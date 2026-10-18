@@ -67,7 +67,18 @@ class DocStore(context: Context, private val claim: String) {
         val blob = f.readBytes()
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, blob, 0, IV_BYTES))
-        return c.doFinal(blob, IV_BYTES, blob.size - IV_BYTES)
+        c.updateAAD(boundTo(name))
+        return try {
+            c.doFinal(blob, IV_BYTES, blob.size - IV_BYTES)
+        } catch (e: javax.crypto.AEADBadTagException) {
+            // An entry that fails authentication holds nothing usable, so it
+            // reads as ABSENT, not as an unanswered request. The kernel treats a
+            // store that cannot answer as blind and refuses to mint a member key
+            // while blind — so "unavailable" here would wedge this document's
+            // member identity for good. Left on disk; the next write replaces it.
+            android.util.Log.w("BentoTray", "store entry $name failed authentication; reading as absent")
+            null
+        }
     }
 
     fun set(name: String, bytes: ByteArray) {
@@ -75,6 +86,7 @@ class DocStore(context: Context, private val claim: String) {
         if (bytes.size > MAX_BYTES) throw Refused("too-large")
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.ENCRYPT_MODE, key())
+        c.updateAAD(boundTo(name))
         dir.mkdirs()
         // Written beside, then renamed over: a crash mid-write leaves the old
         // entry, never a truncated one that would fail to decrypt.
@@ -89,6 +101,15 @@ class DocStore(context: Context, private val claim: String) {
         val f = file(name)
         return !f.exists() || f.delete()
     }
+
+    /**
+     * Authenticated with each entry: which document it belongs to and which
+     * entry it is. An entry file copied into another document's directory, or
+     * renamed from recovery to memberkey, then fails authentication instead of
+     * decrypting as that document's — the directory layout is not trusted to
+     * say whose a ciphertext is.
+     */
+    private fun boundTo(name: String) = "bento-docstore\u001f$claim\u001f$name".toByteArray()
 
     private fun key(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }

@@ -64,9 +64,11 @@ async function scenario(name) {
     },
   }
   win.__bentoTrayNative = native
-  if (name !== 'no-caps') win.__bentoHostCaps = ['store']
+  if (name !== 'no-caps' && name !== 'identity-control') win.__bentoHostCaps = ['store']
 
   vm.runInThisContext(BRIDGE, { filename: 'home/bridge.js' })
+
+  if (name.startsWith('identity-')) return identity(name, win, kept)
 
   const { docStore } = await import(pathToFileURL(join(root, 'kernel/src/docstore.ts')).href)
   // `wait` is how long silence must last to count as "no answer". Requests that
@@ -103,6 +105,36 @@ async function scenario(name) {
   out.tooLargeRaw = await ask({ __bento_tray__: true, dir: 'req', id: 'x5', op: 'store.set', payload: { name: 'recovery', bytes: new Uint8Array(4 * 1024 * 1024) } }, win, 15000)
   out.hostWritable = (() => { try { win.__bentoHost = { ops: [] }; return win.__bentoHost.ops.length === 0 } catch (_) { return false } })()
   return out
+}
+
+// The kernel's REAL member-key path (kernel/src/sync/online.ts deviceIdentity)
+// through the real bridge. This is the step that takes every existing Android
+// member key out of web storage: an identity already in localStorage is ADOPTED
+// (same keys) with its private half moved into the host store, and a new one is
+// minted straight into the store. Without the capability, nothing moves — the
+// control that shows the probe can tell the difference.
+async function identity(name, win, kept) {
+  const ls = new Map()
+  win.localStorage = { getItem: (k) => ls.get(k) ?? null, setItem: (k, v) => ls.set(k, String(v)), removeItem: (k) => ls.delete(k),
+    key: (i) => [...ls.keys()][i] ?? null, get length() { return ls.size } }
+  win.location = new URL('https://0123456789abcdef01234567.bento-tray.invalid/index.html')
+  // Enough document for the kernel modules this import chain loads. save.ts runs
+  // its launchQueue consumer at import (the real bridge defines launchQueue here),
+  // and with no #bento-doc block it reads nothing and adopts nothing.
+  win.document = { visibilityState: 'visible', addEventListener() {}, removeEventListener() {},
+    getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] }
+  const { register } = await import('node:module')
+  register(pathToFileURL(join(root, 'scripts/lib/ts-resolve-hooks.mjs')).href, import.meta.url)
+  const { configureApp } = await import(pathToFileURL(join(root, 'kernel/src/app.ts')).href)
+  configureApp({ appId: 'bento-rig', appName: 'Rig', manifestUrl: 'https://example.invalid/m.json' })
+  const { deviceIdentity } = await import(pathToFileURL(join(root, 'kernel/src/sync/online.ts')).href)
+
+  const docId = 'doc-k3x9q2ab'
+  const existing = { pub: 'EXISTING-PUB', priv: 'EXISTING-PRIV' }
+  if (name !== 'identity-mint') ls.set(`bento-member-${docId}`, JSON.stringify(existing))
+  const id = await deviceIdentity(docId)
+  const held = kept.has('memberkey') ? JSON.parse(Buffer.from(kept.get('memberkey'), 'base64').toString()) : null
+  return { id, local: JSON.parse(ls.get(`bento-member-${docId}`) ?? 'null'), held, host: win.__bentoHost ?? null }
 }
 
 // ------------------------------------------------------------ the checks
@@ -145,6 +177,21 @@ if (process.argv[2] === '--scenario') {
   ok(r.tooLarge === 'refused', 'a host over-cap refusal reaches the kernel as a refused write, not a hang')
   ok(r.tooLargeRaw?.ok === false && r.tooLargeRaw.reason === 'too-large', "the host's 'too-large' reason passes through the relay unchanged")
   ok(r.otherSource === 'NO ANSWER', 'a request whose source is not the page window is ignored')
+
+  const adopt = run('identity-adopt')
+  if (adopt.error) console.log(adopt.error)
+  ok(adopt.id?.pub === 'EXISTING-PUB' && adopt.id?.priv === 'EXISTING-PRIV', 'deviceIdentity ADOPTS an existing member key unchanged (no re-join, same identity)')
+  ok(adopt.held?.priv === 'EXISTING-PRIV' && adopt.held?.docId === 'doc-k3x9q2ab', "the adopted key's private half moves into the host store, under this document")
+  ok(adopt.local && adopt.local.pub === 'EXISTING-PUB' && !('priv' in adopt.local), 'localStorage keeps only the public key after adoption')
+
+  const mint = run('identity-mint')
+  if (mint.error) console.log(mint.error)
+  ok(typeof mint.held?.priv === 'string' && mint.held.priv.length > 20 && mint.held.pub === mint.id?.pub, 'a freshly minted member key goes into the host store')
+  ok(mint.local && mint.local.pub === mint.id?.pub && !('priv' in mint.local), 'a fresh mint never writes the private half to localStorage')
+
+  const ctl = run('identity-control')
+  if (ctl.error) console.log(ctl.error)
+  ok(ctl.host === null && ctl.held === null && ctl.local?.priv === 'EXISTING-PRIV', 'control, no capability: the private key stays in localStorage (so the cases above discriminate)')
 
   console.log(`\n${pass}/${pass + fail} checks passed`)
   process.exit(fail ? 1 : 0)
