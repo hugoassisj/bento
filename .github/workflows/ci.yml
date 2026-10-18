@@ -167,6 +167,13 @@ jobs:
         # once found it cannot be swapped. Contract only: nothing calls it yet.
         run: node scripts/test-identity.ts
 
+      - name: identity statements and conformance vectors
+        # bento/id: every signed statement (dev., bind., att., tomb., del.,
+        # cmp., cns.) and the address normal form. The reference must pass
+        # every row of kernel/fixtures/identity-v1.json, which is the contract
+        # each native host is held to, and must refuse every tampered statement.
+        run: node scripts/test-statements.ts
+
       - name: Typecheck convert (standalone)
         # convert/ is a library beside the apps (the CLI and bento.page/import
         # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
