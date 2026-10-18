@@ -247,6 +247,44 @@ enum IdentityKeys {
         }
     }
 
+    // MARK: the device-list change's own notice (threat model §29 point 4, §2g)
+
+    /// The snapshot above defeats "add a face, then drop the victim's devices".
+    /// The reverse order (drop them first, then add a face) leaves a snapshot
+    /// that already excludes them, and the only thing that warns those devices
+    /// is THIS notice: "the device list changed", sent to the list as it was
+    /// BEFORE the change, plus the address, under the same snapshot and anchor
+    /// rules. It must be queued before the change is published:
+    /// `mayPublishDeviceList` is the check the publisher passes.
+    private static func changeTag(_ before: Set<String>, _ after: Set<String>) -> String {
+        b64url(Data(SHA256.hash(data: Data("devices.\(before.sorted().joined(separator: ","))>\(after.sorted().joined(separator: ","))".utf8))))
+    }
+
+    /// Queue the notice for a device-list change. Idempotent per change.
+    static func queueDeviceListChange(before: Set<String>, after: Set<String>, by device: String, now: Int, in store: Store) -> Bool {
+        guard before != after else { return true }
+        var queued: [Notice] = []
+        switch store.get(outboxItem) {
+        case .found(let q): guard let l = try? JSONDecoder().decode([Notice].self, from: q) else { return false }; queued = l
+        case .absent: break
+        case .unavailable: return false
+        }
+        let tag = changeTag(before, after)
+        if !queued.contains(where: { $0.state == tag }) {
+            queued.append(Notice(kind: "devices-changed", device: device, state: tag, at: now,
+                                 recipients: before.union([addressRecipient])))
+            return save(queued, in: store)
+        }
+        return true
+    }
+
+    /// True only once the notice for exactly this change is durably queued.
+    static func mayPublishDeviceList(before: Set<String>, after: Set<String>, in store: Store) -> Bool {
+        if before == after { return true }
+        let tag = changeTag(before, after)
+        return pendingNotices(in: store)?.contains(where: { $0.state == tag && $0.kind == "devices-changed" }) ?? false
+    }
+
     /// Record that `recipient` confirmed receiving `n`. It counts only if it's
     /// in the notice's own snapshotted recipients (removed devices included);
     /// nothing the caller passes can add to or shrink that set.

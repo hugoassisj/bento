@@ -120,6 +120,30 @@ do {
     IdentityKeys.sweepNotices(now: 2 + 7 * D, in: restarted)
     e("snap.afterTimeout", IdentityKeys.pendingNotices(in: restarted)?.isEmpty ?? false)
   } else { for k in ["snap.recipients", "snap.partial", "snap.stranger", "snap.removedStillCounts", "snap.beforeTimeout", "snap.afterTimeout"] { e(k, "no notice queued") } }
+  // §29 point 4: the reverse order — drop the victim's devices FIRST, then add a face
+  do {
+    let L = Mem(); _ = try! IdentityKeys.device(.consent, in: L, enclave: false, domainState: { X })
+    let before: Set<String> = ["devA", "devB", "devC"], after: Set<String> = ["devA"]
+    e("list.blockedBeforeQueue", !IdentityKeys.mayPublishDeviceList(before: before, after: after, in: L))
+    e("list.queued", IdentityKeys.queueDeviceListChange(before: before, after: after, by: "devA", now: 1, in: L)
+      && IdentityKeys.mayPublishDeviceList(before: before, after: after, in: L))
+    // now the thief adds a face: its snapshot excludes B and C …
+    _ = IdentityKeys.enrolmentGate(Y, device: "devA", devices: after, now: 2, in: L)
+    let notes = IdentityKeys.pendingNotices(in: L) ?? []
+    let listNote = notes.first { $0.kind == "devices-changed" }, faceNote = notes.first { $0.kind == "biometrics-changed" }
+    e("list.toBefore", listNote?.recipients == ["devA", "devB", "devC", "address"])
+    e("list.faceExcludes", faceNote.map { !$0.recipients.contains("devB") } ?? false)
+    // … but B and C still receive the list-change notice, and it waits for them
+    if let ln = listNote {
+      _ = IdentityKeys.markDelivered(ln, to: "devA", now: 3, in: L); _ = IdentityKeys.markDelivered(ln, to: "address", now: 3, in: L)
+      e("list.waitsForRemoved", (IdentityKeys.pendingNotices(in: L) ?? []).contains { $0.kind == "devices-changed" })
+      _ = IdentityKeys.markDelivered(ln, to: "devB", now: 3, in: L); _ = IdentityKeys.markDelivered(ln, to: "devC", now: 3, in: L)
+      e("list.removedGetIt", !(IdentityKeys.pendingNotices(in: L) ?? []).contains { $0.kind == "devices-changed" })
+    } else { e("list.waitsForRemoved", "none"); e("list.removedGetIt", "none") }
+    e("list.idempotent", IdentityKeys.queueDeviceListChange(before: ["devA", "devB"], after: ["devA"], by: "devA", now: 5, in: L)
+      && IdentityKeys.queueDeviceListChange(before: ["devA", "devB"], after: ["devA"], by: "devA", now: 6, in: L)
+      && (IdentityKeys.pendingNotices(in: L) ?? []).filter { $0.kind == "devices-changed" }.count == 1)
+  }
   // without the address it NEVER clears, however long and however many devices confirm
   do {
     let a = Mem(); _ = try! IdentityKeys.device(.consent, in: a, enclave: false, domainState: { X })
@@ -190,6 +214,12 @@ ok(out['snap.stranger'] === 'true', "a confirmation from someone who isn't a rec
 ok(out['snap.removedStillCounts'] === 'true', 'devices REMOVED from the list after queuing are still recipients, and still hold the notice back')
 ok(out['snap.beforeTimeout'] === 'true', 'a snapshotted device that never confirms still holds it back at 6 days')
 ok(out['snap.afterTimeout'] === 'true', 'and stops holding it back at 7 days, once the address has confirmed')
+ok(out['list.blockedBeforeQueue'] === 'true', 'a device-list change may NOT be published before its notice is queued')
+ok(out['list.queued'] === 'true', 'once queued, it may')
+ok(out['list.toBefore'] === 'true', 'the list-change notice goes to the list as it was BEFORE the change, plus the address')
+ok(out['list.faceExcludes'] === 'true', 'the reverse-order attack: the later face notice really does exclude the dropped devices…')
+ok(out['list.waitsForRemoved'] === 'true' && out['list.removedGetIt'] === 'true', '…but the dropped devices still receive the list-change notice, which waits for them')
+ok(out['list.idempotent'] === 'true', 'queuing the same change twice queues one notice')
 ok(out['anchor.never'] === 'true', 'without the ADDRESS a notice never clears, whatever the devices do and however long')
 ok(out['anchor.then'] === 'true', 'and clears once the address confirms')
 ok(out['gate.blind'] === 'true', "a record or outbox that can't be read refuses the consent")
