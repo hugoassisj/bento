@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bento/id privacy notice — bento.page</title>
+<meta name="description" content="What the bento/id directory at id.bento.page stores, what it never stores, who processes it, how long it is kept, and how to delete it.">
+<link rel="canonical" href="https://bento.page/id/privacy">
+<meta name="theme-color" content="#0D1B2E">
+<style>
+:root{--ink:#0D1B2E;--text:rgba(196,206,221,.92);--dim:rgba(182,193,210,.62);--white:#F4F6F9;--peach:#FF9E8A;--line:rgba(182,193,210,.16)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--ink);color:var(--text);font-family:'Instrument Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.65}
+a{color:var(--peach)}
+main{max-width:720px;margin:0 auto;padding:48px 16px 80px}
+h1{color:var(--white);font-family:Fraunces,Georgia,serif;font-size:clamp(30px,5vw,42px);line-height:1.1;margin-bottom:8px}
+h2{color:var(--white);font-size:19px;margin:32px 0 8px}
+p,li{margin:0 0 10px}
+ul{padding-left:20px}
+.meta{color:var(--dim);font-size:14px;margin-bottom:24px}
+table{border-collapse:collapse;width:100%;font-size:15px;margin:8px 0 12px}
+th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:8px 6px}
+th{color:var(--white);font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<h1>bento/id privacy notice</h1>
+<p class="meta">Effective __EFFECTIVE_DATE__ · Controller: __CONTROLLER__ · Contact: <a href="mailto:__CONTACT_EMAIL__">__CONTACT_EMAIL__</a></p>
+
+<p>bento/id lets people find your Bento key from your email address, so they
+can share documents with you and see that a collaborator is really you. It is
+run by a small directory service at <b>id.bento.page</b>. This notice covers
+that service. Bento documents themselves are files you keep; we never host
+them in bento/id.</p>
+
+<h2>What the directory stores</h2>
+<table>
+<tr><th>What</th><th>Why</th><th>How long</th></tr>
+<tr><td>Your email address</td><td>So people who already know it can look up your key. Lookups match an exact address only; there is no search and no list.</td><td>Until you delete it, or 13 months after you last confirmed it, whichever comes first</td></tr>
+<tr><td>Your public account key and public key-agreement key</td><td>So others can check your signatures and encrypt to you. These are public by design; the private halves never leave your devices.</td><td>As above</td></tr>
+<tr><td>A display name, if you chose to give one</td><td>Shown next to your address, marked as self-chosen and unverified</td><td>As above</td></tr>
+<tr><td>Dates: when you published, confirmed or changed your key, and the history of key changes (as fingerprints)</td><td>So collaborators can tell a routine key change from a suspicious one</td><td>As above</td></tr>
+<tr><td>A record that an address was deleted, holding a fingerprint of the last published statement, never the address in readable form</td><td>So people who had your key can see it was withdrawn</td><td>__TOMBSTONE_RETENTION__</td></tr>
+<tr><td>Encrypted recovery data, if you set up passkey recovery (when that feature is available)</td><td>So you can add a new device with your passkey. It is encrypted with a key only your passkey can produce; we cannot open it</td><td>Until you remove that passkey or delete your account</td></tr>
+</table>
+
+<h2>What it never stores</h2>
+<ul>
+<li>Your documents, or anything inside them.</li>
+<li>Your private keys.</li>
+<li>Who you share with, or a list of your contacts.</li>
+<li>Who looked up your address. Lookups are not logged against you.</li>
+</ul>
+
+<h2>Verification codes and email</h2>
+<p>To publish or remove an address we email it a one-time code. The code
+expires after 20 minutes and is stored only as a hash. Email is sent through
+<b>Amazon Web Services (Amazon SES), in the European Union</b>, which acts as
+our processor. Like any email sender, it sees the address and the time a
+message is sent. Messages contain only the code and fixed wording, with no
+tracking.</p>
+
+<h2>Network information</h2>
+<p>To stop abuse we limit how often one network can ask for codes or
+lookups. For this we keep a one-way, daily-changing fingerprint of your IP
+address, and a counter, for at most a day. We do not store IP addresses
+themselves.</p>
+
+<h2>Legal basis</h2>
+<p>__LEGAL_BASIS__</p>
+
+<h2>Your choices and rights</h2>
+<ul>
+<li><b>Delete:</b> from bento/home on any of your devices, or on the web at
+<a href="/id/delete">bento.page/id/delete</a> with a code sent to the
+address. Deletion is immediate.</li>
+<li><b>See what we hold:</b> your published entry is exactly what anyone who
+knows your address can look up. For anything else, write to
+<a href="mailto:__CONTACT_EMAIL__">__CONTACT_EMAIL__</a>.</li>
+<li><b>Correct:</b> publish a new entry from bento/home; the old one is
+replaced.</li>
+<li>__RIGHTS_JURISDICTION__</li>
+</ul>
+
+<h2>Children</h2>
+<p>__CHILDREN__</p>
+
+<h2>Changes</h2>
+<p>If this notice changes, the new version will be posted here with a new
+effective date.</p>
+</main>
+</body>
+</html>
