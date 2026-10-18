@@ -110,9 +110,12 @@ enum IdentityKeys {
     /// The consent key is `.userPresence`, so it accepts the passcode and
     /// survives a change of enrolled faces or fingers. That's deliberate: it
     /// doesn't lock out people without biometrics, or people whose biometrics
-    /// fail. Android's key is invalidated by a new enrolment instead. For
-    /// parity without the lockout, the enrolment is recorded when the consent
-    /// key is created and checked at every consent:
+    /// fail. Android's consent key, which also accepts the device credential,
+    /// survives new enrolments the same way (measured by home-android; only a
+    /// biometric-only key is invalidated). So every host needs this tripwire.
+    /// Android detects the change with a biometric-only canary key; iOS reads
+    /// the enrolment directly. The enrolment is recorded when the consent key is
+    /// created and checked at every consent:
     /// - UNCHANGED: go ahead.
     /// - CHANGED: the agent tells every device and the address "biometrics
     ///   changed on <device>", and asks for the consent to be re-confirmed;
