@@ -14,6 +14,23 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-18 — Android: every docId form the apps mint counts as a docId
+
+**Supersedes "a strict UUID"** in the entry below. Spaces always mints
+`doc-<base36>`, and dash and slides fall back to `d-<base36>…` where
+`crypto.randomUUID` is missing. Read as "no docId", those documents fell back
+to the content hash: every external edit got fresh storage, losing the member
+key and recovery copy, and on update they refused their own legacy storage.
+Not a security issue, because a docId only ever refuses, but it orphaned state
+for whole apps.
+
+A docId is now any `^[A-Za-z0-9_-]{1,128}$`, compared exactly as stored with
+no case folding, the same as the iOS host. JVM cases go through `extractDocId`
+from real document HTML, because the bug was in reading the id: a doc- id and a
+d- id each adopt their own legacy storage, a different doc- id is refused, and
+a doc- id keeps its claim across an external edit. 4 of them fail against the
+strict check.
+
 ## 2026-10-18 — Android: a document's web origin belongs to the document, not to its path
 
 **Supersedes one line of 2026-09-19** ("The native hosts were never exposed …

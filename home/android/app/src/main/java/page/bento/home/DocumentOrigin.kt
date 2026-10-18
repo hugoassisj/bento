@@ -99,13 +99,20 @@ object DocumentOrigin {
         return hex(hmac(subject.toByteArray())).take(24)
     }
 
-    private val UUID = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+    /**
+     * Every form the apps mint: a UUID where `crypto.randomUUID` exists, and
+     * otherwise spaces' `doc-<base36>` (always, in fact) and dash's or slides'
+     * `d-<base36>…`. An earlier strict-UUID check read those as "no docId", so
+     * their documents fell back to the content hash — fresh storage on every
+     * external edit — and refused their own legacy storage on update.
+     * Compared exactly as stored, never case-folded, the same on every host.
+     */
+    private val DOC_ID = Regex("^[A-Za-z0-9_-]{1,128}$")
 
     /**
      * The docId from the document's `#bento-doc` block, or null when there is
      * none to trust: no block, an empty block (a never-saved shell), an
-     * encrypted envelope (no top-level docId), or a value that is not a strict
-     * UUID.
+     * encrypted envelope (no top-level docId), or a value outside [DOC_ID].
      *
      * Only the TOP-LEVEL `docId` key counts. Document content can carry the
      * string `"docId"` anywhere — a pasted clip, a comment — so this tracks
@@ -137,7 +144,7 @@ object DocumentOrigin {
                             if (j < json.length && json[j] == '"') {
                                 val vEnd = stringEnd(json, j) ?: return null
                                 val v = json.substring(j + 1, vEnd)
-                                return if (UUID.matches(v)) v.lowercase() else null
+                                return if (DOC_ID.matches(v)) v else null
                             }
                             return null
                         }
@@ -183,7 +190,7 @@ object DocumentOrigin {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i)
       const m = /^bento-member-(.+)$/.exec(k)
-      if (m) ids.add(m[1].toLowerCase())
+      if (m) ids.add(m[1])
     }
   } catch (e) { unattributed = true }
   try {
@@ -198,7 +205,7 @@ object DocumentOrigin {
       for (const st of db.objectStoreNames) {
         const all = await new Promise(res => { const r = db.transaction(st).objectStore(st).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res(null) })
         if (!all) { unattributed = true; continue }
-        for (const rec of all) { if (rec && typeof rec.docId === 'string') ids.add(rec.docId.toLowerCase()); else unattributed = true }
+        for (const rec of all) { if (rec && typeof rec.docId === 'string') ids.add(rec.docId); else unattributed = true }
       }
       db.close()
     }

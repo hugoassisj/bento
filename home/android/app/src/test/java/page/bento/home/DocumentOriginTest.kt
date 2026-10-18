@@ -130,12 +130,49 @@ class DocumentOriginTest {
         assertNull(DocumentOrigin.extractDocId(doc("""{"slides":[{"docId":"$b"}]}""")))
     }
 
-    @Test fun `no block, an empty block, an envelope and a non-UUID all give null`() {
+    @Test fun `no block, an empty block, an envelope and a malformed id all give null`() {
         assertNull(DocumentOrigin.extractDocId("<html></html>"))
         assertNull(DocumentOrigin.extractDocId(doc("\n")))
         assertNull(DocumentOrigin.extractDocId(doc("""{"format":"bento/enc","v":1,"it":300000,"salt":"x","iv":"y","data":"z"}""")))
-        assertNull(DocumentOrigin.extractDocId(doc("""{"docId":"not-a-uuid"}""")))
-        assertNull(DocumentOrigin.extractDocId(doc("""{"docId":"$a-and-more"}""")))
+        assertNull(DocumentOrigin.extractDocId(doc("""{"docId":""}""")))
+        assertNull(DocumentOrigin.extractDocId(doc("""{"docId":"has space"}""")))
+        assertNull(DocumentOrigin.extractDocId(doc("""{"docId":"../escape"}""")))
+        assertNull(DocumentOrigin.extractDocId(doc("""{"docId":"${"x".repeat(129)}"}""")))
+    }
+
+    // ------------------------------------------------- every docId form the apps mint
+
+    private val spacesId = "doc-k3x9q2ab"        // spaces: always uid('doc')
+    private val dashId = "d-4fz8w1qplmz9k2"      // dash / slides without crypto.randomUUID
+
+    @Test fun `spaces and fallback docIds are read as docIds, exactly as stored`() {
+        assertEquals(spacesId, DocumentOrigin.extractDocId(doc("""{"format":"bento/spaces","docId":"$spacesId"}""")))
+        assertEquals(dashId, DocumentOrigin.extractDocId(doc("""{"docId":"$dashId"}""")))
+        assertEquals("Doc-MiXeD", DocumentOrigin.extractDocId(doc("""{"docId":"Doc-MiXeD"}""")))
+    }
+
+    // These go through extractDocId from real document HTML, as the host does:
+    // the bug was in reading the id, so a case that hands decide() the id
+    // directly would pass against the broken code.
+    private fun factsOf(id: String, sha: String = "s1") =
+        Facts(uri, DocumentOrigin.extractDocId(doc("""{"format":"bento/spaces","docId":"$id","title":"t"}""")), sha)
+
+    @Test fun `a doc- id adopts its own legacy storage`() {
+        assertTrue(DocumentOrigin.mayAdoptLegacy(factsOf(spacesId), Findings(setOf(spacesId), false)))
+    }
+
+    @Test fun `a d- id adopts its own legacy storage`() {
+        assertTrue(DocumentOrigin.mayAdoptLegacy(factsOf(dashId), Findings(setOf(dashId), false)))
+    }
+
+    @Test fun `a successor with a different doc- id is refused`() {
+        assertFalse(DocumentOrigin.mayAdoptLegacy(factsOf("doc-zzzzzzzz"), Findings(setOf(spacesId), false)))
+        assertEquals(Decision.Fresh, DocumentOrigin.decide(factsOf("doc-zzzzzzzz"), Claim("o", spacesId, "s1")))
+    }
+
+    @Test fun `a doc- id keeps its claim across an external edit`() {
+        // the regression: read as docless, it fell to the content hash and lost its storage
+        assertEquals(Decision.Reuse("o"), DocumentOrigin.decide(factsOf(spacesId, "s2"), Claim("o", spacesId, "s1")))
     }
 
     @Test fun `escaped quotes and the save's u003c escaping do not derail the scan`() {
