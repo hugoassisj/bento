@@ -2720,3 +2720,30 @@ jobs:
         # given, refuses a malformed value, and never emits a placeholder: the
         # platforms cache these files, so a wrong one is worse than none.
         run: node scripts/test-well-known.ts
+
+  home-desktop-agent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Desktop agent against the bento/id vectors
+        # home/desktop/agent is the Windows/Linux identity agent core. Its
+        # statements port must reach every verdict AND reason in
+        # kernel/fixtures/identity-v1.json (re-read every run, never pinned), plus
+        # builder round-trips, three tamperings per accepted row, spendCalled
+        # on every cns row, and the frozen display table. A missing fixture
+        # fails; it never skips.
+        working-directory: home/desktop/agent
+        run: cargo test
+      - name: Desktop agent TPM rigs (two software TPMs)
+        # The Linux key store against a real TPM 2.0 (swtpm): the routine key
+        # signs inside the TPM; the consent key and the sealed account key need
+        # the PIN on every use (a wrong PIN is the TPM's own AUTH_FAIL); the key
+        # files are useless on a SECOND TPM (cannot be copied off the machine);
+        # and a second connection without the PIN gets neither, while the
+        # routine key stays usable, which is the stated desktop residual.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libtss2-dev swtpm swtpm-tools >/dev/null
+          ./tpm-rig.sh
