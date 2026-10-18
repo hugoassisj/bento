@@ -36,6 +36,13 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   scalar alone while kx is unruled, or with kx appended under modes A and C. On
   import, each scalar must be in 1..n−1 AND its public point d·G must equal the
   public key in the directory-signed binding. A swapped blob fails closed.
+- **The PRF input is the UTF-8 bytes of `bento/id/prf/v1`.** A host that
+  speaks CTAP `hmac-secret` directly, with no WebAuthn PRF API (libfido2 on
+  desktop), must send `prf.hmacSecretSalt`: SHA-256("WebAuthn PRF" ‖ 0x00 ‖
+  input), per WebAuthn L3 §10.1.4. Then the same security key returns the same
+  32 bytes in a browser and on the desktop, and a blob sealed on one opens on
+  the other. Browsers apply that hash themselves, so never apply it twice. The
+  `prf.wrong` values are the easy mistakes. (home-desktop)
 - **The pepper layer** is the directory's (share implements it). Its rows exist
   so the server code can be checked against the same bytes.
 
