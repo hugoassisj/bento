@@ -28,6 +28,10 @@ tpm = ["dep:tss-esapi"]
 keyring = ["dep:secret-service"]
 # security keys through the DISTRIBUTION libfido2 (>= 1.12), Linux only
 fido = []
+# TEST-ONLY mutants for the PRF interop rig (fido-rig.sh): each must make
+# tests/fido_interop.rs FAIL. Never enabled in a shipped build.
+rig-mutant-double-hash = ["fido"]
+rig-mutant-raw-hash = ["fido"]
 # the in-memory software key store: tests and rigs only, never a shipped path
 test-store = []
 

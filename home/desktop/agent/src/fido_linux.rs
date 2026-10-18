@@ -215,6 +215,21 @@ pub struct Assertion {
     pub prf: Zeroizing<Vec<u8>>,
 }
 
+/// The hmac-secret salt for a raw PRF input: prf_salt, ONCE. The two
+/// `rig-mutant-*` features exist only so the interop rig can prove it catches
+/// the two easy mistakes; a shipped build never enables them.
+fn salt_for(prf_input: &[u8]) -> [u8; 32] {
+    #[cfg(feature = "rig-mutant-double-hash")]
+    return prf_salt(&prf_salt(prf_input));
+    #[cfg(all(feature = "rig-mutant-raw-hash", not(feature = "rig-mutant-double-hash")))]
+    {
+        use sha2::{Digest, Sha256};
+        return Sha256::digest(prf_input).into();
+    }
+    #[allow(unreachable_code)]
+    prf_salt(prf_input)
+}
+
 /// A discoverable get with UP + UV and the PRF extension. `prf_input` is the
 /// RAW PRF input: the salt transform is applied here, once.
 pub fn get_assertion(
@@ -227,7 +242,7 @@ pub fn get_assertion(
     let dev = Dev::open(path)?;
     let cd = client_data(Ceremony::Get, challenge, Platform::Linux);
     let cdh = client_data_hash(&cd);
-    let salt = prf_salt(prf_input);
+    let salt = salt_for(prf_input);
     let rp = CString::new(rp_id).map_err(|e| FidoError::Unavailable(e.to_string()))?;
     let pin_c = pin_bytes(pin)?;
     unsafe {
