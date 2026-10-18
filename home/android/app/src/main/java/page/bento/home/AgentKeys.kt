@@ -77,24 +77,25 @@ object AgentKeys {
                 if (Build.VERSION.SDK_INT >= 30) throw e
             }
             if (ks.containsAlias(CONSENT)) {
-                val bio = biometricsEnrolled(context)
-                // A canary that fails to mint leaves no baseline: the first
-                // consent then reads CHANGED and is re-confirmed once, with a
-                // notice. Never a baseline the canary doesn't back.
-                if (bio == false || (bio == true && remintCanary()))
-                    Notices.recordEnrolment(bio == true, generation(), store(context))
+                val bio = biometrics(context)
+                // A canary that fails to mint, or a state the platform can't
+                // name, leaves no baseline: the first consent then reads
+                // CHANGED (or refuses) — never a baseline nothing backs.
+                if (bio == Notices.Biometrics.NONE || (bio == Notices.Biometrics.ENROLLED && remintCanary()))
+                    Notices.recordEnrolment(bio == Notices.Biometrics.ENROLLED, generation(), store(context))
             }
         }
     }
 
-    /** True, false, or null when the platform can't say right now (treated as UNKNOWN). */
-    fun biometricsEnrolled(context: Context): Boolean? =
+    /** The platform's answer, mapped once. Anything unrecognised is UNKNOWN, which refuses. */
+    fun biometrics(context: Context): Notices.Biometrics =
         when (androidx.biometric.BiometricManager.from(context)
             .canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)) {
-            androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS -> true
+            androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS -> Notices.Biometrics.ENROLLED
             androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED,
-            androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> false
-            else -> null
+            androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> Notices.Biometrics.NONE
+            androidx.biometric.BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> Notices.Biometrics.SENSOR_BUSY
+            else -> Notices.Biometrics.UNKNOWN
         }
 
     /** Read the canary with initSign: no prompt, no signature. Invalidated by a new enrolment (measured). */
@@ -125,15 +126,13 @@ object AgentKeys {
      * The gate before EVERY consent (§29b): the notice is queued first on a
      * change. `devices` is the account's device list now.
      */
-    fun enrolmentGate(context: Context, device: String, devices: Set<String>, now: Long): Notices.Gate {
-        val bio = biometricsEnrolled(context) ?: return Notices.Gate.REFUSE
-        return Notices.enrolmentGate(bio, canary(), device, devices, now, store(context))
+    fun enrolmentGate(context: Context, device: String, devices: Set<String>, now: Long): Notices.Gate =
+        Notices.enrolmentGate(biometrics(context), canary(), device, devices, now, store(context))
     }
 
     /** After re-confirmation: accept the new enrolment (only once its notice is queued) and re-mint the canary. */
     fun acceptEnrolment(context: Context): Boolean {
-        val bio = biometricsEnrolled(context) ?: return false
-        return Notices.acceptEnrolment(bio, canary(), generation(), store(context)) { remintCanary() }
+        return Notices.acceptEnrolment(biometrics(context), canary(), generation(), store(context)) { remintCanary() }
     }
 
     /** False on API 26–29 with no enrolled biometric: this device cannot consent. */

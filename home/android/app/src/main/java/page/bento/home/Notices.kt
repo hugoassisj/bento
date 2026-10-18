@@ -133,6 +133,14 @@ object Notices {
 
     enum class Enrolment { UNCHANGED, CHANGED, UNKNOWN }
 
+    /**
+     * What the platform says about enrolled biometrics. SENSOR_BUSY
+     * (HW_UNAVAILABLE) is often transient; under a "bio" record the canary — a
+     * Keystore check, no sensor needed — decides alone (security §29b). Under a
+     * "none" record it can't tell whether biometrics were added, so UNKNOWN.
+     */
+    enum class Biometrics { ENROLLED, NONE, SENSOR_BUSY, UNKNOWN }
+
     /** What the Keystore says about the canary, read with initSign: never a prompt, never a signature. */
     enum class Canary { USABLE, INVALIDATED, ABSENT, ERROR }
 
@@ -143,26 +151,35 @@ object Notices {
      * then) or "none.<generation>" (no biometrics then). A new generation is
      * chosen at every acceptance, so successive changes are distinct notices.
      */
-    fun check(record: Read, biometricsNow: Boolean, canary: Canary): Enrolment {
-        if (canary == Canary.ERROR) return Enrolment.UNKNOWN
+    fun check(record: Read, bio: Biometrics, canary: Canary): Enrolment {
+        if (canary == Canary.ERROR || bio == Biometrics.UNKNOWN) return Enrolment.UNKNOWN
         val r = when (record) {
             is Read.Found -> record.text
             Read.Absent -> return Enrolment.CHANGED        // made before the check: re-confirm once
             Read.Unavailable -> return Enrolment.UNKNOWN
         }
         return when {
-            r.startsWith("bio.") ->
-                if (biometricsNow && canary == Canary.USABLE) Enrolment.UNCHANGED else Enrolment.CHANGED
-            r.startsWith("none.") ->
-                if (!biometricsNow) Enrolment.UNCHANGED else Enrolment.CHANGED
+            r.startsWith("bio.") -> when {
+                bio == Biometrics.NONE -> Enrolment.CHANGED
+                canary == Canary.USABLE -> Enrolment.UNCHANGED      // ENROLLED, or SENSOR_BUSY: the canary alone
+                else -> Enrolment.CHANGED
+            }
+            r.startsWith("none.") -> when (bio) {
+                Biometrics.NONE -> Enrolment.UNCHANGED
+                Biometrics.ENROLLED -> Enrolment.CHANGED
+                else -> Enrolment.UNKNOWN                           // SENSOR_BUSY: were biometrics added? can't tell
+            }
             else -> Enrolment.UNKNOWN
         }
     }
 
     /** Which change this is: the record it departs from, and what was observed. */
-    fun changeTag(record: Read, biometricsNow: Boolean, canary: Canary): String {
+    fun changeTag(record: Read, bio: Biometrics, canary: Canary): String {
         val from = (record as? Read.Found)?.text ?: "-"
-        return Consent.sha256b64u("enrol.$from>${if (biometricsNow) "bio" else "none"}.${canary.name}")
+        // SENSOR_BUSY under a "bio" record is decided by the canary: tag it as ENROLLED,
+        // so a busy sensor and a ready one name the same change.
+        val seen = if (bio == Biometrics.NONE) "none" else "bio"
+        return Consent.sha256b64u("enrol.$from>$seen.${canary.name}")
     }
 
     enum class Gate { PROCEED, RECONFIRM, REFUSE }
@@ -173,13 +190,13 @@ object Notices {
      * restart neither drops nor repeats it. Nothing here takes input from the
      * page. `devices` is the account's device list now, snapshotted with the address.
      */
-    fun enrolmentGate(biometricsNow: Boolean, canary: Canary, device: String, devices: Set<String>, now: Long, store: Store): Gate {
+    fun enrolmentGate(bio: Biometrics, canary: Canary, device: String, devices: Set<String>, now: Long, store: Store): Gate {
         val record = store.get(ENROLMENT)
-        return when (check(record, biometricsNow, canary)) {
+        return when (check(record, bio, canary)) {
             Enrolment.UNCHANGED -> Gate.PROCEED
             Enrolment.UNKNOWN -> Gate.REFUSE
             Enrolment.CHANGED -> {
-                val n = Notice("biometrics-changed", device, changeTag(record, biometricsNow, canary), now, devices + ADDRESS)
+                val n = Notice("biometrics-changed", device, changeTag(record, bio, canary), now, devices + ADDRESS)
                 if (queue(n, store)) Gate.RECONFIRM else Gate.REFUSE
             }
         }
@@ -192,9 +209,12 @@ object Notices {
      * `remint` replaces the canary under the enrolment as it is now and returns
      * true, or false if it couldn't; with no biometrics it mints nothing.
      */
-    fun acceptEnrolment(biometricsNow: Boolean, canary: Canary, generation: String, store: Store, remint: () -> Boolean): Boolean {
+    fun acceptEnrolment(bio: Biometrics, canary: Canary, generation: String, store: Store, remint: () -> Boolean): Boolean {
+        // a new baseline is only ever recorded under a state the platform could name
+        if (bio != Biometrics.ENROLLED && bio != Biometrics.NONE) return false
+        val biometricsNow = bio == Biometrics.ENROLLED
         val record = store.get(ENROLMENT)
-        val tag = changeTag(record, biometricsNow, canary)
+        val tag = changeTag(record, bio, canary)
         if (pending(store)?.any { it.kind == "biometrics-changed" && it.state == tag } != true) return false
         if (biometricsNow && !remint()) return false
         return store.set(ENROLMENT, (if (biometricsNow) "bio." else "none.") + tok(generation))

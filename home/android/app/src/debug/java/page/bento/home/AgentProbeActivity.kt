@@ -178,7 +178,7 @@ class AgentProbeActivity : AppCompatActivity() {
         AgentKeys.ensure(this)
         val devices = setOf("devA", "devB", "devC")
         if (intent.getBooleanExtra("accept", false)) log("gate: accept=${AgentKeys.acceptEnrolment(this)}")
-        log("gate: canary=${AgentKeys.canary()} biometrics=${AgentKeys.biometricsEnrolled(this)}")
+        log("gate: canary=${AgentKeys.canary()} biometrics=${AgentKeys.biometrics(this)}")
         log("gate: ${AgentKeys.enrolmentGate(this, "devA", devices, System.currentTimeMillis())}")
         val st = AgentKeys.store(this)
         log("gate: outbox=${Notices.pending(st)?.map { it.kind + "->" + it.recipients.sorted() }}")
