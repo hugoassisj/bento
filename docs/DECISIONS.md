@@ -74,8 +74,20 @@ records. That includes `bento-blobcache`, which caches live-session media in
 plaintext. `scripts/test-home-inspector.mjs` runs the script as it ships; it
 also matched real Chromium IndexedDB case for case.
 
-**iOS** implements the same native contract in its own change, keeping the
-member key in the Keychain (this device only).
+**iOS** implements the same native contract (`home/ios/HostDocStore.swift`).
+The member key goes to the Keychain, this device only and never synchronised;
+the recovery copy goes to an app-private file. Both are partitioned by the
+origin string the iOS origin fix mints, so on iOS a moved document keeps its
+store. Measured on the iOS simulator with this bridge and a real invite copy
+joined as a member:
+- the private key lands in the Keychain, and localStorage keeps only `{pub}`
+- the key survives a fresh launch and a move
+- a different file at that path gets an empty partition and mints its own key
+
+An ad-hoc (unsigned) Mac Catalyst build can't reach the Keychain
+(`errSecMissingEntitlement`, -34018). Its store answers 'unavailable', and the
+kernel keeps the key for the session only, never in web storage. A signed build
+needs the Apple team. The iOS simulator works ad-hoc.
 
 ## 2026-10-18 — Android: every docId form the apps mint counts as a docId
 

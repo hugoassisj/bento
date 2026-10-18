@@ -478,7 +478,7 @@ here rather than discovered later.
 | per-document origin | `bento-tray://<host>`: follows the FILE (its document identifier), not the path — `OriginIdentity` | `https://<claim>.bento-tray.invalid`: a claim bound to the document's docId in a device-local index, not the URI — `DocumentOrigin` | same |
 | a document is served only under its own host | ✓ | ✓ (by code: the interceptor answers only the document's own host) | same |
 | a moved document keeps its storage | ✓ (the document identifier follows the file) | ✗ by design: a move outside the app gets a fresh claim; the old storage is left, never cleared — SAF has no device-local anchor | **differs** |
-| per-document store for the recovery copy and member key (`__bentoHost`) | — | ✓ Keystore-encrypted, no-backup app storage, partitioned by the claim — `DocStore` | **differs** (iOS in progress) |
+| per-document store for the recovery copy and member key (`__bentoHost`) | ✓ member key in the Keychain (this device only), recovery in an app-private file, partitioned by the origin — `HostDocStore`. Unsigned Mac builds can't reach the Keychain | ✓ Keystore-encrypted, no-backup app storage, partitioned by the claim — `DocStore` | same |
 | document served from memory, never parsed | ✓ | ✓ | same |
 | bridge injected at document start | `WKUserScript(.atDocumentStart)` | `addDocumentStartJavaScript` | same |
 | bridge reachable only from the document | every message checked: main frame + own origin (`BridgeSender`) | `allowedOriginRules` + `isMainFrame` | same |
