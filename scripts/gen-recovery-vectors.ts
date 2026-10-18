@@ -14,10 +14,9 @@ import { argon2 as nodeArgon2 } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { b64uEnc } from '../kernel/src/statements.ts'
 import {
   ARGON2, formatRecoveryCode, parseRecoveryCode, recoveryWrapKey, recoveryVerifier, prfKek,
-  sealPrfBlob, sealRecoveryInner, pepperKeys, pepperVerifierTag, pepperSeal, type Argon2id,
+  sealPrfBlob, sealRecoveryInner, pepperKeys, pepperVerifierTag, pepperSeal, publicKeyOf, type Argon2id,
 } from '../kernel/src/recovery.ts'
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'kernel/fixtures/recovery-v1.json')
@@ -94,14 +93,15 @@ const derivations = {
 derivations.prfKek = hex(await prfKek(bytes(32, (i) => 0xa0 + i), bytes(32, (i) => 0x70 + i)))
 
 // --- whole blobs (end to end) --------------------------------------------------------------
-async function testKey(alg: 'ECDSA' | 'ECDH') {
-  const kp = (await crypto.subtle.generateKey({ name: alg, namedCurve: 'P-256' }, true,
-    alg === 'ECDSA' ? ['sign', 'verify'] : ['deriveBits'])) as CryptoKeyPair
-  const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey)
-  const d = Uint8Array.from(Buffer.from(jwk.d!, 'base64url'))
-  return { d, pub: b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))) }
+// Test keys are DETERMINISTIC (fixed scalars), so regenerating this file changes
+// nothing unless a rule changes: porters can build against stable bytes.
+async function testKey(name: string) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`bento/id test key ${name}`)))
+  const pub = publicKeyOf(d)
+  if (!pub) throw new Error(`test scalar for ${name} out of range`)
+  return { d, pub }
 }
-const account = await testKey('ECDSA'), kx = await testKey('ECDH'), other = await testKey('ECDSA')
+const account = await testKey('account'), kx = await testKey('kx'), other = await testKey('other')
 const credentialId = bytes(16, (i) => 0xc0 + i)
 const prfOutput = bytes(32, (i) => 0xa0 + i), prfSalt = bytes(32, (i) => 0x70 + i), iv = bytes(12, (i) => 0x20 + i)
 

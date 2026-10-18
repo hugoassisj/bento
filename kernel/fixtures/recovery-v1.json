@@ -224,11 +224,11 @@
   },
   "blobs": {
     "keys": {
-      "accountD": "32f2d4136a59d124262901c6a365690d6d3424ca638eb6334cfc3e11189fccd6",
-      "accountPub": "BD4-4bSa_1eQz59YLbDpJYo5tPJD1C4ocbrEhukYx2WFNee5hPZbmGkFz1aytC2oFkV82zDagcl1xjgjXuyyBBk",
-      "kxD": "615f7b3dfa83696c5960b960f7de520c6bf6196c854a8bd184b7ecd417cbf7f3",
-      "kxPub": "BPDi8qGOFxgE6d9-lcHBcAl9Uydmeq3F3S5bfM3RSH_P07CqIaaiZYOM3i0Ep16hUPw-DwBGbU5MBt7-UuDJndo",
-      "otherD": "54809e36e83eab9a74b54d79b1bb913cb6b8a3e9df5cc951dc125d036c33249e"
+      "accountD": "e5526afbbded1a62046b9985419c6c5023b6f341313ed2f31642c4000c5fbad4",
+      "accountPub": "BDMjqSVpdU__eyOhD6S3LfNBRdBjb9FSideiWuMH_vLj4_nMzSDeX_iQryMpbgrWsmNMGBaany5zKGX5QZpFdJU",
+      "kxD": "361743288ff8a4f9e684d21c995171d89fb0b1a7ff49deca47a30cf2ec5635d1",
+      "kxPub": "BDqYtYs39vp4GvPHOkN5JkIQRaDSghnps_FdtRStcrGU_2d3X3ZrF73bY7HUnotA80qxDjTe209e1hp76cQ6dRk",
+      "otherD": "51ef828c88b05ef95c1ae769ba189e92348be5083a168c57f7eae834ab3985d5"
     },
     "prf": {
       "unruled": {
@@ -236,14 +236,14 @@
         "cred": "1PN26hIA9u446dJBd7iCzxBTKJkne360tuaPoT7q9f4",
         "salt": "cHFyc3R1dnd4eXp7fH1-f4CBgoOEhYaHiImKi4yNjo8",
         "iv": "ICEiIyQlJicoKSor",
-        "ct": "d33j7jx4Uk3GfnsDBu7HOFeBWMeqrGN4O_d0xxYOb1ODcvk211IwDaIDovlUED4t"
+        "ct": "oN1dBuvMmQvkPONA5BfCZRkDj0z4HAe4YUmO1gLOGVFXKmDyuXl-tWuRkTk_vhpo"
       },
       "modeA": {
         "v": 1,
         "cred": "1PN26hIA9u446dJBd7iCzxBTKJkne360tuaPoT7q9f4",
         "salt": "cHFyc3R1dnd4eXp7fH1-f4CBgoOEhYaHiImKi4yNjo8",
         "iv": "ICEiIyQlJicoKSor",
-        "ct": "d33j7jx4Uk3GfnsDBu7HOFeBWMeqrGN4O_d0xxYOb1MXwVvvfMRp53RmQ5mh5TdXCyVPC7tZDo_rby9NjZPDUmyVWwZdsS7-4sSG_xrsc3k"
+        "ct": "oN1dBuvMmQvkPONA5BfCZRkDj0z4HAe4YUmO1gLOGVFAiWP6Cb-kcsuCKOXPahSD_2PnwMFaW5Qoe89rdg4BcD9D3jRZOaTih3drHU4wiJI"
       },
       "inputs": {
         "prfOutput": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
@@ -258,49 +258,49 @@
         "salt": "101112131415161718191a1b1c1d1e1f",
         "iv": "202122232425262728292a2b"
       },
-      "inner": "bf2388f771874fe14a7903ab5621694f183bfb9eba5d2d61dede7956da39e92cc174e5b5341b0dd500cd85dc29841817"
+      "inner": "6883361fa63384a7683b9be8b4d86c1256b92c15e8ed49a184608347cef99f2e1ebc60ac01d1d13a3f6f21f3fbc5d0e1"
     },
     "pepper": {
       "secret": "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
       "iv": "303132333435363738393a3b",
-      "verifyKey": "138e3164b08dfac7240c85d99df1153071897e9b70f51d7fd7d88d93e16dfb8f",
-      "wrapKey": "c655cfed9ea84b933d90e924e22710d331ce45c9b059807039a4c93af1687d32",
-      "verifierTag": "10a01cac769332234863851c9b4f3fac12e7733ac1c126b5b76ad89d9d471cfe",
-      "outer": "093b659cfe33f3d3979b7215ab289f284ec6f6fbaddbba0f42cf197e20deda3742498e9bc46727cb691ec84f6a30f10c02d2d34c858de6eafe1eecbc69a89333"
+      "verifyKey": "dbe97563c63585267b66dbe9c41292b1dc3aabfa8344a30b4a02380ea4de5aed",
+      "wrapKey": "16508846750153078f797c018e72a6d1863b643ab1ca36529f5f5881b10d4c29",
+      "verifierTag": "1922104ae5c6b1d2aaa3dc29b43344e40fd8ab195f33a0d2ef914bfdc2735f5b",
+      "outer": "cff18bdfc8a026fdf9f1884df16ea104a52c2a0348f95eac03a00166eab7662b46780b4e2bcf50e6d1e2f4e4c81880fb4933caf1b8b4e486547a73470f48f443"
     }
   },
   "scalars": [
     {
       "name": "the account scalar matching the signed public half",
-      "d": "32f2d4136a59d124262901c6a365690d6d3424ca638eb6334cfc3e11189fccd6",
-      "pub": "BD4-4bSa_1eQz59YLbDpJYo5tPJD1C4ocbrEhukYx2WFNee5hPZbmGkFz1aytC2oFkV82zDagcl1xjgjXuyyBBk",
+      "d": "e5526afbbded1a62046b9985419c6c5023b6f341313ed2f31642c4000c5fbad4",
+      "pub": "BDMjqSVpdU__eyOhD6S3LfNBRdBjb9FSideiWuMH_vLj4_nMzSDeX_iQryMpbgrWsmNMGBaany5zKGX5QZpFdJU",
       "expect": "accept"
     },
     {
       "name": "scalar 0",
       "d": "0000000000000000000000000000000000000000000000000000000000000000",
-      "pub": "BD4-4bSa_1eQz59YLbDpJYo5tPJD1C4ocbrEhukYx2WFNee5hPZbmGkFz1aytC2oFkV82zDagcl1xjgjXuyyBBk",
+      "pub": "BDMjqSVpdU__eyOhD6S3LfNBRdBjb9FSideiWuMH_vLj4_nMzSDeX_iQryMpbgrWsmNMGBaany5zKGX5QZpFdJU",
       "expect": "reject",
       "reason": "scalar-range"
     },
     {
       "name": "scalar n (the group order)",
       "d": "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551",
-      "pub": "BD4-4bSa_1eQz59YLbDpJYo5tPJD1C4ocbrEhukYx2WFNee5hPZbmGkFz1aytC2oFkV82zDagcl1xjgjXuyyBBk",
+      "pub": "BDMjqSVpdU__eyOhD6S3LfNBRdBjb9FSideiWuMH_vLj4_nMzSDeX_iQryMpbgrWsmNMGBaany5zKGX5QZpFdJU",
       "expect": "reject",
       "reason": "scalar-range"
     },
     {
       "name": "scalar n−1 for a mismatched public half",
       "d": "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632550",
-      "pub": "BD4-4bSa_1eQz59YLbDpJYo5tPJD1C4ocbrEhukYx2WFNee5hPZbmGkFz1aytC2oFkV82zDagcl1xjgjXuyyBBk",
+      "pub": "BDMjqSVpdU__eyOhD6S3LfNBRdBjb9FSideiWuMH_vLj4_nMzSDeX_iQryMpbgrWsmNMGBaany5zKGX5QZpFdJU",
       "expect": "reject",
       "reason": "key-mismatch"
     },
     {
       "name": "another key's scalar (a swapped blob)",
-      "d": "54809e36e83eab9a74b54d79b1bb913cb6b8a3e9df5cc951dc125d036c33249e",
-      "pub": "BD4-4bSa_1eQz59YLbDpJYo5tPJD1C4ocbrEhukYx2WFNee5hPZbmGkFz1aytC2oFkV82zDagcl1xjgjXuyyBBk",
+      "d": "51ef828c88b05ef95c1ae769ba189e92348be5083a168c57f7eae834ab3985d5",
+      "pub": "BDMjqSVpdU__eyOhD6S3LfNBRdBjb9FSideiWuMH_vLj4_nMzSDeX_iQryMpbgrWsmNMGBaany5zKGX5QZpFdJU",
       "expect": "reject",
       "reason": "key-mismatch"
     }

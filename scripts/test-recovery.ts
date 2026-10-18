@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 import {
   ARGON2, formatRecoveryCode, parseRecoveryCode, recoveryWrapKey, recoveryVerifier, prfKek,
   sealPrfBlob, openPrfBlob, sealRecoveryInner, openRecoveryInner, unpackScalars,
-  pepperKeys, pepperVerifierTag, pepperSeal, pepperOpen, type Argon2id,
+  pepperKeys, pepperVerifierTag, pepperSeal, pepperOpen, publicKeyOf, type Argon2id,
 } from '../kernel/src/recovery.ts'
 
 let failures = 0
@@ -124,6 +124,23 @@ for (const s of F.scalars) {
   const v = unpackScalars(unhex(s.d), { accountPub: s.pub })
   ok(s.expect === 'accept' ? v.ok : !v.ok && v.reason === s.reason, `${s.name} → ${s.expect === 'accept' ? 'accept' : `refused: ${s.reason}`}`)
 }
+
+// The fixture's test keys are deterministic, their public halves computed by
+// publicKeyOf itself, so the rows above cannot validate d·G on their own. Check
+// it INDEPENDENTLY against keys the platform generated.
+console.log('\nd·G agrees with the platform on keys it generated')
+for (const alg of ['ECDSA', 'ECDH'] as const) {
+  let agree = 0
+  for (let i = 0; i < 8; i++) {
+    const kp = (await crypto.subtle.generateKey({ name: alg, namedCurve: 'P-256' }, true,
+      alg === 'ECDSA' ? ['sign', 'verify'] : ['deriveBits'])) as CryptoKeyPair
+    const d = Uint8Array.from(Buffer.from((await crypto.subtle.exportKey('jwk', kp.privateKey)).d!, 'base64url'))
+    const pub = Buffer.from(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))).toString('base64url')
+    if (publicKeyOf(d) === pub) agree++
+  }
+  ok(agree === 8, `${alg}: publicKeyOf(d) equals WebCrypto's public key for 8 fresh key pairs`)
+}
+ok(publicKeyOf(new Uint8Array(32)) === null, 'publicKeyOf refuses scalar 0')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

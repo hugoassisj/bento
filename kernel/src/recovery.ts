@@ -141,6 +141,15 @@ function add(p: J, q: J): J {
   const x3 = mod(r * r - h3 - 2n * u1 * h2)
   return [x3, mod(r * (u1 * h2 - x3) - s1 * h3), mod(h * p[2] * q[2])]
 }
+/** The public key (raw uncompressed point, base64url) of a 32-byte private
+ *  scalar in 1..n−1. Plain P-256 arithmetic, so it is identical on every host;
+ *  null for a scalar out of range. */
+export function publicKeyOf(scalar: Uint8Array): string | null {
+  if (!(scalar instanceof Uint8Array) || scalar.length !== 32) return null
+  const d = toBig(scalar)
+  return d >= 1n && d < N ? publicOf(d) : null
+}
+
 /** d·G as a raw uncompressed point (65 bytes), base64url. */
 function publicOf(d: bigint): string {
   let acc: J = [0n, 1n, 0n], base: J = [GX, GY, 1n]
@@ -255,13 +264,16 @@ export async function openRecoveryInner(ct: Uint8Array, a: {
  * The directory's per-account pepper (server side; share implements it, this is
  * the reference for its vectors). From one versioned Worker secret PEPPER_vN:
  *   P         = HKDF(PEPPER_vN, empty, "bento/id/pepper/v1." ‖ b64u(sha256(accountPub)))
- *   verifyKey = HKDF(P, empty, "verify")   — stored verifier = HMAC-SHA-256(verifyKey, verifier)
- *   wrapKey   = HKDF(P, empty, "wrap")     — the outer AES-GCM layer over the inner ciphertext,
- *                                            aad = "bento/id/rc-pepper/v1." ‖ b64u(sha256(accountPub))
+ *   verifyKey = HKDF(P, empty, "bento/id/pepper/v1/verify")
+ *               — the stored verifier is HMAC-SHA-256(verifyKey, verifier)
+ *   wrapKey   = HKDF(P, empty, "bento/id/pepper/v1/wrap")
+ *               — the outer AES-GCM layer over the inner ciphertext,
+ *                 aad = "bento/id/rc-pepper/v1." ‖ b64u(sha256(accountPub))
+ * The subkey labels are fully domain-separated (security §28a).
  */
 export async function pepperKeys(pepper: Uint8Array, accountPub: string): Promise<{ verifyKey: Uint8Array; wrapKey: Uint8Array }> {
   const p = await hkdf(pepper, EMPTY, `bento/id/pepper/v1.${await accountTag(accountPub)}`)
-  return { verifyKey: await hkdf(p, EMPTY, 'verify'), wrapKey: await hkdf(p, EMPTY, 'wrap') }
+  return { verifyKey: await hkdf(p, EMPTY, 'bento/id/pepper/v1/verify'), wrapKey: await hkdf(p, EMPTY, 'bento/id/pepper/v1/wrap') }
 }
 
 export async function pepperVerifierTag(verifyKey: Uint8Array, verifier: Uint8Array): Promise<Uint8Array> {
