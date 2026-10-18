@@ -68,6 +68,11 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     /// identifier. Our own saves replace the file, so its recorded resource id
     /// is refreshed after each one, or a later move couldn't be followed.
     private var originHint: String?
+    /// The kernel's per-document store, held natively: see HostDocStore.
+    private let docStore = HostDocStore()
+    /// Store requests run here, one at a time and in order, off the main thread:
+    /// a recovery copy can be tens of megabytes.
+    private let storeQueue = DispatchQueue(label: "page.bento.home.docstore-requests")
 
     /// Called when the user leaves the document. The browser owns teardown —
     /// closing the UIDocument and releasing the security scope — because it
@@ -269,8 +274,13 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         // editor has already concluded it cannot.
         if let js = Bundle.main.url(forResource: "bridge", withExtension: "js"),
            let src = try? String(contentsOf: js, encoding: .utf8) {
+            // What THIS host implements, declared before the bridge reads it. The
+            // bridge offers the page a per-document store only when told so: a
+            // bridge that advertised one a host didn't implement would have the
+            // kernel keep member keys for the page only, and lose them on reload.
+            let caps = "window.__bentoHostCaps = ['store'];\n"
             cfg.userContentController.addUserScript(
-                WKUserScript(source: src, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+                WKUserScript(source: caps + src, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
 
         webView = WKWebView(frame: view.bounds, configuration: cfg)
@@ -343,6 +353,51 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         task.didFinish()
     }
     func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
+
+    // MARK: - The per-document store
+
+    /// The wire is pinned in home/bridge.js, shared with Android:
+    /// get → b64 or null · set → null · list → a JSON array string · delete →
+    /// null; failures are !ok with 'refused' (an unknown name), 'too-large' or
+    /// 'unavailable'. The partition is THIS document's origin — the identity
+    /// OriginIdentity minted — and never anything the page sent.
+    private func handleStore(_ op: String, _ m: [String: Any], _ id: Int) {
+        let partition = originHost
+        let name = (m["name"] as? String).flatMap(HostDocStore.Name.init(rawValue:))
+        let b64 = m["b64"] as? String
+        storeQueue.async { [weak self] in
+            guard let self else { return }
+            let answer: (Bool, String?)
+            switch op {
+            case "store.list":
+                guard let names = self.docStore.list(in: partition)?.map(\.rawValue),
+                      let json = (try? JSONSerialization.data(withJSONObject: names)).flatMap({ String(data: $0, encoding: .utf8) })
+                else { answer = (false, "unavailable"); break }
+                answer = (true, json)
+            case "store.get":
+                guard let name else { answer = (false, "refused"); break }
+                // a read that failed is NOT "absent": see HostDocStore.Read
+                switch self.docStore.get(name, in: partition) {
+                case .found(let d): answer = (true, d.base64EncodedString())
+                case .absent: answer = (true, nil)
+                case .unavailable: answer = (false, "unavailable")
+                }
+            case "store.set":
+                guard let name else { answer = (false, "refused"); break }
+                guard let b64, let data = Data(base64Encoded: b64) else { answer = (false, "refused"); break }
+                switch self.docStore.set(name, data, in: partition) {
+                case .stored: answer = (true, nil)
+                case .tooLarge: answer = (false, "too-large")
+                case .unavailable: answer = (false, "unavailable")
+                }
+            default: // store.delete
+                guard let name else { answer = (false, "refused"); break }
+                self.docStore.delete(name, in: partition)
+                answer = (true, nil)
+            }
+            DispatchQueue.main.async { self.reply(id, ok: answer.0, value: answer.1) }
+        }
+    }
 
     // MARK: - Which origin
 
@@ -661,6 +716,9 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
                     reply(id, ok: false, value: why)
                 }
             }
+
+        case "store.get", "store.set", "store.list", "store.delete":
+            handleStore(op, m, id)
 
         default:
             reply(id, ok: false, value: "unknown op")
