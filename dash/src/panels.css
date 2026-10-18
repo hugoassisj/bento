@@ -350,20 +350,10 @@ body.dp-resizing { cursor: col-resize; user-select: none; }
 .dp-row select {
   width: 100%;
   min-width: 0;
-  /* one height for every control, so the row pitch does not depend on which
-     control the row happens to hold. MEASURED before: text 28.1px, select
-     26.5px, checkbox 18.1px — three rhythms in one panel. */
-  height: var(--dp-row);
-  font: inherit;
-  font-size: 12.5px;
-  padding: 3px 6px;
-  border: 1px solid var(--line);
-  border-radius: var(--dp-radius);
-  background: var(--surface);
-  color: var(--ink);
+  /* The look — and the one 26px height every control shares, so the row
+     pitch does not depend on which control a row holds — is THE FIELD
+     (styles.css). This rule only sizes. */
 }
-.dp-row input:focus,
-.dp-row select:focus { outline: none; border-color: var(--blue); }
 .dp-row .dp-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 
 /* ————— THE CHECKBOX IS A FIELD, LIKE EVERY OTHER CONTROL —————

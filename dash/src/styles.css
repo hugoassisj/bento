@@ -79,6 +79,9 @@
      the page or a menu floating over the grid has no edge but its shadow, and
      shadows barely read on a dark ground. */
   --surface: #ffffff;
+  /* form-control fill — THE FIELD below. Dash's fields have always sat on
+     --surface; naming it lets the shared block read slides' token as is. */
+  --field: var(--surface);
   /* menu rows, buttons, list items. slides: --chrome-2 */
   --hover: #eceff4;
   /* A wash for hover states drawn OVER unknown content (a chart band, a table
@@ -378,6 +381,42 @@ html, body {
 }
 
 #app { display: flex; flex-direction: column; height: 100%; }
+
+/* ————— THE FIELD — one look for every text field, select and textarea ———————
+   The suite's reference: dash, spaces and type copy this block as it stands.
+   Every chrome field gets it with no class to remember, so a new field cannot
+   come out in the browser's own dress — the grey inset 2px border, square
+   corners, and in dark theme a #3b3b3b fill nobody chose (five of slides'
+   fields had exactly that, each with its own rule that forgot one property).
+
+   :where() keeps the specificity at ZERO, so a context rule that only sizes a
+   field (width, flex, font-weight) layers on top without restating the look,
+   and a field that is deliberately not a box (the ghost title, the password
+   gate's own card) overrides it with an ordinary class. The ring sits ON the
+   border (offset -1px), so no scroll container can clip it. Checkboxes,
+   radios, ranges and file pickers keep their native controls. Guarded here by
+   scripts/test-dash-fields-browser.mjs (slides' rig, ported). */
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='hidden']), select, textarea) {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+:where(textarea) { height: auto; padding: 6px 8px; line-height: 1.5; resize: vertical; }
+:where(input[type='color']) {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 1px 2px;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+:where(input, select, textarea):focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
 
 /* ————— top bar ————— */
 .dx-bar {
@@ -1226,19 +1265,14 @@ html, body {
   margin-inline-start: 8px;
   border-inline-start: 1px solid var(--line);
 }
+/* The look is THE FIELD; this sizes it and sets the monospace face, because
+   a formula is read character by character. */
 .dx-fx-input {
   flex: 1 1 auto;
-  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  padding: 3px 8px;
-  background: transparent;
-  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   min-width: 0;
   align-self: center;
 }
-.dx-fx-input:hover { border-color: var(--line); }
-.dx-fx-input:focus { outline: none; border-color: var(--blue); background: var(--surface); }
 
 /* ————— status bar —————
    Excel's reads left: what you are looking at; right: what the selection adds
@@ -1473,15 +1507,6 @@ html, body {
   font-size: var(--fs-micro);
   color: var(--muted);
 }
-.dx-pop-in {
-  font: inherit;
-  font-size: var(--fs-ui);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  padding: 4px 7px;
-  color: var(--ink);
-}
-.dx-pop-in:focus { outline: none; border-color: var(--blue); }
 
 /* ————— selection outline and fill handle ————— */
 .dg-outline {

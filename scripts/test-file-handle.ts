@@ -270,6 +270,8 @@ console.log('\nembeddedDocBlock reads the #bento-doc body from file bytes')
   const lookalike = `<script data-id="bento-doc">\nDECOY\n${close}` + file(body)
   ok(embeddedDocBlock(lookalike) === body, 'a data-id="bento-doc" lookalike is skipped; the real id block is read')
   ok(embeddedDocBlock('<html>no block here</html>') === null, 'no block → null')
+  ok(embeddedDocBlock(file('')) === '', 'a present-but-EMPTY block → "" (a pristine New shell, distinct from a non-Bento file that has no block)')
+  ok(embeddedDocBlock(file('   \n  ')) === '', 'a whitespace-only block is empty too → ""')
 }
 
 // --- launchQueue: a launched document holds a writable handle at boot ---------
@@ -388,6 +390,50 @@ console.log('\nlaunchQueue adopts the open document — and only it')
       'a Save As during the pending check wins — the launch does not snap back and overwrite it')
   }
 
+  delete (globalThis as Record<string, unknown>).document
+}
+
+// --- B6: a pristine New document adopts its handle ----------------------------
+// A document made with New in bento/home is a pristine shell: #bento-doc is
+// PRESENT but empty. readEmbeddedDoc collapses that to null (like a missing
+// block), so consumeLaunchQueue used to discard the host's hand-over and the
+// first Cmd-S opened a Save-As picker that wrote a SECOND file, leaving the
+// created one empty — the 1.2.9 B6 regression, on every New document in bento/home
+// (Android and iOS via the shared bridge). The adopter now reads the element
+// directly: '' (pristine) adopts; null (no block at all) does not.
+console.log('\nlaunchQueue: a pristine New document adopts its handle (B6)')
+{
+  const pristineFile =
+    `<!doctype html><html><head><script type="application/json" id="bento-doc">\n\n` +
+    `</scr` + `ipt></head><body></body></html>`
+  const handle = (fileText: string | null) => ({
+    kind: 'file', name: 'New-1.bento.html',
+    getFile: async () => { if (fileText === null) throw new Error('unreadable'); return { text: async () => fileText } },
+    async createWritable() { return { async write() {}, async close() {} } },
+  })
+  let pending: unknown
+  const vend = async (files: unknown[], liveBlock: { textContent: string } | null) => {
+    adoptFileHandle(null as never) // reset so this adoption is observable
+    ;(globalThis as Record<string, unknown>).document = {
+      getElementById: (id: string) => (id === 'bento-doc' ? liveBlock : null),
+    }
+    ;(globalThis as Record<string, unknown>).launchQueue =
+      { setConsumer(fn: (p: unknown) => void) { pending = fn({ files }) } }
+    pending = undefined
+    consumeLaunchQueue()
+    await pending
+  }
+
+  // pristine live page (empty block) + a pristine host file (empty block) → adopt
+  await vend([handle(pristineFile)], { textContent: '\n\n' })
+  ok(hasFileHandle(), 'a pristine New shell adopts the host handle — first Cmd-S saves in place, no picker')
+  ok(currentFileName() === 'New-1.bento.html', `and it is the launched New document (${currentFileName()})`)
+
+  // a live page with NO #bento-doc at all (not a Bento document) → booted null → never adopt
+  await vend([handle(pristineFile)], null)
+  ok(!hasFileHandle(), 'a page with no document block adopts nothing (booted is null, not "")')
+
+  adoptFileHandle(null as never)
   delete (globalThis as Record<string, unknown>).document
 }
 

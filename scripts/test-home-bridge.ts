@@ -154,6 +154,26 @@ ok(exportCopy.includes('hasPrefix(') && exportCopy.includes('safeFileName(name)'
     'android: a main-frame page start forgets remembered Save-As copies')
 }
 
+// The Mac (Catalyst) opens a system-handed file IN PLACE. revealDocument's import
+// is right on iOS and wrong on the Mac: an unsandboxed Mac app's Documents is the
+// person's real ~/Documents, so the import wrote a copy there and every save went
+// to the copy while the file they double-clicked never changed (measured,
+// 2026-10-18). The Catalyst branch must open the URL it was given, and must do so
+// BEFORE any import can run.
+{
+  const browser = readFileSync(join(dirname(SRC), 'DocumentBrowserViewController.swift'), 'utf8')
+  const incoming = slice(browser, 'func openIncoming(')
+  const mac = incoming.indexOf('#if targetEnvironment(macCatalyst)')
+  const reveal = incoming.indexOf('revealDocument(')
+  ok(mac >= 0 && /openEditor\(url\)\s*\n\s*return/.test(incoming.slice(mac, reveal > mac ? reveal : undefined)),
+    'on the Mac, openIncoming opens the given file and returns')
+  ok(mac >= 0 && reveal > mac,
+    "the Mac branch comes before revealDocument's import, so the Mac can never import a copy")
+  const yml = readFileSync(join(dirname(SRC), 'project.yml'), 'utf8')
+  ok(/SUPPORTS_MACCATALYST:\s*YES/.test(yml) && /DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER:\s*NO/.test(yml),
+    'the app builds for Mac Catalyst, as page.bento.home on every Apple platform')
+}
+
 if (spawnSync('swiftc', ['--version']).status !== 0) {
   console.log('  skip  no Swift toolchain on this machine — behaviour checks not run')
   console.log(`\n${checks - failures}/${checks} checks passed`)

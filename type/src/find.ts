@@ -511,7 +511,13 @@ let panel: FindPanel | null = null;
  */
 function showPanel(): void {
   document.querySelector('.t-main')?.classList.remove('t-side-off');
-  document.querySelector<HTMLElement>('.t-tabs button[data-tab="find"]')?.click();
+  // The find box lives in the Navigate tab's Results view (main.ts), not in a
+  // tab of its own: open the tab, then the view. A selector naming a tab that
+  // no longer exists matches nothing and fails SILENTLY — that is how the
+  // button and ⌘F once did nothing at all — so the browser rig opens find
+  // both ways and checks the box is on screen and focused.
+  document.querySelector<HTMLElement>('.t-tabs button[data-tab="navigate"]')?.click();
+  document.querySelector<HTMLElement>('#navSeg button[data-view="results"]')?.click();
 }
 
 // The house icon recipe, from icons.ts: 24 box, 16 render, currentColor,

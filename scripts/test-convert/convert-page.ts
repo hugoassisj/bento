@@ -82,6 +82,22 @@ ok(urls.every(u => u === 'https://bento.page/releases/slides/manifest.json'),
 ok(!/\b(XMLHttpRequest|WebSocket|EventSource|sendBeacon|RTCPeerConnection)\b/.test(js), 'no second network API in the bundle')
 ok(/nothing is uploaded|never leaves/i.test(markup), 'the page says so in words')
 
+console.log('no control in the browser\'s default look')
+{
+  // The page is dark. A native control draws in the page's color-scheme, and
+  // accent-color only tints the CHECKED state; with neither, an unchecked
+  // radio or checkbox renders the light UA default on the dark page.
+  const css = styles[0]?.[1] ?? ''
+  ok(/:root\{[^}]*color-scheme:\s*dark/.test(css), ':root declares color-scheme: dark, so native controls draw dark')
+  const page = fs.readFileSync(path.join(root, 'convert/page/convert-page.ts'), 'utf8') + markup
+  const kinds = [...new Set([...page.matchAll(/<input[^>]*type="(\w+)"/g)].map((m) => m[1]))]
+  ok(kinds.every((k) => k === 'file' || k === 'radio' || k === 'checkbox'), `the only inputs are file, radio and checkbox (${kinds.join(', ')}); no text field or select to style`)
+  ok(/#drop input\{[^}]*opacity:0/.test(css), 'the file input is never drawn (the drop zone stands in)')
+  ok(/\.option input\{[^}]*accent-color:var\(--peach\)/.test(css) && /\.flag input\{[^}]*accent-color:var\(--peach\)/.test(css),
+    'radios and checkboxes are tinted with the bento accent')
+  ok(!/<(select|textarea)\b/.test(page), 'no select or textarea anywhere on the page')
+}
+
 console.log('what the page offers')
 ok(/id="sample"/.test(markup) && /A little more portable/.test(js), 'the sample deck is built in (nothing fetched for it)')
 ok(/<a [^>]*href="\/slides\/"/.test(markup), 'the header links the editor, like the rest of bento.page')

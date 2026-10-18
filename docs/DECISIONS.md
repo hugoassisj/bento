@@ -14,6 +14,236 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-18 — Native hosts keep a document's recovery copy and member key outside the page
+
+**Decision.** The native hosts provide the per-document store that
+`kernel/src/docstore.ts` already speaks, so the kernel stops keeping two
+things in the page's own web storage: the crash-recovery copy (`recovery`) and
+this device's member key for the document (`memberkey`, whose private half is
+what lets this device act in the document's live room). Until now only the
+browser extension provided one, and on Android and iOS the whole member key,
+private half included, sat in the document origin's localStorage.
+
+**The shared half, `home/bridge.js`:**
+
+- **The host declares; the bridge obeys.** Each host prepends
+  `window.__bentoHostCaps = ['store']` to the injected bridge. Only then does
+  the bridge define `window.__bentoHost = {ops:['store']}` (non-writable) and
+  relay. A host that advertised a store it could not serve would lose the
+  member key on every reload: the kernel, finding a store present but refusing,
+  keeps the key for that page only and deliberately never falls back to
+  localStorage.
+- **Top frame only, page window only.** No store in a subframe, and a request
+  whose source is not the page's own window is ignored.
+- **The native contract**, written at the relay and enforced by
+  `scripts/test-home-docstore.mjs`. Requests are `{op, name, b64}`. Replies are
+  `(ok, value)`: `get` gives base64 or null; `set` and `delete` give null;
+  `list` gives a JSON array; any failure gives `'refused'` (a name other than
+  recovery/memberkey), `'too-large'` or `'unavailable'`. Bytes are rebuilt as a
+  `Uint8Array` in the page's own realm, because the kernel checks
+  `instanceof`.
+
+**Android, `DocStore.kt`:** partitioned by the document's claim (the identity
+that chooses its origin, 2026-10-18), never a path, URI or anything the page
+names. Encrypted with AES-GCM under a Keystore key. Kept in no-backup app
+storage. Written beside the entry, then renamed, so a crash leaves the old
+entry, not a truncated one. Capped at 64 MB. Runs on the same ordered thread
+as file writes.
+
+Each entry is authenticated with its claim and name (AES-GCM additional data):
+an entry file copied into another document's directory, or renamed from
+`recovery` to `memberkey`, fails authentication instead of decrypting as that
+document's (measured: a renamed genuine entry is refused, and the real one still
+reads). Such an entry reads as ABSENT, not as unavailable. The kernel refuses to
+mint a member key while the store "cannot answer", so treating it as unavailable
+would wedge that document's member identity for good. Absent lets it mint a
+fresh one; the next write replaces the bad entry.
+
+**Verified.** The rig drives the real bridge with the kernel's real client: no
+capability means no store at all; with the capability, 1 MiB round-trips and
+refusals pass through. The kernel's real `deviceIdentity` runs through it too:
+an existing member key in localStorage is adopted unchanged, with its private
+half moved into the store and only `{pub}` left behind; a new key is minted
+straight into the store; without the capability, nothing moves (the control). Removing the capability gate fails the three no-store
+checks. On the emulator the kernel's own autosave moved its recovery copy into
+the native store, and IndexedDB recovery came back empty.
+
+**With it:** the legacy-origin inspector now reads keys only (key cursors),
+attributes `bento-handles` by key, and refuses any other database that holds
+records. That includes `bento-blobcache`, which caches live-session media in
+plaintext. `scripts/test-home-inspector.mjs` runs the script as it ships; it
+also matched real Chromium IndexedDB case for case.
+
+**iOS** implements the same native contract in its own change, keeping the
+member key in the Keychain (this device only).
+
+## 2026-10-18 — Android: every docId form the apps mint counts as a docId
+
+**Supersedes "a strict UUID"** in the entry below. Spaces always mints
+`doc-<base36>`, and dash and slides fall back to `d-<base36>…` where
+`crypto.randomUUID` is missing. Read as "no docId", those documents fell back
+to the content hash: every external edit got fresh storage, losing the member
+key and recovery copy, and on update they refused their own legacy storage.
+Not a security issue, because a docId only ever refuses, but it orphaned state
+for whole apps.
+
+A docId is now any `^[A-Za-z0-9_-]{1,128}$`, compared exactly as stored with
+no case folding, the same as the iOS host. JVM cases go through `extractDocId`
+from real document HTML, because the bug was in reading the id: a doc- id and a
+d- id each adopt their own legacy storage, a different doc- id is refused, and
+a doc- id keeps its claim across an external edit. 4 of them fail against the
+strict check.
+
+## 2026-10-18 — A document's storage origin follows the file, not its path (iOS)
+
+**Corrects 2026-09-19**, which said the native hosts "were never exposed"
+because each document gets its own origin. That held **across paths**, and was
+false **across reuse of one path**. iOS derived the origin from a hash of the
+file's path, so a different file that later took the same path (the original
+deleted, a new download taking the name) inherited the previous file's web
+storage.
+
+Measured on a build of the host, with a real invite copy joined as a member:
+the successor read the old file's recovery copy, its version history, and this
+device's collab member private key for it. Encrypted decks skip the snapshots,
+but not the member key. Android derives its origin the same way, from the
+document's URI, and is fixing it separately.
+
+**Decision.** The origin follows the FILE (`home/ios/OriginIdentity.swift`):
+
+- **The anchor is the file's document identifier** (`NSURLDocumentIdentifierKey`),
+  with `UF_TRACKED` set on first open so a local file has one. Measured: it
+  survives the app's atomic saves, moves, and iCloud eviction and re-download;
+  a copy doesn't carry it; a new file at the same path gets a new one. It's
+  filesystem metadata, so nothing in a file can claim another's.
+- **A fresh origin is an HMAC under a device-local secret** (Keychain, this
+  device only), so knowing a path or an identifier doesn't reveal it.
+- **The host's index is the authority.** It maps a document to its origin
+  string. A moved file keeps its storage, recovery and member key included.
+- **A path that has had a document is never handed to another.** A newcomer
+  gets fresh storage. Old storage is never cleared, because its owner may simply
+  have moved.
+- **Files opened before this change keep their storage.** A legacy origin is
+  adopted only if everything stored there belongs to the file's own docId, so
+  nobody has to re-join a shared document. docId can refuse an origin, never
+  claim one: it's in the file's contents.
+- **The probe that looks (`home/ios/OriginProbe.js`) enumerates every database**
+  with `indexedDB.databases()`: each app's `${appId}-autosave`, the old shared
+  `bento-autosave`, and `bento-handles`, all attributed by docId. Anything it
+  can't attribute (a blob cache, an unknown database holding records, no
+  `databases()` at all, an error) refuses. "Couldn't look" never reads as
+  "empty". The first version looked only in `bento-autosave` and missed every
+  app's real data; `scripts/test-home-origin-probe.mjs` now runs the probe
+  itself in WebKit, including against a real deck's own autosave.
+- **Without a document identifier,** a random extended-attribute id is a hint,
+  honoured only where the index recorded it for this same file or a move of it.
+  Attributes travel with copies; only device-local state can tell "my file" from
+  someone else's copy of it.
+
+**Also:** the scheme handler serves a document only under its own host. It used
+to answer every `bento-tray://` host with the open document, so a page could
+frame another document's host and run itself there. Measured: WebKit partitions
+that frame's storage by the top-level page, so it read nothing, and the bridge
+already refuses frames. Defence in depth.
+
+**Guarded by** `scripts/test-home-origin.mjs`: the real `OriginIdentity.swift`,
+20 cases. It fails against a path-only origin.
+
+---
+## 2026-10-18 — Android: a document's web origin belongs to the document, not to its path
+
+**Supersedes one line of 2026-09-19** ("The native hosts were never exposed …
+cross-deck reads are impossible there"). That holds across different paths. It
+was false across ONE path reused by a different file.
+
+**What was measured** (emulator, Android 16, before this change). The Android
+host served each document from `https://<sha24(URI)>.bento-tray.invalid/`, and
+common document URIs are paths: the folder index's
+`primary:Documents/x.bento.html`, and the Files app's Downloads view, which
+hands over `raw:/storage/…` (a path) or `msf:<row>`, a MediaStore id that
+survives an overwrite. So a DIFFERENT file at the same place opened under the
+previous document's origin and read its localStorage, its autosave recovery
+copy and version history, and, because Android supplies no docstore, this
+device's member private key for that document. A different file elsewhere read
+nothing.
+
+**Decided.** The origin is a CLAIM in a device-local index, bound to the
+document (`DocumentOrigin.kt`, `OriginIndex.kt`):
+
+- **The docId refuses, never claims.** On every open, a URI's claim is reused
+  only for the same docId (a strict UUID read from the plaintext `#bento-doc`).
+  A different docId gets a fresh origin. A docId never selects an origin: an
+  unknown URI does not inherit another URI's claim because the docIds match.
+- **No docId** (an encrypted envelope, or a never-saved shell): reuse only for
+  exactly the bytes the host last read or wrote (SHA-256). Any other change gets
+  a fresh origin. A first save, which writes the docId the kernel just minted,
+  moves the claim to that docId, because the host itself wrote those bytes.
+- **New origins** are HMAC-SHA256(Keystore key, URI ‖ docId), or ‖ the content
+  hash when there is no docId. The key never leaves the device, and nothing in a
+  file selects or reproduces it.
+- **Legacy origins are adopted on update**, so existing recovery copies and
+  member keys survive. But only after an inspector page, served IN the legacy
+  origin before any document code runs there, finds no autosave record and no
+  member key belonging to another docId. Anything it can't attribute, or no
+  answer, gets a fresh origin.
+- **Nothing is cleared.** An abandoned origin's data stays, unreachable. Its
+  owner may have moved, and wiping it would destroy their recovery copy.
+- **A move or rename done outside the app gets a fresh origin.** The only
+  device-local evidence of a move would be the app performing it, and it has no
+  such feature. Letting a matching docId follow the file would let a docId claim
+  an origin, which is the hole this closes.
+
+**Verified on the emulator**, old build upgraded to new, app data kept:
+- the same document reopens on its legacy origin, with its own data;
+- a different document at a URI whose legacy storage holds another docId gets a
+  fresh origin and reads nothing;
+- an `msf:` overwrite by a different docId gets a fresh origin;
+- a successor at the same folder-index path after a delete gets a fresh origin;
+- a document reopened unchanged keeps its origin and data;
+- a never-saved shell keeps its storage across its first save and reopen.
+
+JVM rig: `DocumentOriginTest`, 18 cases. Removing the docId refusal fails 4;
+always adopting legacy storage fails 3. CI now runs the Android unit tests
+(`home-android-unit`); nothing ran them before.
+
+**Still open:** the member private key leaves localStorage only with a host
+docstore (`kernel/src/docstore.ts`). Android's, Keystore-backed and partitioned
+by this same claim, is next. iOS has the same path-derived origin and is fixing
+it in its own change.
+
+## 2026-10-18 — The Mac app is the iOS app, built for Mac Catalyst; a Mac double-click edits in place
+
+**Decision (maintainer, 2026-10-18).** Native desktop apps are the primary desktop
+host, and macOS comes from building the existing `home/ios` app for **Mac
+Catalyst**, not from a SwiftUI rewrite or a separate AppKit target. It ships with
+**Developer ID first** (notarised, outside the store); the Mac App Store comes
+later. A `.bento.html` double-click reaches the app through a per-file "open with"
+binding on documents it saves, plus an "Edit in bento/home" hand-off from the
+browser. A `.bento` extension is ruled out: a Bento file stays an HTML file that
+opens anywhere.
+
+**Why Catalyst.** The app builds for Catalyst with no source changes, so every
+host fix lands on the Mac for free.
+
+**Why a type can't do it.** macOS types a file by its last extension, so
+`x.bento.html` is always `public.html`. Measured: a declared, registered
+`bento.html` type with the app as Owner still left a double-click going to the
+browser.
+
+**What changes in code now.** On the Mac, a file the system hands over is opened
+**where it is**. iOS's `revealDocument(importIfNeeded:)` is right on a phone and
+wrong on a Mac: an unsandboxed Mac app's Documents is the person's real
+`~/Documents`, so the import wrote a copy there, and every save went to the copy.
+On the Mac, a double-click means "edit this file".
+
+The Mac bundle id stays `page.bento.home`: one app on every Apple platform.
+
+**Still open.** The browser hand-off's URL scheme needs a security ruling. Signing,
+notarisation, the keychain, passkeys and associated domains all wait on the paid
+Apple team. The scoping is in the private design notes.
+
+---
+
 ## 2026-09-10 — bento/spaces footnotes: the reference is a TEXT TOKEN, and the number is derived
 
 **Decision.** A footnote in `bento/spaces` is `doc.footnotes` (a document-level
@@ -10434,3 +10664,266 @@ choices are dash's and are recorded because a later change could undo them:
   must never cost the copy. It stays for the next open, as ✕ already left it.
   `recoveryLooksOlder` is read against the workbook AS LOADED, because dash
   stamps `modified` on every edit.
+
+
+## 2026-10-17 — the suite's one field look, set in slides
+
+Every text field, select and textarea in an app's chrome wears one look. The
+rule is the `THE FIELD` block in `slides/src/styles.css`; dash, spaces and type
+copy that block as it stands rather than restyling fields one by one:
+
+- the selector is `:where(…)` over every `input` except checkbox, radio,
+  range, file, colour, button types and hidden, plus `select` and `textarea`;
+  colour inputs get the same border, fill and radius from their own block;
+- 1px solid `--line` border, `--field` fill, `--ink` text, 6px radius,
+  `font: inherit` at 12.5px, 26px tall (border-box, `padding: 0 6px`);
+  textareas are `height: auto` with `padding: 6px 8px` and `line-height: 1.5`;
+- focus is `:focus-visible` → `outline: 2px solid var(--accent-ink);
+  outline-offset: -1px`. The ring sits on the border, so a scroll container
+  cannot clip it.
+
+Two choices here could be undone by accident:
+
+- **Zero specificity, no class.** A field that needs a class to look right
+  comes out in the browser's dress the day someone forgets it. That had
+  happened five times in slides: in dark theme those fields had the browser's
+  `#3b3b3b` fill, and About's theme select had the whole UA look (square, grey
+  `#767676` border, 19px tall). Context rules now only SIZE a field (width,
+  flex, monospace font); they never restate its look.
+- **Two deliberate exceptions, by class.** The deck title is a ghost field (no
+  box at rest, the field's border on hover, its fill once focused). The
+  password gate is its own card on the dark boot splash. Anything else that
+  overrides the look needs a reason recorded here.
+
+`scripts/test-slides-fields-browser.mjs` walks the panel for every element
+kind, the slide panel, About, Replace from JSON, Export images, Encrypt with
+password, the Share popover and the comment popover, in both themes, and fails
+on any field that differs. It plants a field with its author styles reverted
+to prove that the check catches the browser's dress.
+
+
+## 2026-10-17 — dash adopts the suite's one field look
+
+Dash copies slides' `THE FIELD` block as written, into `dash/src/styles.css`
+(see "the suite's one field look, set in slides"). What is dash's own:
+
+- **`--field` is `var(--surface)`.** It's the fill dash's fields have always
+  had, so dark theme keeps dash's palette instead of importing slides' value.
+  `--accent-ink` was already defined, and the ring uses it, not `--blue`. Dark
+  amber passes the 3:1 that WCAG 2.2 SC 1.4.11 asks of a focus indicator.
+- **One exception, by class: `.dx-title`**, the ghost workbook title, as in
+  slides. The boot password gate reuses that class and stays as it is.
+- **Formerly ghost fields are now ordinary fields:** the formula bar, tab
+  rename and the story caption. Each had been boxless at rest. Recording why:
+  only the title is a ghost, so anything else that should be one needs a reason
+  here.
+- **Context rules only size.** Every `:focus { outline: none }` is gone; it
+  would outrank the zero-specificity ring and remove it. The "colour not set"
+  strike on a colour well is now a `background-image` over the fill, because
+  the `background` shorthand reset the fill.
+
+`scripts/test-dash-fields-browser.mjs` is slides' rig ported to 17 dash
+surfaces. Its five mutations are slides' own, and each fails it.
+
+## 2026-10-17 — Rescue: a file moved onto the latest shell of its own app, its document block carried byte for byte
+
+Slides 1.2.4–1.2.8 cannot open password-protected decks: the loader refuses
+every path over the password gate. A fixed shell can't reach those files,
+because About → Update runs inside the app and the file never boots.
+bento.page/convert therefore offers every Bento `.bento.html` "The same
+file, on the latest version". `deliver.ts spliceVerbatim` puts the file's
+`#bento-doc` block, BYTE FOR BYTE, into the newest signed and pinned shell of
+the file's own app.
+
+- **Never parsed into a document, never re-serialised, never decrypted.** A
+  `bento/enc` envelope stays exactly as it was, so no password is involved.
+  The rig decrypts the carried envelope with the original password to prove
+  it was untouched. A re-serialising splice was hidden by compact-JSON
+  fixtures (JSON.stringify reproduces them byte for byte), so the rig also
+  carries a pretty-printed envelope and a plain deck with `\u003c` escapes.
+  A re-serialising mutant fails on both, and the splice's own read-back
+  refuses it.
+- **Which app:** the file's shell `<meta name="generator">`, or, for a plain
+  file from a shell older than that tag, the document's format. The signed
+  manifest's `app` and the downloaded shell's generator must both match the
+  file's, or the rescue is refused. `fetchVerifiedShell` takes the app id; the
+  version floor stays slides-only.
+- **Refused rather than guessed:** a block containing a raw `<` (every Bento
+  writer escapes it, and a raw one could change how the new shell parses),
+  an empty block, a block that isn't JSON, and a document whose format isn't
+  the app's.
+- **Carried:** the block, and for an UNENCRYPTED file its own `<title>`. An
+  encrypted file keeps the shell's neutral title: builds before 1.2.9 wrote
+  an encrypted deck's real title in clear, and carrying it would re-publish
+  what the password hides (security review). **Not carried:**
+  anything else the old shell held. Language packs are reported and can be
+  added again; a first-page preview is regenerated on the next save, and
+  encrypted files never have one.
+- An app with no published release says so plainly.
+- **Never onto a shell that cannot open the file.** `ENC_OPEN_MIN` holds the
+  oldest release of each app that opens encrypted files (slides 1.2.9; 1.2.0–
+  1.2.8 all refuse). An encrypted file is not moved onto an older latest
+  release, so the rescue only goes live with 1.2.9. Plain files may still
+  move onto 1.2.8. Measured on slides' hotfix build: encrypted fixtures from
+  live 1.2.8 and from 1.2.0–1.2.3 show three gates and the loader refusal as
+  they are. Rescued, each shows ONE gate and unlocks to the whole deck.
+
+
+## 2026-10-17 — the loader reads what the app published: running, locked or refused
+
+The compressed shell's loader (scripts/postbuild-compress.mjs) runs the app
+through a cascade: an inline classic script, then `new Function`, then a blob
+import. After each path it decides whether the app ran by reading
+`window.bento`. It used to read `window.bento.doc` alone.
+
+An encrypted deck's app is still at its password gate when the path returns,
+so it had published nothing. Every path read as refused, the app ran once per
+path (three password cards), and the loader painted "every loader path was
+refused" over all of them. Measured in Chromium and WebKit: released slides
+1.2.0 through 1.2.8 cannot open a password-protected deck. 1.1.0 and 1.0.19 can.
+The cascade first shipped in 1.2.0, since there was no 1.1.1 release.
+
+**The contract.** An app publishes `window.bento` before it hands control back
+to the loader:
+- `{ doc, … }` while running;
+- `{ format, locked: true }` while waiting at its password gate, set
+  synchronously BEFORE the gate is shown and replaced wholesale on unlock;
+- `{ format, refused: true }` after painting its OWN refusal of a file it will
+  not open. It may throw afterwards.
+
+Any of the three means the app ran: no later path runs it again, and the loader
+paints nothing. The loader's failure card is only for an app that published
+nothing at all. The decision is made from what was published, not from whether
+the app threw, so `runNow` and the blob step check `mounted()` after a throw
+too.
+
+The apps: slides sets `locked` (this change). Spaces sets `locked` on its own
+branch. Type will set `refused` once security clears its finding in that code.
+
+Guards: `scripts/test-shell-loader-published-browser.mjs` builds toy shells with
+the real postbuild script, for each state and with every path, blob only, and an
+`import.meta` bundle. `scripts/test-slides-encrypted-open-browser.mjs` tests the
+real deck.
+
+`docs/PLATFORM.md` is where cross-app invariants live, and it is the
+maintainer's to edit. This contract belongs there once the maintainer agrees.
+
+## 2026-10-15 — bento/spaces restores by direction, and a recovery unions the trail by day
+
+Every whole-document restore in bento/spaces now resolves through the kernel's
+`applyRestore` (`kernel/src/docfields.ts`) over one rule set,
+`spaces/src/store.ts` `RESTORE_RULES` = the field-class map plus two recover
+hooks, on `trail` and `revisions`. The hand-rolled keep-live in `store.ts` and
+`restoregate.ts` is gone. Each entry point names its direction:
+
+- **'back'** — undo, redo, a version restore from either timeline, Replace
+  from JSON and `bento.loadDoc`. Content follows. Identity, modes, capability
+  and history keep the live value, so a paste or a version can neither delete
+  this space's history nor install one.
+- **'recover'** — the crash-recovery banner only. `revisions` goes through
+  `history.ts` `revisionsRecover`, which applies these rules in order:
+  1. `[]` means the list was cleared. The hook returns `undefined`, so the
+     key is removed, just as Clear history deletes it rather than storing
+     `[]`.
+  2. A recovered list that is not an array, or that has even one entry
+     failing `readable`, is refused whole, and the live list stands. That
+     entry check is the same one a file's list passes (`historyIsForeign`).
+     A recovery snapshot is foreign input, and before this rule one
+     unreadable entry replaced the live, readable log.
+  3. A foreign live list is never written over (#671). This also keeps a
+     newer build's history intact.
+  4. Otherwise the readable recovered list follows the snapshot. This is the
+     crash case: a revision the last save wrote must survive.
+
+  The hook never merges and never picks entries.
+
+  **Cleared stays cleared.** The recovery snapshot is the whole document, so
+  a snapshot with no `revisions` means the person ran Clear history. Without
+  the rule below, Restore on the banner brought the cleared drafts back, and
+  the next copy the person shared carried them. That is a confidentiality
+  bug: here confidentiality wins over integrity, behind a banner the person
+  chose to accept. Since kernel #726, a whole snapshot removes an absent
+  history key by default, so cleared revisions stay cleared in the kernel
+  itself. Before #726 the kernel kept that key live before any hook ran. For
+  that reason `restoregate.ts` `asWholeRecovery` states an absent `revisions`
+  as `[]` on the 'recover' path, and the hook reads `[]` as cleared. That
+  normalisation is now redundant but harmless, since it gives the same
+  result. It stays for now, and removing it is a separate follow-up.
+
+  **The trail opts out.** `RECOVER_RULES` carries
+  `keepLiveWhenAbsent: ['trail']`, and only `trail`. Nobody clears a trail by
+  leaving it out: a snapshot with no trail means "no rows yet", and the live
+  rows are observations nobody can recompute. `revisions` must never be listed
+  there, because cleared history has to stay cleared. A rig row pins the list
+  to exactly `['trail']`. `trail` goes through `trail.ts` `trailRecover`.
+
+`trailRecover` keeps a day found on one side only. A day on both sides goes
+to the side whose whole document is later: the snapshot's `at` against the
+live `modified`, both in epoch ms. A tie keeps live. A live file with no
+`modified` counts as older. Next, so no day is counted twice, rows are walked
+newest first within each series, and a row whose day falls inside the span
+of a row already kept is dropped. That covers a weekly or monthly bucket
+against single days, and two buckets that overlap. Days are compared as
+labels with `dayIndex`, and only within one series. The result then goes
+through `pruneTrail`. Live's key order is kept, so a snapshot that adds
+nothing raises no banner.
+
+**Undo keeps the asset pool live.** Undo checkpoints omit `assets` for size.
+On 'back', `applyRestore` treats an absent content field as dropped, so a
+checkpoint applied as-is would empty the pool. The undo path alone overrides
+`assets` to 'live' (`UNDO_RULES`). That is what undo did before. A version
+restore and a paste carry their own pool, so there it follows.
+
+**A recovery removes what was removed.** The banner path passes
+`wholeSnapshot: true` explicitly. Kernel #716 made that the default, but the
+spaces call still states it, because the recovery snapshot is
+`contentOnly(doc)`, the whole document. So a content key or an unknown
+top-level key missing from the snapshot was deleted by the person, and it
+stays deleted after recovery. That covers a design, footnotes or a journal
+template removed after the last save. History follows its own rules. A
+snapshot with no `trail` keeps the live rows, through the
+`keepLiveWhenAbsent` opt-out. A snapshot with no `revisions` means they were
+cleared, as described above. The identity, mode and
+capability floor is unchanged.
+
+Verified in `scripts/test-spaces-restore.ts`. Mutations, all red:
+- recovery passed as 'back';
+- Replace from JSON passed as 'recover';
+- the hook returning the snapshot's trail wholesale;
+- the span drop removed;
+- the undo assets override removed;
+- `wholeSnapshot: false` on the recovery path;
+- the revisions hook unbound, or returning the snapshot's list;
+- the absent-to-`[]` normalisation removed;
+- the hook keeping live for `[]`;
+- rule 3 (a foreign live list is kept) dropped;
+- `keepLiveWhenAbsent` removed or emptied, which loses the live trail;
+- `'revisions'` added to `keepLiveWhenAbsent`, together with the
+  normalisation removed, which resurrects cleared drafts. With the
+  normalisation still in place, only the pins catch adding `'revisions'`.
+
+## 2026-10-17 — bento/spaces drops its own "absent revisions = cleared" step; the kernel does it
+
+This supersedes one part of the 2026-10-15 entry "bento/spaces restores by
+direction". That entry's `asWholeRecovery` step, which turned an absent
+`revisions` into `[]` before a recovery, is gone. Since kernel #726, a whole
+recovery snapshot removes an absent history key by default, so cleared
+history stays cleared without the spaces step. `RECOVER_RULES` still opts out
+exactly `['trail']` (`keepLiveWhenAbsent`), because a missing trail means "no
+rows yet", not a clear. `revisionsRecover` is kept unchanged:
+- a `[]` the snapshot carries still removes the key;
+- a foreign list on either side still keeps the live list;
+- a readable recovered list still follows the snapshot.
+
+With the step gone, the list is the only thing keeping cleared history
+cleared. `scripts/test-spaces-restore.ts` holds it two ways:
+- a pin that the list is exactly `['trail']`;
+- a behavioural row that plants `['trail', 'revisions']` on the real rules
+  and runs the real recovery path. The cleared drafts come back, and the row
+  asserts that the real rules do not do this.
+
+Mutations, all red:
+- adding `'revisions'` to the list: 8 rows in that rig and 1 in
+  `test-spaces-restore-gate.ts`, including every cleared-stays-cleared row
+  (before this change, only the 2 pins caught it);
+- removing the list: 6 + 1, covering the trail rows.

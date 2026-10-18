@@ -996,4 +996,8 @@ export const ja: Catalog = {
   "Leave version history out": "バージョン履歴を含めない",
   "Versions include text that was deleted. This file keeps them either way.": "バージョンには削除された本文も含まれます。このファイルにはどちらの場合も残ります。",
   "Save invite…": "招待を保存…",
+  "This recovered copy looks older than the file you opened. Keep the file unless you know it’s newer.": "この復元コピーは、開いたファイルより古いようです。新しいと分かっている場合を除き、ファイルをそのまま使ってください。",
+  "Keep the file": "ファイルを使う",
+  "Restore anyway": "それでも復元",
+  "Crash recovery is off for this space — it’s too large to keep a backup copy. Save often.": "このスペースのクラッシュ復旧はオフです — 大きすぎてバックアップを保存できません。こまめに保存してください。",
 }

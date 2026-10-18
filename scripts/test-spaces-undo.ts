@@ -351,7 +351,7 @@ console.log('bento/spaces undo\n')
     ;(foreign as Record<string, unknown>).collab = { v: 2, room: 'w-theirs', key: 'kx', on: true }
     foreign.readonly = true
     foreign.template = true
-    s.replaceDoc(foreign)
+    s.replaceDoc(foreign, 'back')
     ok(textOf(s, 'z') === 'Z0', 'replaceDoc: the content is replaced')
     ok(s.doc.docId === 'u' && room(s) === 'w-room1' && on(s) === false,
       'replaceDoc: docId and collab (incl. its off switch) stay the live ones')

@@ -24,6 +24,10 @@
   --in:'Instrument Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   --fr:Fraunces,Georgia,'Times New Roman',serif;
 }
+/* The page is dark, so native controls must be too: without this the
+   unchecked radio and checkbox draw the browser's light default (a white
+   box with a grey border). accent-color tints the checked state. */
+:root{color-scheme:dark}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--ink);color:var(--text);font-family:var(--in);line-height:1.6;-webkit-font-smoothing:antialiased}
 a{color:var(--peach)}
@@ -104,12 +108,12 @@ footer{border-top:1px solid var(--line);margin-top:56px;padding:22px 0;color:var
 
   <p class="private"><span aria-hidden="true">🔒</span><span><strong>Your file never leaves this device.</strong>
     Conversion runs entirely in this browser tab. Nothing is uploaded, and this page runs no analytics.
-    When it makes a bento/slides deck, it downloads the latest bento/slides app and its signed release record, so that the app it puts your deck into is verified as genuine. Nothing else is downloaded.</span></p>
+    When it makes a Bento file, it downloads the latest version of that Bento app and its signed release record, so that the app it puts your document into is verified as genuine. Nothing else is downloaded.</span></p>
 
   <h2 class="step"><span class="num">1</span> Choose a file</h2>
   <label id="drop">
     <strong id="drop-title">Drop a file here, or choose one</strong>
-    <span class="hint" id="drop-hint">A PowerPoint deck (.pptx), a bento/slides deck (.bento.html), or a deck’s document JSON. Up to <span id="limit">100 MB</span>.</span>
+    <span class="hint" id="drop-hint">A PowerPoint deck (.pptx), any Bento file (.bento.html), including one that won’t open, or a deck’s document JSON. Up to <span id="limit">100 MB</span>.</span>
     <input id="file" type="file" accept=".pptx,.html,.htm,.json,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/html,application/json">
   </label>
   <p class="sample">Just looking? <button type="button" class="linkbtn" id="sample">Try it with a sample deck</button></p>

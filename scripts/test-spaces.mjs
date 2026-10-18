@@ -74,6 +74,7 @@ const RIGS = [
   { name: 'reading', file: 'scripts/test-spaces-reading.ts', bundle: true },
   { name: 'md-strict', file: 'scripts/test-spaces-md-strict.ts', bundle: true },
   { name: 'restore-gate', file: 'scripts/test-spaces-restore-gate.ts', bundle: true },
+  { name: 'restore', file: 'scripts/test-spaces-restore.ts', tzs: TZS_TRAIL, bundle: true },
   { name: 'history', file: 'scripts/test-spaces-history.ts', bundle: true },
   { name: 'mentions', file: 'scripts/test-spaces-mentions.ts' },
   { name: 'size',    file: 'scripts/test-spaces-size.mjs' },
@@ -81,6 +82,11 @@ const RIGS = [
   // built spaces shell and Playwright/Chrome (the CI browser job provides both).
   { name: 'save-revisions', file: 'scripts/test-spaces-save-revisions.ts' },
   { name: 'save-browser', file: 'scripts/test-spaces-save-browser.mjs' },
+  // every chrome field styled, light and dark — the built shell in Chromium
+  { name: 'fields-browser', file: 'scripts/test-spaces-fields-browser.mjs' },
+  { name: 'encrypted-browser', file: 'scripts/test-spaces-encrypted-browser.mjs' },
+  // the older-copy warning and the recovery-off notice, in the built shell
+  { name: 'recovery-browser', file: 'scripts/test-spaces-recovery-browser.mjs' },
   // drives the BUILT shell in Chrome; self-skips outside CI without one
   { name: 'chrome',  file: 'scripts/test-spaces-chrome.ts' },
 ]

@@ -86,20 +86,10 @@
   overflow-wrap: anywhere;
 }
 
+/* The look is THE FIELD (styles.css); a context rule only sizes. */
 .dx-about-in,
-.dx-about select {
-  font: inherit;
-  font-size: var(--fs-ui);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  padding: 4px 7px;
-  background: var(--surface);
-  color: inherit;
-  width: 100%;
-}
-.dx-about-in:focus,
-.dx-about select:focus { outline: none; border-color: var(--blue); }
-.dx-about-in[disabled] { background: var(--panel); color: var(--muted); }
+.dx-about select { width: 100%; }
+.dx-about-in[disabled] { color: var(--muted); }
 
 .dx-about-actions {
   display: flex;
@@ -108,19 +98,14 @@
   margin-top: 6px;
 }
 
+/* The look is THE FIELD (styles.css); this sizes it and sets the monospace
+   face, because it holds JSON. */
 .dx-about-paste {
-  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   width: 100%;
   min-height: 9rem;
   margin-top: 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  padding: 8px;
-  resize: vertical;
-  background: var(--surface);
-  color: inherit;
 }
-.dx-about-paste:focus { outline: none; border-color: var(--blue); }
 
 .dx-about-vers {
   display: flex;

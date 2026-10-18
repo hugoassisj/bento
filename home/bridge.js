@@ -210,4 +210,86 @@
       },
     }
   }
+  // ------------------------------------------------- the per-document store
+  //
+  // kernel/src/docstore.ts keeps two things out of the page's own web storage
+  // when a host offers a store: the crash-recovery copy ('recovery') and this
+  // device's member key for the document ('memberkey'). It finds the store by
+  // `window.__bentoHost.ops` including 'store' at boot, then speaks a
+  // request/response protocol over postMessage on its own window. This relays
+  // that protocol to the native host, which keeps each document's entries in
+  // storage partitioned by the document's own identity — never by anything the
+  // page names.
+  //
+  // ONLY when the native side says it implements the store. This file is
+  // shared, and a host that advertised a store it could not serve would cost
+  // the user their member identity on every reload: the kernel, seeing a store
+  // present but refusing, keeps the key for that page only and deliberately
+  // never falls back to localStorage. So each host declares its capabilities
+  // ahead of this file (`window.__bentoHostCaps`), and without that nothing
+  // here runs.
+  //
+  // Top frame only. Android injects this script into same-origin subframes as
+  // well; a store reachable from a frame the document created is not one the
+  // document controls.
+  ;(() => {
+    const caps = Array.isArray(window.__bentoHostCaps) ? window.__bentoHostCaps.slice() : []
+    try { delete window.__bentoHostCaps } catch (_) {}
+    if (window !== window.top || caps.indexOf('store') < 0) return
+
+    const prev = window.__bentoHost && Array.isArray(window.__bentoHost.ops) ? window.__bentoHost.ops : []
+    const ops = Object.freeze(Array.from(new Set(prev.concat(['store']))))
+    Object.defineProperty(window, '__bentoHost', {
+      value: Object.freeze({ ops }), writable: false, enumerable: true, configurable: false,
+    })
+
+    // THE NATIVE CONTRACT, identical on every host. Requests arrive through the
+    // ordinary call() channel as {id, op, name} (plus b64 for store.set). The
+    // native side answers through the ordinary reply, (id, ok, value), with
+    // value a string or null:
+    //   store.get     ok, value = base64 of the bytes | null when absent
+    //   store.set     ok, value = null
+    //   store.list    ok, value = JSON array of names, e.g. '["memberkey","recovery"]'
+    //   store.delete  ok, value = null      (also when it was already absent)
+    //   any failure   !ok, value = 'refused' (a name other than recovery/memberkey)
+    //                             | 'too-large' (over the host's cap)
+    //                             | 'unavailable' (the host could not do it)
+    // The partition is the document's identity as the HOST derived it; nothing
+    // in a request names it. scripts/test-home-docstore.mjs holds a host to this.
+    const CH = '__bento_tray__'
+    const KNOWN = { 'store.get': 1, 'store.set': 1, 'store.list': 1, 'store.delete': 1 }
+    // Both transports carry strings, so bytes travel as base64 — and are turned
+    // back into a Uint8Array HERE, in the page's own realm, because the kernel
+    // checks `instanceof Uint8Array` and a typed array built elsewhere fails it.
+    const toB64 = (u8) => {
+      let s = ''
+      for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000))
+      return btoa(s)
+    }
+    const fromB64 = (b64) => {
+      const bin = atob(b64)
+      const out = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+      return out
+    }
+
+    window.addEventListener('message', (ev) => {
+      const d = ev.data
+      if (ev.source !== window || !d || d[CH] !== true || d.dir !== 'req' ||
+          typeof d.op !== 'string' || d.op.indexOf('store.') !== 0) return
+      const respond = (result) => window.postMessage({ [CH]: true, dir: 'res', id: d.id, result }, '*')
+      if (!KNOWN[d.op]) { respond({ ok: false, reason: 'unknown op' }); return }
+      const p = d.payload || {}
+      const params = { name: p.name }
+      if (d.op === 'store.set') {
+        if (!(p.bytes instanceof Uint8Array)) { respond({ ok: false, reason: 'bytes must be a Uint8Array' }); return }
+        params.b64 = toB64(p.bytes)
+      }
+      call(d.op, params).then((value) => {
+        if (d.op === 'store.get') respond({ ok: true, bytes: value == null ? null : fromB64(String(value)) })
+        else if (d.op === 'store.list') respond({ ok: true, names: JSON.parse(String(value || '[]')) })
+        else respond({ ok: true })
+      }, (e) => respond({ ok: false, reason: String((e && e.message) || e) }))
+    })
+  })()
 })();
