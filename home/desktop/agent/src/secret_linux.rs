@@ -94,14 +94,47 @@ impl SecretStore {
         self.read(&KeyRole::Account)?.ok_or(StoreError::NoKey)
     }
 
-    /// Remove every key of this profile (device retirement, wipe path).
+    /// Remove every key of this profile (device retirement, the wipe path).
+    /// Locked items are unlocked and deleted too, and the store is searched
+    /// again afterwards: wipe reports success only when NOTHING of this profile
+    /// remains, locked or not (security, #779 review). A keyring that cannot be
+    /// unlocked here makes wipe FAIL; it never pretends.
     pub fn wipe(&self) -> Result<(), StoreError> {
         for role in [KeyRole::Account, KeyRole::Device, KeyRole::Consent] {
-            for item in self.ss.search_items(self.attrs(&role)).map_err(ss_err)?.unlocked {
+            let found = self.ss.search_items(self.attrs(&role)).map_err(ss_err)?;
+            for item in found.locked.iter() {
+                item.unlock().map_err(ss_err)?;
+            }
+            for item in found.unlocked.iter().chain(found.locked.iter()) {
                 item.delete().map_err(ss_err)?;
+            }
+            let left = self.ss.search_items(self.attrs(&role)).map_err(ss_err)?;
+            if !left.unlocked.is_empty() || !left.locked.is_empty() {
+                return Err(StoreError::Unavailable(format!(
+                    "wipe incomplete: {} {} key item(s) remain",
+                    left.unlocked.len() + left.locked.len(),
+                    role_name(&role)
+                )));
             }
         }
         Ok(())
+    }
+
+    /// Lock the default collection (rigs: the wipe-while-locked row).
+    #[doc(hidden)]
+    pub fn lock_collection(&self) -> Result<(), StoreError> {
+        self.ss.get_default_collection().map_err(ss_err)?.lock().map_err(ss_err)
+    }
+
+    /// How many items of this profile exist, locked or not (rigs).
+    #[doc(hidden)]
+    pub fn count_items(&self) -> Result<usize, StoreError> {
+        let mut n = 0;
+        for role in [KeyRole::Account, KeyRole::Device, KeyRole::Consent] {
+            let f = self.ss.search_items(self.attrs(&role)).map_err(ss_err)?;
+            n += f.unlocked.len() + f.locked.len();
+        }
+        Ok(n)
     }
 }
 

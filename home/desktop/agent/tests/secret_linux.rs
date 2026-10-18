@@ -56,3 +56,24 @@ fn stated_exposure_a_second_connection_reads_the_account_key_without_a_prompt() 
     other.wipe().unwrap();
     assert!(other.account().is_err());
 }
+
+#[test]
+fn wipe_with_a_locked_keyring_never_reports_success_while_keys_remain() {
+    // Security, #779 review: wipe() used to delete only UNLOCKED items, so with
+    // a locked keyring every key survived and wipe still returned Ok.
+    let s = SecretStore::open(&profile("locked")).unwrap();
+    s.create_device_key().unwrap();
+    s.store_account(&[3u8; 32]).unwrap();
+    assert_eq!(s.count_items().unwrap(), 2);
+    s.lock_collection().unwrap();
+    match s.wipe() {
+        // either it unlocked and removed everything…
+        Ok(()) => assert_eq!(s.count_items().unwrap(), 0, "wipe said Ok, so nothing may remain"),
+        // …or it refused to claim success; then the keys are still there, and
+        // the caller knows the wipe did not happen.
+        Err(e) => {
+            eprintln!("wipe refused on a locked keyring: {e:?}");
+            assert!(s.count_items().unwrap() > 0, "an Err means keys remain");
+        }
+    }
+}
