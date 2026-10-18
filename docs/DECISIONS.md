@@ -11200,3 +11200,17 @@ Follows the desktop agent core entry above.
 Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
 old pepper labels, losing O→0 when reading a code, and skipping the range
 check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
+
+## 2026-10-18 — Android: no recents snapshot while a sealed document is open
+
+While the open document is password-protected or identity-sealed, the Android
+editor turns off its app-switcher snapshot (`setRecentsScreenshotEnabled(false)`,
+API 33+), so the recents card is blank. The decision comes from the bytes the
+host opened or last wrote (`DocumentIndex.isEncrypted`), so it switches on at
+the save that encrypts the file and back off at the save that removes the
+password. Below API 33 the only tool is `FLAG_SECURE`, which also blocks
+screenshots, so it is not set by default there; it can come later as an
+opt-in setting. Measured on the emulator (API 36), with recents opened from
+Home so the stored snapshot is what shows: a sealed document's card is blank;
+the same file on a build without this change shows its screen; an unsealed
+document's card still shows its content.

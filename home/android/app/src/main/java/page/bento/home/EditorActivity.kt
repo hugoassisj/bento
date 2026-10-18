@@ -205,6 +205,7 @@ class EditorActivity : Activity() {
                     fatal(getString(R.string.err_open))
                 } else {
                     bytes = data
+                    applySealedPrivacy(data)
                     Recents.touch(this, uri, docName)
                     chooseOrigin(facts!!) { origin ->
                         if (isFinishing || isDestroyed) return@chooseOrigin
@@ -728,6 +729,21 @@ class EditorActivity : Activity() {
      */
     private fun targetsOpenDocument(name: String?) = openDocumentVended && name == docName
 
+    /**
+     * Neutral recents while a sealed document is open (threat model §30.6): an
+     * encrypted or identity-sealed file gets no app-switcher snapshot, since the
+     * snapshot is a picture of the unlocked content. Decided from the bytes this
+     * host opened or just wrote, so encrypting a document and saving it over
+     * itself takes effect at that save, and removing the password restores
+     * the snapshot. API 33+; below that the only tool is FLAG_SECURE, which
+     * also blocks screenshots, so it is an opt-in there and not set here.
+     */
+    private fun applySealedPrivacy(data: ByteArray) {
+        if (Build.VERSION.SDK_INT < 33) return
+        val head = String(data, 0, minOf(data.size, DocumentIndex.HEAD_CHARS), Charsets.UTF_8)
+        setRecentsScreenshotEnabled(!DocumentIndex.isEncrypted(head))
+    }
+
     private fun writeInPlace(id: Int, text: String) {
         val uri = docUri ?: return reply(id, false, "no document")
         val data = text.toByteArray()
@@ -741,6 +757,7 @@ class EditorActivity : Activity() {
             runOnUiThread {
                 if (err == null) {
                     bytes = data
+                    applySealedPrivacy(data)
                     OriginIndex.record(this, f!!.uri,
                         DocumentOrigin.Claim(originHost.substringBefore('.'), f.docId, f.contentSha256))
                 }
