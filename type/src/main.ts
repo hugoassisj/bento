@@ -1096,7 +1096,15 @@ dirty = false; paintTitle();
   serialize: () => JSON.stringify(store.doc),
   loadDoc: (json: string) => {
     const parsed = parseDoc(json);
-    if (!parsed.ok) throw new Error(`bento/type: ${parsed.err === 'empty' ? 'empty document' : parsed.detail}`);
+    if (!parsed.ok) {
+      // The MESSAGE is a fixed sentence: whoever catches this may render it,
+      // and `detail` can quote the file (an unknown format's own name, a JSON
+      // parser's message about the bytes). The detail rides on its own
+      // property for a scripting caller that wants it, as data.
+      const err = new Error(`bento/type: the document could not be read (${parsed.err})`);
+      if (parsed.err !== 'empty') Object.assign(err, { detail: parsed.detail });
+      throw err;
+    }
     store.replace(keepLiveHistory(store.doc, parsed.doc));      // the same rule as Replace from JSON
     editor.render();
     schedule();
