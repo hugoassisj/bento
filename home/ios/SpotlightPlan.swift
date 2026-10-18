@@ -12,8 +12,9 @@ import Foundation
 ///   nothing from its content: its entry carries the saved file's own title
 ///   (the neutral one it writes while sealed) or the file name, no text, a fixed
 ///   description, and no keywords drawn from what it contains.
-/// - After a save, the document's entry is replaced at once. When it is sealed,
-///   the old entry is DELETED first, so nothing from before survives.
+/// - When a save is sealed, the document's entry is DELETED before the file is
+///   written, and replaced once it has been, so nothing from before survives
+///   even an interrupted save.
 /// - A full walk removes the entry of every document it no longer finds
 ///   (deleted, or moved out of a granted folder).
 enum SpotlightPlan {
@@ -42,8 +43,15 @@ enum SpotlightPlan {
                      keywords: [app, "bento"].compactMap { $0 })
     }
 
-    /// What one save does to the index: replace the entry, deleting the old one
-    /// first when the document is sealed.
+    /// What happens BEFORE a save is written: when the outgoing file is sealed,
+    /// its entry is deleted first, so if the write lands and the app dies before
+    /// the re-index, the index holds nothing from before.
+    static func beforeSave(id: String, sealed: Bool) -> [Op] {
+        sealed ? [.delete([id])] : []
+    }
+
+    /// What one save does to the index once written: replace the entry, deleting
+    /// the old one first when the document is sealed.
     static func refresh(_ new: Entry, sealed: Bool) -> [Op] {
         sealed ? [.delete([new.id]), .add([new])] : [.add([new])]
     }

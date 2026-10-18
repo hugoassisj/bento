@@ -134,13 +134,42 @@ final class LibraryIndex {
         }
     }
 
+    private func matching(_ url: URL) -> (IndexedDocument) -> Bool {
+        let want = url.standardizedFileURL.resolvingSymlinksInPath().path
+        return { URL(fileURLWithPath: $0.path).standardizedFileURL.resolvingSymlinksInPath().path == want }
+    }
+
+    /// Run before the app writes a document in place. When the file about to be
+    /// written is sealed, its entry leaves the index FIRST, and `write` runs once
+    /// that delete has finished; otherwise `write` runs straight away. A failed
+    /// delete still writes: the person's save matters more, and refresh()
+    /// deletes again once the write lands.
+    ///
+    /// Writes stay in the order they were asked for: one that arrives while a
+    /// sealed write is still waiting on its delete queues behind it, so an older
+    /// write can never land over a newer one.
+    func beforeSave(_ url: URL, sealed: Bool, write: @escaping () -> Void) {
+        if waitingWrite { queuedWrites.append { [weak self] in self?.beforeSave(url, sealed: sealed, write: write) }; return }
+        guard let doc = documents.first(where: matching(url)) else { return write() }
+        let ops = SpotlightPlan.beforeSave(id: doc.path, sealed: sealed)
+        guard !ops.isEmpty else { return write() }
+        waitingWrite = true
+        apply(ops) { [weak self] in
+            write()
+            guard let self else { return }
+            self.waitingWrite = false
+            while !self.waitingWrite, !self.queuedWrites.isEmpty { self.queuedWrites.removeFirst()() }
+        }
+    }
+    private var waitingWrite = false
+    private var queuedWrites: [() -> Void] = []
+
     /// Bring ONE document's entry up to date right after the app has written it
     /// in place, so the library and Spotlight match the saved file without
     /// waiting for the next full walk. Only a document the index already holds
     /// is touched; anything outside the granted folders was never indexed.
     func refresh(_ url: URL) {
-        let want = url.standardizedFileURL.resolvingSymlinksInPath().path
-        let same = { (d: IndexedDocument) in URL(fileURLWithPath: d.path).standardizedFileURL.resolvingSymlinksInPath().path == want }
+        let same = matching(url)
         guard let old = documents.first(where: same) else { return }
         queue.async { [weak self] in
             guard let self else { return }
@@ -260,18 +289,18 @@ final class LibraryIndex {
 
     /// Carry out a plan against the system index, in order: each step starts
     /// only once the one before it has finished.
-    private func apply(_ ops: [SpotlightPlan.Op]) {
-        guard let op = ops.first else { return }
+    private func apply(_ ops: [SpotlightPlan.Op], then done: (() -> Void)? = nil) {
+        guard let op = ops.first else { done?(); return }
         let rest = Array(ops.dropFirst())
         switch op {
         case .delete(let ids):
-            guard !ids.isEmpty else { return apply(rest) }
+            guard !ids.isEmpty else { return apply(rest, then: done) }
             CSSearchableIndex.default().deleteSearchableItems(withIdentifiers: ids) { [weak self] error in
                 if let error { NSLog("spotlight delete failed: %@", String(describing: error)) }
-                DispatchQueue.main.async { self?.apply(rest) }
+                DispatchQueue.main.async { if let self { self.apply(rest, then: done) } else { done?() } }
             }
         case .add(let entries):
-            guard !entries.isEmpty else { return apply(rest) }
+            guard !entries.isEmpty else { return apply(rest, then: done) }
             let items: [CSSearchableItem] = entries.map { e in
                 let attrs = CSSearchableItemAttributeSet(contentType: UTType.html)
                 attrs.title = e.title
@@ -284,7 +313,7 @@ final class LibraryIndex {
             }
             CSSearchableIndex.default().indexSearchableItems(items) { [weak self] error in
                 if let error { NSLog("spotlight index failed: %@", String(describing: error)) }
-                DispatchQueue.main.async { self?.apply(rest) }
+                DispatchQueue.main.async { if let self { self.apply(rest, then: done) } else { done?() } }
             }
         }
     }

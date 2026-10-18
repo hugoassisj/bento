@@ -70,6 +70,12 @@ emit("sealed.title", index[path]?.title ?? "nil")
 emit("sealed.textNil", index[path]?.text == nil)
 emit("sealed.desc", index[path]?.description ?? "nil")
 emit("sealed.keywords", (index[path]?.keywords ?? []).joined(separator: ","))
+// INTERRUPTED: open with text again, then a sealed save whose app dies after
+// the write and before the re-index: only beforeSave ran
+run([.add([P.entry(path: path, title: secret + " — Bento Slides", base: "Q3 plan", app: "slides", sealed: false, text: body, folder: "docs")])])
+run(P.beforeSave(id: path, sealed: true))
+emit("interrupted.clean", !all(path).contains(body) && !all(path).contains(secret))
+emit("unsealed.beforeNoop", P.beforeSave(id: path, sealed: false).isEmpty)
 // a sealed file with no <title>: the file name
 emit("sealed.noTitleTag", P.entry(path: path, title: nil, base: "Q3 plan", app: "slides", sealed: true, text: nil, folder: "docs").title)
 // a sealed document's entry never carries text, whatever is handed in
@@ -99,6 +105,8 @@ ok(out['sealed.noTitle'] === 'true' && out['sealed.title'] === 'Bento Slides', "
 ok(out['sealed.desc'] === 'Encrypted Bento document' && out['sealed.keywords'] === 'bento', 'with a fixed description and no keywords from the document')
 ok(out['sealed.noTitleTag'] === 'Q3 plan', 'a sealed file with no title shows its file name')
 ok(out['sealed.dropsText'] === 'true', 'a sealed entry never carries text, whatever it is handed')
+ok(out['interrupted.clean'] === 'true', 'a sealed save interrupted between the write and the re-index: nothing from before is left')
+ok(out['unsealed.beforeNoop'] === 'true', 'an ordinary save touches nothing before it is written')
 console.log('a full walk:')
 ok(out['walk.removals'] === '/docs/Q3 plan.bento.html,/docs/c.bento.html', 'documents no longer found (deleted, or moved out of a granted folder) are removed')
 ok(out['walk.gone'] === 'true', 'and their entries leave the index')
@@ -109,5 +117,13 @@ ok(/apply\(SpotlightPlan\.refresh\(/.test(lib), 'refresh() applies the save plan
 ok(/SpotlightPlan\.removals\(/.test(lib) && /apply\(\[\.delete\(gone\)/.test(lib), 'reindex() deletes what the walk no longer finds, before adding')
 ok(!/attrs\.textContent = doc\./.test(lib), 'every entry is built by SpotlightPlan, never straight from the document')
 ok(/if ok, let url = self\?\.document\.fileURL \{ LibraryIndex\.shared\.refresh\(url\) \}/.test(ed), 'the editor refreshes the entry after each successful save')
+{
+  const pre = ed.indexOf('LibraryIndex.shared.beforeSave(document.fileURL, sealed: sealed)')
+  const dirty = ed.indexOf('self.document.updateChangeCount(.done)')
+  const save = ed.indexOf('self.document.save(to: self.document.fileURL')
+  ok(pre > 0 && dirty > pre && save > dirty && /let sealed = BentoIndex\.isEncrypted\(/.test(ed),
+    'the editor reads whether the outgoing file is sealed, and marks it changed and writes it only inside beforeSave')
+}
+ok(/if waitingWrite \{ queuedWrites\.append/.test(lib), 'a write arriving while a sealed one waits on its delete queues behind it')
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
