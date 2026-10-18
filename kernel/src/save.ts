@@ -39,6 +39,7 @@ let pristine: Document | null = null
 export function capturePristine() {
   pristine = document.cloneNode(true) as Document
   if (typeof __BENTO_TEST_SEAL__ !== 'undefined' && __BENTO_TEST_SEAL__) consumeTestSeal()
+  announceSeal() // boot: the host learns the starting state before anything else happens
 }
 
 /**
@@ -497,6 +498,7 @@ let encPassword: string | null = null
 /** Set (or clear with null) the password used for every subsequent save. */
 export function setEncryptionPassword(p: string | null) {
   encPassword = p
+  announceSeal()
 }
 
 export const isEncryptionActive = () => encPassword !== null
@@ -516,9 +518,10 @@ let sealBodyKey: Promise<CryptoKey> | null = null
  * every later save closed rather than letting it write plaintext.
  */
 export function setIdentitySeal(kdoc: Uint8Array | null): void {
-  if (kdoc === null) { sealBodyKey = null; return }
+  if (kdoc === null) { sealBodyKey = null; announceSeal(); return }
   if (!(kdoc instanceof Uint8Array) || kdoc.length !== 32) throw new Error('the document key is 32 bytes')
   sealBodyKey = crypto.subtle.importKey('raw', kdoc.slice() as BufferSource, 'HKDF', false, ['deriveKey'])
+  announceSeal()
 }
 
 /**
@@ -537,6 +540,24 @@ export const isBodySealed = () => encPassword !== null || sealBodyKey !== null
  * own guards: an app that leans on it has a missing guard. Readable only through
  * the test probe, so the sealed-test rigs can fail on any refusal (security).
  */
+/**
+ * Tell the HOST whether this document is sealed (security §30.6): a host that
+ * declares 'seal' (home/bridge.js, Android today) blanks its app-switcher
+ * snapshot while it is. Sent at boot and on EVERY change (password set or
+ * removed, identity seal on or off), the moment it happens and before any save,
+ * because a password set but not yet saved is already a secret. A bare boolean,
+ * fire-and-forget: the host never replies, and it can only ADD blanking, so a
+ * missed `true` is the only failure and a redundant post is free. Not
+ * deduplicated, for that reason.
+ */
+let sealPostId = 0
+function announceSeal(): void {
+  const host = (globalThis as { __bentoHost?: { ops?: readonly string[] } }).__bentoHost
+  if (typeof window === 'undefined' || typeof window.postMessage !== 'function') return
+  if (!Array.isArray(host?.ops) || !host.ops.includes('seal')) return
+  window.postMessage({ __bento_tray__: true, dir: 'req', id: `seal-${++sealPostId}`, op: 'seal.state', payload: { sealed: isBodySealed() } }, '*')
+}
+
 let storeRefusals = 0
 export function noteStoreRefusal(): void { storeRefusals++ }
 /** For rigs only (node, or a page through the test probe). Unreachable from page

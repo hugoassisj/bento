@@ -11308,3 +11308,16 @@ fails any sealed page whose rig leaned on it (`close()`/`reload()` throw), so an
 app's guard mutants stay red with no local kernel mutant. `build:sealtest` also
 writes `dist-sealtest/.complete` as its last step, and the helper refuses a shell
 without it: a build that fails after vite wrote the shell can no longer be scored.
+
+## 2026-10-18 — bento/connect: the page tells its host whether it is sealed
+
+A host that declares `'seal'` in `__bentoHost.ops` (Android, through
+home/bridge.js) blanks its app-switcher snapshot while a sealed document is open
+(security §30.6). kernel/src/save.ts posts `{__bento_tray__, dir:'req',
+op:'seal.state', payload:{sealed: isBodySealed()}}` at boot (capturePristine)
+and on every change: a password set or removed, the identity seal on or off. It
+posts the moment the change happens, before any save, because a password set but
+not yet saved is already a secret. The payload is a bare boolean, fire-and-forget,
+and not deduplicated: the host can only ADD blanking, so a missed `true` is the
+only failure and a redundant post costs nothing. Hosts that don't declare
+`'seal'` are sent nothing.
