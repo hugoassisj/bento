@@ -12,6 +12,8 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **Neutral title while sealed, matching the saved file's title.**
+
 - **Password-protected workbooks open again.** The file showed its password
   prompt and then failed with "This file could not start" over it, because the
   file's loader took the prompt for an app that had not started. Dash now tells
