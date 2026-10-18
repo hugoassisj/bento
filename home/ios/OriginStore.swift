@@ -42,12 +42,26 @@ final class OriginStore {
 
     func record(_ origin: String, hint: String?, facts: OriginIdentity.Facts) {
         OriginIdentity.record(origin, hint: hint, f: facts, into: &index)
+        persist()
+    }
+
+    private func persist() {
         guard let u = indexURL, let data = try? JSONEncoder().encode(index) else { return }
         try? FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: u, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 
     static func newHint() -> String { UUID().uuidString }
+
+    /// After our own save replaced the file, point the hint at its new resource id.
+    func refreshHint(_ hint: String, for url: URL) {
+        guard var rec = index.hints[hint] else { return }
+        var st = stat()
+        guard stat(url.standardizedFileURL.path, &st) == 0 else { return }
+        rec.resourceID = "\(st.st_dev):\(st.st_ino)"
+        index.hints[hint] = rec
+        persist()
+    }
 
     /// What the file itself can tell us. Called with the document's security
     /// scope open.
@@ -109,14 +123,21 @@ final class OriginStore {
             return d
         }
         var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        if SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) != errSecSuccess {
+            var g = SystemRandomNumberGenerator()
+            bytes = (0..<32).map { _ in UInt8.random(in: 0...255, using: &g) }
+        }
         let secret = Data(bytes)
         var add = q
         add[kSecValueData as String] = secret
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         add[kSecAttrSynchronizable as String] = false
         SecItemDelete(q as CFDictionary)
-        SecItemAdd(add as CFDictionary, nil)
+        let added = SecItemAdd(add as CFDictionary, nil)
+        // A failed add costs less than it looks: the index stores ORIGIN STRINGS,
+        // so every document already seen keeps its origin. Only origins minted
+        // later would come from a different secret. Say so, rather than nothing.
+        if added != errSecSuccess { NSLog("bento/home: origin secret not kept in the Keychain (%d)", added) }
         return secret
     }
 }

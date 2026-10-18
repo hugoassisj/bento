@@ -2583,6 +2583,30 @@ jobs:
         # replaces it with the real workbook.
         run: node scripts/test-dash-gate-browser.mjs
 
+  home-origin-probe-browser:
+    # The probe that decides whether a file opened for the first time may keep
+    # the storage origin it had before origins followed the file. It runs in
+    # WebKit on iOS, so it's tested in WebKit, against storage laid out the way
+    # the kernel lays it out AND against a real slides deck's own autosave.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps webkit
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the slides shell the real-deck case opens
+        run: |
+          npm ci --prefix slides
+          npm run build:single --prefix slides
+      - name: Origin probe in WebKit
+        run: node scripts/test-home-origin-probe.mjs
+
   spaces-save-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15

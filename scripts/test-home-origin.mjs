@@ -111,7 +111,10 @@ emit("hint.successor.kind", kind(dhs)); emit("hint.successor.differs", origin(dh
 if case .fresh(_, let h) = dhs { emit("hint.successor.newhint", h != nil && h != token) }
 
 // --- reading docId without running anything
-emit("docid.plain", O.docId(inHTML: Data("<script type=\"application/bento+json\" id=\"bento-doc\">{\"docId\":\"abc-123\",\"title\":\"x\"}</script>".utf8)) ?? "nil")
+emit("docid.plain", O.docId(inHTML: Data("<script type=\"application/bento+json\" id=\"bento-doc\">{\"docId\":\"7025B63C-1111-4222-8333-944455556666\",\"title\":\"x\"}</script>".utf8)) ?? "nil")
+emit("docid.minted", O.docId(inHTML: Data("<script type=\"application/bento+json\" id=\"bento-doc\">{\"docId\":\"doc-mvdqlzln-0f16k\"}</script>".utf8)) ?? "nil")
+emit("docid.junk", O.docId(inHTML: Data("<script type=\"application/bento+json\" id=\"bento-doc\">{\"docId\":\"a b/../c\"}</script>".utf8)) ?? "nil")
+emit("docid.decoy", O.docId(inHTML: Data("<!-- id=\"bento-doc\">{\"docId\":\"00000000-0000-4000-8000-000000000000\"} --><div id=\"bento-doc\">{}</div><script type=\"application/bento+json\" id=\"bento-doc\">{\"docId\":\"7025b63c-1111-4222-8333-944455556666\"}</script>".utf8)) ?? "nil")
 emit("docid.enc", O.docId(inHTML: Data("<script type=\"application/bento+json\" id=\"bento-doc\">{\"format\":\"bento/enc\",\"v\":1}</script>".utf8)) ?? "nil")
 emit("docid.notbento", O.docId(inHTML: Data("<html><body>hi</body></html>".utf8)) ?? "nil")
 `
@@ -145,7 +148,10 @@ ok(out['hint.move'] === 'known', 'no document identifier: the hint follows a mov
 ok(out['hint.foreign.kind'] !== 'known' && out['hint.foreign.differs'] === 'true', "a file planted elsewhere carrying another document's attribute does NOT inherit its origin")
 ok(out['hint.successor.kind'] === 'fresh' && out['hint.successor.differs'] === 'true', 'no document identifier: a successor at a claimed path gets fresh storage')
 ok(out['hint.successor.newhint'] === 'true', 'and a new hint of its own, never the old one')
-ok(out['docid.plain'] === 'abc-123', "the document's docId is read from #bento-doc without running anything")
+ok(out['docid.plain'] === '7025B63C-1111-4222-8333-944455556666', "the document's docId is read from #bento-doc without running anything, exactly as stored")
+ok(out['docid.minted'] === 'doc-mvdqlzln-0f16k', 'the editor\'s non-UUID form (doc-<random>, minted where randomUUID is unavailable) is read too')
+ok(out['docid.junk'] === 'nil', 'a docId with anything but plain characters is not read at all')
+ok(out['docid.decoy'] === '7025b63c-1111-4222-8333-944455556666', "the docId comes from the data block's own <script> tag, not the first match in the file")
 ok(out['docid.enc'] === 'nil' && out['docid.notbento'] === 'nil', 'an encrypted envelope or a non-Bento page yields no docId')
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

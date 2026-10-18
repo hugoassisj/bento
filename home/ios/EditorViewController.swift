@@ -64,6 +64,10 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     /// While a possibly-legacy origin's storage is being checked, before the
     /// document itself loads.
     private var probing: (candidate: String, facts: OriginIdentity.Facts, timer: DispatchWorkItem)?
+    /// The attribute hint this document runs under, when it has no document
+    /// identifier. Our own saves replace the file, so its recorded resource id
+    /// is refreshed after each one, or a later move couldn't be followed.
+    private var originHint: String?
 
     /// Called when the user leaves the document. The browser owns teardown —
     /// closing the UIDocument and releasing the security scope — because it
@@ -326,7 +330,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         }
         if probing != nil {
             guard url.path == Self.probePath else { task.didFailWithError(URLError(.resourceUnavailable)); return }
-            let body = Data(Self.probeHTML.utf8)
+            let body = Data((Self.probeHTML ?? "").utf8)
             task.didReceive(HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
                                             headerFields: ["Content-Type": "text/html; charset=utf-8"])!)
             task.didReceive(body); task.didFinish(); return
@@ -347,13 +351,19 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         let d = OriginIdentity.decide(facts, index: OriginStore.shared.index,
                                       secret: OriginStore.shared.secret, newHint: OriginStore.newHint)
         guard case .probeLegacy(let candidate) = d else { settleOrigin(d, facts: facts); return }
+        guard Self.probeHTML != nil else {
+            // no probe to ask with: never adopt blind
+            settleOrigin(OriginIdentity.settleLegacy(candidate, storedDocIds: [OriginIdentity.unattributable], f: facts,
+                                                     secret: OriginStore.shared.secret, newHint: OriginStore.newHint), facts: facts)
+            return
+        }
         // A file never seen here, at a path never claimed: possibly one opened
         // before origins followed the file. Its storage stays its own only if
         // everything stored there is this document's — ask that origin, then load.
         let timer = DispatchWorkItem { [weak self] in
             guard let self, let p = self.probing else { return }
             // no answer: never adopt blind
-            self.settleOrigin(OriginIdentity.settleLegacy(p.candidate, storedDocIds: ["(no answer)"], f: p.facts,
+            self.settleOrigin(OriginIdentity.settleLegacy(p.candidate, storedDocIds: [OriginIdentity.unattributable], f: p.facts,
                                                          secret: OriginStore.shared.secret, newHint: OriginStore.newHint),
                               facts: p.facts)
         }
@@ -372,40 +382,22 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         }
         if let hint { OriginStore.writeHint(hint, to: document.fileURL) }
         OriginStore.shared.record(origin, hint: hint, facts: facts)
+        originHint = facts.documentKey == nil ? (hint ?? facts.hint) : nil
         probing = nil
         originHost = origin
         webView.load(URLRequest(url: URL(string: "bento-tray://\(origin)/index.html")!))
     }
 
     private static let probePath = "/__bento-origin-probe"
-    /// Lists the docIds a possibly-legacy origin holds data for: member keys in
-    /// localStorage, recovery and version records in IndexedDB. Never creates
-    /// the database — an empty one at version 1 would break the editor's own
-    /// upgrade later.
-    private static let probeHTML = """
-    <!doctype html><meta charset="utf-8"><script>
-    (async () => {
-      const ids = new Set()
-      try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('bento-member-')) ids.add(k.slice(13)) } } catch (e) {}
-      try {
-        const db = await new Promise((res, rej) => {
-          const q = indexedDB.open('bento-autosave')
-          q.onupgradeneeded = () => { q.transaction.abort() }
-          q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error)
-        })
-        const read = (store, viaIndex) => new Promise((res) => {
-          if (!db.objectStoreNames.contains(store)) return res()
-          const s = db.transaction(store).objectStore(store)
-          const c = viaIndex ? s.index('docId').openKeyCursor(null, 'nextunique') : s.openKeyCursor()
-          c.onsuccess = () => { const cur = c.result; if (!cur) return res(); ids.add(String(cur.key)); cur.continue() }
-          c.onerror = () => res()
-        })
-        await read('recovery', false); await read('versions', true); db.close()
-      } catch (e) {}
-      window.webkit.messageHandlers.bentoOriginProbe.postMessage([...ids])
-    })()
-    </script>
-    """
+    /// OriginProbe.js, wrapped as a page. It says whose data a possibly-legacy
+    /// origin holds; the same file is run against real IndexedDB by
+    /// scripts/test-home-origin-probe.mjs. nil if it's missing from the bundle,
+    /// and then nothing is ever adopted.
+    private static let probeHTML: String? = {
+        guard let u = Bundle.main.url(forResource: "OriginProbe", withExtension: "js"),
+              let js = try? String(contentsOf: u, encoding: .utf8) else { return nil }
+        return "<!doctype html><meta charset=\"utf-8\"><script>\n" + js + "\n</script>"
+    }()
 
     // MARK: - downloads
     //
@@ -576,9 +568,13 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         if message.name == "bentoOriginProbe" {
             let sender = message.frameInfo.securityOrigin
             guard let p = probing, message.frameInfo.isMainFrame, sender.protocol == "bento-tray",
-                  sender.host == p.candidate, let ids = message.body as? [String] else { return }
+                  sender.host == p.candidate, let body = message.body as? [String: Any],
+                  let ids = body["ids"] as? [String] else { return }
             p.timer.cancel()
-            let d = OriginIdentity.settleLegacy(p.candidate, storedDocIds: Set(ids), f: p.facts,
+            // Anything the probe couldn't attribute to a docId refuses the origin.
+            var stored = Set(ids)
+            if body["unattributable"] as? Bool != false { stored.insert(OriginIdentity.unattributable) }
+            let d = OriginIdentity.settleLegacy(p.candidate, storedDocIds: stored, f: p.facts,
                                                 secret: OriginStore.shared.secret, newHint: OriginStore.newHint)
             settleOrigin(d, facts: p.facts)
             return
@@ -644,6 +640,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
                 // writing behind UIDocument's back.
                 document.updateChangeCount(.done)
                 document.save(to: document.fileURL, for: .forOverwriting) { [weak self] ok in
+                    if ok, let self, let h = self.originHint { OriginStore.shared.refreshHint(h, for: self.document.fileURL) }
                     self?.reply(id, ok: ok, value: ok ? nil : "write failed")
                 }
             } else {

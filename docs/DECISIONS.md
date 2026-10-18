@@ -47,6 +47,14 @@ document's URI, and is fixing it separately.
   adopted only if everything stored there belongs to the file's own docId, so
   nobody has to re-join a shared document. docId can refuse an origin, never
   claim one: it's in the file's contents.
+- **The probe that looks (`home/ios/OriginProbe.js`) enumerates every database**
+  with `indexedDB.databases()`: each app's `${appId}-autosave`, the old shared
+  `bento-autosave`, and `bento-handles`, all attributed by docId. Anything it
+  can't attribute (a blob cache, an unknown database holding records, no
+  `databases()` at all, an error) refuses. "Couldn't look" never reads as
+  "empty". The first version looked only in `bento-autosave` and missed every
+  app's real data; `scripts/test-home-origin-probe.mjs` now runs the probe
+  itself in WebKit, including against a real deck's own autosave.
 - **Without a document identifier,** a random extended-attribute id is a hint,
   honoured only where the index recorded it for this same file or a move of it.
   Attributes travel with copies; only device-local state can tell "my file" from

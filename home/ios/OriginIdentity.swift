@@ -75,6 +75,10 @@ enum OriginIdentity {
         case fresh(String, hint: String?)
     }
 
+    /// Stands in, among stored docIds, for data the probe couldn't attribute (or
+    /// a probe that never answered). It matches no document, so it refuses.
+    static let unattributable = "\u{0}unattributable"
+
     /// The origin every file had before this change: a hash of its path.
     static func legacyOrigin(path: String) -> String {
         hex(SHA256.hash(data: Data(path.utf8)))
@@ -133,12 +137,30 @@ enum OriginIdentity {
     /// running anything. nil for an encrypted envelope or a file that isn't Bento.
     static func docId(inHTML html: Data) -> String? {
         let s = String(decoding: html, as: UTF8.self)
-        guard let tag = s.range(of: "id=\"bento-doc\""),
-              let open = s.range(of: ">", range: tag.upperBound..<s.endIndex),
-              let close = s.range(of: "</script>", range: open.upperBound..<s.endIndex),
-              let obj = try? JSONSerialization.jsonObject(with: Data(s[open.upperBound..<close.lowerBound].utf8)) as? [String: Any]
-        else { return nil }
-        return obj["docId"] as? String
+        // Anchored to the data block's own <script> tag, not the first place the
+        // string appears: a docId only ever REFUSES an origin, but read it right.
+        var from = s.startIndex
+        while let tag = s.range(of: "<script", range: from..<s.endIndex) {
+            guard let end = s.range(of: ">", range: tag.upperBound..<s.endIndex) else { return nil }
+            let attrs = s[tag.upperBound..<end.lowerBound]
+            from = end.upperBound
+            guard attrs.contains("id=\"bento-doc\""), attrs.contains("application/bento+json"),
+                  let close = s.range(of: "</script>", range: end.upperBound..<s.endIndex) else { continue }
+            guard let obj = try? JSONSerialization.jsonObject(with: Data(s[end.upperBound..<close.lowerBound].utf8)) as? [String: Any],
+                  let id = obj["docId"] as? String, isDocIdShaped(id) else { return nil }
+            // as stored: the probe reports ids exactly as the kernel keyed them
+            return id
+        }
+        return nil
+    }
+
+    /// Not "a UUID": the editor mints `crypto.randomUUID()` where it can and
+    /// `doc-<random>` where it can't (a context that isn't secure), and saved
+    /// files carry both. Short, and plain characters only.
+    static func isDocIdShaped(_ s: String) -> Bool {
+        !s.isEmpty && s.count <= 128 && s.unicodeScalars.allSatisfy {
+            ("a"..."z").contains($0) || ("A"..."Z").contains($0) || ("0"..."9").contains($0) || $0 == "-" || $0 == "_"
+        }
     }
 
     private static func hex<D: Sequence>(_ d: D) -> String where D.Element == UInt8 {
