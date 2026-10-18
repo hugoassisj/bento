@@ -10998,8 +10998,13 @@ shell it serves (gate 1, A2).
 - **Enrolling a fingerprint doesn't destroy the routine key**
   (`setInvalidatedByBiometricEnrollment(false)`). It carries no consent, and
   losing it would drop the device from every room it is in. The consent key
-  keeps Android's default: a new enrolment invalidates it, and the device
-  re-links.
+  keeps Android's default: a new enrolment invalidates it. That is the point,
+  not a cost. A newly enrolled finger may be an attacker's, so the phone must
+  never mint a new consent key and certify it itself. The key that wraps the
+  account key on this device carries the consent key's auth parameters (when
+  the account key lands), so it dies with it. The re-link is therefore
+  FORCED: through another device (QR) or a passkey, which notifies every
+  device (§2f). It is never done on the phone alone (vault, security).
 - **Signatures leave as raw r‖s, low-S.** The Keystore emits DER and doesn't
   normalise, so the host converts and folds s.
 - **The host stamps every field of a `cns.`.** The relying party is the app's
