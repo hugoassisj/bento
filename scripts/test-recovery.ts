@@ -142,6 +142,35 @@ for (const alg of ['ECDSA', 'ECDH'] as const) {
 }
 ok(publicKeyOf(new Uint8Array(32)) === null, 'publicKeyOf refuses scalar 0')
 
+// The sign-and-verify probe is a second line of defence: Chrome and Node already
+// refuse a mismatched {d, x, y} on import, so it can't be reached above. Stand in a
+// LAX platform that ignores x, y (imports d alone as PKCS#8, no public key) and
+// the probe must still catch every mismatch. (security, #770)
+console.log('\non a platform that skips the pair check on import, the probe still refuses')
+{
+  const PKCS8_P256 = '308141020100301306072a8648ce3d020106082a8648ce3d030107042730250201010420'
+  // the real methods, BOUND: SubtleCrypto's methods throw on any other `this`, and
+  // scalarMatches reads a throw as a mismatch, so an unbound stand-in refuses
+  // everything and these rows would pass vacuously
+  const lax = {
+    sign: crypto.subtle.sign.bind(crypto.subtle),
+    verify: crypto.subtle.verify.bind(crypto.subtle),
+    importKey: (format: string, data: JsonWebKey, alg: AlgorithmIdentifier, ext: boolean, uses: KeyUsage[]) =>
+      format === 'jwk'
+        ? crypto.subtle.importKey('pkcs8', unhex(PKCS8_P256 + Buffer.from(data.d!, 'base64url').toString('hex')), alg, ext, uses)
+        : crypto.subtle.importKey(format as 'raw', data as unknown as BufferSource, alg, ext, uses),
+  } as unknown as SubtleCrypto
+  // positive control: the lax import really does accept a mismatched pair
+  const mismatched = F.scalars.find((s: { reason?: string; name: string }) => s.name.startsWith("another key's"))
+  const accepted = await lax.importKey('jwk', { kty: 'EC', crv: 'P-256', d: Buffer.from(unhex(mismatched.d)).toString('base64url'),
+    x: 'x', y: 'y' }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']).then(() => true, () => false)
+  ok(accepted, 'control: the lax platform imports a scalar without checking its public half')
+  for (const s of F.scalars) {
+    const v = await unpackScalars(unhex(s.d), { accountPub: s.pub }, undefined, lax)
+    ok(s.expect === 'accept' ? v.ok : !v.ok && v.reason === s.reason, `lax: ${s.name} → ${s.expect === 'accept' ? 'accept' : `refused: ${s.reason}`}`)
+  }
+}
+
 // SHAPE: the recovered scalar never reaches the variable-time BigInt path. A
 // call graph over recovery.ts's top-level declarations: publicOf and its point
 // arithmetic must be unreachable from unpackScalars (security, #770).

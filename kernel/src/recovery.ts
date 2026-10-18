@@ -41,14 +41,19 @@ export const CODE_BYTES = 10 // 80 bits = 16 symbols
 
 const toBig = (b: Uint8Array) => b.reduce((x, v) => (x << 8n) | BigInt(v), 0n)
 
+/** The 80-bit value mod 37, in a fixed 10-step loop (no BigInt on the code). */
+const check37 = (code: Uint8Array) => code.reduce((r, b) => (r * 256 + b) % 37, 0)
+
 /** The printed form: XXXX-XXXX-XXXX-XXXX-C. */
 export function formatRecoveryCode(code: Uint8Array): string {
   if (code.length !== CODE_BYTES) throw new Error('a recovery code is 10 bytes')
-  const n = toBig(code)
   let s = ''
-  for (let i = 15; i >= 0; i--) s += ALPHABET[Number((n >> BigInt(i * 5)) & 31n)]
-  const check = CHECK_ALPHABET[Number(n % 37n)]
-  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${check}`
+  for (let i = 0; i < 16; i++) { // symbol i is bits 5i..5i+4 from the top
+    const bit = i * 5, byte = bit >> 3, sh = bit & 7
+    const two = (code[byte] << 8) | (code[byte + 1] ?? 0)
+    s += ALPHABET[(two >> (11 - sh)) & 31]
+  }
+  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${CHECK_ALPHABET[check37(code)]}`
 }
 
 export type CodeRefusal = 'length' | 'character' | 'check'
@@ -63,17 +68,18 @@ export type CodeRefusal = 'length' | 'character' | 'check'
 export function parseRecoveryCode(input: string): { ok: true; code: Uint8Array } | { ok: false; reason: CodeRefusal } {
   const s = input.toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1')
   if (s.length !== 17) return { ok: false, reason: 'length' }
-  let n = 0n
+  const code = new Uint8Array(CODE_BYTES)
   for (let i = 0; i < 16; i++) {
     const v = ALPHABET.indexOf(s[i])
     if (v < 0) return { ok: false, reason: 'character' } // includes U: valid only as the check
-    n = (n << 5n) | BigInt(v)
+    const bit = i * 5, byte = bit >> 3, sh = bit & 7
+    const two = v << (11 - sh) // the symbol placed in a 16-bit window over bytes byte, byte+1
+    code[byte] |= two >> 8
+    if (byte + 1 < CODE_BYTES) code[byte + 1] |= two & 0xff
   }
   const check = CHECK_ALPHABET.indexOf(s[16])
   if (check < 0) return { ok: false, reason: 'character' }
-  if (BigInt(check) !== n % 37n) return { ok: false, reason: 'check' }
-  const code = new Uint8Array(CODE_BYTES)
-  for (let i = CODE_BYTES - 1; i >= 0; i--) { code[i] = Number(n & 0xffn); n >>= 8n }
+  if (check !== check37(code)) return { ok: false, reason: 'check' }
   return { ok: true, code }
 }
 
@@ -199,15 +205,15 @@ export function packScalars(keys: BlobKeys, mode: KxMode = KX_MODE): Uint8Array 
  * mismatched pair), then signs a probe that must verify under that public key,
  * so a platform that skips the pair check on import is caught too (security, #770).
  */
-export async function unpackScalars(pt: Uint8Array, expected: { accountPub: string; kxPub?: string }, mode: KxMode = KX_MODE):
-  Promise<Verdict<BlobKeys>> {
+export async function unpackScalars(pt: Uint8Array, expected: { accountPub: string; kxPub?: string }, mode: KxMode = KX_MODE,
+  subtle: SubtleCrypto = crypto.subtle): Promise<Verdict<BlobKeys>> {
   const withKx = BLOB_KX[mode]
   if (pt.length !== (withKx ? 64 : 32)) return no('length')
   const scalars = withKx ? [pt.slice(0, 32), pt.slice(32)] : [pt.slice(0, 32)]
   const pubs = withKx ? [expected.accountPub, expected.kxPub] : [expected.accountPub]
   for (let i = 0; i < scalars.length; i++) {
     if (!scalarInRange(scalars[i])) return no('scalar-range')
-    if (pubs[i] === undefined || !(await scalarMatches(scalars[i], pubs[i]!))) return no('key-mismatch')
+    if (pubs[i] === undefined || !(await scalarMatches(scalars[i], pubs[i]!, subtle))) return no('key-mismatch')
   }
   return { ok: true, value: withKx ? { account: scalars[0], kx: scalars[1] } : { account: scalars[0] } }
 }
@@ -229,17 +235,18 @@ function scalarInRange(d: Uint8Array): boolean {
 const PROBE = te.encode('bento/id/scalar-probe/v1')
 const ECDSA_P256 = { name: 'ECDSA', namedCurve: 'P-256' }
 
-/** Does the private scalar d belong to the raw public key pub? Platform crypto only. */
-async function scalarMatches(d: Uint8Array, pub: string): Promise<boolean> {
+/** Does the private scalar d belong to the raw public key pub? Platform crypto only.
+ *  `subtle` is injectable so a rig can stand in a platform that skips the pair check on import. */
+async function scalarMatches(d: Uint8Array, pub: string, subtle: SubtleCrypto): Promise<boolean> {
   const raw = b64uDec(pub)
   if (!raw || raw.length !== 65 || raw[0] !== 4) return false
   try {
-    const priv = await crypto.subtle.importKey('jwk', {
+    const priv = await subtle.importKey('jwk', {
       kty: 'EC', crv: 'P-256', d: b64uEnc(d), x: b64uEnc(raw.slice(1, 33)), y: b64uEnc(raw.slice(33)), ext: false,
     }, ECDSA_P256, false, ['sign'])
-    const pubKey = await crypto.subtle.importKey('raw', raw as BufferSource, ECDSA_P256, false, ['verify'])
-    const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, priv, PROBE as BufferSource)
-    return await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pubKey, sig, PROBE as BufferSource)
+    const pubKey = await subtle.importKey('raw', raw as BufferSource, ECDSA_P256, false, ['verify'])
+    const sig = await subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, priv, PROBE as BufferSource)
+    return await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pubKey, sig, PROBE as BufferSource)
   } catch { return false }
 }
 
