@@ -48,6 +48,9 @@ const INCLUDE = [
   /^manifest\.json$/,
   /^icons\/[^/]+\.(png|svg)$/,
   /^src\/[^/]+\.(js|html|css)$/,
+  // bento/id: the agent's modules, and the statement code generated from kernel
+  // (scripts/gen-webext-id.mjs) — one level for src/id, one for src/id/gen
+  /^src\/id\/(gen\/)?[^/]+\.js$/,
   /^_locales\/[a-zA-Z_]+\/messages\.json$/,
 ]
 /** Present on purpose, deliberately NOT shipped. */

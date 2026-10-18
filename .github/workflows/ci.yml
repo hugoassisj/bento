@@ -926,6 +926,14 @@ jobs:
         # member key never follows.
         run: node scripts/test-webext-store.ts
 
+      - name: WebExtension bento/id rig
+        # The extension's statement code must be the kernel reference, unaltered
+        # (a generated type-strip, checked current), and must pass the whole
+        # conformance contract in kernel/fixtures/identity-v1.json. The
+        # passkey-wrapped account key must fail closed for the wrong passkey,
+        # credential or binding; the recovery code is 80 random bits.
+        run: node scripts/test-webext-id.ts
+
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
         # uses but English lacks renders as the key name, a locale missing a key
