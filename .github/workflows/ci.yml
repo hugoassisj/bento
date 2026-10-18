@@ -2685,3 +2685,10 @@ jobs:
         # that refuses the recovery copy gets the notice once, held to read;
         # pt and de show slides' words. Planted in bento-spaces-autosave.
         run: node scripts/test-spaces-recovery-browser.mjs
+      - name: bento/id directory (two-proof bind, exact lookups, limits, tombstones)
+        # The real worker and Durable Objects against an in-memory namespace:
+        # a binding needs the mailed code AND the key's signature over it, so
+        # an attacker who starts a binding of their key to a victim's address
+        # can't finish it; bind/start answers 202 whatever happens; per-address
+        # mail limits and per-IP limits hold; no raw address or IP at rest.
+        run: node scripts/test-directory.ts
