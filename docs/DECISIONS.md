@@ -10988,6 +10988,15 @@ shell it serves (gate 1, A2).
   consent key lives in StrongBox where the device has one. A `dev.`
   certificate names it as `consentPub`, and it is a different key from the
   routine one.
+- **The consent key accepts the device credential as well as a strong
+  biometric (API 30+), as security ruled (threat model §29).** People without
+  biometrics aren't excluded, matching iOS's `.userPresence`. An organisation
+  setting, "biometric-only consent", is OFF by default and not built yet. The
+  residual risk, stated plainly: a thief holding the phone AND its passcode
+  passes user verification. Notification to every device, the contest/freeze
+  and the recovery code catch that, not the key. On API 26–29, a per-use key
+  accepts biometrics only, so a phone without one gets no consent key: it can
+  do routine work but not consent. That fallback awaits security's ruling.
 - **§2e (B) is enforced in two layers, each with its own bound.** The routine
   key carries a Keystore validity window of the OVERALL timeout (24 h). That is
   the hardware floor, and it means "since the device was last unlocked": a
