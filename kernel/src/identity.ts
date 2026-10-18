@@ -104,7 +104,11 @@ export interface IdentityAgent {
   /** The person using this document, or null when no identity is set up or
    *  they declined to use it here (consent is per document). */
   whoami(): Promise<PublicIdentity | null>
-  /** Sign `payload` (the exact UTF-8 text) for `purpose` with this device's key. */
+  /** Sign `payload` (the exact UTF-8 text) for `purpose` with this device's key.
+   *  A host method that throws reaches the caller as a REJECTED promise: callers
+   *  treat a rejection exactly like `{ ok: false, reason: 'unavailable' }` and
+   *  never let it escape. Check the payload first with statements.ts
+   *  payloadMatchesPurpose; the host refuses a mismatch either way. */
   sign(purpose: SignPurpose, payload: string): Promise<SignResult>
   /** Who a key in the room (or, phase 2, an address) belongs to; null if unknown.
    *  A lookup by `{email}` is consent-gated and rate-limited by the HOST, so a

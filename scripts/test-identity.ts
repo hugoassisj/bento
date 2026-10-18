@@ -167,8 +167,10 @@ console.log('\nonce found, the agent cannot be reassigned')
   ok(threw && a.sign === orig, 'a write to the captured agent throws (strict mode) and changes nothing')
 }
 
-// K1 is contract only. Pin that no runtime file imports it yet, so this PR is
-// provably free of behaviour change; the bridge (B1) and the apps add callers.
+// Pin that nothing CALLS the agent yet, so the contract is provably free of
+// behaviour change until the bridge (B1) and the apps add callers. A type-only
+// import (`import type`) brings no code, so it does not count: statements.ts
+// uses the SignPurpose type to check payloads.
 console.log('\ncontract only: nothing calls it yet')
 {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -179,11 +181,11 @@ console.log('\ncontract only: nothing calls it yet')
       const p = join(dir, f)
       if (statSync(p).isDirectory()) walk(p)
       else if (/\.(ts|tsx|js|mjs)$/.test(f) && p !== join(root, 'kernel/src/identity.ts') &&
-        /from ['"][^'"]*\/identity(\.ts)?['"]/.test(readFileSync(p, 'utf8'))) hits.push(p.slice(root.length + 1))
+        /^import(?!\s+type\b)[^\n]*from ['"][^'"]*\/identity(\.ts)?['"]/m.test(readFileSync(p, 'utf8'))) hits.push(p.slice(root.length + 1))
     }
   }
   for (const d of ['kernel/src', 'slides/src', 'spaces/src', 'type/src', 'dash/src']) walk(join(root, d))
-  ok(hits.length === 0, `no runtime module imports kernel/src/identity.ts (${hits.join(', ') || 'none'})`)
+  ok(hits.length === 0, `no runtime module imports kernel/src/identity.ts for its code (${hits.join(', ') || 'none'})`)
 }
 
 // The real path, last: identityAgent() over globalThis, with its capture-once

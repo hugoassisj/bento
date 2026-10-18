@@ -10974,3 +10974,53 @@ Settled here, so other zones don't redefine them:
 
 This change is contract only, with no callers. `scripts/test-identity.ts` pins
 that no runtime module imports it yet.
+
+## 2026-10-18 — bento/id: the signed statements and their family rules (kernel/src/statements.ts)
+
+Every bento/id statement is defined once, in the kernel, with conformance
+vectors (`kernel/fixtures/identity-v1.json`) that every host must pass: the
+Swift, Kotlin and Rust agents, the extension and the directory. The rules are
+the shipped collab statements' rules, made strict:
+- **Exact bytes.** Dot-joined UTF-8 text, signed over its exact bytes and never
+  re-canonicalised. No JSON inside a statement.
+- **Every field is a closed, dot-free token or base64url free text.** Free
+  text means an email address or a display name, encoded as base64url without
+  padding. A raw email would break the split.
+- **Strict parse.** Split on `.`, keep empty fields, require the exact field
+  count, check each field's grammar, and accept printable ASCII only. An absent
+  value is an empty field.
+- **Units and versions.** Times are epoch ms. The version is in the prefix
+  (`bind2.`), never a field.
+- **Keys and signatures.** Keys are raw P-256 points. Signatures are raw r‖s,
+  low-S, base64url. DER and high-S signatures are refused.
+
+The statements:
+- `dev.`: the device cert. The account key signs both the device's routine key
+  and its hardware CONSENT key, so a consent signature can be tied to the person.
+  It's one cert, not two, because both keys share the device's lifetime and
+  revocation. The light tier has no hardware consent key, so its `consentPub` is
+  empty.
+- `bind.`: the person cert, holder-signed, with `seq` and a `prev` chain for
+  rotation.
+- `att.` and `tomb.`: signed by the directory's online key, with the binding
+  state inside the signature.
+- `del.` and `cmp.`: holder requests to the directory.
+- `cns.`: host-stamped consent (security §24). Its transcript binds the
+  audience, a single-use challenge and the exact authorised statement. The
+  verifier recomputes the transcript and never trusts one from the request.
+- `pk.` is reserved for the phase-2 passkey statement.
+
+Two placements are left open on purpose:
+- **kx** (identity-design §6b, a maintainer decision). Both `bind.` and `dev.`
+  carry a kx slot, and until the ruling BOTH must be empty, so nothing accepts a
+  placement nobody chose. Phase 1 shares nothing and needs no kx.
+- **Addresses are ASCII-only in phase 1** (a maintainer decision). Platforms
+  disagree on international domains, and an address two hosts read differently
+  is exactly what the shared normal form exists to prevent.
+
+**What phase 1 does NOT guarantee:** invite and revoke (`inv.`/`rev.`) are
+verified by the relay with the OWNER key's signature, not with a consent-key
+`cns.`. In phase 1, their high-authority protection is a host-drawn prompt plus
+an owner key held by the agent and gated on user verification. No consent-key
+(AAL3) guarantee exists for `inv.`/`rev.` before phase 2 adds room-audience
+consent (security §24).
