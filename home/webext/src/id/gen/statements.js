@@ -35,7 +35,7 @@
 //     signature here is a rejection, so a forgotten conversion fails loudly.
 
 import { isNormalAddress } from './address.js'
-import { DISPLAY_FORBIDDEN_FLAT, DISPLAY_FORBIDDEN_UNICODE } from './display-table.ts'
+import { DISPLAY_FORBIDDEN_FLAT, DISPLAY_FORBIDDEN_UNICODE } from './display-table.js'
                                                 
 
 // --- strict base64url --------------------------------------------------------

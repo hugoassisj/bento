@@ -121,15 +121,20 @@ export const scalarInRange = (d) => {
   return v > 0n && v < N
 }
 
-export async function importAccount(d, accountPubRaw, { extractable = false } = {}) {
+export async function importAccount(d, accountPubRaw, { extractable = false, crypto: c = globalThis.crypto } = {}) {
   if (!scalarInRange(d)) throw new Error('the recovered scalar is not in 1..n-1')
   const pub = unb64u(accountPubRaw)
   if (pub.length !== 65 || pub[0] !== 4) throw new Error('account public key must be an uncompressed P-256 point')
   const jwk = { kty: 'EC', crv: 'P-256', d: b64u(d), x: b64u(pub.slice(1, 33)), y: b64u(pub.slice(33)), ext: extractable }
-  const key = await subtle().importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, extractable, ['sign'])
-  const verifyKey = await subtle().importKey('raw', pub, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'])
-  const probe = globalThis.crypto.getRandomValues(new Uint8Array(32))
-  const sig = await subtle().sign({ name: 'ECDSA', hash: 'SHA-256' }, key, probe)
-  if (!(await subtle().verify({ name: 'ECDSA', hash: 'SHA-256' }, verifyKey, sig, probe))) throw new Error('recovered key does not match the binding')
+  // Chrome and Node already REFUSE a JWK whose d does not match its x/y
+  // (DataError), so a swapped blob fails here. The sign-and-verify probe below
+  // is defence in depth for any engine that does not check that (measured by
+  // security, 2026-10-18; not yet measured on Firefox). `crypto` is injectable
+  // so the rig can prove the probe alone catches it.
+  const key = await c.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, extractable, ['sign'])
+  const verifyKey = await c.subtle.importKey('raw', pub, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'])
+  const probe = c.getRandomValues(new Uint8Array(32))
+  const sig = await c.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, probe)
+  if (!(await c.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, verifyKey, sig, probe))) throw new Error('recovered key does not match the binding')
   return key
 }

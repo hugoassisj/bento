@@ -22,15 +22,24 @@ import { stripTypeScriptTypes } from 'node:module'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(root, 'home/webext/src/id/gen')
-const SOURCES = ['address.ts', 'statements.ts']
+// The entry points; every module they import from kernel/src comes with them.
+const ENTRY = ['statements.ts', 'address.ts']
+const VALUE_IMPORT = /^import (?!type )[^;]*?from '\.\/([a-z0-9-]+)\.ts'/gm
 
 export function generate() {
   const out = {}
-  for (const f of SOURCES) {
+  const todo = [...ENTRY]
+  const seen = new Set()
+  while (todo.length) {
+    const f = todo.shift()
+    if (seen.has(f)) continue
+    seen.add(f)
     const src = readFileSync(join(root, 'kernel/src', f), 'utf8')
+    for (const m of src.matchAll(VALUE_IMPORT)) todo.push(`${m[1]}.ts`)
     let js = stripTypeScriptTypes(src, { mode: 'strip' })
     // a type-only import vanishes; value imports point at the generated siblings
-    js = js.replace(/^import type .*$/gm, '').replace(/from '\.\/([a-z]+)\.ts'/g, "from './$1.js'")
+    js = js.replace(/^import type .*$/gm, '').replace(/from '\.\/([a-z0-9-]+)\.ts'/g, "from './$1.js'")
+    if (/from '[^']*\.ts'/.test(js)) throw new Error(`${f}: an import still points at a .ts file`)
     out[f.replace(/\.ts$/, '.js')] = `// GENERATED from kernel/src/${f} by scripts/gen-webext-id.mjs — do not edit.\n` + js
   }
   return out

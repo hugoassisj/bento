@@ -19,7 +19,7 @@
 //  4. The recovery code is 80 random bits as 16 Crockford base-32 symbols plus a
 //     mod-37 check symbol: typing it back is forgiving, and a typo is refused locally.
 
-import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -39,11 +39,15 @@ function ok(cond: boolean, msg: string) {
 }
 
 console.log('\n— the extension runs the kernel reference, unaltered')
-for (const [name, js] of Object.entries(generate() as Record<string, string>)) {
+const fresh = generate() as Record<string, string>
+for (const [name, js] of Object.entries(fresh)) {
   let have = ''
   try { have = readFileSync(join(root, 'home/webext/src/id/gen', name), 'utf8') } catch { /* missing */ }
   ok(have === js, `home/webext/src/id/gen/${name} is the current type-strip of kernel/src (run node scripts/gen-webext-id.mjs if not)`)
 }
+const extra = readdirSync(join(root, 'home/webext/src/id/gen')).filter((f) => !(f in fresh))
+ok(extra.length === 0, `no leftover files in home/webext/src/id/gen${extra.length ? ` (${extra.join(', ')})` : ''}`)
+ok(Object.values(fresh).every((js) => !/from '[^']*\.ts'/.test(js)), 'every import in the generated copy resolves to a generated .js sibling')
 
 console.log('\n— the conformance contract (kernel/fixtures/identity-v1.json), against the extension\'s copy')
 {
@@ -58,10 +62,16 @@ console.log('\n— the conformance contract (kernel/fixtures/identity-v1.json), 
   const dir = mkdtempSync(join(tmpdir(), 'webext-id-'))
   const f = join(dir, 'conformance.ts')
   writeFileSync(f, swapped)
-  const r = spawnSync(process.execPath, [f], { encoding: 'utf8' })
-  const tail = (r.stdout.trim().split('\n').at(-1) ?? '')
-  const m = tail.match(/^(\d+)\/(\d+) checks passed$/)
-  ok(r.status === 0 && !!m && m[1] === m[2] && Number(m[2]) > 100, `every conformance row passes on the extension's code (${tail || r.stderr.trim().split('\n').at(-1)})`)
+  const run = (file: string) => {
+    const r = spawnSync(process.execPath, [file], { encoding: 'utf8' })
+    const tail = (r.stdout.trim().split('\n').at(-1) ?? '')
+    const m = tail.match(/^(\d+)\/(\d+) checks passed$/)
+    return { ok: r.status === 0 && !!m && m[1] === m[2], total: m ? Number(m[2]) : 0, tail: tail || r.stderr.trim().split('\n').slice(-3).join(' | ') }
+  }
+  const kernel = run(join(root, 'scripts/test-statements.ts'))
+  const ext = run(f)
+  ok(kernel.ok, `kernel's own rig passes on kernel's source (${kernel.tail})`)
+  ok(ext.ok && ext.total === kernel.total, `every conformance row passes on the extension's code, and as many rows as kernel's own run (${ext.tail} vs kernel ${kernel.total})`)
 }
 
 console.log('\n— the passkey-wrapped account key (identity-design §2f)')
@@ -91,6 +101,19 @@ console.log('\n— the passkey-wrapped account key (identity-design §2f)')
   ok(key.extractable === false && key.usages.join() === 'sign', 'the recovered key comes back NON-extractable, sign-only')
   const stranger = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign'])
   ok(await fails(blob.importAccount(out.accountD, await blob.rawPub(stranger.publicKey))), 'a recovered key that does not match the binding\'s public key is refused (a swapped blob fails closed)')
+  // the probe ALONE: an engine whose JWK import does not check d against x/y
+  // (simulated: importKey hands back the scalar's own key, whatever x/y said)
+  const lax: any = {
+    getRandomValues: (a: Uint8Array) => crypto.getRandomValues(a),
+    subtle: new Proxy(subtle, { get: (t: any, k: string) => k === 'importKey'
+      ? async (fmt: string, data: any, alg: any, ext: boolean, use: string[]) => {
+          if (fmt !== 'jwk') return t.importKey(fmt, data, alg, ext, use)
+          return t.importKey('pkcs8', await t.exportKey('pkcs8', kp.privateKey), alg, ext, use) // the scalar's own key, x/y ignored
+        }
+      : typeof t[k] === 'function' ? t[k].bind(t) : t[k] }),
+  }
+  ok(await fails(blob.importAccount(out.accountD, await blob.rawPub(stranger.publicKey), { crypto: lax })), 'with an import that does not check the key pair, the sign-and-verify probe alone still refuses a mismatched key')
+  ok(!(await fails(blob.importAccount(out.accountD, accountPub, { crypto: lax }))), 'and accepts the matching one (the lax import is not just failing everything)')
   const kx = crypto.getRandomValues(new Uint8Array(32))
   const b2 = await blob.wrapAccount({ prf, credentialId, accountD, kxD: kx })
   const out2 = await blob.unwrapAccount(b2, { prf, credentialId })
