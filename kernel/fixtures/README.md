@@ -35,10 +35,16 @@ random, so a regeneration changes bytes but not verdicts.
   Apple's Security framework emit DER: convert, then fold s to the lower half,
   before anything crosses the bridge. A DER or high-S signature is refused here,
   so a forgotten conversion fails loudly rather than silently.
-- **Parse strictly.** Split on `.` and KEEP empty fields (many split helpers
-  drop them, and Kotlin's `split` and Swift's `split` behave differently by
-  default). Require the exact field count. Base64url is canonical: no padding,
-  and it must re-encode to the same string.
+- **Parse strictly.** Split on `.` and KEEP empty fields, then require the
+  exact field count. The traps, by language:
+  - Swift's `split(separator:)` DROPS empty fields by default
+    (`omittingEmptySubsequences: true`). Use `components(separatedBy: ".")`, or
+    pass `omittingEmptySubsequences: false`.
+  - Kotlin's plain `split(".")` keeps them, like JS. A `limit` argument or a
+    `.filter { it.isNotEmpty() }` loses them. (home-android, measured)
+  - Rust's `str::split('.')` keeps them; `split_terminator` and filters don't.
+
+  Base64url is canonical: no padding, and it must re-encode to the same string.
 - **Addresses: the vectors are the contract, not a regex.** The reference
   avoids lookbehind, because Rust's `regex` crate has none. Implement the rules
   however your language allows, but pass every row. Phase 1 is ASCII-only: any
