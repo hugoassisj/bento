@@ -12,6 +12,7 @@
 pub mod address;
 pub mod agent;
 pub mod b64u;
+pub mod device_list;
 mod display_table;
 pub mod statements;
 
