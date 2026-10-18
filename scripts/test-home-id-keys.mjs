@@ -80,6 +80,8 @@ do {
   e("trip.same", IdentityKeys.checkEnrolment(X, in: m) == .unchanged)
   e("trip.other", IdentityKeys.checkEnrolment(Y, in: m) == .changed)
   e("trip.lost", IdentityKeys.checkEnrolment(nil, in: m) == .changed)
+  // through the gate, as the agent does: queue the notice, then accept
+  _ = IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 1, in: m)
   IdentityKeys.acceptEnrolment(Y, in: m)
   e("trip.accepted", IdentityKeys.checkEnrolment(Y, in: m) == .unchanged && IdentityKeys.checkEnrolment(X, in: m) == .changed)
   let n0 = Mem()
@@ -89,6 +91,26 @@ do {
   e("trip.norecord", IdentityKeys.checkEnrolment(X, in: legacy) == .changed)
   legacy.failReads = true
   e("trip.unreadable", IdentityKeys.checkEnrolment(X, in: legacy) == .unknown)
+}
+// The notice comes first, and survives a kill before acceptance (§29).
+do {
+  let m = Mem(), X = Data("faceX".utf8), Y = Data("faceY".utf8)
+  _ = try! IdentityKeys.device(.consent, in: m, enclave: false, domainState: { X })
+  e("gate.same", IdentityKeys.enrolmentGate(X, device: "iPhone", now: 1, in: m) == .proceed)
+  e("gate.noaccept.before", !IdentityKeys.acceptEnrolment(Y, in: m) && IdentityKeys.checkEnrolment(Y, in: m) == .changed)
+  e("gate.changed", IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 2, in: m) == .reconfirm)
+  e("gate.queued", (IdentityKeys.pendingNotices(in: m) ?? []).count == 1)
+  // the agent is killed here, before acceptEnrolment. A fresh process, the same store:
+  let restarted = m
+  e("gate.survives", (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1 && IdentityKeys.checkEnrolment(Y, in: restarted) == .changed)
+  e("gate.idempotent", IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 3, in: restarted) == .reconfirm && (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
+  e("gate.accept", IdentityKeys.acceptEnrolment(Y, in: restarted) && IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 4, in: restarted) == .proceed)
+  e("gate.stillqueued", (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
+  if let n = IdentityKeys.pendingNotices(in: restarted)?.first {
+    e("gate.sent", IdentityKeys.markSent(n, in: restarted) && (IdentityKeys.pendingNotices(in: restarted)?.isEmpty ?? false))
+  } else { e("gate.sent", "no notice was ever queued") }
+  let f = Mem(); _ = try! IdentityKeys.device(.consent, in: f, enclave: false, domainState: { X }); f.failReads = true
+  e("gate.blind", IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 5, in: f) == .refuse)
 }
 `
 const dir = mkdtempSync(join(tmpdir(), 'bento-idkeys-'))
@@ -132,6 +154,15 @@ for (const tag of ['se', 'sw'].filter((t) => out[`${t}.routinepub`])) {
   ok(out[`${tag}.blind.device`] === 'true' && out[`${tag}.blind.account`] === 'true', 'a store that cannot be read never gets a key minted over it')
   ok(out[`${tag}.blind.kept`] === 'true', 'and the existing device key is still the one in use afterwards')
 }
+console.log('the notice comes first (§29):')
+ok(out['gate.same'] === 'true', 'an unchanged enrolment proceeds')
+ok(out['gate.noaccept.before'] === 'true', 'a new enrolment cannot be ACCEPTED before its notice is queued')
+ok(out['gate.changed'] === 'true' && out['gate.queued'] === 'true', 'a change queues the notice durably, then asks for re-confirmation')
+ok(out['gate.survives'] === 'true', 'killed before acceptance: on restart the notice is still queued and the state still not accepted')
+ok(out['gate.idempotent'] === 'true', 'the gate after a restart neither drops nor repeats the notice')
+ok(out['gate.accept'] === 'true' && out['gate.stillqueued'] === 'true', 'accepting after re-confirmation leaves the notice queued until it is SENT')
+ok(out['gate.sent'] === 'true', 'the notice leaves the outbox only when the sender marks it sent')
+ok(out['gate.blind'] === 'true', "a record or outbox that can't be read refuses the consent")
 console.log('biometric enrolment tripwire (§29):')
 ok(out['trip.same'] === 'true', 'the enrolment the consent key was created under reads unchanged')
 ok(out['trip.other'] === 'true', 'a different enrolment is CHANGED (notify every device, re-confirm)')

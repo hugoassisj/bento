@@ -150,8 +150,83 @@ enum IdentityKeys {
     }
 
     /// After the person has re-confirmed a consent under a changed enrolment.
+    /// Refused unless the notice for this change is durably queued: the
+    /// protection is the NOTICE (someone who added their own face re-confirms
+    /// trivially), so the new state may never be accepted without it.
     @discardableResult
-    static func acceptEnrolment(_ current: Data?, in store: Store) -> Bool { recordEnrolment(current, in: store) }
+    static func acceptEnrolment(_ current: Data?, in store: Store) -> Bool {
+        guard case .found(let q) = store.get(outboxItem), let queued = try? JSONDecoder().decode([Notice].self, from: q),
+              queued.contains(where: { $0.state == stateTag(current) }) else { return false }
+        return recordEnrolment(current, in: store)
+    }
+
+    // MARK: the notice, before anything else (threat model §29)
+
+    /// "Biometrics changed on <device>", for every device and the address.
+    struct Notice: Codable, Equatable {
+        var kind = "biometrics-changed"
+        let device: String
+        /// which new state it's about (a hash, never the state itself)
+        let state: String
+        let at: Int
+    }
+
+    static let outboxItem = "identity/notice-outbox"
+
+    private static func stateTag(_ d: Data?) -> String {
+        b64url(Data(SHA256.hash(data: d ?? noBiometrics)))
+    }
+
+    enum Gate: Equatable {
+        /// the enrolment is the one the consent key was made under
+        case proceed
+        /// changed: the notice IS queued; ask for re-confirmation, then acceptEnrolment
+        case reconfirm
+        /// the record or the outbox can't be read or written: refuse the consent
+        case refuse
+    }
+
+    /// Run before every consent. On a change, the notice is written to the
+    /// durable outbox FIRST, before the consent can go on, whether it then
+    /// completes or is cancelled. Queuing is idempotent per new state, so a
+    /// restart neither drops nor repeats it. Nothing here takes input from the
+    /// page, so a page can't suppress or delay it.
+    static func enrolmentGate(_ current: Data?, device: String, now: Int, in store: Store) -> Gate {
+        switch checkEnrolment(current, in: store) {
+        case .unchanged: return .proceed
+        case .unknown: return .refuse
+        case .changed:
+            var queued: [Notice] = []
+            switch store.get(outboxItem) {
+            case .found(let q): guard let l = try? JSONDecoder().decode([Notice].self, from: q) else { return .refuse }; queued = l
+            case .absent: break
+            case .unavailable: return .refuse
+            }
+            let tag = stateTag(current)
+            if !queued.contains(where: { $0.state == tag }) {
+                queued.append(Notice(device: device, state: tag, at: now))
+                guard let d = try? JSONEncoder().encode(queued), store.set(outboxItem, d) else { return .refuse }
+            }
+            return .reconfirm
+        }
+    }
+
+    /// The notices still to deliver. The sender removes one only once it's sent.
+    static func pendingNotices(in store: Store) -> [Notice]? {
+        switch store.get(outboxItem) {
+        case .found(let q): return try? JSONDecoder().decode([Notice].self, from: q)
+        case .absent: return []
+        case .unavailable: return nil
+        }
+    }
+
+    @discardableResult
+    static func markSent(_ n: Notice, in store: Store) -> Bool {
+        guard var l = pendingNotices(in: store) else { return false }
+        l.removeAll { $0 == n }
+        guard let d = try? JSONEncoder().encode(l) else { return false }
+        return store.set(outboxItem, d)
+    }
 
     private static func access(_ role: Role) throws -> SecAccessControl {
         let flags: SecAccessControlCreateFlags = role == .consent ? [.privateKeyUsage, .userPresence] : [.privateKeyUsage]
