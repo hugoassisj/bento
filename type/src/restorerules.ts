@@ -75,3 +75,28 @@ export const RESTORE_RULES: Readonly<Record<RestoreDirection, RestoreRules>> = {
 
 validateRestoreRules(RESTORE_RULES.back);
 validateRestoreRules(RESTORE_RULES.recover);
+
+/**
+ * The signature UNION (security addendum to ruling 7, 2026-10-16): after any
+ * whole-document restore, in BOTH directions, `signatures` and `sigRemovals`
+ * are the union of the live document's and the incoming one's, entry by SigId.
+ * A restore never drops a signature (a stale pre-sign snapshot used to) and
+ * never resurrects a removed one (a removal on EITHER side stays: removal is
+ * final). Live wins a same-key clash; a same key is the same act of signing.
+ */
+export function unionSignatures<T extends { signatures?: unknown; sigRemovals?: unknown }>(
+  restored: T, live: T, incoming: T,
+): T {
+  const map = (v: unknown): Record<string, unknown> =>
+    v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+  const merge = (a: unknown, b: unknown) => {
+    const out: Record<string, unknown> = {};
+    for (const src of [map(b), map(a)]) for (const k of Object.keys(src)) out[k] = src[k];  // live (a) wins
+    return out;
+  };
+  const sigs = merge(live.signatures, incoming.signatures);
+  const rem = merge(live.sigRemovals, incoming.sigRemovals);
+  const out = { ...restored, signatures: sigs } as T & { sigRemovals?: unknown };
+  if (Object.keys(rem).length) out.sigRemovals = rem; else delete out.sigRemovals;
+  return out;
+}

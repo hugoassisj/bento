@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url'
 import { configureApp } from '../kernel/src/app.ts'
 import { setEncryptionPassword } from '../kernel/src/save.ts'
 import { docContentKey, canSnapshot, recoveryBanner } from '../type/src/autosave.ts'
-import { sign, newKey, verifyAll, sigId, newHistorySalt } from '../type/src/canon.ts'
+import { sign, newKey, verifyAll, sigId, newHistorySalt, signRemoval } from '../type/src/canon.ts'
 const one = (d: { docId: string }, x: any) => ({ [sigId(d.docId, x)]: x })
 const vals = (m: Record<string, any>) => Object.values(m ?? {})
 import { RESTORE_RULES } from '../type/src/restorerules.ts'
@@ -189,45 +189,82 @@ H('Save a copy… (a \'copied\' result) must not clear the dot (asserted at sour
     'and never clears dirty unconditionally after the cancelled guard')
 }
 
-H('a recovery snapshot with NO signatures never pairs its revisions with the live signatures')
+H('a recovery snapshot with NO signatures keeps the live signature, which reads its history CHANGED (ruling 7 union, §37 supersedes #702)')
 {
-  // Signatures cover content AND revisions, so a restore that took the
-  // snapshot's revisions but kept the file's signatures would show signatures
-  // over a history they never saw — every one reading "changed". The newer
-  // state is genuinely unsigned, so the right outcome is NO signatures.
-  //
-  // What makes that true in type is parseDoc DEFAULTING an absent `signatures`
-  // to [] (model.ts) before any restore logic sees the snapshot. A recovery
-  // rule that keeps the live value when a field is ABSENT would otherwise keep
-  // the file's signatures. That default is an implementation detail, so this
-  // row pins it at type's seam: break it and this goes red.
-  //
-  // Through the banner's own restore path: gateRestored, then store.replace.
+  // #702 asserted that such a snapshot restores to NO signatures. Ruling 7's
+  // union supersedes it (security §37): a restore never drops a valid
+  // signature. What keeps it honest is v2's history commitment: the kept
+  // signature reads its history CHANGED against the snapshot's revisions,
+  // never "matches". Through the banner's real path: gateRestored, then
+  // store.restore('recover').
   const live = doc()
-  live.revisions = [{ id: 'r1', at: '2026-01-01T00:00:00.000Z', label: 'Revision 1',
-                      body: JSON.parse(JSON.stringify(live.body)) }]
-  live.signatures = { k1: { alg: 'ES256', pub: 'P', name: 'Bob', content: 'C', prev: '', sig: 'S' } as any }
-  ok(vals(live.signatures).length === 1 && vals(live.signatures)[0].name === 'Bob',
-    'the FILE really is signed (Bob) — so "no signatures after restore" is a result, not a fixture')
-
-  // The crashed session held a NEWER revision and no signatures at all — and
-  // its JSON lacks the key entirely, not just an empty list.
+  live.revisions = [{ id: 'r1', at: '2026-01-01T00:00:00.000Z', label: 'Revision 1', body: JSON.parse(JSON.stringify(live.body)) }]
+  const bob = await sign(live, await newKey(), { name: 'Bob' })
+  live.signatures = one(live, bob)
   const newer = JSON.parse(JSON.stringify(live)) as Record<string, unknown>
-  ;(newer.revisions as unknown[]).push({ id: 'r2', at: '2026-02-01T00:00:00.000Z', label: 'Revision 2',
-                                         body: JSON.parse(JSON.stringify(live.body)) })
+  ;(newer.revisions as unknown[]).push({ id: 'r2', at: '2026-02-01T00:00:00.000Z', label: 'Revision 2', body: JSON.parse(JSON.stringify(live.body)) })
   delete newer.signatures
   ok(!('signatures' in newer), 'the snapshot JSON genuinely has no signatures key')
+  const store = new Store(JSON.parse(JSON.stringify(live)))
+  store.restore(gateRestored(JSON.stringify(newer), store.doc)!, 'recover')
+  ok(store.doc.revisions.length === 2, "the restore takes the snapshot's revisions")
+  const v = await verifyAll(store.doc, store.doc.signatures)
+  ok(v.entries.length === 1 && v.entries[0].sig.name === 'Bob', "and Bob's signature SURVIVES the restore")
+  ok(v.entries[0].ok && v.entries[0].history === 'changed', 'it still attests the content, and reads its history CHANGED — never matches')
+}
 
-  const gated = gateRestored(JSON.stringify(newer), live)
-  ok(gated !== null, 'the snapshot passes the restore gate')
-  const store = new Store(live)
-  store.replace(gated!)
-  ok(store.doc.revisions.length === 2 && store.doc.revisions[1].id === 'r2',
-    'the restore takes the snapshot\'s revisions')
-  ok(store.doc.signatures !== null && typeof store.doc.signatures === 'object' && vals(store.doc.signatures).length === 0,
-    'and NO signatures — the snapshot\'s unsigned state, not an absent field')
-  ok(!JSON.stringify(store.doc.signatures ?? {}).includes('Bob'),
-    'the file\'s signatures are never paired with the snapshot\'s revisions')
+H('ruling 7: restore UNIONS signatures and removals, in both directions (security addendum)')
+{
+  const at = '2026-10-18T10:00:00.000Z'
+  // a signature made AFTER the snapshot was taken survives recovering from it
+  for (const dir of ['recover', 'back'] as const) {
+    const file = doc()
+    const preSign = JSON.parse(JSON.stringify(file)) as TypeDoc       // autosaved before Sign
+    const k = await newKey()
+    const s1 = await sign(file, k, { name: 'Alice' })
+    file.signatures = one(file, s1)
+    const st = new Store(JSON.parse(JSON.stringify(file)))
+    st.restore(gateRestored(JSON.stringify(preSign), st.doc)!, dir)
+    const v = await verifyAll(st.doc, st.doc.signatures)
+    ok(v.entries.length === 1 && v.entries[0].ok, `a ${dir} restore from a snapshot taken BEFORE a signing keeps that signature, and it verifies`)
+  }
+  // a removal on EITHER side stays removed after the union
+  const mk2 = async () => {
+    const d = doc(); const k = await newKey(); const s1 = await sign(d, k, { name: 'Alice' })
+    const id = sigId(d.docId, s1); d.signatures = { [id]: s1 }
+    return { d, k, s1, id, t: await signRemoval(d.docId, id, k, at) }
+  }
+  {
+    const { d, s1, id, t } = await mk2()
+    const live = JSON.parse(JSON.stringify(d)); live.sigRemovals = { [id]: t }          // removed AFTER the snapshot
+    const st = new Store(live); st.restore(gateRestored(JSON.stringify(d), st.doc)!, 'recover')
+    const v = await verifyAll(st.doc, st.doc.signatures, { removals: st.doc.sigRemovals })
+    ok(v.entries[0].removal === 'removed', 'a removal only in the LIVE document stays removed after recover — a restore never un-removes')
+    void s1
+  }
+  {
+    const { d, id, t } = await mk2()
+    const snap = JSON.parse(JSON.stringify(d)); snap.sigRemovals = { [id]: t }          // removed only in the snapshot
+    const st = new Store(JSON.parse(JSON.stringify(d))); st.restore(gateRestored(JSON.stringify(snap), st.doc)!, 'recover')
+    const v = await verifyAll(st.doc, st.doc.signatures, { removals: st.doc.sigRemovals })
+    ok(v.entries[0].removal === 'removed', 'a removal only in the SNAPSHOT stays removed after recover')
+  }
+  {
+    // an INVALID or UNAUTHORISED removal, from either side, removes nothing
+    const { d, id, t } = await mk2()
+    const third = await signRemoval(d.docId, id, await newKey(), at)
+    const forged = { ...t, at: '2026-10-18T11:00:00.000Z' }
+    for (const [label, bad, verdict] of [['an unauthorised', third, 'requested'], ['an invalid', forged, 'invalid']] as const) {
+      for (const side of ['live', 'snapshot'] as const) {
+        const live = JSON.parse(JSON.stringify(d)), snap = JSON.parse(JSON.stringify(d))
+        ;(side === 'live' ? live : snap).sigRemovals = { [id]: bad }
+        const st = new Store(live); st.restore(gateRestored(JSON.stringify(snap), st.doc)!, 'recover')
+        const v = await verifyAll(st.doc, st.doc.signatures, { removals: st.doc.sigRemovals, owner: 'SOME-OWNER' })
+        ok(v.entries.length === 1 && v.entries[0].ok && v.entries[0].removal === verdict,
+          `${label} removal from the ${side} side removes nothing (${v.entries[0].removal})`)
+      }
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -291,10 +328,13 @@ H('crash recovery brings content AND history back TOGETHER (recover)')
   const gated = gateRestored(JSON.stringify(snap), store.doc)!
   store.restore(gated, 'recover')
   ok(store.doc.revisions.map(r => r.id).join() === 'r3', 'the TRIMMED list comes back from the snapshot')
-  ok(vals(store.doc.signatures).length === 1 && vals(store.doc.signatures)[0].sig === vals(snap.signatures)[0].sig,
-    'with the signature made over it — revisions and signatures are never split')
   const v = await verifyAll(store.doc, store.doc.signatures)
-  ok(v.ok && v.entries[0].ok, 'so the re-signed signature VERIFIES after recovery')
+  const reSigned = v.entries.find(e => e.sig.sig === vals(snap.signatures)[0].sig)
+  const old = v.entries.find(e => e.sig.sig === vals(file.signatures)[0].sig)
+  ok(v.entries.length === 2 && !!reSigned && !!old,
+    'BOTH signatures are present after recovery — the union never drops one (ruling 7)')
+  ok(reSigned!.ok && reSigned!.history === 'matches', 'the re-signed one VERIFIES, its history matching the trimmed list')
+  ok(old!.ok && old!.history === 'changed', 'the pre-trim one still attests the content, its history honestly CHANGED')
   ok(store.doc.docId === file.docId, 'identity still comes from the live file')
   ok(store.undo() && store.doc.revisions.map(r => r.id).join() === 'r3',
     'undo of the restore reverts content but keeps history live — going back never discards')

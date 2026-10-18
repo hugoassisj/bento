@@ -21,7 +21,7 @@
 import type { Block, TypeDoc } from './model.ts';
 import { copyIsReceiveOnly } from './model.ts';
 import { FROM_LIVE, applyRestore, type RestoreDirection } from '../../kernel/src/docfields.ts';
-import { RESTORE_RULES } from './restorerules.ts';
+import { RESTORE_RULES, unionSignatures } from './restorerules.ts';
 
 type Snap =
   | { kind: 'doc'; doc: TypeDoc }
@@ -169,7 +169,8 @@ export class Store {
   restore(doc: TypeDoc, direction: RestoreDirection): void {
     this.#push({ kind: 'doc', doc: clone(this.#doc) });
     this.#run = null;
-    this.#doc = applyRestore(this.#doc, doc, direction, RESTORE_RULES[direction]);
+    // signatures and their removals UNION, in both directions (ruling 7)
+    this.#doc = unionSignatures(applyRestore(this.#doc, doc, direction, RESTORE_RULES[direction]), this.#doc, doc);
     this.#emit();
   }
 
@@ -186,7 +187,7 @@ export class Store {
       // Going BACK (undo or redo): content follows the snapshot, history stays
       // live, identity/mode/capability stay live (restorerules.ts). So undo
       // can never discard a revision, and comments undo like any edit.
-      this.#doc = applyRestore(this.#doc, s.doc, 'back', RESTORE_RULES.back);
+      this.#doc = unionSignatures(applyRestore(this.#doc, s.doc, 'back', RESTORE_RULES.back), this.#doc, s.doc);
       return inverse;
     }
     // A block snapshot restores that block in place. If the block is gone (a
