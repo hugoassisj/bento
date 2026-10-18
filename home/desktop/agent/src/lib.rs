@@ -13,6 +13,7 @@ pub mod address;
 pub mod agent;
 pub mod b64u;
 pub mod device_list;
+pub mod webauthn;
 pub mod recovery;
 mod display_table;
 pub mod statements;
