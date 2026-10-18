@@ -677,13 +677,13 @@ const tracker = () => {
   const rows = Object.keys(trailOf(store.doc)).sort().join(',')
   const pasted = docForExport(store.doc)
   ok(pasted.trail === undefined, 'Copy document JSON carries no trail')
-  store.replaceDoc(JSON.parse(JSON.stringify(pasted)) as SpacesDoc)
+  store.replaceDoc(JSON.parse(JSON.stringify(pasted)) as SpacesDoc, 'back')
   ok(Object.keys(trailOf(store.doc)).sort().join(',') === rows,
     'replaceDoc keeps the LIVE trail — Replace from JSON does not wipe it')
   // and a pasted doc carrying a DIFFERENT trail cannot overwrite the live one
   const forged = JSON.parse(JSON.stringify(store.doc)) as SpacesDoc
   forged.trail = { '2020-01-01': { n: { todo: 999 } } }
-  store.replaceDoc(forged)
+  store.replaceDoc(forged, 'back')
   ok(trailOf(store.doc)['2020-01-01'] === undefined && Object.keys(trailOf(store.doc)).sort().join(',') === rows,
     'a restored or pasted trail never replaces the live record')
 }

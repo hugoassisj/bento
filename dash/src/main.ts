@@ -52,7 +52,7 @@ import { savingFor, saveRevision, type Acknowledge } from './saving.ts'
 import { dismissSplash, dismissSplashNow } from './splash.ts'
 import { t, i18nApi } from './i18n.ts'
 import {
-  parseDoc, docBytes, docBudget, rowCount, DOC_BUDGET_FSA, DOC_BUDGET_DOWNLOAD,
+  parseDoc, docBytes, docBudget, rowCount, DOC_BUDGET_FSA, DOC_BUDGET_DOWNLOAD, FORMAT,
   type DashDoc, type ParseResult, type Column, type ColumnType, type TableSheet,
   type Sheet, type CanvasSheet,
 } from './model.ts'
@@ -199,8 +199,22 @@ if (envelope) {
   else refuse(res)
 }
 
+/**
+ * The app is UP but has no workbook to expose yet — say so on `window.bento`.
+ *
+ * The shell's loader decides the app mounted by looking at `window.bento`; it
+ * used to ask for `.doc`, which a password gate or a refusal page never has, so
+ * it ran the whole app again through its next path and finally threw "every
+ * loader path was refused" over the gate. `locked` is the shared signal the
+ * loader accepts (slides' loader fix); `boot()` replaces the whole object.
+ */
+function markMountedWithoutDoc(extra: Record<string, unknown> = {}): void {
+  ;(window as unknown as Record<string, unknown>).bento = { format: FORMAT, locked: true, ...extra }
+}
+
 /** An encrypted workbook: ask, then take the same boot path. */
 async function passwordGate(raw: string): Promise<void> {
+  markMountedWithoutDoc()
   dismissSplashNow()
   document.body.innerHTML =
     `<div class="dx-gate"><h1>${t('This file is encrypted.')}</h1>` +
@@ -231,6 +245,8 @@ async function passwordGate(raw: string): Promise<void> {
  * subscription are constructed, and none of them exist on this path.
  */
 function refuse(res: Extract<ParseResult, { ok: false }>): void {
+  // up, with nothing to open: `refused` says why `doc` is missing
+  markMountedWithoutDoc({ refused: true })
   dismissSplashNow()
   const why = res.err === 'empty' ? '' : 'detail' in res ? res.detail : ''
   const found = 'found' in res && res.found ? ` (${res.found})` : ''

@@ -114,6 +114,12 @@ const flag = (name, fallback) => {
 }
 const generator = flag('generator', 'bento-slides')
 const titleFallback = flag('title', 'bento/slides')
+// What the file IS, for the one message the loader writes before any app runs
+// (the unsupported-browser notice). It said "bento/dash spreadsheet" in every
+// app's shell — a slides deck told its reader it was a spreadsheet.
+const KIND = { 'bento-slides': 'presentation', 'bento-dash': 'spreadsheet', 'bento-spaces': 'space', 'bento-type': 'document' }
+if (!/^[\w/ .-]+$/.test(titleFallback)) throw new Error(`--title must be plain words, got ${JSON.stringify(titleFallback)}`)
+const fileKind = `${titleFallback} ${KIND[generator] ?? 'file'}`
 // How the inflated runtime is started. `cascade` (the default since 1.1.1):
 // see below. `blob` (the 1.1.0 loader): a module import from a blob: URL. `inline`: an inline <script type="module"> whose
 // textContent is the inflated bundle — no blob: URL at all, so it runs where a
@@ -450,20 +456,25 @@ const loader = `
 (async () => {${diag ? DIAG : ''}
   var violations = 0
   document.addEventListener('securitypolicyviolation', function () { violations++ })
-  var fail = function (msg) {
+  // Two ways to fill the card, kept apart: fail() takes the loader's OWN fixed
+  // markup (the unsupported-browser notice), failText() takes anything built
+  // from an error, whose message the loader does not control, as plain text.
+  var card = function () {
     var d = document.createElement('div')
     d.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0D1B2E;color:#F2F0EA;font:16px/1.6 sans-serif;text-align:center;padding:40px;z-index:99999'
-    d.innerHTML = msg
     document.body.appendChild(d)
     var s = document.getElementById('bento-splash'); if (s) s.remove()
+    return d
   }
+  var fail = function (html) { card().innerHTML = html }
+  var failText = function (text) { card().textContent = text }
   if (${inflateMode === 'js' ? "typeof Uint8Array === 'undefined' || typeof TextDecoder === 'undefined'" : inflateMode === 'native' ? "typeof DecompressionStream === 'undefined'" : 'false'}) {
     // The old text said "2023 or later" and then listed Chrome 80, which is
     // 2020 — a reader checking their version against it learns nothing. It also
     // never said what kind of file this is, and never mentioned that the data
     // is plain readable JSON in this same file, which is the one route out that
     // works with no capable browser at all.
-    fail('<b>This is a bento/dash spreadsheet.</b><br>Opening it needs a browser released in 2023 or later \\u2014 Safari 16.4+, Firefox 113+, or a current Chrome or Edge.<br><br>Nothing is lost: your data is stored as plain readable JSON inside this same file. Open it in a newer browser, or open it in a text editor and look for the block marked "bento-doc".')
+    fail('<b>This is a ${fileKind}.</b><br>Opening it needs a browser released in 2023 or later \\u2014 Safari 16.4+, Firefox 113+, or a current Chrome or Edge.<br><br>Nothing is lost: your data is stored as plain readable JSON inside this same file. Open it in a newer browser, or open it in a text editor and look for the block marked "bento-doc".')
     return
   }
   ${INFLATE_JS}${codec ? codec.LOADER_DECODER : ''}
@@ -520,11 +531,24 @@ const loader = `
     // report arrives in a later task and is counted, but nothing waits for
     // it). Then new Function, also synchronous. Only the blob import is a
     // promise, and it is the last resort.
-    var mounted = function () { return !!(window.bento && window.bento.doc) }
+    // THE CONTRACT: an app publishes window.bento before it hands control back,
+    //   { doc, … }                 running;
+    //   { format, locked: true }   waiting at its password gate (no doc yet);
+    //   { format, refused: true }  it painted its OWN refusal (a file it will
+    //                              not open) — it may throw afterwards.
+    // Any of the three means the app ran: no later path runs it again and the
+    // loader paints nothing. The loader's card is only for "nothing ran at all".
+    // Reading doc alone made every path of an encrypted file "fail", re-run the
+    // app (one gate per path) and end on the failure card (1.2.4–1.2.8). What
+    // the app PUBLISHED decides, not whether it threw: the check runs after a
+    // throw too.
+    var mounted = function () { return !!(window.bento && (window.bento.doc || window.bento.locked || window.bento.refused)) }
     var runNow = function (name, fn) {
       if (mounted()) return true
-      try { fn() } catch (e) { tried.push(name + ': ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}; return false }
+      var threw = false
+      try { fn() } catch (e) { threw = true; tried.push(name + ': ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''} }
       var okp = mounted()
+      if (threw && !okp) return false
       tried.push(name + (okp ? ': ok' : ': ran, no app (refused, or the app did not mount)'))${diag ? `
       say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}
       if (okp) path = name
@@ -566,7 +590,8 @@ const loader = `
         await import(url)
       } catch (e) { why = why || ((e && e.name) + ': ' + (e && e.message)) }
       document.removeEventListener('securitypolicyviolation', onv)
-      var okb = !why && mounted()
+      // published counts even if the module then threw (a refusal may throw)
+      var okb = mounted()
       tried.push('blob' + (okb ? ': ok' : why ? ': ' + why : ': imported, no app'))${diag ? `
       say('loader path blob → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}
       if (okb) path = 'blob'
@@ -616,7 +641,7 @@ const loader = `
     await import(url)`}
   } catch (e) {${diag ? `
     say('BOOT FAILED: ' + (e && e.name) + ': ' + (e && e.message) + (e && e.stack ? ' | ' + String(e.stack).split('\\n').slice(0, 3).join(' | ') : ''), true)` : ''}
-    fail('This file could not start: ' + (e && e.message ? e.message : e))
+    failText('This file could not start: ' + (e && e.message ? e.message : e))
   }
 })()
 `

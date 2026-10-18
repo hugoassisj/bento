@@ -29,18 +29,10 @@
 .dx-ask-title { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
 .dx-ask-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .dx-ask-row > span { font-size: 12px; color: var(--muted); }
-.dx-ask-in {
-  width: 100%;
-  padding: 7px 9px;
-  font: inherit;
-  color: inherit;
-  background: var(--panel);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-}
-/* --blue, not --accent: the amber ring is 2.02:1 on white and misses the 3:1
-   WCAG 2.2 SC 1.4.11 asks of a focus indicator. See .dx-btn:focus-visible. */
-.dx-ask-in:focus-visible { outline: 2px solid var(--blue); outline-offset: -1px; }
+/* The look and the focus ring are THE FIELD (styles.css); this only sizes.
+   The shared ring is --accent-ink, not --accent: dark amber passes the 3:1
+   WCAG 2.2 SC 1.4.11 asks of a focus indicator where bright amber did not. */
+.dx-ask-in { width: 100%; }
 /* A formula is read character by character — an l and a 1 have to differ. */
 .dx-ask-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .dx-ask-hint {

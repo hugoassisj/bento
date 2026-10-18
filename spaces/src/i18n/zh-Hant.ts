@@ -996,4 +996,8 @@ export const zh_Hant: Catalog = {
   "Leave version history out": "不包含版本歷程",
   "Versions include text that was deleted. This file keeps them either way.": "版本中包含已刪除的文字。無論如何，此檔案都會保留它們。",
   "Save invite…": "儲存邀請…",
+  "This recovered copy looks older than the file you opened. Keep the file unless you know it’s newer.": "此復原副本似乎比你開啟的檔案更舊。除非你確定它較新，否則請保留該檔案。",
+  "Keep the file": "保留檔案",
+  "Restore anyway": "仍然還原",
+  "Crash recovery is off for this space — it’s too large to keep a backup copy. Save often.": "此空間的當機復原已關閉 — 檔案太大，無法保留備份。請經常儲存。",
 }

@@ -97,12 +97,22 @@ export interface RestoreRules {
    *  is data loss, not exposure. Under FALSE an absent field keeps the live
    *  value. This keys on the EFFECTIVE keepLive, not the class: a history field an
    *  app OVERRODE to 'follows' (e.g. comments) is treated as content, so a deleted
-   *  comment stays deleted. A history field left at its default 'live' keep
-   *  (revisions, signatures) keeps live when absent either way, and the
-   *  identity/mode/capability floor is unchanged. Only 'recover' is affected —
-   *  'back' already drops an absent field. (maintainer ruling 2026-10-15: whole is
-   *  the default.) */
+   *  comment stays deleted. A history field at its default 'live' keep (revisions,
+   *  signatures) absent from a WHOLE snapshot is ALSO removed — the snapshot
+   *  carries history, so an absent key was cleared — unless the field opts out via
+   *  `keepLiveWhenAbsent`. The identity/mode/capability floor is unchanged. Only
+   *  'recover' is affected — 'back' already drops an absent field. (maintainer
+   *  ruling 2026-10-15: whole is the default.) */
   readonly wholeSnapshot?: boolean
+  /** History fields (default 'live' keep) whose ABSENCE from a whole snapshot does
+   *  NOT mean the user cleared them — a projection-shaped sub-field, a per-day
+   *  trail, anything an app recomputes — so on 'recover' they keep the live value
+   *  when absent instead of being removed. Only meaningful for history-class
+   *  fields (content already follows the whole-snapshot rule, and the floor is
+   *  always live); `validateRestoreRules` throws on a non-history entry. A field
+   *  with a recover hook still runs its hook when the snapshot CARRIES the field —
+   *  this governs only the absent case. */
+  readonly keepLiveWhenAbsent?: readonly string[]
 }
 
 /** Resolve a whole-document restore and return the doc to INSTALL.
@@ -164,13 +174,20 @@ export function applyRestore<T extends object>(
     }
     // 'live'
     if (direction === 'recover' && cls === 'history') {
-      // A missing key keeps live BEFORE any hook runs — so absent-never-wipes
-      // does not depend on each hook remembering it, and a hook never sees an
-      // undefined incoming.
+      // A hook runs ONLY with a present incoming (never an undefined one — the
+      // contract hook authors rely on). When incoming is present it decides.
       const hook = I[k] !== undefined ? ownGet(rules.recover, k) : undefined
       if (hook) { const v = hook(L[k], I[k], at); if (v !== undefined) out[k] = v; continue }
-      if (I[k] !== undefined) out[k] = I[k]
-      else if (L[k] !== undefined) out[k] = L[k] // absent never wipes a history field on recover
+      if (I[k] !== undefined) { out[k] = I[k]; continue }
+      // Absent. A recovery snapshot is contentOnly(doc) — it strips only collab,
+      // so it CARRIES history; an absent default-live history key therefore means
+      // the user CLEARED it. Under a WHOLE snapshot (the default) it stays removed
+      // (cleared stays cleared — else cleared drafts resurrect and ride the next
+      // shared copy). It keeps live only for a PROJECTION (wholeSnapshot:false) or
+      // a field listed in keepLiveWhenAbsent, whose absence does not imply a user
+      // clear (e.g. a per-day trail).
+      const keepAbsent = !whole || (rules.keepLiveWhenAbsent?.includes(k) ?? false)
+      if (keepAbsent && L[k] !== undefined) out[k] = L[k]
       continue
     }
     if (L[k] !== undefined) out[k] = L[k]
@@ -184,12 +201,24 @@ export function applyRestore<T extends object>(
  *  so a slipped override is SAFE, not merely caught. */
 export function validateRestoreRules(rules: RestoreRules): void {
   const kl = rules.keepLive
-  if (!kl) return
-  for (const k of Object.keys(kl)) {
+  if (kl) {
+    for (const k of Object.keys(kl)) {
+      if (PROTO_KEYS.has(k)) continue
+      const cls = ownGet(rules.classes, k)
+      if (cls && FLOOR_CLASSES.has(cls) && ownGet(kl, k) !== 'live') {
+        throw new Error(`keepLive override for "${k}" (class ${cls}) must be 'live' — identity, mode and capability fields never follow a restore`)
+      }
+    }
+  }
+  // keepLiveWhenAbsent only governs the absent case of a 'live' HISTORY field.
+  // A content field already follows the whole-snapshot rule and the floor is
+  // always live, so a non-history entry is a config mistake — fail loudly.
+  for (const k of rules.keepLiveWhenAbsent ?? []) {
     if (PROTO_KEYS.has(k)) continue
     const cls = ownGet(rules.classes, k)
-    if (cls && FLOOR_CLASSES.has(cls) && ownGet(kl, k) !== 'live') {
-      throw new Error(`keepLive override for "${k}" (class ${cls}) must be 'live' — identity, mode and capability fields never follow a restore`)
+    const kept = ownGet(rules.keepLive, k) ?? defaultKeepLive(cls)
+    if (cls !== 'history' || kept !== 'live') {
+      throw new Error(`keepLiveWhenAbsent entry "${k}" (class ${cls ?? 'unknown'}, keepLive ${kept}) must be a default-live history field — it governs only the absent case of a 'live' history key`)
     }
   }
 }

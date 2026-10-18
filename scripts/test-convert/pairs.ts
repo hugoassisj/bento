@@ -48,7 +48,7 @@ const pptx = await fxMinimal()
   ok(d.kind === 'pptx' && JSON.stringify(ids(d)) === '["pptx-to-slides"]', `a .pptx is offered a bento/slides deck (${ids(d)})`)
   ok(detect('deck.xlsx', pptx).kind === 'unknown', 'a zip that is not a .pptx is not taken for one')
   const html = detect('deck.bento.html', enc.encode(wrap(sample)))
-  ok(html.kind === 'bento' && html.source === 'html' && JSON.stringify(ids(html)) === '["slides-to-pptx"]', `a .bento.html deck is offered PowerPoint (${ids(html)})`)
+  ok(html.kind === 'bento' && html.source === 'html' && JSON.stringify(ids(html)) === '["slides-to-pptx","update-shell"]', `a .bento.html deck is offered PowerPoint, and the latest version of itself (${ids(html)})`)
   const json = detect('deck.json', enc.encode(SAMPLE_DECK))
   ok(json.kind === 'bento' && json.source === 'json' && JSON.stringify(ids(json)) === '["slides-to-pptx","json-to-slides"]',
     `document JSON is offered PowerPoint AND a deck (${ids(json)})`)
@@ -59,10 +59,17 @@ const pptx = await fxMinimal()
   ok(!!pp && !pp.ok && /compact/.test(pp.why) && c.some((o) => o.ok && o.conversion.id === 'json-to-slides'),
     'compact JSON: PowerPoint is shown but explained, and making a deck is offered')
   const spaces = detect('notes.bento.html', enc.encode(wrap({ format: 'bento/spaces', pages: [] })))
-  ok(spaces.kind === 'bento' && optionsFor(spaces).length === 0 && /^There is no conversion for bento\/spaces files yet\.$/.test(nothingFor(spaces)),
-    `another app's file is recognised and told plainly ("${nothingFor(spaces)}")`)
+  ok(spaces.kind === 'bento' && JSON.stringify(ids(spaces)) === '["update-shell"]',
+    `another app's file is recognised, and offered only the move to its own app's latest release (${ids(spaces)})`)
+  // an encrypted file whose shell does not say which app made it: the rescue
+  // is shown, but cannot run (there is no app to move it to); the password
+  // wording covers the JSON-only case, which has no shell at all
   const locked = detect('locked.bento.html', enc.encode(wrap({ format: 'bento/enc', v: 1 })))
-  ok(optionsFor(locked).length === 0 && /password/.test(nothingFor(locked)), 'a password-protected file is told what to do')
+  const lo = optionsFor(locked)
+  ok(lo.length === 1 && lo[0].conversion.id === 'update-shell' && !lo[0].ok && /which Bento app/.test(lo[0].why),
+    `an encrypted file with no app named: the rescue is shown and explained (${lo[0] && !lo[0].ok ? lo[0].why : 'not shown'})`)
+  const lockedJson = detect('locked.json', enc.encode(JSON.stringify({ format: 'bento/enc', v: 1 })))
+  ok(optionsFor(lockedJson).length === 0 && /password/.test(nothingFor(lockedJson)), 'an encrypted document as bare JSON is told what to do')
   ok(detect('x.html', enc.encode('<p>hello</p>')).kind === 'unknown', 'an ordinary web page is not a Bento file')
   ok(detect('x.json', enc.encode('{"a":')).kind === 'unknown', 'broken JSON is refused in words')
 }

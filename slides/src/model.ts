@@ -1382,8 +1382,8 @@ const renderableElement = (e: unknown): boolean =>
 /**
  * Fill the fields the format REQUIRES but a hand- or agent-written document
  * may omit: `title`, `version`, `size`, `theme` (and its four colour/face
- * keys), and on each slide `id`, `background`, `transition`, `elements` and
- * `notes`. A document that omitted `theme` passed parseDoc and then crashed
+ * keys), on each slide `id`, `background`, `transition`, `elements` and
+ * `notes`, and a table element's `style`. A document that omitted `theme` passed parseDoc and then crashed
  * the shell at boot — `undefined.palette` — leaving the reader on the splash
  * for good; a missing `size` did the same on `width`. Each value comes from the
  * editor's own defaults (newDoc, emptySlide), and ONLY where the field is
@@ -1414,6 +1414,14 @@ function fillRequired(doc: Record<string, unknown>): boolean {
     if (typeof s.background !== 'string') s.background = blank.background
     if (typeof s.transition !== 'string') s.transition = blank.transition
     s.elements = Array.isArray(s.elements) ? s.elements.filter(renderableElement) : []
+    // A table's `style` is required by the type but not by renderableElement,
+    // and the properties panel reads it unguarded: a full document whose table
+    // omitted it opened, then crashed the panel when the table was selected.
+    // Fill it the way a new table gets it (the deck theme's table style), which
+    // is also what compact expansion gives a compact table.
+    for (const e of s.elements as Record<string, unknown>[]) {
+      if (e.type === 'table' && !isRecord(e.style)) e.style = tableStyleFor(doc.theme as BentoDoc['theme'])
+    }
     if (typeof s.notes !== 'string') s.notes = blank.notes
   }
   return (doc.slides as unknown[]).length > 0

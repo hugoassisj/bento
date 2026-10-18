@@ -32,7 +32,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Store } from '../spaces/src/store.ts'
 import { parseDoc, docContentKey, FORMAT, type SpacesDoc } from '../spaces/src/model.ts'
-import { gateRestored, recoveryOffered, restoreInto, MAX_RESTORE_CHARS } from '../spaces/src/restoregate.ts'
+import { gateRestored, recoveryOffered, restoreInto, recoverInto, MAX_RESTORE_CHARS } from '../spaces/src/restoregate.ts'
 import { sanitizeInline } from '../spaces/src/sanitize.ts'
 
 let checks = 0
@@ -78,7 +78,8 @@ const editedA = (text = 'edited after the save'): Record<string, any> => {
 const first = (s: Store) => String((s.doc.pages as SpacesDoc['pages'] | undefined)?.[0]?.blocks?.[0]?.html ?? '')
 /** A restore that THROWS was not refused cleanly — the app would have applied
  *  whatever it got to before the throw — so it counts as "went through". */
-const restore = (s: Store, json: unknown): boolean => { try { return restoreInto(s, json) } catch { return true } }
+// Both directions run the same gate first; 'back' is the version restore.
+const restore = (s: Store, json: unknown): boolean => { try { return restoreInto(s, json, 'back') } catch { return true } }
 const offered = (json: unknown, live: SpacesDoc): boolean => { try { return recoveryOffered(json, live) } catch { return true } }
 
 console.log('bento/spaces restore gate\n')
@@ -125,7 +126,7 @@ console.log('\nidentity and capability stay the open space\'s\n')
 {
   const noCollab = liveA(); delete noCollab.collab
   const snap = editedA(); snap.collab = { v: 2, room: 'wATTACKER', key: 'k', on: true }
-  const g = gateRestored(JSON.stringify(snap), noCollab)
+  const g = gateRestored(JSON.stringify(snap), noCollab, 'recover', Date.now())
   ok(g.ok && g.doc.collab === undefined, 'a space with no live session does not gain one from an entry')
 }
 
@@ -192,7 +193,7 @@ console.log('\nthe controls: honest restores still work\n')
   // recovery: an edit lost in a crash, plus a field this build does not know
   const snap = editedA(); snap.futureField = { kept: true }; snap.pages[1].futurePageField = 7
   const s = new Store(liveA())
-  ok(restore(s, JSON.stringify(snap)), 'an honest recovery snapshot restores')
+  ok(recoverInto(s, { json: JSON.stringify(snap), at: Date.now() }), 'an honest recovery snapshot restores (the banner\'s path, \'recover\')')
   ok(first(s) === 'edited after the save', 'with its edit')
   ok((s.doc as Record<string, any>).futureField?.kept === true && (s.doc.pages[1] as Record<string, any>).futurePageField === 7,
     'and unknown fields survive, as a file open keeps them')
@@ -211,9 +212,11 @@ console.log('\nthe controls: honest restores still work\n')
 }
 {
   const live = liveA()
-  const g = gateRestored(JSON.stringify(snapshotOf(live)), live)
-  ok(g.ok && docContentKey(g.doc) === docContentKey(live) && JSON.stringify(g.doc) === JSON.stringify(live),
-    'an honest snapshot of the open space comes back byte-identical')
+  for (const dir of ['back', 'recover'] as const) {
+    const g = gateRestored(JSON.stringify(snapshotOf(live)), live, dir, Date.now())
+    ok(g.ok && docContentKey(g.doc) === docContentKey(live) && JSON.stringify(g.doc) === JSON.stringify(live),
+      `an honest snapshot of the open space comes back byte-identical ('${dir}')`)
+  }
 }
 
 console.log('\nevery restore path uses the gate\n')
@@ -225,15 +228,15 @@ console.log('\nevery restore path uses the gate\n')
   const about = readFileSync(join(root, 'spaces/src/about.ts'), 'utf8') +
     readFileSync(join(root, 'spaces/src/doccmds.ts'), 'utf8')
   const offer = main.slice(main.indexOf('async function offerRecovery('), main.indexOf('async function offerRecovery(') + 1400)
-  ok(/recoveryOffered\(snap\.json, doc\)/.test(offer), 'the recovery check gates before offering')
-  ok(/restoreInto\(store, snap\.json\)/.test(offer), 'the banner\'s Restore goes through restoreInto')
-  ok(/restoreInto\((h\.)?store, v\.json\)/.test(about), 'History\'s Restore goes through restoreInto')
+  ok(/recoveryOffered\(snap\.json, doc, snap\.at\)/.test(offer), 'the recovery check gates before offering (timed by the snapshot)')
+  ok(/recoverInto\(store, snap\)/.test(offer), 'the banner\'s Restore goes through recoverInto (restoreInto, \'recover\')')
+  ok(/restoreVersion\((h\.)?store, v\.json\)/.test(about), 'History\'s Restore goes through restoreVersion (restoreInto, \'back\')')
   ok(!/JSON\.parse\((snap|v)\.json\)/.test(main + about), 'no raw JSON.parse of a stored entry remains')
   // the in-file timeline (history.ts) is the document's own, but what it
   // applies is still parsed, sanitized and given the live identity
   const fileHist = about.slice(about.indexOf('function openFileHistory('), about.indexOf('function summary('))
-  ok(/restoreInto\(h\.store, JSON\.stringify\(next\)\)/.test(fileHist) && !/replaceDoc\(/.test(fileHist),
-    'Versions in this file restores through restoreInto, never a bare replaceDoc')
+  ok(/restoreVersion\(h\.store, JSON\.stringify\(next\)\)/.test(fileHist) && !/replaceDoc\(/.test(fileHist),
+    'Versions in this file restores through restoreVersion, never a bare replaceDoc')
 }
 
 console.log('\na design is content, not identity\n')
@@ -248,19 +251,47 @@ console.log('\na design is content, not identity\n')
   const snap = clone(live) as SpacesDoc & { design?: string; designs?: Record<string, unknown> }
   snap.design = 'mine'
   snap.designs = { mine: { base: 'riso', label: 'Mine' } }
-  const g = gateRestored(JSON.stringify(snap), live)
+  const g = gateRestored(JSON.stringify(snap), live, 'recover', Date.now())
   ok(g.ok && (g.doc as typeof snap).design === 'mine' && JSON.stringify((g.doc as typeof snap).designs) === JSON.stringify(snap.designs),
     'the gate passes design and designs through from the snapshot')
   ok(recoveryOffered(JSON.stringify(snap), live), 'a snapshot that differs only by its design is offered for recovery')
   const designedLive = clone(live) as SpacesDoc & { design?: string }
   designedLive.design = 'ledger'
-  const g2 = gateRestored(JSON.stringify(clone(live)), designedLive)
-  ok(g2.ok && !Object.hasOwn(g2.doc, 'design'), 'restoring a snapshot with no design does not keep the live design (it is content, not identity)')
+  const g2 = gateRestored(JSON.stringify(clone(live)), designedLive, 'back')
+  ok(g2.ok && !Object.hasOwn(g2.doc, 'design'), 'restoring a version with no design does not keep the live design (it is content, not identity)')
+  // A recovery removes what was removed (kernel #716, wholeSnapshot): the
+  // recovery snapshot is the whole document, so a design, footnotes and a
+  // journal template the person removed after the last save stay removed —
+  // through the banner's real path, recoverInto. (This row was pinned as a
+  // KERNEL GAP until #716.)
+  {
+    const fileDoc = clone(live) as SpacesDoc & Record<string, unknown>
+    fileDoc.design = 'ledger'
+    fileDoc.footnotes = { 1: 'a note' }
+    fileDoc.journalTemplate = 't1'
+    fileDoc.futureKey = { from: 'a newer build' }
+    fileDoc.trail = { '2026-09-10': { n: { todo: 1 } } }
+    fileDoc.revisions = [{ id: 'r0', at: '2026-09-10T00:00:00Z', body: {} }]
+    // the crash copy: all four removed, no history in it at all, forged modes
+    const crash = snapshotOf(live)
+    crash.pages[0].blocks[0].html = 'edited before the crash'
+    crash.readonly = true; crash.template = true
+    const s = new Store(fileDoc as SpacesDoc)
+    ok(recoverInto(s, { json: JSON.stringify(crash), at: Date.now() }), 'recovery of a snapshot with design/footnotes/journal template removed applies')
+    const d = s.doc as SpacesDoc & Record<string, unknown>
+    ok(!Object.hasOwn(d, 'design') && !Object.hasOwn(d, 'footnotes') && !Object.hasOwn(d, 'journalTemplate'),
+      'a design, footnotes and journal template REMOVED after the last save stay removed after recovery')
+    ok(!Object.hasOwn(d, 'futureKey'), 'an UNKNOWN top-level key absent from the snapshot is removed too')
+    ok(JSON.stringify(d.trail) === JSON.stringify(fileDoc.trail), 'an absent trail in the snapshot KEEPS the live rows ("no rows yet")')
+    ok(!Object.hasOwn(d, 'revisions'), 'an absent revisions in the (whole) snapshot means CLEARED: the key is removed')
+    ok(d.docId === live.docId && JSON.stringify(d.collab) === JSON.stringify(LIVE_COLLAB) && d.readonly === undefined && d.template === undefined,
+      'the identity / mode / capability floor is unchanged (collab live, forged readonly/template ignored)')
+  }
   // A PAGE's design (per-page designs) is content too: it lives in `pages`,
   // which the gate passes through and the content key already covers
   const paged = clone(live) as SpacesDoc
   ;(paged.pages[0] as { design?: string }).design = 'studio'
-  const g3 = gateRestored(JSON.stringify(paged), live)
+  const g3 = gateRestored(JSON.stringify(paged), live, 'recover', Date.now())
   ok(g3.ok && (g3.doc.pages[0] as { design?: string }).design === 'studio', 'the gate passes a page\'s own design through from the snapshot')
   ok(recoveryOffered(JSON.stringify(paged), live), 'a snapshot that differs only by one page\'s design is offered for recovery')
 }
