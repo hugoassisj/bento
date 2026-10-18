@@ -12,6 +12,7 @@
 pub mod address;
 pub mod agent;
 pub mod b64u;
+mod display_table;
 pub mod statements;
 
 #[cfg(all(target_os = "linux", feature = "tpm"))]
