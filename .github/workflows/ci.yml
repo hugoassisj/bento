@@ -135,8 +135,16 @@ jobs:
         # and the restore DIRECTION matters: a version restore ('back') keeps a
         # live field; crash recovery ('recover') reconciles a live history field
         # with the newer snapshot. Recover hooks (newestListWins for unsigned
-        # lists) vs the default (signed-safe). Absent never wipes on recover.
+        # lists) vs the default (signed-safe). On recover, a field absent from a
+        # whole snapshot stays removed (deleted or cleared stays so) unless the
+        # rules opt it out (keepLiveWhenAbsent); a projection keeps the live value.
         run: node scripts/test-restore.ts
+
+      - name: identity agent contract
+        # bento/id: how a document finds the host's identity agent. A valid
+        # agent only, null otherwise (today's behaviour), never a throw, and
+        # once found it cannot be swapped. Contract only: nothing calls it yet.
+        run: node scripts/test-identity.ts
 
       - name: Typecheck convert (standalone)
         # convert/ is a library beside the apps (the CLI and bento.page/import

@@ -10927,3 +10927,33 @@ Mutations, all red:
   `test-spaces-restore-gate.ts`, including every cleared-stays-cleared row
   (before this change, only the 2 pins caught it);
 - removing the list: 6 + 1, covering the trail rows.
+
+## 2026-10-18 — bento/id: the identity agent contract (kernel/src/identity.ts)
+
+The document's side of the identity agent is ONE kernel module, so the hosts
+build against a single definition instead of each inventing one. The host
+defines `globalThis.__bentoIdentity` before the runtime boots, and only on a
+verified, signed shell (gate 1). `identityAgent()` returns it, or null when it
+is absent or malformed. On null every caller keeps today's behaviour.
+
+Settled here, so other zones don't redefine them:
+- **The contract version** is `IDENTITY_CONTRACT = 1`, an exact match. A host
+  advertising another version is treated as absent, never misread. Optional
+  members are additions within a version, and a breaking change bumps it.
+- **The calls.** Phase 1 has `whoami`, `sign(purpose, payload)` and
+  `resolve({pub} | {email})`. `unwrap` and `share` (phase 2) are typed as
+  optional members now, so the contract doesn't churn.
+- **No call takes a docId or a caller name.** The host identifies the calling
+  document from what the platform reports, never from the page.
+- **Results only.** A signature is raw r‖s (64 bytes, base64url), never DER.
+  Private keys never cross the bridge.
+- **`SignPurpose`** is one word per existing statement family: `frame`, `prove`,
+  `delegate`, `show`, `invite`, `revoke`. A signature is locked to its purpose.
+  The shared payload matcher and its vectors come with the statement formats
+  (K2).
+- **Capture.** A valid agent is captured once, with its methods bound and the
+  object frozen, so a later change to the global can't redirect a call. An
+  absent agent is not cached, so a host that defines it late is still found.
+
+This change is contract only, with no callers. `scripts/test-identity.ts` pins
+that no runtime module imports it yet.
