@@ -11170,3 +11170,45 @@ Follows the desktop agent core entry above.
 Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
 old pepper labels, losing O→0 when reading a code, and skipping the range
 check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
+
+## 2026-10-18 — bento/connect: the desktop agent's security-key ceremony, and one rule for C libraries (home/desktop/agent)
+
+- **One authenticator stack per platform.**
+  - **Linux** uses the distribution's **libfido2** (Yubico, BSD-2-Clause,
+    minimum 1.12). **Windows** will use only the platform WebAuthn API
+    (`webauthn.dll`), which covers security keys, Windows Hello and phone
+    hybrid: non-admin apps can't reach CTAP-HID keys directly there. libfido2 is
+    never shipped on Windows.
+  - **The PRF → CTAP hmac-secret transform**, SHA-256("WebAuthn PRF" ‖ 0x00 ‖
+    input), is applied exactly once. On Linux the agent applies it before
+    libfido2. On Windows the raw input goes to `webauthn.dll`'s PRF path, which
+    applies it itself. Applying it twice still gives deterministic output, but
+    it never matches what the same key gives on the web.
+- **The desktop's clientDataJSON origin** is exactly `bento-desktop:linux` or
+  `bento-desktop:windows`, never `https://bento.page`. A native app
+  self-asserts its origin; on the web the browser vouches for it, which is where
+  phishing resistance comes from. The fields are type, challenge, origin and
+  crossOrigin, in spec order, with CCDToString escaping and no topOrigin.
+- **C libraries are the distribution's, behind a thin in-tree FFI.** That
+  applies to libfido2 and to the keyring. The keyring moved from the
+  secret-service crate to libsecret, which removed a zbus tree carrying three
+  RustSec "unmaintained" notices. There are no binding crates, no bundled
+  copies and no OpenSSL crate in the shipped graph. Any future bundled build
+  must say so and pin and checksum its source.
+- **Supply chain (`supply-chain-check.sh`).** cargo-deny runs over the shipped
+  graph: a permissive-only licence allow-list, RustSec advisories and
+  crates.io-only sources. A second check proves the test-only authenticator is
+  absent from that graph. Each has a positive control: an LGPL crate, and the
+  testkit as a normal dependency, must both be refused.
+- **The test authenticator is Google's OpenSK** (Apache-2.0, pinned commit and
+  nightly), in a separate test-only crate with our own MIT uhid adapter. An
+  AGPL alternative was rejected even for tests.
+- **The PRF interop rig.** One virtual key and one credential, with an
+  independent WebAuthn client (Yubico python-fido2, BSD-2, hash-pinned) that
+  applies the PRF transform itself, as a browser does. The agent's output must
+  be byte-equal to it. Two mutant builds, double-hash and raw-input-hash, must
+  each fail ON THAT COMPARISON, not by failing to build or to reach the key.
+- **The no-TPM store's wipe** re-counts every item, locked or not, after
+  clearing. Measured: libsecret's clear silently skips items in a locked
+  keyring, so the re-count is what keeps a wipe from reporting success while
+  keys remain.

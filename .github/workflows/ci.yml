@@ -2882,5 +2882,28 @@ jobs:
         # no prompt once the keyring is unlocked.
         working-directory: home/desktop/agent
         run: |
-          sudo apt-get install -y -qq gnome-keyring dbus >/dev/null
+          sudo apt-get install -y -qq gnome-keyring dbus libsecret-1-dev >/dev/null
           ./keyring-rig.sh
+      - name: Desktop agent supply chain (cargo-deny, test-only crates absent)
+        # The SHIPPED agent's graph: a permissive-only licence allow-list,
+        # RustSec advisories, crates.io-only sources; and the test-only virtual
+        # authenticator (agent-testkit / OpenSK) must not be in it. Each check
+        # has a positive control (an LGPL crate, the testkit as a normal
+        # dependency) that must be refused.
+        working-directory: home/desktop/agent
+        run: |
+          cargo install -q cargo-deny --locked --version 0.18.9
+          ./supply-chain-check.sh
+      - name: Desktop agent PRF interop rig (virtual security key)
+        # One virtual FIDO2 key (Google OpenSK, Apache-2.0, test-only, over
+        # uhid), an independent WebAuthn client (Yubico python-fido2, BSD-2,
+        # hash-pinned) and the agent's libfido2 layer must produce the SAME PRF
+        # output for the same credential; two mutant builds (double hash, raw
+        # input hash) must each fail that comparison.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get install -y -qq libfido2-dev python3-cryptography python3-pip >/dev/null
+          printf 'fido2==1.2.0 --hash=sha256:f7c8ee62e359aa980a45773f9493965bb29ede1b237a9218169dbfe60c80e130\n' > /tmp/fido2-req.txt
+          python3 -m pip install -q --break-system-packages --no-deps --require-hashes -r /tmp/fido2-req.txt
+          rustup toolchain install nightly-2026-06-03 --profile minimal
+          ./fido-rig.sh

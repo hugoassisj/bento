@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// bento/id — the desktop agent core (Windows, Linux).
+// bento/connect — the desktop agent core (Windows, Linux).
 //
 // The reference for every byte is kernel/src/statements.ts and
 // kernel/src/address.ts; the CONTRACT is kernel/fixtures/identity-v1.json,

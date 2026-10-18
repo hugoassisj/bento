@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// bento/id — the recovery code and the key blobs, a port of
+// bento/connect — the recovery code and the key blobs, a port of
 // kernel/src/recovery.ts (identity-design §2f, security §28). Every value is
 // DETERMINISTIC in kernel/fixtures/recovery-v1.json, so this port reproduces the
 // exact bytes end to end; tests/recovery.rs runs every row.
