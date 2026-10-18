@@ -13,8 +13,12 @@ pub mod address;
 pub mod agent;
 pub mod b64u;
 pub mod device_list;
+pub mod recovery;
 mod display_table;
 pub mod statements;
 
 #[cfg(all(target_os = "linux", feature = "tpm"))]
 pub mod tpm_linux;
+
+#[cfg(all(target_os = "linux", feature = "keyring"))]
+pub mod secret_linux;

@@ -11136,3 +11136,37 @@ The passkey blob and the recovery code follow the exact bytes in the identity
 design's §2f (raw 32-byte scalars checked to lie in 1..n−1 and to match the
 binding; the code is 16 Crockford base-32 characters plus a mod-37 check
 symbol, and the 10 decoded bytes, never the string, feed the derivation).
+
+## 2026-10-18 — bento/id: the desktop agent's recovery code, key blobs and no-TPM store (home/desktop/agent)
+
+Follows the desktop agent core entry above.
+
+- **The recovery code and key blobs are a byte-exact port of
+  `kernel/src/recovery.ts`.** `kernel/fixtures/recovery-v1.json` is
+  deterministic, so every printed code, parse result, derivation, blob and
+  pepper value must match to the byte. Argon2id is checked against the RFC 9106
+  §5.3 vector before anything relies on it, and the port's parameters are
+  asserted equal to the fixture's.
+- **The scalar import is constant-time.** A recovered private scalar is checked
+  through p256's constant-time decode (which refuses 0 and anything ≥ n) and
+  its constant-time scalar multiplication. Only public points are compared.
+  There is no bignum and no hand-rolled d·G.
+- **Display names need Unicode 17.0 or later.** A test fails if the
+  normalisation data ever drops below 17.0.
+- **The no-TPM Linux store** is the Secret Service, used when there is no TPM
+  this user can open. The routine key and the account key are software keys,
+  loaded only while in use and zeroized afterwards. There is no consent key, so
+  every high-assurance consent is refused and routed to a phone or security
+  key. The exposure is stated and asserted by a rig: once the keyring is
+  unlocked, any same-user process can read these keys with no prompt.
+  Organisations can refuse such machines.
+- **The Windows consent key** must be a P-256 key that prompts for Windows
+  Hello on every use. The Passport key storage provider is preferred, once it is
+  measured on real Windows. If it can't do that, consent falls back to a
+  device-bound Windows Hello WebAuthn assertion, verified by the directory with
+  an empty `consentPub`, which is the existing light-tier path and not a format
+  change. RSA consent keys and the legacy password dialog are both refused.
+
+Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
+old pepper labels, losing O→0 when reading a code, and skipping the range
+check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
