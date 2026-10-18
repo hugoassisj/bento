@@ -29,6 +29,8 @@ class AgentProbeActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         if (intent.getStringExtra("mode") == "window") { windowProbe(); return }
         if (intent.getStringExtra("mode") == "consent") { consentProbe(); return }
+        if (intent.getStringExtra("mode") == "keystate") { keyState(); return }
+        if (intent.getStringExtra("mode") == "gate") { gateProbe(); return }
         AgentKeys.ensure(this)
         log("sdk=${Build.VERSION.SDK_INT} routine=${AgentKeys.strength(AgentKeys.ROUTINE)} consent=${AgentKeys.strength(AgentKeys.CONSENT)}")
         val routineSig = AgentKeys.signRoutine(msg)
@@ -124,6 +126,64 @@ class AgentProbeActivity : AppCompatActivity() {
             }
             override fun onAuthenticationError(code: Int, err: CharSequence) { log("prompt error $code: $err"); log("DONE") }
         }).authenticate(info, BiometricPrompt.CryptoObject(AgentKeys.consentSignature()))
+    }
+
+    /**
+     * Is each key still usable? Initialising a Signature needs no
+     * authentication, but throws KeyPermanentlyInvalidatedException for a key
+     * the platform invalidated — the enrolment tripwire, observed directly.
+     * "fresh" first deletes both keys and mints them anew.
+     */
+    private fun keyState() {
+        val ks = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (intent.getBooleanExtra("fresh", false)) { ks.deleteEntry(AgentKeys.ROUTINE); ks.deleteEntry(AgentKeys.CONSENT) }
+        try { AgentKeys.ensure(this) } catch (e: Exception) { log("ensure threw ${e.javaClass.simpleName}: ${e.message}") }
+        // POSITIVE CONTROL: a biometric-ONLY per-use key, which the platform
+        // documents as invalidated by a new enrolment. If this one never reads
+        // INVALIDATED either, the probe cannot see invalidation at all.
+        if (intent.getBooleanExtra("canary", false)) {
+            ks.deleteEntry("bento-probe-canary")
+            java.security.KeyPairGenerator.getInstance(android.security.keystore.KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore").apply {
+                initialize(android.security.keystore.KeyGenParameterSpec.Builder("bento-probe-canary", android.security.keystore.KeyProperties.PURPOSE_SIGN)
+                    .setAlgorithmParameterSpec(java.security.spec.ECGenParameterSpec("secp256r1"))
+                    .setDigests(android.security.keystore.KeyProperties.DIGEST_SHA256)
+                    .setUserAuthenticationRequired(true)
+                    .setUserAuthenticationParameters(0, android.security.keystore.KeyProperties.AUTH_BIOMETRIC_STRONG)
+                    .build())
+            }.generateKeyPair()
+            log("keystate: canary minted")
+        }
+        val bm = androidx.biometric.BiometricManager.from(this)
+        log("keystate: biometricStrong=${bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)} (0=enrolled)")
+        for (alias in listOf(AgentKeys.ROUTINE, AgentKeys.CONSENT, "bento-probe-canary")) {
+            val r = if (!ks.containsAlias(alias)) "ABSENT" else try {
+                Signature.getInstance("SHA256withECDSA").initSign(ks.getKey(alias, null) as java.security.PrivateKey); "usable"
+            } catch (e: android.security.keystore.KeyPermanentlyInvalidatedException) { "INVALIDATED" }
+              catch (e: Exception) { "error ${e.javaClass.simpleName}" }
+            log("keystate: $alias $r")
+        }
+        log("DONE"); finish()
+    }
+
+    /**
+     * The §29b gate on real keys. "fresh" deletes everything and starts a new
+     * identity; "accept" re-confirms. Logs the gate, the canary and the outbox.
+     */
+    private fun gateProbe() {
+        val ks = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (intent.getBooleanExtra("fresh", false)) {
+            for (a in listOf(AgentKeys.ROUTINE, AgentKeys.CONSENT, AgentKeys.CANARY)) ks.deleteEntry(a)
+            java.io.File(noBackupFilesDir, "identity").deleteRecursively()
+        }
+        AgentKeys.ensure(this)
+        val devices = setOf("devA", "devB", "devC")
+        if (intent.getBooleanExtra("accept", false)) log("gate: accept=${AgentKeys.acceptEnrolment(this)}")
+        log("gate: canary=${AgentKeys.canary()} biometrics=${AgentKeys.biometricsEnrolled(this)}")
+        log("gate: ${AgentKeys.enrolmentGate(this, "devA", devices, System.currentTimeMillis())}")
+        val st = AgentKeys.store(this)
+        log("gate: outbox=${Notices.pending(st)?.map { it.kind + "->" + it.recipients.sorted() }}")
+        log("gate: record=${(st.get(Notices.ENROLMENT) as? Notices.Read.Found)?.text?.substringBefore('.')}")
+        log("DONE"); finish()
     }
 
     /** Verify a raw r‖s signature against the key's certificate, as a verifier elsewhere would. */

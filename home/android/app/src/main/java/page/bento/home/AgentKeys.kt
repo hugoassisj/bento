@@ -38,6 +38,11 @@ import java.security.spec.ECGenParameterSpec
 object AgentKeys {
     const val ROUTINE = "bento-agent-routine"
     const val CONSENT = "bento-agent-consent"
+    /** Biometric-only, never signs: the enrolment tripwire (Notices, §29b). */
+    const val CANARY = "bento-agent-canary"
+
+    /** The agent's identity records (enrolment baseline, notice outbox, alerts). */
+    fun store(context: Context): Notices.Store = Notices.FileStore(java.io.File(context.noBackupFilesDir, "identity"))
 
     private fun keystore() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
@@ -51,6 +56,10 @@ object AgentKeys {
         // the caller reports no identity. A bento/id key on a phone anyone can
         // pick up and use would vouch for nobody.)
         if (!ks.containsAlias(CONSENT)) {
+            // The canary and the enrolment baseline are made WITH the consent
+            // key, before any consent can run the gate: otherwise a brand-new
+            // identity reads "changed" and its first consent sends every device
+            // a false "biometrics changed" (home-ios hit exactly this).
             val sb = Build.VERSION.SDK_INT >= 28 &&
                 context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
             try {
@@ -67,7 +76,64 @@ object AgentKeys {
                 // once a fingerprint is enrolled. From 30 on this is a real fault.
                 if (Build.VERSION.SDK_INT >= 30) throw e
             }
+            if (ks.containsAlias(CONSENT)) {
+                val bio = biometricsEnrolled(context)
+                // A canary that fails to mint leaves no baseline: the first
+                // consent then reads CHANGED and is re-confirmed once, with a
+                // notice. Never a baseline the canary doesn't back.
+                if (bio == false || (bio == true && remintCanary()))
+                    Notices.recordEnrolment(bio == true, generation(), store(context))
+            }
         }
+    }
+
+    /** True, false, or null when the platform can't say right now (treated as UNKNOWN). */
+    fun biometricsEnrolled(context: Context): Boolean? =
+        when (androidx.biometric.BiometricManager.from(context)
+            .canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)) {
+            androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS -> true
+            androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED,
+            androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> false
+            else -> null
+        }
+
+    /** Read the canary with initSign: no prompt, no signature. Invalidated by a new enrolment (measured). */
+    fun canary(): Notices.Canary = try {
+        val ks = keystore()
+        if (!ks.containsAlias(CANARY)) Notices.Canary.ABSENT
+        else { Signature.getInstance("SHA256withECDSA").initSign(ks.getKey(CANARY, null) as PrivateKey); Notices.Canary.USABLE }
+    } catch (e: android.security.keystore.KeyPermanentlyInvalidatedException) { Notices.Canary.INVALIDATED }
+      catch (e: Exception) { Notices.Canary.ERROR }
+
+    /** Replace the canary under the enrolment as it is now. Biometric-only and per-use, so any new enrolment voids it. */
+    fun remintCanary(): Boolean = try {
+        keystore().deleteEntry(CANARY)
+        val b = KeyGenParameterSpec.Builder(CANARY, KeyProperties.PURPOSE_SIGN)
+            .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
+            .setDigests(KeyProperties.DIGEST_SHA256)
+            .setUserAuthenticationRequired(true)
+            .setInvalidatedByBiometricEnrollment(true)
+        if (Build.VERSION.SDK_INT >= 30) b.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
+        else @Suppress("DEPRECATION") b.setUserAuthenticationValidityDurationSeconds(-1)
+        KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore").apply { initialize(b.build()) }.generateKeyPair()
+        true
+    } catch (e: Exception) { false }
+
+    fun generation(): String = Consent.b64uEnc(ByteArray(12).also { java.security.SecureRandom().nextBytes(it) })
+
+    /**
+     * The gate before EVERY consent (§29b): the notice is queued first on a
+     * change. `devices` is the account's device list now.
+     */
+    fun enrolmentGate(context: Context, device: String, devices: Set<String>, now: Long): Notices.Gate {
+        val bio = biometricsEnrolled(context) ?: return Notices.Gate.REFUSE
+        return Notices.enrolmentGate(bio, canary(), device, devices, now, store(context))
+    }
+
+    /** After re-confirmation: accept the new enrolment (only once its notice is queued) and re-mint the canary. */
+    fun acceptEnrolment(context: Context): Boolean {
+        val bio = biometricsEnrolled(context) ?: return false
+        return Notices.acceptEnrolment(bio, canary(), generation(), store(context)) { remintCanary() }
     }
 
     /** False on API 26–29 with no enrolled biometric: this device cannot consent. */

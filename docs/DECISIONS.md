@@ -11013,14 +11013,32 @@ shell it serves (gate 1, A2).
   that goes backwards locks the session.
 - **Enrolling a fingerprint doesn't destroy the routine key**
   (`setInvalidatedByBiometricEnrollment(false)`). It carries no consent, and
-  losing it would drop the device from every room it is in. The consent key
-  keeps Android's default: a new enrolment invalidates it. That is the point,
-  not a cost. A newly enrolled finger may be an attacker's, so the phone must
-  never mint a new consent key and certify it itself. The key that wraps the
-  account key on this device carries the consent key's auth parameters (when
-  the account key lands), so it dies with it. The re-link is therefore
-  FORCED: through another device (QR) or a passkey, which notifies every
-  device (§2f). It is never done on the phone alone (vault, security).
+  losing it would drop the device from every room it is in.
+- **Nor does it invalidate the consent key, so a CANARY is the tripwire
+  (threat model §29b).** Measured on the emulator with a positive control:
+  a per-use key that also accepts the device credential survives new
+  fingerprints. Only a biometric-ONLY key is invalidated, and a control key
+  read `KeyPermanentlyInvalidatedException` after a new finger. Removing a
+  fingerprint invalidates neither (measured). So a biometric-only canary key
+  stands beside the consent key. It never signs: before every consent it is
+  read with `initSign`, which needs no prompt. A missing or invalidated canary,
+  biometrics gone under a "bio" record, biometrics present under a "none"
+  record, or no record at all reads CHANGED. A Keystore error reads UNKNOWN
+  and refuses. On CHANGED the gate is home/ios's: the notice "biometrics
+  changed on <device>" goes to the durable outbox FIRST, then the person
+  re-confirms, then the canary is re-minted under the new enrolment. There is
+  no forced re-link; that rested on an invalidation that doesn't happen. The
+  canary and the baseline are made WITH the consent key, so a brand-new
+  identity's first consent reads unchanged and sends no false notice.
+- **Notices follow §29a, ported from home/ios** (`Notices.kt`). Recipients are
+  snapshotted when a notice is queued: the devices then, plus the address.
+  Removed devices still receive it and still hold it back. It never clears
+  without the address. A silent device stops holding it back after 7 days,
+  and only once the address has confirmed. A device-list change sends its own
+  notice to the list as it was BEFORE the change, and may not be published
+  until that notice is queued. Every device also checks each fetched list
+  itself and raises a local alert if it, or a device it didn't remove, is
+  gone. The alert is written before the new list becomes the baseline.
 - **Signatures leave as raw r‖s, low-S.** The Keystore emits DER and doesn't
   normalise, so the host converts and folds s.
 - **The host stamps every field of a `cns.`.** The relying party is the app's
