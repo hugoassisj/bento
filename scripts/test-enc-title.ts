@@ -14,7 +14,7 @@
 // TWO LAYERS, because a DOM is not always present:
 //   1. SOURCE GATE (always runs, including CI): serializeBody neutralises the
 //      <title> under the same veto as the preview (previewAllowed(body)), and
-//      suggestedFileName neutralises the filename under isEncryptionActive().
+//      suggestedFileName neutralises the filename under isBodySealed().
 //      This is the regression guard CI enforces and the mutation target.
 //   2. FILE SCAN (only where jsdom is installed — locally and in a browser, not
 //      CI, matching scripts/test-type-preview.ts): actually serialize an
@@ -46,9 +46,11 @@ console.log('\n— source gate: the encrypted-output neutralisation is in place 
   ok(/titleEl\.textContent\s*=\s*previewAllowed\(body\)\s*\?[\s\S]{0,120}:\s*appConfig\(\)\.appName/.test(src),
      'serializeBody neutralises <title> when the output is encrypted (previewAllowed veto)')
 
-  // The suggested filename is gated on isEncryptionActive(): neutral when encrypted.
-  ok(/isEncryptionActive\(\)\s*\?\s*appConfig\(\)\.appName\s*:\s*doc\.title/.test(src),
-     'suggestedFileName neutralises the download name when the password is active')
+  // The suggested filename is gated on isBodySealed(): neutral when the body is
+  // sealed by a password OR the identity seal. isEncryptionActive() is only the
+  // password, so gating on it named an identity-sealed file after its title.
+  ok(/isBodySealed\(\)\s*\?\s*appConfig\(\)\.appName\s*:\s*doc\.title/.test(src),
+     'suggestedFileName neutralises the download name when the body is sealed')
 }
 
 // ───────────────────────────────────────────── 2. FILE SCAN (needs a DOM)

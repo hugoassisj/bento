@@ -128,7 +128,6 @@ object AgentKeys {
      */
     fun enrolmentGate(context: Context, device: String, devices: Set<String>, now: Long): Notices.Gate =
         Notices.enrolmentGate(biometrics(context), canary(), device, devices, now, store(context))
-    }
 
     /** After re-confirmation: accept the new enrolment (only once its notice is queued) and re-mint the canary. */
     fun acceptEnrolment(context: Context): Boolean {

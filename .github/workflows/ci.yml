@@ -35,6 +35,27 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  type-boot-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: Type boots on the loader's inline path; fields wiring still works
+        run: node scripts/test-type-boot-browser.mjs
+
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -146,6 +167,28 @@ jobs:
         # once found it cannot be swapped. Contract only: nothing calls it yet.
         run: node scripts/test-identity.ts
 
+      - name: identity statements and conformance vectors
+        # bento/id: every signed statement (dev., bind., att., tomb., del.,
+        # cmp., cns.) and the address normal form. The reference must pass
+        # every row of kernel/fixtures/identity-v1.json, which is the contract
+        # each native host is held to, and must refuse every tampered statement.
+        run: node scripts/test-statements.ts
+
+      - name: identity recovery code and key blobs
+        # bento/id: every host must derive the identical keys from the same
+        # recovery code and passkey PRF output. Deterministic vectors in
+        # kernel/fixtures/recovery-v1.json: Argon2id against RFC 9106, the
+        # code's printed form and forgiving parse (all five extra check symbols),
+        # every derivation, every blob re-sealed byte for byte, every refusal.
+        run: node scripts/test-recovery.ts
+
+      - name: identity seal — one "body is sealed" predicate
+        # bento/id §E: every plaintext-to-disk guard asks isBodySealed(), not
+        # "is there a password". The identity-sealed body is a genuine bento/enc
+        # v1 envelope (kdf hkdf-kdoc) that frozen shells read as sealed; fresh
+        # salt per save; the password path unchanged; the two refuse each other.
+        run: node scripts/test-body-seal.ts
+
       - name: Typecheck convert (standalone)
         # convert/ is a library beside the apps (the CLI and bento.page/import
         # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
@@ -159,6 +202,16 @@ jobs:
 
       - name: Splice conformance gate
         run: node scripts/shell-gate.mjs slides/dist-single/Bento_Slides.bento.html
+
+      - name: The gate refuses a sealed TEST shell
+        # Positive control for the gate's no-test-seal check (security §31): the
+        # build:sealtest shell carries the sealed test document's key handoff,
+        # inside its deflated runtime, and must be refused for it; the release
+        # shell from the same source must pass.
+        working-directory: slides
+        run: |
+          npm run build:sealtest
+          node ../scripts/test-seal-gate.mjs
 
       # spaces: a second app proving the kernel seam — same pipeline, same gate.
       - name: Install (spaces)
@@ -816,6 +869,25 @@ jobs:
         # the document's origin. Compiles the real HostDocStore; skips off Apple.
         run: node scripts/test-home-docstore-ios.mjs
 
+      - name: home/ios bento/id keys rig
+        # The agent's keys: the account key, the Secure Enclave routine and consent
+        # keys, raw low-S signatures (verified in WebCrypto), never minting over a
+        # store it could not read, and the §29 biometric-enrolment notice outbox.
+        # Apple toolchains only; skips elsewhere.
+        run: node scripts/test-home-id-keys.mjs
+
+      - name: home/ios bento/id statements rig
+        # The Swift statements against kernel/fixtures/identity-v1.json: verdict
+        # and reason on every row, round trips, tampering, transcripts, low-S,
+        # purposes, addresses, spendCalled and the frozen display table.
+        run: node scripts/test-home-id-statements.mjs
+
+      - name: home/ios bento/id agent rig
+        # sign() routing and the host-stamped consent statement (§2e (A)): what
+        # the page can name, what only the host stamps, and the verifier refusing
+        # a relay, replay, payload swap or docId swap.
+        run: node scripts/test-home-id-agent.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected
@@ -918,6 +990,14 @@ jobs:
         # path is gone (seen through a grant) and the content hash matches; the
         # member key never follows.
         run: node scripts/test-webext-store.ts
+
+      - name: WebExtension bento/id rig
+        # The extension's statement code must be the kernel reference, unaltered
+        # (a generated type-strip, checked current), and must pass the whole
+        # conformance contract in kernel/fixtures/identity-v1.json. The
+        # passkey-wrapped account key must fail closed for the wrong passkey,
+        # credential or binding; the recovery code is 80 random bits.
+        run: node scripts/test-webext-id.ts
 
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
@@ -2460,6 +2540,14 @@ jobs:
         run: |
           npm ci --prefix slides
           npm run build:single --prefix slides
+          npm run build:sealtest --prefix slides
+      - name: The sealed TEST document in Chromium
+        # bento/id §E (security §31): the shared helper boots the build:sealtest
+        # shell with the identity seal set before the app's own boot, proves it
+        # took, and the saved file carries an identity-sealed envelope, a
+        # neutral <title> and filename, no preview, and no plaintext; the
+        # unsealed control shows the same checks can see a leak.
+        run: node scripts/test-sealed-boot.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
@@ -2637,6 +2725,31 @@ jobs:
         # replaces it with the real workbook.
         run: node scripts/test-dash-gate-browser.mjs
 
+  home-ios-swift:
+    # The home/ios Swift rigs need CryptoKit, Security and LocalAuthentication,
+    # so on the ubuntu validate job they print SKIPPED and pass. Here they run
+    # for real, and a rig that reports SKIPPED FAILS the step, so a missing
+    # toolchain can never pass quietly.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Toolchain
+        run: sw_vers && xcrun swiftc --version
+      - name: Swift rigs (a skip fails)
+        shell: bash
+        run: |
+          set -o pipefail
+          for rig in test-tray-releases.mjs test-home-origin.mjs test-home-docstore-ios.mjs; do
+            echo "::group::$rig"
+            node "scripts/$rig" | tee "$RUNNER_TEMP/rig.out"
+            echo "::endgroup::"
+            if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::$rig skipped on macOS"; exit 1; fi
+          done
+
   home-origin-probe-browser:
     # The probe that decides whether a file opened for the first time may keep
     # the storage origin it had before origins followed the file. It runs in
@@ -2660,6 +2773,27 @@ jobs:
           npm run build:single --prefix slides
       - name: Origin probe in WebKit
         run: node scripts/test-home-origin-probe.mjs
+
+  type-cantopen-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: The can't-open message shows the file's details as text
+        run: node scripts/test-type-cantopen-browser.mjs
 
   spaces-save-browser:
     runs-on: ubuntu-latest
@@ -2713,3 +2847,65 @@ jobs:
         # given, refuses a malformed value, and never emits a placeholder: the
         # platforms cache these files, so a wrong one is worse than none.
         run: node scripts/test-well-known.ts
+
+  type-fields-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: Every chrome field wears the suite's one field look, light and dark
+        # The THE FIELD block copied from slides: border, fill, radius, height and
+        # the focus ring, measured on twelve real surfaces, plus a planted
+        # browser-default field that must be flagged.
+        run: node scripts/test-type-fields-browser.mjs
+
+  home-desktop-agent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Desktop agent against the bento/id vectors
+        # home/desktop/agent is the Windows/Linux identity agent core. Its
+        # statements port must reach every verdict AND reason in
+        # kernel/fixtures/identity-v1.json (re-read every run, never pinned), plus
+        # builder round-trips, three tamperings per accepted row, spendCalled
+        # on every cns row, and the frozen display table. A missing fixture
+        # fails; it never skips.
+        working-directory: home/desktop/agent
+        run: cargo test
+      - name: Desktop agent TPM rigs (two software TPMs)
+        # The Linux key store against a real TPM 2.0 (swtpm): the routine key
+        # signs inside the TPM; the consent key and the sealed account key need
+        # the PIN on every use (a wrong PIN is the TPM's own AUTH_FAIL); the key
+        # files are useless on a SECOND TPM (cannot be copied off the machine);
+        # and a second connection without the PIN gets neither, while the
+        # routine key stays usable, which is the stated desktop residual.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libtss2-dev swtpm swtpm-tools >/dev/null
+          ./tpm-rig.sh
+      - name: Desktop agent no-TPM keyring rigs (gnome-keyring)
+        # On a Linux machine without a usable TPM the agent falls back to the
+        # Secret Service. Against a real gnome-keyring in a D-Bus session: the
+        # routine key signs and verifies; there is no consent key, so consent is
+        # refused (AAL3 routed elsewhere); wipe removes the keys; and the stated
+        # exposure is asserted: a second connection reads the account key with
+        # no prompt once the keyring is unlocked.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get install -y -qq gnome-keyring dbus >/dev/null
+          ./keyring-rig.sh

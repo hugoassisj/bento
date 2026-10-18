@@ -10975,6 +10975,232 @@ Settled here, so other zones don't redefine them:
 This change is contract only, with no callers. `scripts/test-identity.ts` pins
 that no runtime module imports it yet.
 
+## 2026-10-18 — bento/id: the signed statements and their family rules (kernel/src/statements.ts)
+
+Every bento/id statement is defined once, in the kernel, with conformance
+vectors (`kernel/fixtures/identity-v1.json`) that every host must pass: the
+Swift, Kotlin and Rust agents, the extension and the directory. The rules are
+the shipped collab statements' rules, made strict:
+- **Exact bytes.** Dot-joined UTF-8 text, signed over its exact bytes and never
+  re-canonicalised. No JSON inside a statement.
+- **Every field is a closed, dot-free token or base64url free text.** Free
+  text means an email address or a display name, encoded as base64url without
+  padding. A raw email would break the split.
+- **Strict parse.** Split on `.`, keep empty fields, require the exact field
+  count, check each field's grammar, and accept printable ASCII only. An absent
+  value is an empty field.
+- **Units and versions.** Times are epoch ms. The version is in the prefix
+  (`bind2.`), never a field.
+- **Keys and signatures.** Keys are raw P-256 points. Signatures are raw r‖s,
+  low-S, base64url. DER and high-S signatures are refused.
+
+The statements:
+- `dev.`: the device cert. The account key signs both the device's routine key
+  and its hardware CONSENT key, so a consent signature can be tied to the person.
+  It's one cert, not two, because both keys share the device's lifetime and
+  revocation. The light tier has no hardware consent key, so its `consentPub` is
+  empty.
+- `bind.`: the person cert, holder-signed, with `seq` and a `prev` chain for
+  rotation.
+- `att.` and `tomb.`: signed by the directory's online key, with the binding
+  state inside the signature.
+- `del.` and `cmp.`: holder requests to the directory.
+- `cns.`: host-stamped consent (security §24). Its transcript binds the
+  audience, a single-use challenge and the exact authorised statement. The
+  verifier recomputes the transcript and never trusts one from the request.
+- `pk.` is reserved for the phase-2 passkey statement.
+
+Two placements are left open on purpose:
+- **kx** (identity-design §6b, a maintainer decision). Both `bind.` and `dev.`
+  carry a kx slot, and until the ruling BOTH must be empty, so nothing accepts a
+  placement nobody chose. Phase 1 shares nothing and needs no kx.
+- **Addresses are ASCII-only in phase 1** (a maintainer decision). Platforms
+  disagree on international domains, and an address two hosts read differently
+  is exactly what the shared normal form exists to prevent.
+
+**What phase 1 does NOT guarantee:** invite and revoke (`inv.`/`rev.`) are
+verified by the relay with the room OWNER key's signature, not with a
+consent-key `cns.`. In phase 1, documents don't convert to identity mode, so
+the owner key still lives in the document file. The kernel signs `inv.`/`rev.`
+with it exactly as today: no agent prompt, no user-verification gate, no consent
+key. The agent holds an owner key only after conversion (phase 2). Then
+`inv.`/`rev.` get a host-drawn prompt and a user-verified owner key, and phase
+2's room-audience `cns.` (a relay change, deployed first) adds the consent-key
+guarantee. No consent-key (AAL3) guarantee exists for `inv.`/`rev.` before then
+(security §24).
+
+**UI rule: a display name is self-asserted.** A `bind.` name or a `dev.` label
+is whatever its holder typed. The kernel refuses invisible and layout characters,
+requires NFC, and caps the length. No filter stops homoglyphs, though: "Аlice"
+with a Cyrillic А passes. So no surface ever shows a name WITHOUT the verified
+address beside it, and the ✓ always belongs to the address, never to the name.
+(security, #764)
+
+## 2026-10-18 — bento/id: the desktop agent core and its Linux key store (home/desktop/agent)
+
+The Windows/Linux identity agent is a Rust library crate, `home/desktop/agent`.
+The Tauri host will call it after its own checks. Settled here, so the host and
+other zones build on the same ground:
+
+- **The statements are a PORT, and the vectors are the contract.**
+  `kernel/fixtures/identity-v1.json` is re-read on every run, never pinned.
+  Every row must reach the reference's verdict AND reason. Accepted rows must
+  round-trip through the builders and refuse three kinds of tampering. Every
+  `cns.` row must spend its challenge when `spendCalled` says so. The display
+  refusal set is embedded as the fixture's frozen Unicode 17.0 ranges, and a
+  test fails if the two ever differ. JavaScript string semantics that change
+  verdicts (`trim()`'s whitespace set, UTF-16 `length`) are reproduced on
+  purpose.
+- **One way in.** The agent answers only a `Caller` the host built after its
+  per-webview capability check, on a verified shell, carrying the docId the
+  host read from the file itself. It never takes a docId or a caller name from
+  the page.
+- **Routine signing** (`frame`, `prove`, `delegate`, `show`) uses the device
+  key, unprompted, inside a session: 1 h idle and 24 h overall by default, or
+  15 min and 12 h for organisations at AAL3. Past either limit, even routine
+  signatures are refused until the person re-authenticates.
+- **Consent is host-stamped.** The rp (`bento`), the audience (`dir`, phase 1's
+  only one), the docId and a 2-minute expiry are chosen by the host. The page
+  supplies only the statement and the directory's challenge. The consent key
+  signs, and prompts every time.
+- **`sign('invite' | 'revoke')` is refused** with `unavailable`. Those are signed
+  by the room's owner key, which the kernel holds in phase 1.
+- **The Linux key store** is the TPM, and the TPM counts only if this user can
+  open it:
+  - the routine key is created in the TPM, non-exportable, and needs no prompt;
+  - the consent key is created in the TPM with the person's PIN as its
+    authValue, so every use needs the PIN and the TPM's lockout limits guessing;
+  - the account key is shared across devices, so it can't be created inside
+    one TPM. It is sealed under the same PIN and unsealed only for a prompted
+    use, then zeroized.
+  What sits on disk are TPM-wrapped blobs that only this TPM can load.
+- **Two desktop-specific residuals, stated rather than hidden.**
+  - On a phone, other apps can't use our keys at all. On a desktop, any process
+    running as the same user can ask the TPM to sign with the routine key, so it
+    can edit as the person in rooms they already belong to. It can't copy the
+    key off the machine, and it can't use the consent or account key without
+    the PIN.
+  - The session timers bind the genuine agent only. A process calling the TPM
+    directly bypasses them.
+  Both are accepted: same-user malware can already edit the person's files and
+  drive the app.
+- **No key-agreement key** anywhere until its placement is ruled.
+
+Rigs:
+- `home/desktop/agent/tests/conformance.rs`, the vectors plus the mutations
+  that showed each check bites: accepting high-S, a late spend, and a dropped
+  display range;
+- `tests/tpm_linux.rs` via `tpm-rig.sh`, against two independent swtpm TPMs:
+  the routine key signs and verifies; a wrong PIN is the TPM's own AUTH_FAIL;
+  the sealed account key unseals only with the PIN; the key files fail on a
+  second TPM; and a second connection without the PIN gets neither the consent
+  key nor the account key, while the routine residual is asserted so it stays
+  visible.
+## 2026-10-18 — bento/id: the recovery code and key blobs (kernel/src/recovery.ts)
+
+The bytes behind identity-design §2f, signed by security §28, with
+deterministic vectors (`kernel/fixtures/recovery-v1.json`) that every host must
+reproduce exactly:
+- **Argon2id** v0x13 with p = 1 (safest for WASM and phones), 64 MiB, t = 3, a
+  32-byte tag and 16-byte salts. The wrap salt and the verifier salt are
+  independent. Hosts check their primitive against RFC 9106 §5.3 first.
+- **The recovery code** is 80 random bits, printed as 16 Crockford base32
+  symbols plus a CHECK symbol (mod 37): `XXXX-XXXX-XXXX-XXXX-C`. With the check,
+  a typo is caught on the device before it costs one of the directory's five
+  daily attempts (vault, as §2f's author). Parsing forgives case, separators and
+  O/I/L. Argon2id takes the decoded bytes, never the typed string.
+- **Wrap key and verifier.** wrap key = HKDF(Argon2id(code, salt), empty,
+  "bento/id/rc-wrap/v1"); verifier = Argon2id(code, salt_v).
+- **The PRF KEK** is §2f's formula.
+- **Blob plaintext** is raw 32-byte private scalars. Each one is checked on
+  import to be in 1..n−1 and to match its directory-signed public half (computed
+  as d·G, the same on every platform). The layout follows the kx placement
+  (§6b): the account scalar alone until it's ruled.
+- **AAD binds every blob.** The PRF blob is bound to its credential, the
+  recovery blob to its account, and the pepper layer to its account.
+- **Argon2id is injected.** The kernel takes it as a parameter and ships no
+  WASM: documents never derive these keys, and only agents do.
+## 2026-10-18 — bento/id in the extension: the statement code is generated from kernel
+
+`kernel/src/statements.ts` and `address.ts` are the one definition of every
+byte a host signs or checks, and `kernel/fixtures/identity-v1.json` is the
+contract. The native hosts must reimplement them (Swift, Kotlin and Rust can't
+import TypeScript). The extension ships plain JavaScript, so it doesn't have
+to: `scripts/gen-webext-id.mjs` type-strips the two files into
+`home/webext/src/id/gen/`, and `scripts/test-webext-id.ts` fails if the copy is
+stale. The same rig runs kernel's own conformance rig with its imports pointed
+at the extension's copy, so every fixture row is checked against the code the
+extension ships. A hand port would pass the vectors today and drift later.
+
+The passkey blob and the recovery code follow the exact bytes in the identity
+design's §2f (raw 32-byte scalars checked to lie in 1..n−1 and to match the
+binding; the code is 16 Crockford base-32 characters plus a mod-37 check
+symbol, and the 10 decoded bytes, never the string, feed the derivation).
+
+## 2026-10-18 — bento/id: one "body is sealed" predicate, and the sealed TEST document
+
+The kernel half of identity-kernel §E.2 (security §31):
+- **`isBodySealed()` is THE question for every plaintext-to-disk guard**
+  (recovery snapshots, version history, previews, filenames, native
+  indexes). It is true when the body is sealed by a password OR by the
+  identity seal. `isEncryptionActive()` stays, and means only "there is a
+  password": the password UI asks that, and a guard must not. A document sealed
+  to people has no password, so a guard asking the old question writes it to
+  disk in plaintext. Measured on slides before its guards switch: a sealed
+  deck's edit lands in both IndexedDB stores.
+- **`setIdentitySeal(kdoc)`** is synchronous, so the predicate is true from the
+  call on. It imports the 32-byte document key non-extractable as an HKDF base.
+  Each save draws a fresh 16-byte salt and IV, and bodyKey = HKDF(K_doc, salt,
+  "bento/body.v1"). The body is a GENUINE bento/enc v1 envelope with
+  `kdf:'hkdf-kdoc'`. Never v:2: an old shell's parseEnvelope would reject it,
+  boot the starter deck, and overwrite the sealed block on its next save. The
+  password path is unchanged and wins when both are set. Each path refuses the
+  other's envelope.
+- **The sealed TEST document is compiled only into test builds.** Phase 1 has no
+  real way to seal a document at boot (the per-recipient wraps are phase 2), so
+  `npm run build:sealtest` (→ `dist-sealtest/`) builds a shell whose
+  `capturePristine()` consumes a one-shot key handoff before any editor exists.
+  `scripts/lib/sealed-boot.mjs` is the one helper every app and security use. It
+  never runs in a release: in phase 1 nobody holds a wrap for such a body, so
+  one stray global would make a person's file unrecoverable. The flag
+  `__BENTO_TEST_SEAL__` is false in every release build and the minifier drops
+  the branch. shell-gate.mjs refuses any shell carrying the handoff's name,
+  scanning the deflated payloads too. `scripts/test-seal-gate.mjs` proves the
+  gate refuses a real test shell.
+## 2026-10-18 — bento/id: the desktop agent's recovery code, key blobs and no-TPM store (home/desktop/agent)
+
+Follows the desktop agent core entry above.
+
+- **The recovery code and key blobs are a byte-exact port of
+  `kernel/src/recovery.ts`.** `kernel/fixtures/recovery-v1.json` is
+  deterministic, so every printed code, parse result, derivation, blob and
+  pepper value must match to the byte. Argon2id is checked against the RFC 9106
+  §5.3 vector before anything relies on it, and the port's parameters are
+  asserted equal to the fixture's.
+- **The scalar import is constant-time.** A recovered private scalar is checked
+  through p256's constant-time decode (which refuses 0 and anything ≥ n) and
+  its constant-time scalar multiplication. Only public points are compared.
+  There is no bignum and no hand-rolled d·G.
+- **Display names need Unicode 17.0 or later.** A test fails if the
+  normalisation data ever drops below 17.0.
+- **The no-TPM Linux store** is the Secret Service, used when there is no TPM
+  this user can open. The routine key and the account key are software keys,
+  loaded only while in use and zeroized afterwards. There is no consent key, so
+  every high-assurance consent is refused and routed to a phone or security
+  key. The exposure is stated and asserted by a rig: once the keyring is
+  unlocked, any same-user process can read these keys with no prompt.
+  Organisations can refuse such machines.
+- **The Windows consent key** must be a P-256 key that prompts for Windows
+  Hello on every use. The Passport key storage provider is preferred, once it is
+  measured on real Windows. If it can't do that, consent falls back to a
+  device-bound Windows Hello WebAuthn assertion, verified by the directory with
+  an empty `consentPub`, which is the existing light-tier path and not a format
+  change. RSA consent keys and the legacy password dialog are both refused.
+
+Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
+old pepper labels, losing O→0 when reading a code, and skipping the range
+check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
+
 ## 2026-10-18 — bento/id on Android: the agent's two keys, the routine session, and host-stamped consent
 
 The Android agent core (phase-1 plan A1). It isn't wired to any page yet: the
