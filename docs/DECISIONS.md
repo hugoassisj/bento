@@ -11035,3 +11035,44 @@ requires NFC, and caps the length. No filter stops homoglyphs, though: "Аlice"
 with a Cyrillic А passes. So no surface ever shows a name WITHOUT the verified
 address beside it, and the ✓ always belongs to the address, never to the name.
 (security, #764)
+
+## 2026-10-18 — bento/id: the recovery code and key blobs (kernel/src/recovery.ts)
+
+The bytes behind identity-design §2f, signed by security §28, with
+deterministic vectors (`kernel/fixtures/recovery-v1.json`) that every host must
+reproduce exactly:
+- **Argon2id** v0x13 with p = 1 (safest for WASM and phones), 64 MiB, t = 3, a
+  32-byte tag and 16-byte salts. The wrap salt and the verifier salt are
+  independent. Hosts check their primitive against RFC 9106 §5.3 first.
+- **The recovery code** is 80 random bits, printed as 16 Crockford base32
+  symbols plus a CHECK symbol (mod 37): `XXXX-XXXX-XXXX-XXXX-C`. With the check,
+  a typo is caught on the device before it costs one of the directory's five
+  daily attempts (vault, as §2f's author). Parsing forgives case, separators and
+  O/I/L. Argon2id takes the decoded bytes, never the typed string.
+- **Wrap key and verifier.** wrap key = HKDF(Argon2id(code, salt), empty,
+  "bento/id/rc-wrap/v1"); verifier = Argon2id(code, salt_v).
+- **The PRF KEK** is §2f's formula.
+- **Blob plaintext** is raw 32-byte private scalars. Each one is checked on
+  import to be in 1..n−1 and to match its directory-signed public half (computed
+  as d·G, the same on every platform). The layout follows the kx placement
+  (§6b): the account scalar alone until it's ruled.
+- **AAD binds every blob.** The PRF blob is bound to its credential, the
+  recovery blob to its account, and the pepper layer to its account.
+- **Argon2id is injected.** The kernel takes it as a parameter and ships no
+  WASM: documents never derive these keys, and only agents do.
+## 2026-10-18 — bento/id in the extension: the statement code is generated from kernel
+
+`kernel/src/statements.ts` and `address.ts` are the one definition of every
+byte a host signs or checks, and `kernel/fixtures/identity-v1.json` is the
+contract. The native hosts must reimplement them (Swift, Kotlin and Rust can't
+import TypeScript). The extension ships plain JavaScript, so it doesn't have
+to: `scripts/gen-webext-id.mjs` type-strips the two files into
+`home/webext/src/id/gen/`, and `scripts/test-webext-id.ts` fails if the copy is
+stale. The same rig runs kernel's own conformance rig with its imports pointed
+at the extension's copy, so every fixture row is checked against the code the
+extension ships. A hand port would pass the vectors today and drift later.
+
+The passkey blob and the recovery code follow the exact bytes in the identity
+design's §2f (raw 32-byte scalars checked to lie in 1..n−1 and to match the
+binding; the code is 16 Crockford base-32 characters plus a mod-37 check
+symbol, and the 10 decoded bytes, never the string, feed the derivation).
