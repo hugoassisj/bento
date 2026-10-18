@@ -185,11 +185,25 @@ object DocumentOrigin {
     const val INSPECTOR_PATH = "/.bento-host-inspect"
     val INSPECTOR_HTML = """<!doctype html><meta charset="utf-8"><script>
 (async () => {
+  // docIds that own data here, and whether anything could not be attributed.
+  // Reads KEYS only (key cursors), never record bodies.
   const ids = new Set(); let unattributed = false
+  const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) })
+  // every key a cursor yields, as a docId; a non-string key is unattributable
+  const keysOf = (source, primary) => new Promise((res, rej) => {
+    const r = source.openKeyCursor()
+    r.onerror = () => rej(r.error)
+    r.onsuccess = () => {
+      const c = r.result
+      if (!c) return res()
+      const k = primary ? c.primaryKey : c.key
+      if (typeof k === 'string') ids.add(k); else unattributed = true
+      c.continue()
+    }
+  })
   try {
     for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i)
-      const m = /^bento-member-(.+)$/.exec(k)
+      const m = /^bento-member-(.+)${'$'}/.exec(localStorage.key(i))
       if (m) ids.add(m[1])
     }
   } catch (e) { unattributed = true }
@@ -198,14 +212,20 @@ object DocumentOrigin {
     // unattributable, never "empty". Only names that already exist are
     // opened, at their own version, so looking never creates a database.
     if (!indexedDB.databases) throw new Error('cannot list databases')
-    const dbs = await indexedDB.databases()
-    for (const { name } of dbs) {
-      if (!name || !/autosave$/.test(name)) { if (name) unattributed = true; continue }
-      const db = await new Promise((res, rej) => { const r = indexedDB.open(name); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) })
-      for (const st of db.objectStoreNames) {
-        const all = await new Promise(res => { const r = db.transaction(st).objectStore(st).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res(null) })
-        if (!all) { unattributed = true; continue }
-        for (const rec of all) { if (rec && typeof rec.docId === 'string') ids.add(rec.docId); else unattributed = true }
+    for (const { name } of await indexedDB.databases()) {
+      if (!name) continue
+      const db = await req(indexedDB.open(name))
+      for (const st of Array.from(db.objectStoreNames)) {
+        const store = db.transaction(st).objectStore(st)
+        if (/-autosave${'$'}/.test(name) && st === 'recovery') await keysOf(store, true)          // keyPath docId
+        else if (/-autosave${'$'}/.test(name) && st === 'versions' && store.indexNames.contains('docId'))
+          await keysOf(store.index('docId'), false)                                            // the docId index
+        else if (name === 'bento-handles') await keysOf(store, true)                           // keyed by docId
+        // Anything else that holds records cannot be tied to a document —
+        // including bento-blobcache, which caches live-session media in
+        // PLAINTEXT (sync/blobs.ts), so adopting it would hand a successor the
+        // previous document's images. An empty store is harmless.
+        else if (await req(store.count()) > 0) unattributed = true
       }
       db.close()
     }

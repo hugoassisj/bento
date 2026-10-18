@@ -14,6 +14,57 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-18 — Native hosts keep a document's recovery copy and member key outside the page
+
+**Decision.** The native hosts provide the per-document store that
+`kernel/src/docstore.ts` already speaks, so the kernel stops keeping two
+things in the page's own web storage: the crash-recovery copy (`recovery`) and
+this device's member key for the document (`memberkey`, whose private half is
+what lets this device act in the document's live room). Until now only the
+browser extension provided one, and on Android and iOS the whole member key,
+private half included, sat in the document origin's localStorage.
+
+**The shared half, `home/bridge.js`:**
+
+- **The host declares; the bridge obeys.** Each host prepends
+  `window.__bentoHostCaps = ['store']` to the injected bridge. Only then does
+  the bridge define `window.__bentoHost = {ops:['store']}` (non-writable) and
+  relay. A host that advertised a store it could not serve would lose the
+  member key on every reload: the kernel, finding a store present but refusing,
+  keeps the key for that page only and deliberately never falls back to
+  localStorage.
+- **Top frame only, page window only.** No store in a subframe, and a request
+  whose source is not the page's own window is ignored.
+- **The native contract**, written at the relay and enforced by
+  `scripts/test-home-docstore.mjs`. Requests are `{op, name, b64}`. Replies are
+  `(ok, value)`: `get` gives base64 or null; `set` and `delete` give null;
+  `list` gives a JSON array; any failure gives `'refused'` (a name other than
+  recovery/memberkey), `'too-large'` or `'unavailable'`. Bytes are rebuilt as a
+  `Uint8Array` in the page's own realm, because the kernel checks
+  `instanceof`.
+
+**Android, `DocStore.kt`:** partitioned by the document's claim (the identity
+that chooses its origin, 2026-10-18), never a path, URI or anything the page
+names. Encrypted with AES-GCM under a Keystore key. Kept in no-backup app
+storage. Written beside the entry, then renamed, so a crash leaves the old
+entry, not a truncated one. Capped at 64 MB. Runs on the same ordered thread
+as file writes.
+
+**Verified.** The rig drives the real bridge with the kernel's real client: no
+capability means no store at all; with the capability, 1 MiB round-trips and
+refusals pass through. Removing the capability gate fails the three no-store
+checks. On the emulator the kernel's own autosave moved its recovery copy into
+the native store, and IndexedDB recovery came back empty.
+
+**With it:** the legacy-origin inspector now reads keys only (key cursors),
+attributes `bento-handles` by key, and refuses any other database that holds
+records. That includes `bento-blobcache`, which caches live-session media in
+plaintext. `scripts/test-home-inspector.mjs` runs the script as it ships; it
+also matched real Chromium IndexedDB case for case.
+
+**iOS** implements the same native contract in its own change, keeping the
+member key in the Keychain (this device only).
+
 ## 2026-10-18 — Android: every docId form the apps mint counts as a docId
 
 **Supersedes "a strict UUID"** in the entry below. Spaces always mints

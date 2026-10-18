@@ -463,7 +463,11 @@ class EditorActivity : Activity() {
             message.data?.let { onBridgeMessage(it) }
         }
 
-        val src = assets.open("bridge.js").use { it.readBytes().toString(Charsets.UTF_8) }
+        // Capabilities first, then the shared bridge, in one injected script:
+        // bridge.js advertises the per-document store to the page ONLY when
+        // the host declares it here, so a host without one never offers it.
+        val src = "window.__bentoHostCaps = ['store'];\n" +
+            assets.open("bridge.js").use { it.readBytes().toString(Charsets.UTF_8) }
         WebViewCompat.addDocumentStartJavaScript(web, src, rules)
     }
 
@@ -687,6 +691,8 @@ class EditorActivity : Activity() {
                 }
             }
 
+            "store.get", "store.set", "store.list", "store.delete" -> onStore(id, m)
+
             else -> reply(id, false, "unknown op")
         }
     }
@@ -762,6 +768,35 @@ class EditorActivity : Activity() {
         if (out == null) "no output stream" else { out.use { it.write(data) }; null }
     } catch (e: Exception) {
         Log.w(TAG, "write failed", e); e.message ?: "write failed"
+    }
+
+    /** The document's store, partitioned by the claim its origin was chosen by. */
+    private val docStore: DocStore by lazy { DocStore(this, originHost.substringBefore('.')) }
+
+    /**
+     * The per-document store (see [DocStore]). On the ordered [io] thread, like
+     * the file writes: a set followed by a get must see the set, and the
+     * Keystore and disk work stay off the main thread.
+     */
+    private fun onStore(id: Int, m: JSONObject) {
+        val op = m.optString("op")
+        val name = m.optString("name")
+        val b64 = if (op == "store.set") m.optString("b64") else null
+        io.execute {
+            val (ok, value) = try {
+                when (op) {
+                    "store.get" -> true to docStore.get(name)?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
+                    "store.set" -> { docStore.set(name, android.util.Base64.decode(b64 ?: "", android.util.Base64.DEFAULT)); true to null }
+                    "store.list" -> true to org.json.JSONArray(docStore.list()).toString()
+                    else -> { docStore.delete(name); true to null }
+                }
+            } catch (e: DocStore.Refused) {
+                false to (e.message ?: "refused")
+            } catch (e: Exception) {
+                Log.w(TAG, "store $op failed", e); false to "unavailable"
+            }
+            runOnUiThread { reply(id, ok, value) }
+        }
     }
 
     private fun beginExport(id: Int, name: String, text: String) {

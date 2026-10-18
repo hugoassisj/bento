@@ -730,6 +730,25 @@ jobs:
         # silent save — and a launch request the host cannot meet is refused,
         # never turned into an export. Runs the real bridge against a fake host.
         run: node scripts/test-home-launch.mjs
+      - name: home per-document store rig
+        # The shared bridge relays the kernel's per-document store
+        # (kernel/src/docstore.ts) to a native host, which keeps the recovery
+        # copy and the member key out of the page's own web storage. Driven end
+        # to end here: the real bridge, the real kernel client, a fake host. It
+        # proves the store appears ONLY when the native side declares it — a
+        # store advertised and then refused would lose the member key on every
+        # reload — and that bytes round-trip as a Uint8Array the kernel accepts.
+        run: node scripts/test-home-docstore.mjs
+      - name: home legacy-origin inspector rig
+        # Before an Android document adopts the storage it used under the old
+        # per-path origins, an inspector page reports which documents own data
+        # there. This runs that script as it ships (extracted from
+        # DocumentOrigin.kt) against kernel-shaped storage: every app's autosave
+        # attributed, bento-handles by key, and anything it cannot tie to a
+        # document — including bento-blobcache, which holds plaintext media —
+        # refusing adoption. The JVM tests cover the decision; only this covers
+        # the script.
+        run: node scripts/test-home-inspector.mjs
 
       - name: tray mark is one source
         # tray-icon.svg is the only drawing of the mark. Everything else is
