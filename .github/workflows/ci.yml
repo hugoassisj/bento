@@ -844,6 +844,12 @@ jobs:
         # the document's origin. Compiles the real HostDocStore; skips off Apple.
         run: node scripts/test-home-docstore-ios.mjs
 
+      - name: home/ios bento/id recovery rig
+        # Argon2id (ours: RFC 9106, Node's native one on random inputs) and every
+        # byte of kernel/fixtures/recovery-v1.json: the recovery code, derivations,
+        # both key blobs, and recovered scalars checked through CryptoKit. Apple only.
+        run: node scripts/test-home-id-recovery.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected
