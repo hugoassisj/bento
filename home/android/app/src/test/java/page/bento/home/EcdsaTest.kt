@@ -49,6 +49,24 @@ class EcdsaTest {
         assertTrue("the run must include a sign-byte integer (33 bytes)", sawSignByte)
     }
 
+    @Test fun `low-S normalisation keeps the signature valid and always lands at or below n over 2`() {
+        val n = java.math.BigInteger("FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551", 16)
+        val kp = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+        var flipped = 0
+        repeat(500) { k ->
+            val msg = "low-s $k".toByteArray()
+            val raw = Ecdsa.derToRaw(Signature.getInstance("SHA256withECDSA").run { initSign(kp.private); update(msg); sign() })
+            val low = Ecdsa.lowS(raw)
+            val s = java.math.BigInteger(1, low.copyOfRange(32, 64))
+            assertTrue("s must be low", s <= n.shiftRight(1))
+            if (!low.contentEquals(raw)) flipped++
+            val ok = Signature.getInstance("SHA256withECDSA").run { initVerify(kp.public); update(msg); verify(rawToDer(low)) }
+            assertTrue("normalised signature $k must still verify", ok)
+            assertArrayEquals("normalising twice changes nothing", low, Ecdsa.lowS(low))
+        }
+        assertTrue("about half need flipping; got $flipped of 500", flipped in 150..350)
+    }
+
     @Test fun `a hand-built signature with a short r is left-padded`() {
         val r = ByteArray(31) { 0x11 }; val s = ByteArray(32) { 0x7f }
         val der = byteArrayOf(0x30, (2 + 31 + 2 + 32).toByte(), 0x02, 31) + r + byteArrayOf(0x02, 32) + s

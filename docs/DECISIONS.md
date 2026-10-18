@@ -10974,3 +10974,51 @@ Settled here, so other zones don't redefine them:
 
 This change is contract only, with no callers. `scripts/test-identity.ts` pins
 that no runtime module imports it yet.
+
+## 2026-10-18 — bento/id on Android: the agent's two keys, the routine session, and host-stamped consent
+
+The Android agent core (phase-1 plan A1). It isn't wired to any page yet: the
+`__bentoIdentity` global goes in only after the Android host verifies the
+shell it serves (gate 1, A2).
+
+- **Two Keystore keys.** The ROUTINE key signs collaboration traffic without a
+  prompt. The CONSENT key needs an authentication for every use: a
+  BiometricPrompt authorises exactly one signature (a CryptoObject), and the
+  Keystore, not the UI, refuses a second (measured on the emulator). The
+  consent key lives in StrongBox where the device has one. A `dev.`
+  certificate names it as `consentPub`, and it is a different key from the
+  routine one.
+- **§2e (B) is enforced in two layers, each with its own bound.** The routine
+  key carries a Keystore validity window of the OVERALL timeout (24 h). That is
+  the hardware floor, and it means "since the device was last unlocked": a
+  lock-screen unlock reopens it with no app prompt (measured, with a control).
+  `RoutineGate` enforces "since Bento was last used": idle 1 h, overall 24 h,
+  tightenable by an organisation (15 min / 12 h) but never loosened. A clock
+  that goes backwards locks the session.
+- **Enrolling a fingerprint doesn't destroy the routine key**
+  (`setInvalidatedByBiometricEnrollment(false)`). It carries no consent, and
+  losing it would drop the device from every room it is in. The consent key
+  keeps Android's default: a new enrolment invalidates it, and the device
+  re-links.
+- **Signatures leave as raw r‖s, low-S.** The Keystore emits DER and doesn't
+  normalise, so the host converts and folds s.
+- **The host stamps every field of a `cns.`.** The relying party is the app's
+  own (`bento`). The audience is phase 1's only one (`dir`). The docId is the
+  one the host read from the file it opened (#755's rule), never one the page
+  names. The expiry is 2 minutes. A page supplies only the statement and the
+  verifier's challenge. The host refuses to stamp a request a verifier would
+  refuse: wrong family, a document-scoped purpose without a docId, or a
+  malformed challenge.
+- **Conformance is kernel's fixture, re-read on every run.** `ConsentTest`
+  reaches the stated verdict on every `cns` row, rebuilds every accepted row's
+  text byte for byte, and passes the transcript, purpose and low-S rows. It
+  never pins a signature.
+- **Measured end to end on the emulator.** A consent signed inside a
+  BiometricPrompt by the real Keystore key is accepted by kernel's reference
+  `verifyConsent`. Re-presenting it is rejected as `replay`; presenting it to
+  a room verifier, or applying it to another statement, as `transcript`;
+  checking it against another relying party as `rp`; checking it against the
+  routine key as `signature`; and presenting it after expiry as `expired`.
+
+Still for a real phone: TEE and StrongBox residency (the emulator reports
+software keys), and the API 26–29 consent path, which allows biometrics only.

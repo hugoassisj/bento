@@ -28,6 +28,7 @@ class AgentProbeActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (intent.getStringExtra("mode") == "window") { windowProbe(); return }
+        if (intent.getStringExtra("mode") == "consent") { consentProbe(); return }
         AgentKeys.ensure(this)
         log("sdk=${Build.VERSION.SDK_INT} routine=${AgentKeys.strength(AgentKeys.ROUTINE)} consent=${AgentKeys.strength(AgentKeys.CONSENT)}")
         val routineSig = AgentKeys.signRoutine(msg)
@@ -92,6 +93,37 @@ class AgentProbeActivity : AppCompatActivity() {
         log("window: $r")
         log("DONE")
         finish()
+    }
+
+    /**
+     * A host-stamped consent end to end: stamp a `cns.` for the given challenge
+     * and statement, sign it with the consent key inside a BiometricPrompt, and
+     * log text, signature and keys for kernel's reference verifier to judge.
+     */
+    private fun consentProbe() {
+        AgentKeys.ensure(this)
+        val challenge = intent.getStringExtra("challenge")!!
+        val payload = intent.getStringExtra("payload")!!
+        val purpose = Consent.Purpose.of(intent.getStringExtra("purpose") ?: "link")!!
+        val text = Consent.stamp(purpose, intent.getStringExtra("docId"), challenge, payload, System.currentTimeMillis())
+        if (text == null) { log("consent: host REFUSED to stamp"); log("DONE"); return }
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Link a new device?").setSubtitle("bento/id probe")
+            .setAllowedAuthenticators(Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL)
+            .build()
+        BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                val s = result.cryptoObject!!.signature!!
+                s.update(text.toByteArray(Charsets.UTF_8))
+                val sig = Ecdsa.lowS(Ecdsa.derToRaw(s.sign()))
+                log("CNS text=$text")
+                log("CNS sig=${Consent.b64uEnc(sig)}")
+                log("CNS consentPub=${Consent.b64uEnc(AgentKeys.publicRaw(AgentKeys.CONSENT))}")
+                log("CNS routinePub=${Consent.b64uEnc(AgentKeys.publicRaw(AgentKeys.ROUTINE))}")
+                log("DONE")
+            }
+            override fun onAuthenticationError(code: Int, err: CharSequence) { log("prompt error $code: $err"); log("DONE") }
+        }).authenticate(info, BiometricPrompt.CryptoObject(AgentKeys.consentSignature()))
     }
 
     /** Verify a raw r‖s signature against the key's certificate, as a verifier elsewhere would. */

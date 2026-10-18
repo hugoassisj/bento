@@ -47,6 +47,9 @@ object AgentKeys {
     fun ensure(context: Context) {
         val ks = keystore()
         if (!ks.containsAlias(ROUTINE)) generate(ROUTINE, consent = false, strongBox = false)
+        // (Requires a secure lock screen: without one, generation throws and
+        // the caller reports no identity. A bento/id key on a phone anyone can
+        // pick up and use would vouch for nobody.)
         if (!ks.containsAlias(CONSENT)) {
             val sb = Build.VERSION.SDK_INT >= 28 &&
                 context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
@@ -62,7 +65,23 @@ object AgentKeys {
         val b = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
             .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
             .setDigests(KeyProperties.DIGEST_SHA256)
-        if (consent) {
+        if (!consent) {
+            // The HARDWARE floor of §2e (B): no device authentication in the
+            // overall period and the Keystore itself refuses, whatever the app
+            // believes. It is only a floor — a lock-screen unlock reopens it
+            // (measured), so the idle and overall timeouts proper are RoutineGate's.
+            b.setUserAuthenticationRequired(true)
+            if (Build.VERSION.SDK_INT >= 30) {
+                b.setUserAuthenticationParameters(RoutineGate.OVERALL_SECONDS,
+                    KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL)
+            } else {
+                @Suppress("DEPRECATION") b.setUserAuthenticationValidityDurationSeconds(RoutineGate.OVERALL_SECONDS)
+            }
+            // Enrolling a new fingerprint must not destroy the device's identity:
+            // the routine key carries no consent, and losing it would orphan every
+            // room this device is in. (Android 7+; the default would invalidate.)
+            b.setInvalidatedByBiometricEnrollment(false)
+        } else {
             b.setUserAuthenticationRequired(true)
             // Per-use: a BiometricPrompt must authorise each signature. On 30+
             // the device PIN/pattern also qualifies; before 30 a 0-second
@@ -103,7 +122,7 @@ object AgentKeys {
         val s = Signature.getInstance("SHA256withECDSA")
         s.initSign(keystore().getKey(ROUTINE, null) as PrivateKey)
         s.update(message)
-        return Ecdsa.derToRaw(s.sign())
+        return Ecdsa.lowS(Ecdsa.derToRaw(s.sign()))
     }
 
     /**
@@ -146,5 +165,23 @@ object Ecdsa {
             return ByteArray(32 - trimmed.size) + trimmed
         }
         return int() + int()
+    }
+
+    /** P-256's group order n. */
+    private val N = BigInteger("FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551", 16)
+    private val HALF_N = N.shiftRight(1)
+
+    /**
+     * Low-S normalisation (K1's SignResult contract): if s > n/2, replace it
+     * with n − s. Both verify; only the low one is accepted, so a signature
+     * cannot be re-minted into a second valid byte string by a third party.
+     * The Keystore does not normalise, so about half its signatures need this.
+     */
+    fun lowS(raw: ByteArray): ByteArray {
+        require(raw.size == 64) { "raw P-256 signature is 64 bytes" }
+        val s = BigInteger(1, raw.copyOfRange(32, 64))
+        if (s <= HALF_N) return raw
+        val t = N.subtract(s).toByteArray().let { if (it.size > 32) it.copyOfRange(it.size - 32, it.size) else it }
+        return raw.copyOfRange(0, 32) + ByteArray(32 - t.size) + t
     }
 }
