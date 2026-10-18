@@ -844,6 +844,25 @@ jobs:
         # the document's origin. Compiles the real HostDocStore; skips off Apple.
         run: node scripts/test-home-docstore-ios.mjs
 
+      - name: home/ios bento/id keys rig
+        # The agent's keys: the account key, the Secure Enclave routine and consent
+        # keys, raw low-S signatures (verified in WebCrypto), never minting over a
+        # store it could not read, and the §29 biometric-enrolment notice outbox.
+        # Apple toolchains only; skips elsewhere.
+        run: node scripts/test-home-id-keys.mjs
+
+      - name: home/ios bento/id statements rig
+        # The Swift statements against kernel/fixtures/identity-v1.json: verdict
+        # and reason on every row, round trips, tampering, transcripts, low-S,
+        # purposes, addresses, spendCalled and the frozen display table.
+        run: node scripts/test-home-id-statements.mjs
+
+      - name: home/ios bento/id agent rig
+        # sign() routing and the host-stamped consent statement (§2e (A)): what
+        # the page can name, what only the host stamps, and the verifier refusing
+        # a relay, replay, payload swap or docId swap.
+        run: node scripts/test-home-id-agent.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected
