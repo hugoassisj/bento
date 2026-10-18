@@ -73,6 +73,13 @@ for (i, c) in cases.enumerated() {
 let pa = (F["params"] as! [String: Any])["argon2"] as! [String: Any]
 emit("params", Argon2id.bento == .init(memoryKiB: pa["memoryKiB"] as! Int, passes: pa["passes"] as! Int, parallelism: pa["parallelism"] as! Int, tagLength: pa["tagLength"] as! Int) && pa["version"] as! Int == 0x13)
 
+// the wipe: every buffer Argon2id frees is all zeros by then, the 64 MiB of blocks included
+var released = 0, largest = 0, dirty = 0
+Argon2id.probe = { p, n in released += 1; largest = max(largest, n); for i in 0..<n where p[i] != 0 { dirty += 1; break } }
+_ = Argon2id.hash(password: hx("009e01a578034a5304ef"), salt: hx("101112131415161718191a1b1c1d1e1f"))
+Argon2id.probe = nil
+emit("wipe", "\(released)|\(largest)|\(dirty)")
+
 // codes and parsing
 for (i, c) in (F["codes"] as! [[String: Any]]).enumerated() { emit("fmt\(i)", R.formatCode(hx(c["bytes"] as! String)) ?? "nil") }
 for (i, c) in (F["parse"] as! [[String: Any]]).enumerated() { emit("parse\(i)", verdict(R.parseCode(c["input"] as! String)) { hs($0) }) }
@@ -139,7 +146,7 @@ let out
 try {
   writeFileSync(join(dir, 'main.swift'), main)
   writeFileSync(join(dir, 'cases.json'), JSON.stringify(cases))
-  execFileSync('swiftc', ['-O', '-o', join(dir, 'a'), ...SRC, join(dir, 'main.swift')], { stdio: 'pipe' })
+  execFileSync('swiftc', ['-O', '-D', 'BENTO_WIPE_PROBE', '-o', join(dir, 'a'), ...SRC, join(dir, 'main.swift')], { stdio: 'pipe' })
   out = Object.fromEntries(execFileSync(join(dir, 'a'), [FIXTURE, join(dir, 'cases.json')], { maxBuffer: 1 << 24 }).toString().trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)))
 } catch (err) { console.error('swiftc or run failed:\n' + (err.stderr?.toString() ?? err.message)); process.exit(2) }
 finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
@@ -155,6 +162,10 @@ ok(bad.length === 0, `${cases.length} random inputs and parameters agree with No
 ok(out.params === 'true', "the fixture's parameters are ours: version 0x13, p = 1, 64 MiB, t = 3, 32 bytes")
 console.log(`  (64 MiB, t = 3 took ${out.argon2_ms} ms here)`)
 
+{
+  const [released, largest, dirty] = (out.wipe ?? '').split('|').map(Number)
+  ok(released >= 6 && largest === 65536 * 128 && dirty === 0, `every buffer is zeroed before it's freed, the 64 MiB of blocks included (${released} buffers, ${dirty} not zeroed)`)
+}
 console.log('the recovery code:')
 F.codes.forEach((c, i) => ok(out[`fmt${i}`] === c.printed, `${c.bytes} prints as ${c.printed}`))
 F.parse.forEach((p, i) => {

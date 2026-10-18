@@ -83,7 +83,9 @@ enum IdentityRecovery {
     /// the recovery blob's wrap key: HKDF(Argon2id(code, salt), empty, "bento/id/rc-wrap/v1")
     static func recoveryWrapKey(code: [UInt8], salt: [UInt8]) -> [UInt8]? {
         guard code.count == codeBytes, salt.count == saltLength else { return nil }
-        return hkdf(Argon2id.hash(password: code, salt: salt), info: "bento/id/rc-wrap/v1")
+        var stretched = Argon2id.hash(password: code, salt: salt)
+        defer { Argon2id.wipe(&stretched) }
+        return hkdf(stretched, info: "bento/id/rc-wrap/v1")
     }
 
     /// what proves knowledge of the code to the directory: Argon2id(code, salt_v)

@@ -12,6 +12,11 @@ import Foundation
 ///
 /// Lanes are filled one after another (no threads), which is what the format
 /// allows and is the same result as filling them in parallel.
+///
+/// Everything derived from the password (the 64 MiB of blocks, the scratch
+/// blocks, H0 and the H' intermediates) is wiped with memset_s before it's
+/// released, which the compiler may not elide. That's best effort in Swift: an
+/// Array the runtime copied behind our back can't be reached.
 enum Argon2id {
     struct Params: Equatable {
         let memoryKiB: Int
@@ -33,23 +38,29 @@ enum Argon2id {
         var h0in: [UInt8] = []
         for v in [p, params.tagLength, params.memoryKiB, t, 0x13, 2] { h0in += le32(v) }
         for field in [password, salt, secret, ad] { h0in += le32(field.count) + field }
-        let h0 = Blake2b.hash(h0in, outLength: 64)
+        var h0 = Blake2b.hash(h0in, outLength: 64)
+        wipe(&h0in)
+        defer { wipe(&h0) }
 
         let mem = UnsafeMutablePointer<UInt64>.allocate(capacity: mPrime * 128)
         mem.initialize(repeating: 0, count: mPrime * 128)
-        defer { mem.deinitialize(count: mPrime * 128); mem.deallocate() }
+        defer { release(mem, mPrime * 128) }
         func block(_ lane: Int, _ col: Int) -> UnsafeMutablePointer<UInt64> { mem + (lane * laneLen + col) * 128 }
 
         for lane in 0..<p {
-            for col in 0..<2 { load(hPrime(h0 + le32(col) + le32(lane), 1024), into: block(lane, col)) }
+            for col in 0..<2 {
+                var seed = h0 + le32(col) + le32(lane), first = hPrime(seed, 1024)
+                load(first, into: block(lane, col))
+                wipe(&seed); wipe(&first)
+            }
         }
 
         let g = Compressor()
         defer { g.free() }
         let zero = UnsafeMutablePointer<UInt64>.allocate(capacity: 128); zero.initialize(repeating: 0, count: 128)
-        let input = UnsafeMutablePointer<UInt64>.allocate(capacity: 128)
-        let address = UnsafeMutablePointer<UInt64>.allocate(capacity: 128)
-        defer { zero.deallocate(); input.deallocate(); address.deallocate() }
+        let input = UnsafeMutablePointer<UInt64>.allocate(capacity: 128); input.initialize(repeating: 0, count: 128)
+        let address = UnsafeMutablePointer<UInt64>.allocate(capacity: 128); address.initialize(repeating: 0, count: 128)
+        defer { release(zero, 128); release(input, 128); release(address, 128) }
 
         for pass in 0..<t {
             for slice in 0..<4 {
@@ -106,10 +117,31 @@ enum Argon2id {
         for lane in 0..<p { let b = block(lane, laneLen - 1); for k in 0..<128 { c[k] ^= b[k] } }
         var cBytes: [UInt8] = []; cBytes.reserveCapacity(1024)
         for w in c { for s in 0..<8 { cBytes.append(UInt8(truncatingIfNeeded: w >> (8 * s))) } }
+        wipe(&c)
+        defer { wipe(&cBytes) }
         return hPrime(cBytes, params.tagLength)
     }
 
     // MARK: - pieces
+
+    /// Overwrite with zeros in a way the optimiser must keep (C11 memset_s).
+    static func wipe<T>(_ a: inout [T]) {
+        a.withUnsafeMutableBytes { b in if let base = b.baseAddress { _ = memset_s(base, b.count, 0, b.count) } }
+    }
+
+    #if BENTO_WIPE_PROBE
+    /// test builds only: sees each buffer after the wipe, before it's freed
+    nonisolated(unsafe) static var probe: ((UnsafeMutablePointer<UInt64>, Int) -> Void)?
+    #endif
+
+    static func release(_ p: UnsafeMutablePointer<UInt64>, _ count: Int) {
+        _ = memset_s(p, count * 8, 0, count * 8)
+        #if BENTO_WIPE_PROBE
+        probe?(p, count)
+        #endif
+        p.deinitialize(count: count)
+        p.deallocate()
+    }
 
     private static func le32(_ v: Int) -> [UInt8] { (0..<4).map { UInt8(truncatingIfNeeded: v >> (8 * $0)) } }
 
@@ -123,13 +155,15 @@ enum Argon2id {
 
     /// RFC 9106 §3.3 H': a variable-length hash built from BLAKE2b
     static func hPrime(_ x: [UInt8], _ tau: Int) -> [UInt8] {
-        let input = le32(tau) + x
+        var input = le32(tau) + x
+        defer { wipe(&input) }
         if tau <= 64 { return Blake2b.hash(input, outLength: tau) }
         let r = (tau + 31) / 32 - 2
         var v = Blake2b.hash(input, outLength: 64)
         var out = Array(v[0..<32])
-        for _ in 1..<r { v = Blake2b.hash(v, outLength: 64); out += v[0..<32] }
+        for _ in 1..<r { var next = Blake2b.hash(v, outLength: 64); swap(&v, &next); wipe(&next); out += v[0..<32] }
         out += Blake2b.hash(v, outLength: tau - 32 * r)
+        wipe(&v)
         return out
     }
 
@@ -137,7 +171,8 @@ enum Argon2id {
     private final class Compressor {
         let r = UnsafeMutablePointer<UInt64>.allocate(capacity: 128)
         let tmp = UnsafeMutablePointer<UInt64>.allocate(capacity: 128)
-        func free() { r.deallocate(); tmp.deallocate() }
+        init() { r.initialize(repeating: 0, count: 128); tmp.initialize(repeating: 0, count: 128) }
+        func free() { Argon2id.release(r, 128); Argon2id.release(tmp, 128) }
 
         /// next = G(prev, ref), XORed into next's old value when `xor` (passes after the first)
         func fill(prev: UnsafeMutablePointer<UInt64>, ref: UnsafeMutablePointer<UInt64>,
