@@ -775,6 +775,14 @@ jobs:
         # changes.
         run: node scripts/test-tray-releases.mjs
 
+      - name: home/ios origin identity rig
+        # Which storage origin a document runs in. It used to be a hash of the
+        # file's path, so a different file that later took the same path read
+        # the previous one's recovery copy and member key. The origin follows the
+        # file's document identifier now; this compiles the real OriginIdentity
+        # and checks every rule. CryptoKit only, so it skips off Apple platforms.
+        run: node scripts/test-home-origin.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected

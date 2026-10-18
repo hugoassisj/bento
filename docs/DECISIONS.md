@@ -14,6 +14,55 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-18 — A document's storage origin follows the file, not its path (iOS)
+
+**Corrects 2026-09-19**, which said the native hosts "were never exposed"
+because each document gets its own origin. That held **across paths**, and was
+false **across reuse of one path**. iOS derived the origin from a hash of the
+file's path, so a different file that later took the same path (the original
+deleted, a new download taking the name) inherited the previous file's web
+storage.
+
+Measured on a build of the host, with a real invite copy joined as a member:
+the successor read the old file's recovery copy, its version history, and this
+device's collab member private key for it. Encrypted decks skip the snapshots,
+but not the member key. Android derives its origin the same way, from the
+document's URI, and is fixing it separately.
+
+**Decision.** The origin follows the FILE (`home/ios/OriginIdentity.swift`):
+
+- **The anchor is the file's document identifier** (`NSURLDocumentIdentifierKey`),
+  with `UF_TRACKED` set on first open so a local file has one. Measured: it
+  survives the app's atomic saves, moves, and iCloud eviction and re-download;
+  a copy doesn't carry it; a new file at the same path gets a new one. It's
+  filesystem metadata, so nothing in a file can claim another's.
+- **A fresh origin is an HMAC under a device-local secret** (Keychain, this
+  device only), so knowing a path or an identifier doesn't reveal it.
+- **The host's index is the authority.** It maps a document to its origin
+  string. A moved file keeps its storage, recovery and member key included.
+- **A path that has had a document is never handed to another.** A newcomer
+  gets fresh storage. Old storage is never cleared, because its owner may simply
+  have moved.
+- **Files opened before this change keep their storage.** A legacy origin is
+  adopted only if everything stored there belongs to the file's own docId, so
+  nobody has to re-join a shared document. docId can refuse an origin, never
+  claim one: it's in the file's contents.
+- **Without a document identifier,** a random extended-attribute id is a hint,
+  honoured only where the index recorded it for this same file or a move of it.
+  Attributes travel with copies; only device-local state can tell "my file" from
+  someone else's copy of it.
+
+**Also:** the scheme handler serves a document only under its own host. It used
+to answer every `bento-tray://` host with the open document, so a page could
+frame another document's host and run itself there. Measured: WebKit partitions
+that frame's storage by the top-level page, so it read nothing, and the bridge
+already refuses frames. Defence in depth.
+
+**Guarded by** `scripts/test-home-origin.mjs`: the real `OriginIdentity.swift`,
+20 cases. It fails against a path-only origin.
+
+---
+
 ## 2026-10-18 — The Mac app is the iOS app, built for Mac Catalyst; a Mac double-click edits in place
 
 **Decision (maintainer, 2026-10-18).** Native desktop apps are the primary desktop
