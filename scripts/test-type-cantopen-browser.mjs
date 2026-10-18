@@ -17,17 +17,20 @@
 //   - the message is shown, with the file's detail as literal text;
 //   - no element from the file reaches the page (no img, no b), and the
 //     handler's sentinel never fires;
-//
 //   - no text from the file appears anywhere outside that message; type's
 //     boot error is a fixed sentence, since the detail is already on screen;
 //   - type publishes window.bento = { format, refused: true } (the shell
 //     loader's contract for "painted its own refusal"), so the page shows ONE
 //     message: the app does not run again on a later loader path, and no
-//     "This file could not start" card is painted over it.
+//     "This file could not start" card is painted over it;
+//   - bento.loadDoc refuses such a document with a fixed message too, the
+//     detail riding on its own `detail` property, and the open document
+//     untouched.
 //
 // Mutations (run, judged by exit code): set the detail line with innerHTML
 // instead of textContent → red; put the detail back into the thrown error
-// → red; drop the published refusal → red.
+// → red; drop the published refusal → red; put the detail back into
+// bento.loadDoc's message → red.
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -83,6 +86,25 @@ try {
     ok(!/onerror|__fired|<img|<b>|bold/.test(r.outside),
       `${c.name}: no text from the file appears anywhere outside the message`)
     ok(r.fromFile === 0 && !r.fired, `${c.name}: nothing from the file became an element (${r.fromFile}) and its handler never ran (${r.fired})`)
+    await p.close()
+  }
+  // window.bento.loadDoc, the scripted twin of Replace from JSON: a document it
+  // refuses throws a FIXED message (a caller may render it), with the detail,
+  // which can quote the file, on its own property as data.
+  {
+    const p = await browser.newPage()
+    await p.route(/^https?:/, (r) => r.abort())
+    await p.goto(new URL('../type/dist-single/Bento_Type.bento.html', import.meta.url).href)
+    await p.waitForFunction(() => window.bento?.doc)
+    const r = await p.evaluate((markup) => {
+      const before = JSON.stringify(window.bento.doc)
+      try { window.bento.loadDoc(JSON.stringify({ format: markup, body: [] })); return { threw: false } }
+      catch (e) { return { threw: true, message: String(e.message), detail: String(e.detail ?? ''), unchanged: JSON.stringify(window.bento.doc) === before } }
+    }, MARKUP)
+    ok(r.threw && r.message === 'bento/type: the document could not be read (format)' && !/onerror|<img|bold/.test(r.message),
+      `bento.loadDoc refuses with a fixed message carrying no file text (${JSON.stringify(r.message)})`)
+    ok(r.detail.includes('<img src=x onerror='), 'and the detail is still there for a scripting caller, on its own property')
+    ok(r.unchanged, 'and the open document is untouched')
     await p.close()
   }
 } finally {

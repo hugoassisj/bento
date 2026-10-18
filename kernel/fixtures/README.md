@@ -14,6 +14,31 @@ random, so a regeneration changes bytes but not verdicts.
 
 **The keys in this file are TEST KEYS ONLY.** Never use them for anything else.
 
+`recovery-v1.json` holds the recovery-code and key-blob vectors (identity-design
+§2f, signed by security §28). Unlike the statement vectors, every value in it is
+DETERMINISTIC (fixed codes, salts and IVs), so a host must reproduce the exact
+bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
+`scripts/test-recovery.ts`. Generator: `scripts/gen-recovery-vectors.ts`.
+
+- **Argon2id first.** Check your Argon2id against the `rfc9106` row (RFC 9106
+  §5.3, with its own parameters) before trusting it. Then use OUR parameters:
+  version 0x13, p = 1, m = 64 MiB, t = 3, a 32-byte tag, 16-byte salts.
+- **The code is 17 symbols: 16 data symbols and a check symbol**, printed
+  `XXXX-XXXX-XXXX-XXXX-C`. Data symbols are Crockford base32 (no I, L, O, U).
+  The check is the 80-bit value mod 37, with `* ~ $ = U` for 32 to 36. Every one
+  of those five has its own row, because that's where hosts disagree. Parsing
+  forgives case, spaces and hyphens, and reads O as 0 and I/L as 1. U is valid
+  ONLY as the check symbol. Argon2id takes the 10 decoded BYTES, never the
+  string.
+- **HKDF salt "empty" means zero-length** (equivalent to 32 zero bytes). AES-GCM
+  ciphertexts are `ciphertext ‖ 16-byte tag` with a 12-byte IV.
+- **Blob plaintext** is raw 32-byte big-endian private scalars: the account
+  scalar alone while kx is unruled, or with kx appended under modes A and C. On
+  import, each scalar must be in 1..n−1 AND its public point d·G must equal the
+  public key in the directory-signed binding. A swapped blob fails closed.
+- **The pepper layer** is the directory's (share implements it). Its rows exist
+  so the server code can be checked against the same bytes.
+
 ## What each section checks
 
 - `statements`: one row per case. `type` names the verifier. `text` and `sig`
@@ -60,6 +85,16 @@ random, so a regeneration changes bytes but not verdicts.
   invisible. On top of the table: NFC is required, at most 64 code points, and
   ZWNJ/ZWJ (U+200C/U+200D) are allowed only mid-text. (home-desktop found the
   drift; security added the unassigned code points.)
+- **Compare normalised text by code points, not by string equality, in Swift.**
+  Swift's `String ==` is canonical equivalence, so a decomposed `é` compares
+  equal to its NFC form and an NFC check written as `s == nfc(s)` passes text
+  that isn't NFC. Compare `unicodeScalars` instead. (home-ios, measured)
+- **Check a recovered private scalar with the platform's key constructor, never
+  bignum arithmetic.** It's a secret, and a hand-rolled d·G is variable-time on
+  it. CryptoKit's `P256.Signing.PrivateKey(rawRepresentation:)` refuses 0, n,
+  n+1 and 2^256−1 and accepts 1 and n−1 (home-ios, measured). The Rust `p256`
+  crate's `SecretKey::from_slice` is likewise constant-time (home-desktop).
+  Derive the public key from it and compare that to the bound key.
 - **Compute NFC with Unicode 17.0 (or later) data.** Normalisation is stable
   across versions only for assigned characters, and the table refuses
   everything unassigned at 17.0. So any normaliser at 17.0 or later agrees on

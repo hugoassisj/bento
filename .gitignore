@@ -5,6 +5,8 @@
 node_modules
 dist/
 dist-single/
+# sealed TEST shells (npm run build:sealtest): never shipped
+dist-sealtest/
 
 # local test decks — never committed (may contain confidential content)
 testing/
