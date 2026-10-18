@@ -955,6 +955,14 @@ jobs:
         # member key never follows.
         run: node scripts/test-webext-store.ts
 
+      - name: WebExtension bento/id rig
+        # The extension's statement code must be the kernel reference, unaltered
+        # (a generated type-strip, checked current), and must pass the whole
+        # conformance contract in kernel/fixtures/identity-v1.json. The
+        # passkey-wrapped account key must fail closed for the wrong passkey,
+        # credential or binding; the recovery code is 80 random bits.
+        run: node scripts/test-webext-id.ts
+
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
         # uses but English lacks renders as the key name, a locale missing a key
@@ -2770,3 +2778,27 @@ jobs:
         # given, refuses a malformed value, and never emits a placeholder: the
         # platforms cache these files, so a wrong one is worse than none.
         run: node scripts/test-well-known.ts
+
+  type-fields-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: Every chrome field wears the suite's one field look, light and dark
+        # The THE FIELD block copied from slides: border, fill, radius, height and
+        # the focus ring, measured on twelve real surfaces, plus a planted
+        # browser-default field that must be flagged.
+        run: node scripts/test-type-fields-browser.mjs

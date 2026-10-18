@@ -11060,3 +11060,19 @@ reproduce exactly:
   recovery blob to its account, and the pepper layer to its account.
 - **Argon2id is injected.** The kernel takes it as a parameter and ships no
   WASM: documents never derive these keys, and only agents do.
+## 2026-10-18 — bento/id in the extension: the statement code is generated from kernel
+
+`kernel/src/statements.ts` and `address.ts` are the one definition of every
+byte a host signs or checks, and `kernel/fixtures/identity-v1.json` is the
+contract. The native hosts must reimplement them (Swift, Kotlin and Rust can't
+import TypeScript). The extension ships plain JavaScript, so it doesn't have
+to: `scripts/gen-webext-id.mjs` type-strips the two files into
+`home/webext/src/id/gen/`, and `scripts/test-webext-id.ts` fails if the copy is
+stale. The same rig runs kernel's own conformance rig with its imports pointed
+at the extension's copy, so every fixture row is checked against the code the
+extension ships. A hand port would pass the vectors today and drift later.
+
+The passkey blob and the recovery code follow the exact bytes in the identity
+design's §2f (raw 32-byte scalars checked to lie in 1..n−1 and to match the
+binding; the code is 16 Crockford base-32 characters plus a mod-37 check
+symbol, and the 10 decoded bytes, never the string, feed the derivation).
