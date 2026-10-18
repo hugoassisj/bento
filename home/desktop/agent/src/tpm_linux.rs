@@ -230,9 +230,18 @@ impl TpmStore {
     }
 }
 
-/// A wrong PIN is a refusal the person can retry, not an outage.
+/// A wrong PIN is a refusal the person can retry, not an outage. Matched on the
+/// TPM's OWN authorization failures only (measured on swtpm: a wrong PIN on
+/// Sign and on Unseal both return TPM_RC_AUTH_FAIL, "the authorization HMAC
+/// check failed and DA counter incremented"), so an unrelated error can never
+/// masquerade as "the person said no".
 fn auth_failure(msg: String) -> StoreError {
-    if msg.contains("authorization") || msg.contains("auth") || msg.contains("lockout") {
+    const AUTH: [&str; 3] = [
+        "the authorization HMAC check failed",           // TPM_RC_AUTH_FAIL (counts toward DA lockout)
+        "authorization failure without DA implications", // TPM_RC_BAD_AUTH
+        "authorizations for objects subject to DA protection are not allowed at this time", // TPM_RC_LOCKOUT
+    ];
+    if AUTH.iter().any(|a| msg.contains(a)) {
         StoreError::Declined
     } else {
         StoreError::Unavailable(msg)
