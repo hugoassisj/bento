@@ -23,3 +23,6 @@ pub mod tpm_linux;
 
 #[cfg(all(target_os = "linux", feature = "keyring"))]
 pub mod secret_linux;
+
+#[cfg(all(target_os = "linux", feature = "fido"))]
+pub mod fido_linux;

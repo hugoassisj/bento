@@ -26,6 +26,8 @@ secret-service = { version = "5", features = ["rt-async-io-crypto-rust"], option
 tpm = ["dep:tss-esapi"]
 # the Linux no-TPM key store (freedesktop Secret Service)
 keyring = ["dep:secret-service"]
+# security keys through the DISTRIBUTION libfido2 (>= 1.12), Linux only
+fido = []
 # the in-memory software key store: tests and rigs only, never a shipped path
 test-store = []
 
