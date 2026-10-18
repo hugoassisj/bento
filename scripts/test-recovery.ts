@@ -121,7 +121,7 @@ console.log('\nwhole blobs, end to end')
 
 console.log('\nscalars on import: in range, and matching the signed public half')
 for (const s of F.scalars) {
-  const v = unpackScalars(unhex(s.d), { accountPub: s.pub })
+  const v = await unpackScalars(unhex(s.d), { accountPub: s.pub })
   ok(s.expect === 'accept' ? v.ok : !v.ok && v.reason === s.reason, `${s.name} → ${s.expect === 'accept' ? 'accept' : `refused: ${s.reason}`}`)
 }
 
@@ -141,6 +141,27 @@ for (const alg of ['ECDSA', 'ECDH'] as const) {
   ok(agree === 8, `${alg}: publicKeyOf(d) equals WebCrypto's public key for 8 fresh key pairs`)
 }
 ok(publicKeyOf(new Uint8Array(32)) === null, 'publicKeyOf refuses scalar 0')
+
+// SHAPE: the recovered scalar never reaches the variable-time BigInt path. A
+// call graph over recovery.ts's top-level declarations: publicOf and its point
+// arithmetic must be unreachable from unpackScalars (security, #770).
+console.log('\nthe recovered scalar never reaches the variable-time path')
+{
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'kernel/src/recovery.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+  const starts = [...src.matchAll(/^(?:export )?(?:async )?(?:function|const) ([A-Za-z_]\w*)/gm)].map((m) => ({ name: m[1], at: m.index! }))
+  const body = new Map(starts.map((s, i) => [s.name, src.slice(s.at, starts[i + 1]?.at ?? src.length)]))
+  const calls = (name: string) => [...body.keys()].filter((n) => n !== name && new RegExp(`\\b${n}\\b`).test(body.get(name)!))
+  const reach = (from: string) => {
+    const seen = new Set([from]), todo = [from]
+    while (todo.length) for (const c of calls(todo.pop()!)) if (!seen.has(c)) { seen.add(c); todo.push(c) }
+    return seen
+  }
+  const r = reach('unpackScalars')
+  for (const bad of ['publicOf', 'publicKeyOf', 'add', 'dbl', 'inv', 'toBig']) ok(!r.has(bad), `${bad} is unreachable from unpackScalars`)
+  // non-vacuous: the graph sees these edges where they exist
+  ok(reach('publicKeyOf').has('dbl') && reach('openPrfBlob').has('scalarMatches'), 'the call graph sees real edges (publicKeyOf → dbl, openPrfBlob → scalarMatches)')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

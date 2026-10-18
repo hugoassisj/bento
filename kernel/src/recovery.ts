@@ -190,19 +190,57 @@ export function packScalars(keys: BlobKeys, mode: KxMode = KX_MODE): Uint8Array 
  * for the mode, every scalar in 1..n−1 (security §28), and each one's public
  * half equal to the public key in the directory-signed binding. A blob swapped by
  * a malicious directory fails closed here.
+ *
+ * These are RECOVERED PRIVATE SCALARS, so nothing here branches on their bits.
+ * The range check is a branch-free byte compare, and the match goes through the
+ * platform's crypto, never publicOf (variable-time double-and-add on BigInt,
+ * kept for the generator and the rig only). The scalar is imported as a JWK
+ * {d, x, y} with x, y from the stated public half (Chrome and Node refuse a
+ * mismatched pair), then signs a probe that must verify under that public key,
+ * so a platform that skips the pair check on import is caught too (security, #770).
  */
-export function unpackScalars(pt: Uint8Array, expected: { accountPub: string; kxPub?: string }, mode: KxMode = KX_MODE):
-  Verdict<BlobKeys> {
+export async function unpackScalars(pt: Uint8Array, expected: { accountPub: string; kxPub?: string }, mode: KxMode = KX_MODE):
+  Promise<Verdict<BlobKeys>> {
   const withKx = BLOB_KX[mode]
   if (pt.length !== (withKx ? 64 : 32)) return no('length')
   const scalars = withKx ? [pt.slice(0, 32), pt.slice(32)] : [pt.slice(0, 32)]
   const pubs = withKx ? [expected.accountPub, expected.kxPub] : [expected.accountPub]
   for (let i = 0; i < scalars.length; i++) {
-    const d = toBig(scalars[i])
-    if (d < 1n || d >= N) return no('scalar-range')
-    if (pubs[i] === undefined || publicOf(d) !== pubs[i]) return no('key-mismatch')
+    if (!scalarInRange(scalars[i])) return no('scalar-range')
+    if (pubs[i] === undefined || !(await scalarMatches(scalars[i], pubs[i]!))) return no('key-mismatch')
   }
   return { ok: true, value: withKx ? { account: scalars[0], kx: scalars[1] } : { account: scalars[0] } }
+}
+
+const N_BYTES = Uint8Array.from({ length: 32 }, (_, i) => Number((N >> BigInt(8 * (31 - i))) & 0xffn))
+
+/** 1 ≤ d < n for a 32-byte big-endian scalar, without branching on its bytes. */
+function scalarInRange(d: Uint8Array): boolean {
+  let nonzero = 0, lt = 0, gt = 0
+  for (let i = 0; i < 32; i++) {
+    const a = d[i], b = N_BYTES[i], open = 1 ^ (lt | gt)
+    lt |= open & (((a - b) >>> 31) & 1)
+    gt |= open & (((b - a) >>> 31) & 1)
+    nonzero |= a
+  }
+  return (lt & ((nonzero | -nonzero) >>> 31)) === 1
+}
+
+const PROBE = te.encode('bento/id/scalar-probe/v1')
+const ECDSA_P256 = { name: 'ECDSA', namedCurve: 'P-256' }
+
+/** Does the private scalar d belong to the raw public key pub? Platform crypto only. */
+async function scalarMatches(d: Uint8Array, pub: string): Promise<boolean> {
+  const raw = b64uDec(pub)
+  if (!raw || raw.length !== 65 || raw[0] !== 4) return false
+  try {
+    const priv = await crypto.subtle.importKey('jwk', {
+      kty: 'EC', crv: 'P-256', d: b64uEnc(d), x: b64uEnc(raw.slice(1, 33)), y: b64uEnc(raw.slice(33)), ext: false,
+    }, ECDSA_P256, false, ['sign'])
+    const pubKey = await crypto.subtle.importKey('raw', raw as BufferSource, ECDSA_P256, false, ['verify'])
+    const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, priv, PROBE as BufferSource)
+    return await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pubKey, sig, PROBE as BufferSource)
+  } catch { return false }
 }
 
 // --- AES-256-GCM ---------------------------------------------------------------------
