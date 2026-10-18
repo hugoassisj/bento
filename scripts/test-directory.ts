@@ -19,8 +19,9 @@
 //   · no raw address or IP is ever written to storage.
 
 import worker, { Address, Ledger, LIMITS } from '../server/directory/src/worker.js'
-import { normalize } from '../server/directory/src/address.js'
-import { b64u, bindText, completionText, deleteText, hashOf } from '../server/directory/src/statements.js'
+import { addressKey, normalize } from '../server/directory/src/address.js'
+import { b64uEnc, buildBind, buildCmp, buildDel, sha256b64u as hashOf, signStatement, verifyAtt, verifyTomb } from '../kernel/src/statements.ts'
+import { readFileSync } from 'node:fs'
 
 let fails = 0, passes = 0
 const ok = (c: unknown, n: string) => { if (c) passes++; else { fails++; console.log('FAIL ' + n) } }
@@ -64,17 +65,25 @@ const EC = { name: 'ECDSA', namedCurve: 'P-256' } as const
 const SIG = { name: 'ECDSA', hash: 'SHA-256' } as const
 async function signer() {
   const kp = (await crypto.subtle.generateKey(EC, true, ['sign', 'verify'])) as CryptoKeyPair
-  const pub = b64u.enc(await crypto.subtle.exportKey('raw', kp.publicKey))
-  return { pub, sign: async (t: string) => b64u.enc(await crypto.subtle.sign(SIG, kp.privateKey, new TextEncoder().encode(t))), kp }
+  const pub = b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)))
+  return { pub, sign: (t: string) => signStatement(kp.privateKey, t), kp }
 }
 async function kxPub() {
   const kp = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair
-  return b64u.enc(await crypto.subtle.exportKey('raw', kp.publicKey))
+  return b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)))
 }
+// the old field names, onto the kernel's builders
+const bindText = (b: { email: string; key: string; kx?: string | null; name?: string; seq: number; prev?: string; created: number; expires: number }) =>
+  buildBind({ address: b.email, accountPub: b.key, kx: b.kx ?? null, name: b.name ?? null, seq: b.seq, prev: b.prev ?? null, created: b.created, expires: b.expires })
+const completionText = buildCmp
+const deleteText = buildDel
 const dir = await signer()
 const dirJwk = JSON.stringify(await crypto.subtle.exportKey('jwk', dir.kp.privateKey))
-const verifyDir = async (text: string, sig: string) =>
-  crypto.subtle.verify(SIG, dir.kp.publicKey, b64u.dec(sig), new TextEncoder().encode(text))
+// the directory's answers, checked with the kernel's CLIENT verifiers, exactly as an agent will
+const DIR_KEYS = { 'dir-1': dir.pub }
+const verifyDirAtt = async (text: string, sig: string, bindText: string) =>
+  (await verifyAtt(text, sig, { directoryKeys: DIR_KEYS, bindText, now, maxAgeMs: 10 * MIN })).ok
+const verifyDirTomb = async (text: string, sig: string) => (await verifyTomb(text, sig, { directoryKeys: DIR_KEYS, now })).ok
 
 // ---------- env + mail capture ----------
 const mailbox: { to: string; body: string; code: string }[] = []
@@ -101,7 +110,7 @@ async function api(method: string, path: string, body?: unknown, ip = IP) {
 
 async function person(email: string, name?: string) {
   const k = await signer()
-  return { email, k, kx: await kxPub(), name }
+  return { email, k, kx: null as string | null, name } // the kx slot stays EMPTY until §6b is ruled
 }
 async function stmtFor(p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: string, life = 13 * MONTH) {
   const text = bindText({ email: p.email, key: p.k.pub, kx: p.kx, name: p.name, seq, prev, created: now, expires: Math.floor(now + life) })
@@ -126,6 +135,8 @@ const N: [string, string | null][] = [
   ['a@x-.com', null], ['a b@x.com', null], ['a@b@x.com', null], ['x'.repeat(65) + '@x.com', null],
   ['a@' + 'b'.repeat(63) + '.' + 'c'.repeat(63) + '.' + 'd'.repeat(63) + '.' + 'e'.repeat(60) + '.com', null],
 ]
+// the storage name is a domain-separated hash, pinned (a change orphans every stored address)
+ok(await addressKey('alice@example.com') === '123c19c9631499522f93afd25daf131a98d5e7483bdba996c9db3fc973468494', 'addressKey: known answer for sha256("bento-dir/1/addr\\n" + address)')
 for (const [i, want] of N) ok(normalize(i) === want, `normalize(${JSON.stringify(i).slice(0, 40)}) → ${want}`)
 
 // =====================================================================
@@ -139,7 +150,7 @@ const alice = await person('alice@example.com', 'Alice')
   ok(!mailbox[0].body.includes('Alice'), 'the mail carries no user-supplied text (not the display name)')
   ok(c.status === 200 && c.j.binding === s.text, `bind/complete → 200 with the exact statement (${c.status})`)
   const att = String(c.j.attestation)
-  ok(await verifyDir(att, String(c.j.attestationSig)), 'attestation verifies with the directory key')
+  ok(await verifyDirAtt(att, String(c.j.attestationSig), s.text), 'attestation passes the kernel client verifier (verifyAtt)')
   ok(att === `att.${await hashOf(s.text)}.${now}.${now}.dir-1.active`, `attestation names this exact text, state active (${att.slice(0, 30)}…)`)
 }
 {
@@ -148,7 +159,7 @@ const alice = await person('alice@example.com', 'Alice')
   ok(r.status === 200, 'lookup by exact address (case-insensitive) → 200')
   const f = String(r.j.attestation).split('.')
   ok(f[3] === String(now) && Number(f[2]) === now - HOUR, 'lookup re-issues the attestation: fresh issuedAt, original verifiedAt')
-  ok(await verifyDir(String(r.j.attestation), String(r.j.attestationSig)), 'lookup attestation verifies')
+  ok(await verifyDirAtt(String(r.j.attestation), String(r.j.attestationSig), String(r.j.binding)), 'lookup attestation passes verifyAtt')
   ok(r.h.get('access-control-allow-origin') === '*' && r.h.get('x-robots-tag')?.includes('noindex') && !r.h.get('set-cookie'), 'headers: CORS *, noindex, no cookie')
   ok((await api('GET', '/v1/lookup?e=nobody@example.com')).status === 404, 'unknown address → 404')
   ok((await api('GET', '/v1/lookup?e=alice@')).status === 400, 'malformed address → 400')
@@ -179,6 +190,16 @@ const alice = await person('alice@example.com', 'Alice')
   const p = await person('carol@example.com')
   const sameKx = bindText({ email: p.email, key: p.k.pub, kx: p.k.pub, seq: 1, created: now, expires: now + MONTH })
   ok((await api('POST', '/v1/bind/start', { stmt: sameKx, sig: await p.k.sign(sameKx) })).status === 400, 'kx == signing key → refused')
+  const kxFilled = bindText({ email: p.email, key: p.k.pub, kx: await kxPub(), seq: 1, created: now, expires: now + MONTH })
+  ok((await api('POST', '/v1/bind/start', { stmt: kxFilled, sig: await p.k.sign(kxFilled) })).status === 400, 'a filled kx slot → refused while the placement is unruled (§6b)')
+  const g0 = await stmtFor(p)
+  const raw = new Uint8Array(await crypto.subtle.sign(SIG, p.k.kp.privateKey, new TextEncoder().encode(g0.text)))
+  const N_ = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n
+  const sv = raw.subarray(32).reduce((x, v) => (x << 8n) | BigInt(v), 0n)
+  const hi = sv > N_ >> 1n ? sv : N_ - sv // force the high-S twin of the same signature
+  const hiSig = new Uint8Array(64); hiSig.set(raw.subarray(0, 32))
+  for (let i = 31, x = hi; i >= 0; i--, x >>= 8n) hiSig[32 + i] = Number(x & 0xffn)
+  ok((await api('POST', '/v1/bind/start', { stmt: g0.text, sig: b64uEnc(hiSig) })).status === 400, 'a high-S signature (the malleable twin) → refused')
   const long = await stmtFor(p, 1, undefined, 14 * MONTH)
   ok((await api('POST', '/v1/bind/start', { stmt: long.text, sig: long.sig })).status === 400, 'lifetime over 13 months → refused')
   const good = await stmtFor(p)
@@ -263,7 +284,7 @@ const alice = await person('alice@example.com', 'Alice')
   const l = await api('GET', '/v1/lookup?e=fran@example.com')
   const t = (l.j.tombstone ?? {}) as { text: string; sig: string }
   ok(l.status === 410 && t.text?.startsWith('tomb.') && t.text.split('.')[4] === 'holder', 'lookup → 410 with a holder tombstone')
-  ok(await verifyDir(t.text, t.sig), 'the tombstone is directory-signed')
+  ok(await verifyDirTomb(t.text, t.sig), 'the tombstone passes the kernel client verifier (verifyTomb)')
 
   now += 2 * MIN
   const g = await person('gina@example.com'); await bind(g)
@@ -284,6 +305,10 @@ const alice = await person('alice@example.com', 'Alice')
   const p = await person('hal@example.com'); await bind(p)
   now += 13 * MONTH + DAY
   ok((await api('GET', '/v1/lookup?e=hal@example.com')).status === 404, 'an expired binding answers 404, exactly like never-existed')
+  // its statement is still held, so the holder can still remove it (re-read as of
+  // when it was accepted: integrity, not freshness)
+  ok((await api('POST', '/v1/delete', { email: p.email, ts: now, sig: await p.k.sign(deleteText(p.email, now)) })).status === 204, 'the holder can still delete an EXPIRED binding')
+  ok((await api('GET', '/v1/lookup?e=hal@example.com')).status === 410, '…and it then answers 410 with a tombstone')
 }
 
 // =====================================================================
@@ -321,6 +346,28 @@ const alice = await person('alice@example.com', 'Alice')
   ok(!/@example\.com/.test(dump), 'no plaintext address anywhere in storage, beyond the signed statement it serves')
   ok(stores.every((m) => [...m.keys()].every((k) => k === 'ledger' || /^[0-9a-f]{64}$/.test(k))), 'every address object is named by a hash, never the address')
   ok(!/10\.0\.\d+\.\d+/.test(dump), 'no raw IP in storage')
+}
+
+// =====================================================================
+// the kernel's conformance vectors, end to end through the Worker
+// =====================================================================
+const V = JSON.parse(readFileSync(new URL('../kernel/fixtures/identity-v1.json', import.meta.url), 'utf8'))
+for (const r of V.addresses) {
+  const want = r.address ?? null
+  ok(normalize(r.input) === want, `vector address ${JSON.stringify(r.input).slice(0, 40)} → ${want ?? r.reason}`)
+}
+{
+  const saved = now
+  let n = 0
+  now = V.now
+  for (const v of V.statements.filter((x: { type: string; kxMode?: string }) => x.type === 'bind' && (x.kxMode ?? V.kxModeDefault) === V.kxModeDefault)) {
+    n++
+    const r = await api('POST', '/v1/bind/start', { stmt: v.text, sig: v.sig }, freshIp())
+    ok(r.status === (v.expect === 'accept' ? 202 : 400), `vector ${v.name} → ${r.status}`)
+  }
+  ok(n >= 8, `the bind vectors actually ran (${n})`)
+  now = saved
+  mailbox.length = 0
 }
 
 console.log(`${passes} passed, ${fails} failed`)

@@ -40,14 +40,18 @@ day's hashes can't be linked to the next.
 - per address: one mail a minute, 3 a day, 10 a month (the mail-bombing control)
 - per IP and hour: start 20, complete 60, lookup 300, delete 20
 
-## Status: scaffold, ahead of kernel's K2
+## Status
 
 The statement formats (`bind.`, `cmp.`, `del.`, `att.`, `tomb.`) and the
-address normalisation belong to the kernel, so the directory and every agent
-verify with one implementation and one set of test vectors. Until they land,
-`src/statements.js` and `src/address.js` carry the layouts agreed with kernel,
-marked **provisional**. They become imports of kernel's modules, with its
-vectors added to the rig.
+address normal form are the KERNEL's (`kernel/src/statements.ts`,
+`kernel/src/address.ts`), so the directory and every agent verify with one
+implementation. `src/statements.js` and `src/address.js` only add what is the
+directory's own: its online signing key and the storage name. The rig runs
+kernel's conformance vectors (`kernel/fixtures/identity-v1.json`) end to end
+through the Worker, and checks every answer with kernel's client verifiers.
+
+The `kx` slot in `bind.` stays EMPTY, and a filled one is refused, until the
+maintainer rules where the key-agreement key lives (kernel's `KX_MODE`).
 
 Phase 1 accepts **ASCII addresses only** (recommended, pending the
 maintainer's decision on international addresses): the platforms disagree on

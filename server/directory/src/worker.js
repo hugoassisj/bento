@@ -20,8 +20,17 @@
 
 import { addressKey, normalize } from './address.js'
 import {
-  attest, hashOf, importDirKey, tombstone as tombText, verifyBinding, verifyCompletion, verifyDelete,
+  attest, buildCmp, buildDel, hashOf, importDirKey, tombstone as tombText, verifyBind, verifyCmp, verifyDel,
 } from './statements.js'
+
+/** A bind. statement's fields, or null. `at` is the time it is judged at: now
+ *  for a new submission; for one the directory already accepted, the time it
+ *  accepted it (that re-check is integrity, not freshness; expiry is checked
+ *  separately, so an expired binding can still be read in order to delete it). */
+async function readBind(text, sig, at) {
+  const v = await verifyBind(text, sig, { now: at })
+  return v.ok ? v.value : null
+}
 
 const sha256hex = async (text) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('')
@@ -144,10 +153,10 @@ export default {
     if (p === '/v1/bind/start') {
       // ALWAYS 202 from here on, whatever happens: the answer must not reveal
       // whether the address exists, is rate-limited, or was mailed.
-      const binding = await verifyBinding(b.stmt, b.sig)
+      const binding = await readBind(b.stmt, b.sig, Date.now())
       if (!binding) return json(400, { error: 'bad-statement' }) // reveals nothing about the address
-      const email = normalize(binding.email)
-      if (!email || email !== binding.email) return json(400, { error: 'bad-address' })
+      const email = normalize(binding.address)
+      if (!email || email !== binding.address) return json(400, { error: 'bad-address' })
       if (!(await ledger(env, ip, 'start'))) return json(202, { ok: true })
       const r = await call(await addressStub(env, email), 'start', { stmt: b.stmt, sig: b.sig })
       if (r.body.mail) {
@@ -230,19 +239,20 @@ export class Address {
 
     if (a.op === 'start') {
       if (!(await mayMail())) return out(202, { mail: null })
-      const b = await verifyBinding(a.stmt, a.sig)
+      const b = await readBind(a.stmt, a.sig, now)
       if (!b) return out(202, { mail: null })
       const code = mintCode()
       await s.put('pend', { kind: 'bind', stmt: a.stmt, sig: a.sig, codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
-      return out(202, { mail: { code, fp: (await hashOf(b.key)).slice(0, 8) } })
+      return out(202, { mail: { code, fp: (await hashOf(b.accountPub)).slice(0, 8) } })
     }
 
     if (a.op === 'complete') {
       const p = await pending('bind')
       if (!p) return out(400, { error: 'invalid' })
-      const b = await verifyBinding(p.stmt, p.sig) // re-verified: storage is not trusted blindly
+      const b = await readBind(p.stmt, p.sig, now) // re-verified, and still within its lifetime
       const h = await hashOf(p.stmt)
-      if (!b || !same(await codeHash(a.code), p.codeHash) || !(await verifyCompletion(b.key, h, a.code, a.sig))) return fail(p)
+      if (!b || !same(await codeHash(a.code), p.codeHash)) return fail(p)
+      if (!(await verifyCmp(buildCmp(h, a.code), a.sig, { accountPub: b.accountPub, bindText: p.stmt })).ok) return fail(p)
       // sequence rules against what is live now
       const cur = await s.get('cur')
       const live = cur && cur.b.expires > now ? cur : null
@@ -251,13 +261,13 @@ export class Address {
       } else if (b.seq !== 1 && !(cur && b.seq === cur.b.seq + 1 && b.prev === cur.h)) {
         return fail(p) // a fresh start is seq 1; an expired binding may also be continued
       }
-      const rebound = !!live && live.b.key !== b.key // a new key with no old-key signature: pinners warn
+      const rebound = !!live && live.b.key !== b.accountPub // a new key with no old-key signature: pinners warn
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       const att = await attest(dirKey, this.env.DIR_KID, h, now, now)
       if (cur) await s.put('chain', [...((await s.get('chain')) || []), cur.h])
       // `b` keeps only what the service needs between requests — NOT the address
       // or the name, which live once, inside the signed statement it serves
-      await s.put('cur', { stmt: p.stmt, sig: p.sig, h, b: { key: b.key, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound })
+      await s.put('cur', { stmt: p.stmt, sig: p.sig, h, b: { key: b.accountPub, seq: b.seq, expires: b.expires }, verifiedAt: now, rebound })
       await s.delete(['pend', 'tomb'])
       return out(200, { binding: p.stmt, sig: p.sig, attestation: att.text, attestationSig: att.sig, rebound })
     }
@@ -277,16 +287,17 @@ export class Address {
 
     const tombstone = async (by) => {
       const cur = await s.get('cur')
-      const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
-      const t = await tombText(dirKey, this.env.DIR_KID, cur?.h, cur?.b.seq ?? 0, now, by)
       await s.delete(['cur', 'pend'])
-      await s.put('tomb', t)
+      if (!cur) return // nothing was bound: nothing to record
+      const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
+      await s.put('tomb', await tombText(dirKey, this.env.DIR_KID, cur.h, cur.b.seq, now, by))
     }
 
     if (a.op === 'delete') {
       const cur = await s.get('cur')
-      const b = cur && (await verifyBinding(cur.stmt, cur.sig)) // the address, read from the statement itself
-      if (!b || !(await verifyDelete(b.key, b.email, a.ts, a.sig, now))) return out(400, { error: 'invalid' })
+      const b = cur && (await readBind(cur.stmt, cur.sig, cur.verifiedAt)) // the address, read from the statement itself
+      if (!b || !Number.isSafeInteger(a.ts)) return out(400, { error: 'invalid' })
+      if (!(await verifyDel(buildDel(b.address, a.ts), a.sig, { accountPub: b.accountPub, now })).ok) return out(400, { error: 'invalid' })
       await tombstone('holder')
       return out(200, { deleted: true })
     }
