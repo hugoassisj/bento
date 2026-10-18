@@ -55,9 +55,16 @@ random, so a regeneration changes bytes but not verdicts.
   Unicode tables, so a character newly assigned to a category would be refused
   on one host and accepted on another, and a name would verify on one device
   and not the next. The table is frozen at Unicode 17.0 as explicit ranges, and
-  changing it is a format decision. On top of the table: NFC is required, at
-  most 64 code points, and ZWNJ/ZWJ (U+200C/U+200D) are allowed only mid-text.
-  (home-desktop found the drift.)
+  changing it is a format decision. It includes every code point UNASSIGNED at
+  17.0, the 66 noncharacters among them, because one assigned later could be
+  invisible. On top of the table: NFC is required, at most 64 code points, and
+  ZWNJ/ZWJ (U+200C/U+200D) are allowed only mid-text. (home-desktop found the
+  drift; security added the unassigned code points.)
+- **Compute NFC with Unicode 17.0 (or later) data.** Normalisation is stable
+  across versions only for assigned characters, and the table refuses
+  everything unassigned at 17.0. So any normaliser at 17.0 or later agrees on
+  every name the table lets through. A native port whose platform normaliser is
+  older than 17.0 must embed a 17.0 one.
 - **Spend the consent challenge FIRST.** A `cns.` attempt that gets past the
   grammar check must consume its challenge even when it is refused (rp, docId,
   transcript, expiry, signature). Otherwise a refused attempt's challenge stays

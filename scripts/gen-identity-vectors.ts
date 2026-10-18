@@ -131,6 +131,8 @@ let bind1 = ''
     ['\u2028', 'line separator'], ['\u2029', 'paragraph separator'], ['\u180E', 'Mongolian vowel separator'],
     ['\u00AD', 'soft hyphen'], ['\u0007', 'a control character'], ['\uE000', 'private use'],
     ['\u3164', 'Hangul filler (renders blank)'], ['\u115F', 'Hangul choseong filler'],
+    ['\u0378', 'an unassigned code point'], ['\uFFFF', 'a noncharacter (U+FFFF)'], ['\uFDD0', 'a noncharacter (U+FDD0)'],
+    ['\u{3FFFF}', 'a noncharacter in plane 3'],
   ] as const) {
     const t = buildBind({ ...base, name: `Al${c}ice` })
     row({ name: `bind: a name containing ${what} is refused`, type: 'bind', text: t, sig: await sign(account, t), expect: 'reject', reason: 'name' })

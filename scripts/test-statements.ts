@@ -165,7 +165,7 @@ console.log('\nthe display refusal set is FROZEN, not read from the platform\'s 
   ok(ascending, 'ranges are sorted, disjoint and non-adjacent (one canonical table)')
   // The categories it was frozen from. Compared only on a runtime whose tables ARE
   // that version; on another Node the categories may differ, which is the point.
-  const re = /[\p{Cc}\p{Co}\p{Zl}\p{Zp}\u115F\u1160\u3164\uFFA0]|(?![\u200C\u200D])\p{Cf}/u
+  const re = /[\p{Cc}\p{Co}\p{Cn}\p{Zl}\p{Zp}\u115F\u1160\u3164\uFFA0]|(?![\u200C\u200D])\p{Cf}/u
   if (process.versions.unicode === DISPLAY_FORBIDDEN_UNICODE) {
     let same = true
     for (let c = 0; c <= 0x10ffff; c++) {
@@ -177,6 +177,10 @@ console.log('\nthe display refusal set is FROZEN, not read from the platform\'s 
     console.log(`  note  runtime is Unicode ${process.versions.unicode}; the frozen table (${DISPLAY_FORBIDDEN_UNICODE}) is authoritative, category check skipped`)
   }
   ok(!displayForbidden(0x200c) && !displayForbidden(0x200d), 'ZWNJ and ZWJ are not in the table (refused only at either end)')
+  const nonchars = [...Array.from({ length: 32 }, (_, i) => 0xfdd0 + i), ...Array.from({ length: 17 }, (_, p) => [p * 0x10000 + 0xfffe, p * 0x10000 + 0xffff]).flat()]
+  ok(nonchars.length === 66 && nonchars.every(displayForbidden), 'all 66 noncharacters are refused')
+  ok(displayForbidden(0x0378) && displayForbidden(0x3ffff), 'unassigned code points (U+0378, U+3FFFF) are refused')
+  ok(!displayForbidden(0x1f469) && !displayForbidden(0x06cc) && !displayForbidden(0x0041), 'assigned letters and emoji are not')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

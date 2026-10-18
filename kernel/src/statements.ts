@@ -34,6 +34,7 @@
 //     signature here is a rejection, so a forgotten conversion fails loudly.
 
 import { isNormalAddress } from './address.ts'
+import { DISPLAY_FORBIDDEN_FLAT, DISPLAY_FORBIDDEN_UNICODE } from './display-table.ts'
 import type { SignPurpose } from './identity.ts'
 
 // --- strict base64url --------------------------------------------------------
@@ -75,6 +76,9 @@ function freeText(f: string): string | null {
  * of anything invisible or layout-changing that could make "alice ✓" read as
  * something else on screen. Refused:
  *   - controls (Cc), private use (Co), line and paragraph separators (Zl, Zp);
+ *   - UNASSIGNED code points (Cn), the 66 noncharacters among them: one assigned
+ *     later could be an invisible format character, and NFC is stable across
+ *     Unicode versions only for assigned characters (security, #764);
  *   - every format character (Cf): bidi overrides and marks (including U+061C),
  *     zero-width space, word joiner, BOM, soft hyphen, the Mongolian vowel
  *     separator — EXCEPT ZWNJ/ZWJ (U+200C/U+200D), which Persian, Indic scripts
@@ -87,22 +91,29 @@ function freeText(f: string): string | null {
  * General categories come from each platform's Unicode tables, so a character
  * newly assigned to Cf would be refused by one host and accepted by another until
  * both updated, and a name would verify on one device and not the next. These
- * ranges are the categories above as of Unicode 17.0 (the fixture carries the
- * same table for the native hosts, and the rig recomputes it). Changing them is
- * a deliberate format decision, never a side effect of a platform update.
+ * ranges are the categories above as of Unicode 17.0, generated into
+ * kernel/src/display-table.ts by scripts/gen-display-table.ts (which refuses to
+ * run on any other Unicode version); the fixture carries the same table for the
+ * native hosts, and the rig recomputes it. Changing it is a deliberate format
+ * decision, never a side effect of a platform update.
  */
 const MAX_DISPLAY = 64
-export const DISPLAY_FORBIDDEN_UNICODE = '17.0'
-export const DISPLAY_FORBIDDEN_RANGES: ReadonlyArray<readonly [number, number]> = Object.freeze([
-  [0x0000, 0x001f], [0x007f, 0x009f], [0x00ad, 0x00ad], [0x0600, 0x0605], [0x061c, 0x061c],
-  [0x06dd, 0x06dd], [0x070f, 0x070f], [0x0890, 0x0891], [0x08e2, 0x08e2], [0x115f, 0x1160],
-  [0x180e, 0x180e], [0x200b, 0x200b], [0x200e, 0x200f], [0x2028, 0x202e], [0x2060, 0x2064],
-  [0x2066, 0x206f], [0x3164, 0x3164], [0xe000, 0xf8ff], [0xfeff, 0xfeff], [0xffa0, 0xffa0],
-  [0xfff9, 0xfffb], [0x110bd, 0x110bd], [0x110cd, 0x110cd], [0x13430, 0x1343f], [0x1bca0, 0x1bca3],
-  [0x1d173, 0x1d17a], [0xe0001, 0xe0001], [0xe0020, 0xe007f], [0xf0000, 0xffffd], [0x100000, 0x10fffd],
-].map((r) => Object.freeze(r) as readonly [number, number]))
+export { DISPLAY_FORBIDDEN_UNICODE }
+/** The frozen table as [first, last] pairs (kernel/src/display-table.ts, generated). */
+export const DISPLAY_FORBIDDEN_RANGES: ReadonlyArray<readonly [number, number]> = Object.freeze(
+  Array.from({ length: DISPLAY_FORBIDDEN_FLAT.length / 2 },
+    (_, i) => Object.freeze([DISPLAY_FORBIDDEN_FLAT[2 * i], DISPLAY_FORBIDDEN_FLAT[2 * i + 1]]) as readonly [number, number])
+)
+/** Is this code point refused in display text? A binary search over the frozen ranges. */
 export function displayForbidden(cp: number): boolean {
-  for (const [a, b] of DISPLAY_FORBIDDEN_RANGES) { if (cp < a) return false; if (cp <= b) return true }
+  let lo = 0, hi = DISPLAY_FORBIDDEN_RANGES.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const [a, b] = DISPLAY_FORBIDDEN_RANGES[mid]
+    if (cp < a) hi = mid - 1
+    else if (cp > b) lo = mid + 1
+    else return true
+  }
   return false
 }
 const ZWNJ = 0x200c, ZWJ = 0x200d
