@@ -16,7 +16,7 @@
 import 'fake-indexeddb/auto'
 import { configureApp } from '../kernel/src/app.ts'
 import { putRecovery, getRecovery, addVersion, listVersions, clearRecovery, clearVersions } from '../kernel/src/autosave.ts'
-import { setIdentitySeal, setEncryptionPassword, isBodySealed } from '../kernel/src/save.ts'
+import { setIdentitySeal, setEncryptionPassword, isBodySealed, storeRefusalCount } from '../kernel/src/save.ts'
 
 let failures = 0
 let checks = 0
@@ -53,6 +53,20 @@ for (const [label, seal, unseal] of [
   unseal()
   ok((await getRecovery('doc-a'))?.title === 'ZZ A ZZ', 'unsealed again: the refused write never landed (the old copy is untouched)')
   ok((await listVersions('doc-a')).length === 1, 'and no version was added while sealed')
+}
+
+console.log('\nthe refusal counter, directly: each refused call counts once, nothing else counts')
+{
+  const n0 = storeRefusalCount()
+  await putRecovery(docOf('doc-c', 'c')); await addVersion(docOf('doc-c', 'c'))
+  await getRecovery('doc-c'); await listVersions('doc-c')
+  ok(storeRefusalCount() === n0, 'unsealed: four store calls, the counter unchanged')
+  setIdentitySeal(kdoc)
+  await putRecovery(docOf('doc-c', 'c')); await addVersion(docOf('doc-c', 'c'))
+  ok(storeRefusalCount() === n0 + 2, 'sealed: putRecovery + addVersion raise it by exactly 2')
+  await clearRecovery('doc-c'); await clearVersions('doc-c')
+  ok(storeRefusalCount() === n0 + 2, 'sealed: the purge is not a refusal (unchanged)')
+  setIdentitySeal(null)
 }
 
 console.log('\nthe purge still works while sealed, for that document only')

@@ -72,7 +72,7 @@ function consumeTestSeal() {
     body: (doc: KernelDoc) => encodeDocBody(doc),
     file: (doc: KernelDoc) => serializeAuto(doc),
     fileName: (doc: KernelDoc) => suggestedFileName(doc),
-    storeRefusals: () => storeRefusals,
+    storeRefusals: () => storeRefusalCount(),
   })
 }
 
@@ -539,6 +539,9 @@ export const isBodySealed = () => encPassword !== null || sealBodyKey !== null
  */
 let storeRefusals = 0
 export function noteStoreRefusal(): void { storeRefusals++ }
+/** For rigs only (node, or a page through the test probe). Unreachable from page
+ *  script in a release: a module export inside the bundle, and unused there. */
+export function storeRefusalCount(): number { return storeRefusals }
 
 /** Parse a data-block body as an encryption envelope; null if it is not one. */
 export function parseEnvelope(text: string): EncEnvelope | null {
