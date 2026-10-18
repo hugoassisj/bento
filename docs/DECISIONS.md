@@ -10951,9 +10951,14 @@ Settled here, so other zones don't redefine them:
   `delegate`, `show`, `invite`, `revoke`. A signature is locked to its purpose.
   The shared payload matcher and its vectors come with the statement formats
   (K2).
-- **Capture.** A valid agent is captured once, with its methods bound and the
-  object frozen, so a later change to the global can't redirect a call. An
-  absent agent is not cached, so a host that defines it late is still found.
+- **What a host must define.** The global is a non-writable, non-configurable
+  DATA property, never a getter. The agent object is frozen. Its methods are
+  closures, because they are called with `this` undefined. Anything else is
+  treated as no agent. Together these rules mean neither the page nor anything
+  later can redirect a call after capture: not by swapping the global, not by
+  patching the object, and not through `this` (security, #759).
+- **Capture.** A valid agent is captured once. An absent agent is not cached,
+  so a host that defines it late is still found.
 
 This change is contract only, with no callers. `scripts/test-identity.ts` pins
 that no runtime module imports it yet.
