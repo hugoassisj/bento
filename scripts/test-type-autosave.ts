@@ -210,7 +210,7 @@ H('a recovery snapshot with NO signatures keeps the live signature, which reads 
   ok(store.doc.revisions.length === 2, "the restore takes the snapshot's revisions")
   const v = await verifyAll(store.doc, store.doc.signatures)
   ok(v.entries.length === 1 && v.entries[0].sig.name === 'Bob', "and Bob's signature SURVIVES the restore")
-  ok(v.entries[0].ok && v.entries[0].history === 'changed', 'it still attests the content, and reads its history CHANGED — never matches')
+  ok(!!v.entries[0]?.ok && v.entries[0]?.history === 'changed', 'it still attests the content, and reads its history CHANGED — never matches')
 }
 
 H('ruling 7: restore UNIONS signatures and removals, in both directions (security addendum)')
@@ -239,7 +239,7 @@ H('ruling 7: restore UNIONS signatures and removals, in both directions (securit
     const live = JSON.parse(JSON.stringify(d)); live.sigRemovals = { [id]: t }          // removed AFTER the snapshot
     const st = new Store(live); st.restore(gateRestored(JSON.stringify(d), st.doc)!, 'recover')
     const v = await verifyAll(st.doc, st.doc.signatures, { removals: st.doc.sigRemovals })
-    ok(v.entries[0].removal === 'removed', 'a removal only in the LIVE document stays removed after recover — a restore never un-removes')
+    ok(v.entries[0]?.removal === 'removed', 'a removal only in the LIVE document stays removed after recover — a restore never un-removes')
     void s1
   }
   {
@@ -247,7 +247,7 @@ H('ruling 7: restore UNIONS signatures and removals, in both directions (securit
     const snap = JSON.parse(JSON.stringify(d)); snap.sigRemovals = { [id]: t }          // removed only in the snapshot
     const st = new Store(JSON.parse(JSON.stringify(d))); st.restore(gateRestored(JSON.stringify(snap), st.doc)!, 'recover')
     const v = await verifyAll(st.doc, st.doc.signatures, { removals: st.doc.sigRemovals })
-    ok(v.entries[0].removal === 'removed', 'a removal only in the SNAPSHOT stays removed after recover')
+    ok(v.entries[0]?.removal === 'removed', 'a removal only in the SNAPSHOT stays removed after recover')
   }
   {
     // an INVALID or UNAUTHORISED removal, from either side, removes nothing
@@ -260,8 +260,8 @@ H('ruling 7: restore UNIONS signatures and removals, in both directions (securit
         ;(side === 'live' ? live : snap).sigRemovals = { [id]: bad }
         const st = new Store(live); st.restore(gateRestored(JSON.stringify(snap), st.doc)!, 'recover')
         const v = await verifyAll(st.doc, st.doc.signatures, { removals: st.doc.sigRemovals, owner: 'SOME-OWNER' })
-        ok(v.entries.length === 1 && v.entries[0].ok && v.entries[0].removal === verdict,
-          `${label} removal from the ${side} side removes nothing (${v.entries[0].removal})`)
+        ok(v.entries.length === 1 && !!v.entries[0]?.ok && v.entries[0]?.removal === verdict,
+          `${label} removal from the ${side} side removes nothing (${v.entries[0]?.removal})`)
       }
     }
   }
