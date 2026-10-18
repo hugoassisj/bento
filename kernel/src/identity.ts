@@ -56,9 +56,16 @@ export interface PublicIdentity {
  *   show     — `live`/`end` and `${kind}.aud.${i}`, presenting controls (routine)
  *   invite   — `inv.${pub}.${role}.${exp}`, an owner granting a role (high authority)
  *   revoke   — `rev.${pub}`, an owner removing a key (high authority)
- * High-authority purposes get the host's own consent prompt and the consent
- * key every time; routine ones ride the session (security §2e). The shared
- * payload matcher and its test vectors land with the statement formats (K2).
+ * Routine purposes are signed with the DEVICE key and ride the session (§2e).
+ * The high-authority ones are signed with the room's OWNER key, which the relay
+ * verifies. In phase 1 that key still lives in the document file and the kernel
+ * signs with it directly, exactly as today: no agent holds an owner key, so a
+ * phase-1 agent refuses `invite`/`revoke` ('unavailable'). The agent holds an
+ * owner key only once a document converts to identity mode (phase 2). Then it
+ * signs `inv.`/`rev.` after its own consent prompt, and the CONSENT key signs a
+ * separate `cns.` (statements.ts) that travels beside it. A cns. needs the
+ * verifier's audience and challenge, so phase 2 adds a call that carries them;
+ * this contract version has none. The shared payload matcher is statements.ts.
  */
 export type SignPurpose = 'frame' | 'prove' | 'delegate' | 'show' | 'invite' | 'revoke'
 

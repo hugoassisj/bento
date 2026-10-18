@@ -35,6 +35,7 @@
 //     signature here is a rejection, so a forgotten conversion fails loudly.
 
 import { isNormalAddress } from './address.js'
+import { DISPLAY_FORBIDDEN_FLAT, DISPLAY_FORBIDDEN_UNICODE } from './display-table.ts'
                                                 
 
 // --- strict base64url --------------------------------------------------------
@@ -71,15 +72,61 @@ function freeText(f        )                {
   return b64uEnc(utf8(t)) === f ? t : null
 }
 
-/** Display text a person sees (a name, a device label): bounded, and free of
- *  controls and bidirectional overrides, which could make "alice ✓" read as
- *  something else on screen. */
+/**
+ * Display text a person sees (a name, a device label): bounded, in NFC, and free
+ * of anything invisible or layout-changing that could make "alice ✓" read as
+ * something else on screen. Refused:
+ *   - controls (Cc), private use (Co), line and paragraph separators (Zl, Zp);
+ *   - UNASSIGNED code points (Cn), the 66 noncharacters among them: one assigned
+ *     later could be an invisible format character, and NFC is stable across
+ *     Unicode versions only for assigned characters (security, #764);
+ *   - every format character (Cf): bidi overrides and marks (including U+061C),
+ *     zero-width space, word joiner, BOM, soft hyphen, the Mongolian vowel
+ *     separator — EXCEPT ZWNJ/ZWJ (U+200C/U+200D), which Persian, Indic scripts
+ *     and emoji sequences need, and which are refused only at either end;
+ *   - the Hangul fill letters U+115F, U+1160, U+3164, U+FFA0, which render blank.
+ * No filter stops homoglyphs, so a name is SELF-ASSERTED and must never be shown
+ * without the verified address beside it (docs/DECISIONS.md).
+ *
+ * The set is FROZEN as explicit code-point ranges, not resolved through `\p{…}`.
+ * General categories come from each platform's Unicode tables, so a character
+ * newly assigned to Cf would be refused by one host and accepted by another until
+ * both updated, and a name would verify on one device and not the next. These
+ * ranges are the categories above as of Unicode 17.0, generated into
+ * kernel/src/display-table.ts by scripts/gen-display-table.ts (which refuses to
+ * run on any other Unicode version); the fixture carries the same table for the
+ * native hosts, and the rig recomputes it. Changing it is a deliberate format
+ * decision, never a side effect of a platform update.
+ */
 const MAX_DISPLAY = 64
-const DISPLAY_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩‎‏]/
+export { DISPLAY_FORBIDDEN_UNICODE }
+/** The frozen table as [first, last] pairs (kernel/src/display-table.ts, generated). */
+export const DISPLAY_FORBIDDEN_RANGES                                           = Object.freeze(
+  Array.from({ length: DISPLAY_FORBIDDEN_FLAT.length / 2 },
+    (_, i) => Object.freeze([DISPLAY_FORBIDDEN_FLAT[2 * i], DISPLAY_FORBIDDEN_FLAT[2 * i + 1]])                             )
+)
+/** Is this code point refused in display text? A binary search over the frozen ranges. */
+export function displayForbidden(cp        )          {
+  let lo = 0, hi = DISPLAY_FORBIDDEN_RANGES.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const [a, b] = DISPLAY_FORBIDDEN_RANGES[mid]
+    if (cp < a) hi = mid - 1
+    else if (cp > b) lo = mid + 1
+    else return true
+  }
+  return false
+}
+const ZWNJ = 0x200c, ZWJ = 0x200d
 function displayText(f        )                {
   const t = freeText(f)
   if (t === null || t.length === 0) return null
-  if ([...t].length > MAX_DISPLAY || DISPLAY_FORBIDDEN.test(t)) return null
+  const cps = [...t].map((c) => c.codePointAt(0) )
+  if (cps.length > MAX_DISPLAY) return null
+  if (t.normalize('NFC') !== t) return null
+  if (cps.some(displayForbidden)) return null
+  const ends = [cps[0], cps[cps.length - 1]]
+  if (ends.some((c) => c === ZWNJ || c === ZWJ)) return null
   return t
 }
 
@@ -511,7 +558,10 @@ export function buildConsent(c         )         {
  * OWN audience, the challenge it issued and the payload it is about to apply —
  * it never trusts a transcript from the request. `spend(challenge)` must mark
  * the challenge used and return false if it was already spent or has expired;
- * it is called first, so any attempt consumes the challenge.
+ * it is called first, so any attempt consumes the challenge. That is the right
+ * default for races (no second try against one challenge), and it relies on
+ * challenges being SESSION-BOUND: one issued to one session, so a stranger who
+ * spends it can only fail that session's attempt, never take it over.
  *
  * `consentPub` must come from a verified dev. certificate's consentPub field;
  * that is what makes it a consent key and not merely a key.
@@ -562,10 +612,15 @@ export const webauthnChallengeFor = (cnsText        )                  => sha256
 
 /**
  * Prefixes reserved for statements not defined yet, so nothing else takes them:
- *   pk. — an account-signed passkey statement (phase 2), for room-audience
- *         verifiers of light-tier consent. Never the dev. consentPub slot.
+ *   pk.   — an account-signed passkey statement (phase 2), for room-audience
+ *           verifiers of light-tier consent. Never the dev. consentPub slot.
+ *   drev. — an account-signed device revocation. Not needed in phase 1: a device
+ *           retired without rotating the account key is one whose hardware-wrapped
+ *           keys were destroyed by a confirmed wipe, so its dev. cert names a key
+ *           nobody holds. It arrives with per-device kx, when senders wrap to
+ *           device keys (security §25b).
  */
-export const RESERVED_PREFIXES                    = Object.freeze(['pk'])
+export const RESERVED_PREFIXES                    = Object.freeze(['pk', 'drev'])
 
 // --- routine signing: what payload each SignPurpose (identity.ts) may sign ----
 
