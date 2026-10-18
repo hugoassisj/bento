@@ -174,6 +174,23 @@ ok(exportCopy.includes('hasPrefix(') && exportCopy.includes('safeFileName(name)'
     'the app builds for Mac Catalyst, as page.bento.home on every Apple platform')
 }
 
+// The per-document store (HostDocStore). The bridge offers it only when the host
+// DECLARES it, so the capability must be declared ahead of the bridge source. And
+// the partition is the document's own origin, never a value the page sent: a
+// page that could name a partition could read another document's member key.
+{
+  ok(/__bentoHostCaps = \['store'\];[^]*?caps \+ src/.test(swift),
+    'the host declares its store capability ahead of the injected bridge')
+  const store = slice(swift, 'private func handleStore(')
+  ok(/let partition = originHost/.test(store) && !/m\["partition"\]|m\["origin"\]|m\["host"\]/.test(store),
+    "the store partition is this document's origin, never a value from the page")
+  ok(/HostDocStore\.Name\.init\(rawValue:\)/.test(store) && /"refused"/.test(store),
+    'a name the kernel does not use is refused')
+  const sw = swift.slice(swift.indexOf('func userContentController('), swift.indexOf('case "store.get", "store.set"'))
+  ok(sw.indexOf('BridgeSender.accepts') > 0,
+    "store requests pass the same sender check as every other op (they're handled after it)")
+}
+
 if (spawnSync('swiftc', ['--version']).status !== 0) {
   console.log('  skip  no Swift toolchain on this machine — behaviour checks not run')
   console.log(`\n${checks - failures}/${checks} checks passed`)
