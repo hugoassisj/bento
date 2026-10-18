@@ -111,14 +111,28 @@ export async function rawPub(publicKey) {
  * a fresh challenge with it and verify under the stated public key. A blob the
  * directory swapped yields a key that fails here.
  */
-/** the P-256 group order */
-const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n
+/** the P-256 group order, as 32 big-endian bytes */
+const N_BYTES = Uint8Array.from([
+  0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+  0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17, 0x9e, 0x84, 0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51,
+])
 
-/** A scalar in 1..n−1 (security §28): checked before any platform sees it. */
+/**
+ * 1 ≤ d < n for a 32-byte big-endian scalar (security §28) — WITHOUT branching
+ * on its bytes. These are recovered PRIVATE scalars, so the check must not take
+ * a different time for different values (no BigInt, no early exit). The same
+ * branch-free compare as kernel/src/recovery.ts.
+ */
 export const scalarInRange = (d) => {
   if (!(d instanceof Uint8Array) || d.length !== 32) return false
-  const v = d.reduce((x, b) => (x << 8n) | BigInt(b), 0n)
-  return v > 0n && v < N
+  let nonzero = 0, lt = 0, gt = 0
+  for (let i = 0; i < 32; i++) {
+    const a = d[i], b = N_BYTES[i], open = 1 ^ (lt | gt)
+    lt |= open & (((a - b) >>> 31) & 1)
+    gt |= open & (((b - a) >>> 31) & 1)
+    nonzero |= a
+  }
+  return (lt & ((nonzero | -nonzero) >>> 31)) === 1
 }
 
 export async function importAccount(d, accountPubRaw, { extractable = false, crypto: c = globalThis.crypto } = {}) {
