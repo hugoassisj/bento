@@ -341,6 +341,23 @@ H('ruling 7: SigId is derived from what was signed (row 8)');
   ok(!misfiled.ok && misfiled.entries[0].why === 'bad-id', 'an entry under a key its own fields do not produce is INVALID');
   const both = await verifyAll(d, { [id]: a, [idOf(d, again)]: again });
   ok(both.entries.length === 1, 'the same signature delivered twice is ONE key');
+
+  // TWO SIGNERS, IDENTICAL TEXT. The signed text holds no key, so two people
+  // co-signing the same version under the same (or an empty) name sign the very
+  // same bytes. The key is what tells them apart: without it in the SigId one
+  // would overwrite the other in the map.
+  const { parseDoc } = await import('../type/src/model.ts');
+  const k1 = await newKey(), k2 = await newKey();
+  for (const nm of ['', 'Same Name']) {
+    const s1 = await sign(d, k1, { name: nm }), s2 = await sign(d, k2, { name: nm });
+    ok(s1.content === s2.content && s1.history === s2.history && s1.prev === s2.prev && s1.name === s2.name && s1.pub !== s2.pub,
+       `  (two keys signed identical text, name ${JSON.stringify(nm)})`);
+    ok(idOf(d, s1) !== idOf(d, s2), `two signers of identical text get DISTINCT SigIds (name ${JSON.stringify(nm)})`);
+    const merged = await verifyAll(d, keyed(d, s1, s2));
+    ok(merged.entries.length === 2 && merged.ok, 'and both survive side by side, and both verify');
+    const conv = parseDoc(JSON.stringify({ ...d, signatures: [s1, s2] }));
+    ok(conv.ok && Object.keys(conv.doc.signatures).length === 2, 'an old array holding both converts to two keys, not one');
+  }
 }
 
 H('ruling 7: old files convert on open (row 10)');
@@ -412,6 +429,17 @@ H('the synchronous SHA-256 behind SigId (sha256.ts)');
     if (hex(sha256(data)) !== hex(new Uint8Array(await crypto.subtle.digest('SHA-256', data)))) bad++;
   }
   ok(bad === 0, `matches WebCrypto on random input of every length 0..200 (${bad} mismatches)`);
+  let big = 0;
+  for (const n of [4095, 4096, 4097, 65535, 65536, 1 << 20]) {
+    const data = crypto.getRandomValues(new Uint8Array(Math.min(n, 65536)));
+    const full = new Uint8Array(n); for (let i = 0; i < n; i += data.length) full.set(data.subarray(0, Math.min(data.length, n - i)), i);
+    if (hex(sha256(full)) !== hex(new Uint8Array(await crypto.subtle.digest('SHA-256', full)))) big++;
+  }
+  ok(big === 0, `and on large inputs around block and buffer boundaries, up to 1 MiB (${big} mismatches)`);
+  const backing = crypto.getRandomValues(new Uint8Array(500));
+  const view = backing.subarray(13, 13 + 333);                    // an offset VIEW into a bigger buffer
+  ok(hex(sha256(view)) === hex(new Uint8Array(await crypto.subtle.digest('SHA-256', view.slice()))),
+     'and on a subarray view at an offset (it hashes the view, not the whole buffer)');
 }
 
 H('signing again after an edit — the past is reported honestly');
