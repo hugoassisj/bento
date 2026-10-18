@@ -471,6 +471,8 @@ here rather than discovered later.
 | FSA polyfill | `home/bridge.js` | `home/bridge.js` | **one shared file** |
 | per-document origin | `bento-tray://<host>`: follows the FILE (its document identifier), not the path — `OriginIdentity` | `https://<sha24>.bento-tray.invalid`, intercepted — from the URI | **differs** (Android fixing) |
 | a document is served only under its own host | ✓ | — | — |
+| member key and recovery copy held by the host, not web storage (the kernel's docstore; see DECISIONS, the native docstore entry) | Keychain (this device only) + app-private file — `HostDocStore` | Keystore-backed — see that entry | same |
+| a moved document keeps its store | ✓ (its document identifier survives a move) | ✗ by design: an outside move gets a fresh claim, and the old store is orphaned, never cleared | differs |
 | document served from memory, never parsed | ✓ | ✓ | same |
 | bridge injected at document start | `WKUserScript(.atDocumentStart)` | `addDocumentStartJavaScript` | same |
 | bridge reachable only from the document | every message checked: main frame + own origin (`BridgeSender`) | `allowedOriginRules` + `isMainFrame` | same |
