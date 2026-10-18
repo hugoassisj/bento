@@ -81,7 +81,7 @@ do {
   e("trip.other", IdentityKeys.checkEnrolment(Y, in: m) == .changed)
   e("trip.lost", IdentityKeys.checkEnrolment(nil, in: m) == .changed)
   // through the gate, as the agent does: queue the notice, then accept
-  _ = IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 1, in: m)
+  _ = IdentityKeys.enrolmentGate(Y, device: "iPhone", devices: ["devA"], now: 1, in: m)
   IdentityKeys.acceptEnrolment(Y, in: m)
   e("trip.accepted", IdentityKeys.checkEnrolment(Y, in: m) == .unchanged && IdentityKeys.checkEnrolment(X, in: m) == .changed)
   let n0 = Mem()
@@ -96,27 +96,44 @@ do {
 do {
   let m = Mem(), X = Data("faceX".utf8), Y = Data("faceY".utf8)
   _ = try! IdentityKeys.device(.consent, in: m, enclave: false, domainState: { X })
-  e("gate.same", IdentityKeys.enrolmentGate(X, device: "iPhone", now: 1, in: m) == .proceed)
+  e("gate.same", IdentityKeys.enrolmentGate(X, device: "iPhone", devices: ["devA", "devB"], now: 1, in: m) == .proceed)
   e("gate.noaccept.before", !IdentityKeys.acceptEnrolment(Y, in: m) && IdentityKeys.checkEnrolment(Y, in: m) == .changed)
-  e("gate.changed", IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 2, in: m) == .reconfirm)
+  e("gate.changed", IdentityKeys.enrolmentGate(Y, device: "iPhone", devices: ["devA", "devB", "devC"], now: 2, in: m) == .reconfirm)
   e("gate.queued", (IdentityKeys.pendingNotices(in: m) ?? []).count == 1)
   // the agent is killed here, before acceptEnrolment. A fresh process, the same store:
   let restarted = m
   e("gate.survives", (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1 && IdentityKeys.checkEnrolment(Y, in: restarted) == .changed)
-  e("gate.idempotent", IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 3, in: restarted) == .reconfirm && (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
-  e("gate.accept", IdentityKeys.acceptEnrolment(Y, in: restarted) && IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 4, in: restarted) == .proceed)
+  e("gate.idempotent", IdentityKeys.enrolmentGate(Y, device: "iPhone", devices: ["devA", "devB", "devC"], now: 3, in: restarted) == .reconfirm && (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
+  e("gate.accept", IdentityKeys.acceptEnrolment(Y, in: restarted) && IdentityKeys.enrolmentGate(Y, device: "iPhone", devices: ["devA", "devB", "devC"], now: 4, in: restarted) == .proceed)
   e("gate.stillqueued", (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
+  let D = 86_400_000
   if let n = IdentityKeys.pendingNotices(in: restarted)?.first {
-    let everyone: Set<String> = ["devA", "devB", "address"]
-    _ = IdentityKeys.markDelivered(n, to: "devA", of: everyone, in: restarted)
-    _ = IdentityKeys.markDelivered(n, to: "address", of: everyone, in: restarted)
-    e("gate.partial", (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
-    e("gate.stranger", !IdentityKeys.markDelivered(n, to: "mallory", of: everyone, in: restarted))
-    _ = IdentityKeys.markDelivered(n, to: "devB", of: everyone, in: restarted)
-    e("gate.sent", IdentityKeys.pendingNotices(in: restarted)?.isEmpty ?? false)
-  } else { e("gate.sent", "no notice was ever queued"); e("gate.partial", "none"); e("gate.stranger", "none") }
+    e("snap.recipients", n.recipients == ["devA", "devB", "devC", "address"])
+    // the thief removes devB and devC from the device list: nothing here changes
+    _ = IdentityKeys.markDelivered(n, to: "devA", now: 10, in: restarted)
+    _ = IdentityKeys.markDelivered(n, to: "address", now: 10, in: restarted)
+    e("snap.partial", (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
+    e("snap.stranger", !IdentityKeys.markDelivered(n, to: "mallory", now: 10, in: restarted))
+    e("snap.removedStillCounts", IdentityKeys.markDelivered(n, to: "devB", now: 11, in: restarted) && (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
+    IdentityKeys.sweepNotices(now: 2 + 6 * D, in: restarted)
+    e("snap.beforeTimeout", (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
+    IdentityKeys.sweepNotices(now: 2 + 7 * D, in: restarted)
+    e("snap.afterTimeout", IdentityKeys.pendingNotices(in: restarted)?.isEmpty ?? false)
+  } else { for k in ["snap.recipients", "snap.partial", "snap.stranger", "snap.removedStillCounts", "snap.beforeTimeout", "snap.afterTimeout"] { e(k, "no notice queued") } }
+  // without the address it NEVER clears, however long and however many devices confirm
+  do {
+    let a = Mem(); _ = try! IdentityKeys.device(.consent, in: a, enclave: false, domainState: { X })
+    _ = IdentityKeys.enrolmentGate(Y, device: "iPhone", devices: ["devA", "devB"], now: 1, in: a)
+    if let n = IdentityKeys.pendingNotices(in: a)?.first {
+      _ = IdentityKeys.markDelivered(n, to: "devA", now: 2, in: a); _ = IdentityKeys.markDelivered(n, to: "devB", now: 2, in: a)
+      IdentityKeys.sweepNotices(now: 1 + 30 * D, in: a)
+      e("anchor.never", (IdentityKeys.pendingNotices(in: a) ?? []).count == 1)
+      _ = IdentityKeys.markDelivered(n, to: "address", now: 1 + 30 * D, in: a)
+      e("anchor.then", IdentityKeys.pendingNotices(in: a)?.isEmpty ?? false)
+    } else { e("anchor.never", "none"); e("anchor.then", "none") }
+  }
   let f = Mem(); _ = try! IdentityKeys.device(.consent, in: f, enclave: false, domainState: { X }); f.failReads = true
-  e("gate.blind", IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 5, in: f) == .refuse)
+  e("gate.blind", IdentityKeys.enrolmentGate(Y, device: "iPhone", devices: ["devA", "devB", "devC"], now: 5, in: f) == .refuse)
 }
 `
 const dir = mkdtempSync(join(tmpdir(), 'bento-idkeys-'))
@@ -167,9 +184,14 @@ ok(out['gate.changed'] === 'true' && out['gate.queued'] === 'true', 'a change qu
 ok(out['gate.survives'] === 'true', 'killed before acceptance: on restart the notice is still queued and the state still not accepted')
 ok(out['gate.idempotent'] === 'true', 'the gate after a restart neither drops nor repeats the notice')
 ok(out['gate.accept'] === 'true' && out['gate.stillqueued'] === 'true', 'accepting after re-confirmation leaves the notice queued until it is SENT')
-ok(out['gate.partial'] === 'true', 'a PARTIAL delivery (two of three recipients) leaves the notice queued')
-ok(out['gate.stranger'] === 'true', "a confirmation from someone who isn't a recipient is ignored")
-ok(out['gate.sent'] === 'true', 'the notice leaves the outbox only once EVERY device and the address confirmed it')
+ok(out['snap.recipients'] === 'true', 'the recipients are SNAPSHOTTED when the notice is queued: the devices listed then, plus the address')
+ok(out['snap.partial'] === 'true', 'a partial delivery leaves the notice queued')
+ok(out['snap.stranger'] === 'true', "a confirmation from someone who isn't a recipient is ignored")
+ok(out['snap.removedStillCounts'] === 'true', 'devices REMOVED from the list after queuing are still recipients, and still hold the notice back')
+ok(out['snap.beforeTimeout'] === 'true', 'a snapshotted device that never confirms still holds it back at 6 days')
+ok(out['snap.afterTimeout'] === 'true', 'and stops holding it back at 7 days, once the address has confirmed')
+ok(out['anchor.never'] === 'true', 'without the ADDRESS a notice never clears, whatever the devices do and however long')
+ok(out['anchor.then'] === 'true', 'and clears once the address confirms')
 ok(out['gate.blind'] === 'true', "a record or outbox that can't be read refuses the consent")
 console.log('biometric enrolment tripwire (§29):')
 ok(out['trip.same'] === 'true', 'the enrolment the consent key was created under reads unchanged')

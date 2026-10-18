@@ -169,8 +169,29 @@ enum IdentityKeys {
         /// which new state it's about (a hash, never the state itself)
         let state: String
         let at: Int
-        /// who has confirmed receiving it: device keys, and "address"
+        /// WHO it goes to, snapshotted when it was queued: the devices listed
+        /// then, plus "address". A later change to the device list never
+        /// shrinks it, because the device whose biometrics changed holds the
+        /// account key and could otherwise drop the victim's other devices
+        /// before delivery, suppressing the very notice that warns about it.
+        let recipients: Set<String>
+        /// who has confirmed receiving it
         var deliveredTo: Set<String> = []
+    }
+
+    /// The anchor recipient: nothing on the device side can remove it.
+    static let addressRecipient = "address"
+    /// A snapshotted device that can never confirm (wiped, destroyed) stops
+    /// holding the notice back after this long — but only once the address has.
+    static let silentDeviceTimeoutMs = 7 * 86_400_000
+
+    /// Whether `n` may leave the outbox at `now`: everyone confirmed; or the
+    /// address confirmed and every device still silent has timed out. Never
+    /// without the address.
+    static func isDone(_ n: Notice, now: Int) -> Bool {
+        guard n.deliveredTo.contains(addressRecipient) else { return false }
+        if n.recipients.isSubset(of: n.deliveredTo) { return true }
+        return now - n.at >= silentDeviceTimeoutMs
     }
 
     static let outboxItem = "identity/notice-outbox"
@@ -193,7 +214,9 @@ enum IdentityKeys {
     /// completes or is cancelled. Queuing is idempotent per new state, so a
     /// restart neither drops nor repeats it. Nothing here takes input from the
     /// page, so a page can't suppress or delay it.
-    static func enrolmentGate(_ current: Data?, device: String, now: Int, in store: Store) -> Gate {
+    /// `devices` is the account's device list as it stands NOW; it's
+    /// snapshotted into the notice along with the address.
+    static func enrolmentGate(_ current: Data?, device: String, devices: Set<String>, now: Int, in store: Store) -> Gate {
         switch checkEnrolment(current, in: store) {
         case .unchanged: return .proceed
         case .unknown: return .refuse
@@ -206,7 +229,8 @@ enum IdentityKeys {
             }
             let tag = stateTag(current)
             if !queued.contains(where: { $0.state == tag }) {
-                queued.append(Notice(device: device, state: tag, at: now))
+                queued.append(Notice(device: device, state: tag, at: now,
+                                     recipients: devices.union([addressRecipient])))
                 guard let d = try? JSONEncoder().encode(queued), store.set(outboxItem, d) else { return .refuse }
             }
             return .reconfirm
@@ -223,17 +247,27 @@ enum IdentityKeys {
         }
     }
 
-    /// Record that `recipient` (a device key, or "address") confirmed receiving
-    /// `n`. The notice leaves the outbox only once every one of `recipients`
-    /// has: a partial send never clears it, because the device that never
-    /// heard is the one a thief would choose. `recipients` is the account's
-    /// devices plus "address", as the directory lists them at delivery time.
+    /// Record that `recipient` confirmed receiving `n`. It counts only if it's
+    /// in the notice's own snapshotted recipients (removed devices included);
+    /// nothing the caller passes can add to or shrink that set.
     @discardableResult
-    static func markDelivered(_ n: Notice, to recipient: String, of recipients: Set<String>, in store: Store) -> Bool {
-        guard !recipients.isEmpty, recipients.contains(recipient), var l = pendingNotices(in: store),
-              let i = l.firstIndex(where: { $0.state == n.state && $0.device == n.device }) else { return false }
+    static func markDelivered(_ n: Notice, to recipient: String, now: Int, in store: Store) -> Bool {
+        guard var l = pendingNotices(in: store),
+              let i = l.firstIndex(where: { $0.state == n.state && $0.device == n.device }),
+              l[i].recipients.contains(recipient) else { return false }
         l[i].deliveredTo.insert(recipient)
-        if recipients.isSubset(of: l[i].deliveredTo) { l.remove(at: i) }
+        return save(l.filter { !isDone($0, now: now) }, in: store)
+    }
+
+    /// Clear notices whose silent devices have timed out (only once the address
+    /// has confirmed). Run when the agent checks its outbox.
+    @discardableResult
+    static func sweepNotices(now: Int, in store: Store) -> Bool {
+        guard let l = pendingNotices(in: store) else { return false }
+        return save(l.filter { !isDone($0, now: now) }, in: store)
+    }
+
+    private static func save(_ l: [Notice], in store: Store) -> Bool {
         guard let d = try? JSONEncoder().encode(l) else { return false }
         return store.set(outboxItem, d)
     }
