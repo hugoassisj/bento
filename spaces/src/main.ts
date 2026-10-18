@@ -19,7 +19,7 @@ import {
   isBodySealed,
 } from '../../kernel/src/save.ts'
 import { setTabTitle, setNeutralTabTitle } from './tabtitle.ts'
-import { putRecovery, getRecovery, clearRecovery, pruneOld, addVersion } from '../../kernel/src/autosave.ts'
+import { putRecovery, getRecovery, clearRecovery, clearVersions, pruneOld, addVersion } from '../../kernel/src/autosave.ts'
 import { APP_VERSION, applyUpdateInPlace } from '../../kernel/src/update.ts'
 import { t, locale, applyDirection } from './i18n'
 import { i18nApi } from '../../kernel/src/i18n.ts'
@@ -488,7 +488,13 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   void offerRecovery(doc, store, editor)
   // A host that refuses the recovery copy (too large) turns crash recovery off
   // for this space; say so once, where the save status shows, held long enough
-  // to read (slides holds it 8s). Never for an encrypted space.
+  // to read (slides holds it 8s). Never for a sealed space.
+  //
+  // `encrypted: isBodySealed` is redundant today: the autosave guard above
+  // (`if (isBodySealed()) return`) means a sealed space never asks for a
+  // recovery copy, so the kernel never fires for it. Kept on purpose; a
+  // mutation of this line alone stays green because that guard covers it,
+  // which is not a gap.
   wireRecoveryOff({
     docId: () => store.doc.docId,
     encrypted: isBodySealed,
@@ -754,6 +760,16 @@ function banner(text: string, actions: Array<[string, () => void, boolean?, bool
  */
 async function offerRecovery(doc: SpacesDoc, store: Store, editor: Editor): Promise<void> {
   if (store.readOnly) return // a reading copy, a view-only follower or a frozen file is never rewritten
+  // A SEALED SPACE IS NEVER OFFERED A PLAINTEXT COPY, and the ones an unsealed
+  // session left for this docId are deleted: the recovery snapshot and every
+  // version. boot() runs after the seal is in place (the identity seal is set
+  // in capturePristine, the password before boot), so isBodySealed() here is
+  // the proven state. Only this docId's entries; never another document's.
+  if (isBodySealed()) {
+    await clearRecovery(doc.docId)
+    await clearVersions(doc.docId)
+    return
+  }
   const snap = await getRecovery(doc.docId)
   if (!snap || !recoveryOffered(snap.json, doc, snap.at)) return
   // What the banner SAYS is recoverynotice.ts: when the snapshot looks older

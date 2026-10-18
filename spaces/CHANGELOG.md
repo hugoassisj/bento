@@ -1377,7 +1377,9 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   never keeps a recovery copy.
 - **A sealed space keeps no readable copy in this browser.** A space sealed
   by a password or by the identity seal writes no crash-recovery copy and no
-  version, and shows no recovery-off notice. Neutral title while sealed,
+  version, and shows no recovery-off notice. Opening a sealed space never
+  offers a readable copy an earlier unsealed session left in this browser, and
+  deletes that space's copies. Neutral title while sealed,
   matching the saved file's title: the tab reads "bento/spaces", from the
   password prompt on.
 

@@ -20,7 +20,7 @@
 // out, a page as its own space) sits in the slot of its KIND — exports with
 // the export, Import beside Replace from JSON, the two ways a document arrives.
 
-import { setEncryptionPassword, isEncryptionActive } from '../../kernel/src/save.ts'
+import { setEncryptionPassword, isEncryptionActive, isBodySealed } from '../../kernel/src/save.ts'
 import { setTabTitle } from './tabtitle.ts'
 import { clearVersions, clearRecovery, listVersions, type Snapshot } from '../../kernel/src/autosave.ts'
 import type { Dialog } from '../../kernel/src/ui/dialog.ts'
@@ -231,7 +231,9 @@ function openHistory(h: DocHost): void {
       }
     }
     render([])
-    void listVersions(h.store.doc.docId).then(render).catch(() => { /* no store, no history */ })
+    // a sealed space lists nothing: any entry for it is a plaintext copy an
+    // unsealed session left, which boot deletes (main.ts offerRecovery)
+    if (!isBodySealed()) void listVersions(h.store.doc.docId).then(render).catch(() => { /* no store, no history */ })
   }))
 }
 

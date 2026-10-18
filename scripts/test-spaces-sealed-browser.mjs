@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// A SEALED SPACE WRITES NOTHING READABLE, in the built shell (bento/id K3).
+// A SEALED SPACE WRITES NOTHING READABLE, in the built shell (Bento ID, bento/connect: K3).
 //
 //   npm run build:sealtest --prefix spaces && node scripts/test-spaces-sealed-browser.mjs
 //
@@ -16,7 +16,10 @@
 //   3. document.title is neutral (exactly what the saved file's <title> holds)
 //      at boot, after a rename and after page navigation; and at the password
 //      gate and after unlock for a password space;
-//   4. under a host that refuses recovery copies, no recovery-off notice.
+//   4. under a host that refuses recovery copies, no recovery-off notice;
+//   5. plaintext an UNSEALED session left for this docId on the same storage is
+//      never offered to a SEALED boot (no banner, no version history) and is
+//      deleted, while another document's entries survive.
 // CONTROL: the same steps unsealed DO put the marker in the recovery and version
 // stores, show the document title in the tab, and show the notice.
 //
@@ -24,6 +27,10 @@
 //   main.ts autosave guard back to isEncryptionActive  → the recovery row
 //   main.ts save-path guard back to isEncryptionActive → the versions row
 //   tabtitle.ts tabTitle ignores the seal              → the title rows
+//   main.ts offerRecovery skips the delete             → the plaintext-left-behind scan row
+//   main.ts offerRecovery ignores the seal             → the banner row (and the scan row)
+// The recovery-off notice's own guard (wireRecoveryOff encrypted:) is covered
+// by the autosave guard: a mutation of it alone stays green, by design.
 import { writeFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -93,6 +100,20 @@ async function navigate(page) {
   return after !== before
 }
 
+/**
+ * End a page openSealed opened. The helper's close() (when this checkout's
+ * helper has one) THROWS if the store refused a write on a sealed page: the
+ * kernel's backstop must never be what keeps a scan clean, so a refusal is a
+ * red row here. Without it, the context is closed as before.
+ */
+async function finish(o, what) {
+  if (typeof o.close === 'function') {
+    try { await o.close(); ok(true, `${what}: the store refused nothing`) }
+    catch (e) { ok(false, `${what}: ${e.message}`) }
+  }
+  await o.context.close().catch(() => {})
+}
+
 /** IndexedDB stores (db/store) holding the marker. */
 const stores = async (page) => scanIndexedDB(page, MARK)
 
@@ -121,7 +142,8 @@ try {
    * edit, ⌘S, wait out the autosave debounce, scan.
    */
   async function walk(sealed) {
-    const { page, context, errors, reload } = await openSealed(browser, 'spaces', { sealed, doc: markedDoc })
+    const o = await openSealed(browser, 'spaces', { sealed, doc: markedDoc })
+    const { page, context, errors, reload } = o
     await context.addInitScript(fsaMock)
     // reload() installs the key handoff again and re-proves the seal state
     await reload()
@@ -158,7 +180,7 @@ try {
       }
       o.onerror = () => res(null)
     }), [DB, markedDoc.docId])
-    await context.close()
+    await finish(o, sealed ? 'sealed walk' : 'unsealed walk')
     return r
   }
 
@@ -300,7 +322,8 @@ try {
 
   /** The marked space under a host that refuses the recovery copy. */
   async function hosted(sealed) {
-    const { page, context, reload } = await openSealed(browser, 'spaces', { sealed, doc: markedDoc })
+    const o = await openSealed(browser, 'spaces', { sealed, doc: markedDoc })
+    const { page, context, reload } = o
     await context.addInitScript(refusingHost)
     await reload()
     await booted(page)
@@ -310,7 +333,7 @@ try {
     await rename(page, MARK + ' hosted again')
     await page.waitForTimeout(3500)
     const r = await page.evaluate((n) => ({ sets: window.__sets, notices: window.__notices.filter((x) => x.startsWith(n)).length }), NOTICE)
-    await context.close()
+    await finish(o, sealed ? 'sealed, hosted' : 'unsealed, hosted')
     return { sealedAfter, ...r }
   }
 
@@ -322,6 +345,69 @@ try {
     ok(h.notices === 0, `sealed: no recovery-off notice (${h.notices})`)
     const hc = await hosted(false)
     ok(hc.sets >= 1 && hc.notices === 1, `control: unsealed, the host refused a copy and the notice showed once (${hc.sets} asked, ${hc.notices} shown)`)
+  }
+
+  console.log('\nplaintext an unsealed session left behind, then a sealed boot on the same storage')
+  {
+    const MX = MARK + 'X', MY = MARK + 'Y'
+    const docOf = (id, title) => ({ ...structuredClone(markedDoc), docId: id, title })
+    /** an unsealed session on `context` that edits, so a snapshot and a version land */
+    async function leave(context, doc, edit) {
+      const o = await openSealed(browser, 'spaces', { sealed: false, doc, context })
+      await booted(o.page)
+      await rename(o.page, edit)
+      await o.page.waitForTimeout(4000)
+      await o.page.close()
+      return o
+    }
+    async function bannerAndHistory(page) {
+      await page.waitForSelector('.sp-banner', { timeout: 4000 }).catch(() => {})
+      const banner = await page.locator('.sp-banner').count()
+      await page.locator('.sp-savemenu').click()
+      await page.getByText('Version history…', { exact: true }).click()
+      await page.waitForTimeout(800)
+      const versions = await page.locator('.sp-ab-version').count()
+      return { banner, versions }
+    }
+
+    // control: an unsealed reboot of X on the same storage IS offered the copy
+    {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+      await context.route(/^https?:/, (route) => route.abort())
+      const x = await leave(context, docOf('rig-left-x', MX), MX + ' edited')
+      const again = await openSealed(browser, 'spaces', { sealed: false, context, url: x.url })
+      await booted(again.page)
+      const r = await bannerAndHistory(again.page)
+      ok(r.banner > 0, `control: an UNSEALED reboot of X on the same storage IS offered the banner (${r.banner})`)
+      ok(r.versions > 0, `control: and its version history DOES list X's versions (${r.versions})`)
+      await finish(again, 'unsealed reboot of X')
+    }
+
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    await context.route(/^https?:/, (route) => route.abort())
+    const x = await leave(context, docOf('rig-left-x', MX), MX + ' edited')
+    await leave(context, docOf('rig-left-y', MY), MY + ' edited')
+    {
+      const probe = await context.newPage()
+      await probe.goto(x.url)
+      await booted(probe)
+      const before = await scanIndexedDB(probe, MX)
+      ok(before.includes(`${DB}/recovery`) && before.includes(`${DB}/versions`),
+        `precondition: the unsealed session left X's snapshot and a version (${before.join(', ')})`)
+      await probe.close()
+    }
+    const sealedX = await openSealed(browser, 'spaces', { context, url: x.url })
+    await booted(sealedX.page)
+    const r = await bannerAndHistory(sealedX.page)
+    ok(r.banner === 0, `a SEALED boot of X on the same storage offers NO banner (${r.banner})`)
+    ok(r.versions === 0, `and its version history shows NOTHING (${r.versions})`)
+    await sealedX.page.waitForTimeout(500)
+    const leftX = await scanIndexedDB(sealedX.page, MX)
+    ok(leftX.length === 0, `afterwards NO IndexedDB store holds X's plaintext (${leftX.join(', ') || 'none'})`)
+    const leftY = await scanIndexedDB(sealedX.page, MY)
+    ok(leftY.includes(`${DB}/recovery`) && leftY.includes(`${DB}/versions`),
+      `a SECOND document's (Y) snapshot and version survive the sealed boot of X (${leftY.join(', ') || 'none'})`)
+    await finish(sealedX, 'sealed boot of X')
   }
 } finally {
   await browser.close()
