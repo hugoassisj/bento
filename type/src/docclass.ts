@@ -67,6 +67,9 @@ export const TYPE_FIELDS = {
   //   sigRemovals content too: a removal syncs and reaches a reader, so a copy
   //               shows a signature as removed wherever it was removed (ruling 7).
   sigRemovals: 'content',
+  // identity — the owner's PUBLIC key in a copy without collab (security §37):
+  // never synced and kept live on restore, so no collaborator can set it
+  sigAuthority: 'identity',
   format: 'content',
   version: 'content',
   title: 'content',

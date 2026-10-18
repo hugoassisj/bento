@@ -426,6 +426,22 @@ console.log('\n=== what that looks like on one paragraph ===');
     ok(Object.hasOwn(got, 'ok-id'), 'while an ordinary SigId arrives as one key');
   }
 
+  H('§37: the owner key a copy carries (sigAuthority) never syncs');
+  {
+    const A = new TypeSync('a'); const B = new TypeSync('b');
+    const dA = mk(); const dB = clone(dA); A.adopt(dA as never); B.adopt(dB as never);
+    const bA = clone(dA);
+    dA.sigAuthority = { owner: 'ATTACKER-KEY' };
+    const ops = A.diff(bA as never, dA as never, { text: true });
+    ok(!docKeys(ops).some(k => k === 'sigAuthority' || k.startsWith('sigAuthority.')),
+      'a replica never EMITS a sigAuthority change (identity class)');
+    // and a hand-made op carrying it is never APPLIED
+    const forged = [{ op: 'set', k: 'sigAuthority', v: { owner: 'ATTACKER-KEY' }, l: 99, a: 'z', s: 1, pv: 2 }];
+    try { B.apply(dB as never, forged as never); } catch { /* refused outright is fine too */ }
+    ok(!('sigAuthority' in dB) || (dB.sigAuthority as { owner?: string })?.owner !== 'ATTACKER-KEY',
+      'nor APPLIES one a peer sends, so no collaborator can make their key the owner');
+  }
+
   void DOC_NODE;
 }
 

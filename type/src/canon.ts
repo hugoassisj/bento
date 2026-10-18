@@ -69,6 +69,8 @@ export const VOLATILE = new Set([
   'collab',        // credentials + room state
   'preview',       // cached first-page render
   'signatures',    // the chain itself — a signature cannot cover itself
+  'sigAuthority',  // the owner's key a copy carries (§37): writing it into a copy must
+                  // not change what any signature in that copy covers
   'sigRemovals',   // removals of signatures (ruling 7): a removal of ONE must never
                   // change the content every OTHER signature covers
   'autosave',
@@ -444,6 +446,28 @@ export async function signRemoval(docId: string, id: string, key: CryptoKeyPair,
  * `owner` is the document owner's key when this copy knows it, else null.
  */
 export type RemovalState = 'removed' | 'requested' | 'contested' | 'invalid';
+
+/**
+ * The owner key a removal is checked against (security §37): the document's
+ * own `collab.owner` whenever it has one — a planted `sigAuthority` is then
+ * IGNORED — else the `sigAuthority.owner` a copy carries, else none (removals
+ * by any key but the signer's read contested).
+ */
+export function signatureOwner(doc: { collab?: unknown; sigAuthority?: unknown }): string | null {
+  const c = doc.collab as { owner?: unknown } | undefined;
+  if (c && typeof c === 'object' && typeof c.owner === 'string' && c.owner) return c.owner;
+  const a = doc.sigAuthority as { owner?: unknown } | undefined;
+  if (a && typeof a === 'object' && typeof a.owner === 'string' && a.owner) return a.owner;
+  return null;
+}
+
+/** Write the owner's PUBLIC key into a copy that carries signatures (§37). */
+export function withSigAuthority<T extends object>(copy: T, source: { collab?: unknown; sigAuthority?: unknown }): T {
+  const owner = signatureOwner(source);
+  const out = copy as T & { sigAuthority?: { owner: string } };
+  if (owner) out.sigAuthority = { owner }; else delete out.sigAuthority;
+  return out;
+}
 export async function checkRemoval(
   docId: string, id: string, sig: Pick<Signature, 'pub'>, t: Tombstone, owner: string | null,
 ): Promise<RemovalState> {

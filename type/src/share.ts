@@ -26,6 +26,7 @@
 
 import { mintInvite } from './sync/online.ts';
 import { projectForCopy } from '../../kernel/src/docfields.ts';
+import { withSigAuthority } from './canon.ts';
 import { withoutEmbeddedCaps, type TypeDoc } from './model.ts';
 import { TYPE_FIELDS, HISTORY_CLASS } from './docclass.ts';
 
@@ -63,7 +64,9 @@ export async function inviteCopy(doc: TypeDoc, ownerPriv: string, opts: InviteOp
   if (opts.withHistory === false) {
     for (const k of HISTORY_CLASS) delete (out as unknown as Record<string, unknown>)[k];
   }
-  return out;
+  // the owner's PUBLIC key for removal checks (§37); this copy keeps
+  // collab.owner, which wins, so this is the backstop if a later tier drops it
+  return withSigAuthority(out, doc);
 }
 
 /**
@@ -77,5 +80,5 @@ export function readerCopy(doc: TypeDoc): TypeDoc {
   // history field — revisions, comments, signatures — dropped.
   const out = projectForCopy(clone(doc), TYPE_FIELDS, 'reader');
   if (out.collab) out.collab.on = true;
-  return out;
+  return withSigAuthority(out, doc);           // the owner's PUBLIC key (§37)
 }

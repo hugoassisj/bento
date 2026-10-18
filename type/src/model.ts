@@ -14,7 +14,7 @@
 import { normalize, shift as shiftMarks, type Mark } from './inline.ts';
 import { withoutCaps, projectForCopy } from '../../kernel/src/docfields.ts';
 import { TYPE_FIELDS } from './docclass.ts';
-import { sigId } from './canon.ts';
+import { sigId, withSigAuthority } from './canon.ts';
 // value import is safe: xref.ts imports only TYPES from this module, precisely
 // so the core can call into it without a cycle
 import { shiftRefs } from './xref.ts';
@@ -362,6 +362,16 @@ export interface TypeDoc {
    *  signature can never clear its removal. */
   sigRemovals?: Record<string, Tombstone>;
   /**
+   * The document owner's PUBLIC key, written into a COPY that carries
+   * signatures but not `collab` (security §37), so a removal by the owner can
+   * still be checked there. A full document reads `collab.owner` and ignores
+   * this. Identity class: never synced, kept live on restore. As trustworthy
+   * as the copy itself — whoever holds a copy can rewrite it along with
+   * everything else, so it is shown as "the document's owner key", never as
+   * verified ownership.
+   */
+  sigAuthority?: { owner: string };
+  /**
    * Is the document recording edits as tracked changes?
    *
    * DOCUMENT-level, not a viewer preference — unlike the locale, reduced motion
@@ -498,7 +508,10 @@ export function copyIsReceiveOnly(collab: TypeDoc['collab'] | undefined): boolea
  * fresh docId per output — see the tier-gap note there.
  */
 export function docForExport(doc: TypeDoc): TypeDoc {
-  return projectForCopy(withoutEmbeddedCaps(withoutCaps(doc)), TYPE_FIELDS, 'copyJSON');
+  const out = projectForCopy(withoutEmbeddedCaps(withoutCaps(doc)), TYPE_FIELDS, 'copyJSON');
+  // collab is stripped above, so the owner's PUBLIC key rides along for the
+  // signatures this copy keeps (security §37)
+  return withSigAuthority(out, doc);
 }
 
 /**
@@ -865,6 +878,9 @@ export function parseDoc(raw: string): ParseResult {
     }
   }
   if (Object.keys(removals).length) doc.sigRemovals = removals; else delete doc.sigRemovals;
+  if (isObj(json.sigAuthority) && typeof json.sigAuthority.owner === 'string' && json.sigAuthority.owner) {
+    doc.sigAuthority = { owner: json.sigAuthority.owner };
+  } else delete doc.sigAuthority;
   if (Object.keys(styles).length) doc.styles = styles; else delete doc.styles;
   // A salt is 16 bytes, base64url without padding: exactly 22 characters. Anything
   // else is not a salt — dropped, so its signatures report the history MISSING

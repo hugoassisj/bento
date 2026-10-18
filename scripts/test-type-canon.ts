@@ -29,9 +29,13 @@
 // Anything the Signatures panel RENDERS is also pinned, because the panel is
 // where a false "✓ valid" would actually mislead someone.
 
+import { register } from 'node:module';
+// later DYNAMIC imports (share.ts, for the §37 copy rows) go through the repo's
+// resolve hooks, as in test-type-share.ts; the static imports below do not need them
+register('./lib/ts-resolve-hooks.mjs', import.meta.url);
 import {
   canonicalize, digest, sign, verify, verifyAll, sigId, signatureOrder, latestSignature, isLowS, newKey, exportPub, VOLATILE,
-  signRemoval, checkRemoval,
+  signRemoval, checkRemoval, signatureOwner, withSigAuthority,
   SIGNED_EXCLUDE, historyCommitment, newHistorySalt, historyDisplay,
 } from '../type/src/canon.ts';
 import { readFileSync } from 'node:fs';
@@ -407,6 +411,46 @@ H('ruling 7: a removal is a SIGNED tombstone, and only the signer or the owner c
      "so removing Alice's signature leaves Bob's valid and untouched");
   ok(v.entries.find(e => e.sig.name === 'Alice')!.ok && v.entries.find(e => e.sig.name === 'Alice')!.removal === 'removed',
      "and Alice's own bytes still verify, shown as removed"); 
+}
+
+H('§37: the owner key in a copy, and who it lets remove');
+{
+  const { readerCopy } = await import('../type/src/share.ts');
+  const { docForExport } = await import('../type/src/model.ts');
+  const signer = await newKey(), owner = await newKey(), third = await newKey();
+  const ownerPub = await exportPub(owner);
+  const base = { ...doc(), collab: { room: 'r', key: 'K', owner: ownerPub, ownerPriv: 'PRIV', v: 2 } } as Record<string, any>;
+  const a = await sign(base as never, signer, { name: 'Alice' });
+  const id = idOf(base as never, a);
+  const at = '2026-10-18T10:00:00.000Z';
+  base.signatures = { [id]: a };
+  ok(signatureOwner(base) === ownerPub, "a full document's owner is collab.owner");
+  ok(signatureOwner({ ...base, sigAuthority: { owner: 'PLANTED' } }) === ownerPub,
+     'and a PLANTED sigAuthority is ignored whenever collab.owner exists');
+  // a copy WITHOUT collab carries the owner's public key instead
+  const exported = docForExport(base as never) as Record<string, any>;
+  ok(!('collab' in exported) && exported.sigAuthority?.owner === ownerPub, 'Copy document JSON drops collab and carries sigAuthority.owner');
+  ok(!JSON.stringify(exported).includes('PRIV'), 'and never the private half');
+  const reader = readerCopy(base as never) as Record<string, any>;
+  ok(reader.sigAuthority?.owner === ownerPub, 'a view-only copy carries it too');
+  // it is out of the digest: a copy carrying it still verifies every signature
+  ok((await verifyAll(exported as never, exported.signatures)).ok, 'a copy carrying sigAuthority still VERIFIES every signature');
+  // in that copy, removals are checked against the carried key
+  const byOwner = await signRemoval(base.docId, id, owner, at), byThird = await signRemoval(base.docId, id, third, at);
+  const res = async (t: unknown, d: Record<string, any>) =>
+    (await verifyAll(d as never, d.signatures, { removals: { [id]: t as never }, owner: signatureOwner(d) })).entries[0].removal;
+  ok(await res(byOwner, exported) === 'removed', "in a collab-less copy the owner's removal is confirmed against the carried key");
+  ok(await res(byThird, exported) === 'requested', 'a removal by a key that is neither signer nor the carried owner is refused');
+  const bare = { ...exported }; delete bare.sigAuthority;
+  ok(signatureOwner(bare) === null && await res(byOwner, bare) === 'contested', 'with no owner known at all, it reads CONTESTED');
+  // restore keeps the LIVE sigAuthority, in both directions
+  const { Store } = await import('../type/src/store.ts');
+  for (const dir of ['back', 'recover'] as const) {
+    const st = new Store(JSON.parse(JSON.stringify({ ...exported, body: [{ id: 'p1', kind: 'para', text: 'x' }] })));
+    st.restore(JSON.parse(JSON.stringify({ ...exported, sigAuthority: { owner: 'SNAPSHOT-KEY' } })), dir);
+    ok((st.doc as any).sigAuthority?.owner === ownerPub, `a ${dir} restore keeps the LIVE sigAuthority, never the snapshot's`);
+  }
+  void withSigAuthority;
 }
 
 H('ruling 7: old files convert on open (row 10)');
