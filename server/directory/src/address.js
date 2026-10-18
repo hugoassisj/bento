@@ -8,7 +8,8 @@
 // reference implementation (K2, kernel/src/address.ts) plus a vector fixture
 // every host must pass — Swift, Kotlin and Rust agents can't import this file —
 // and this module becomes an import of it.
-//   · PHASE 1 IS ASCII-ONLY: any non-ASCII character, in the local part or the
+//   · PHASE 1 IS ASCII-ONLY — RECOMMENDED, PENDING THE MAINTAINER'S DECISION on
+//     international addresses. Any non-ASCII character, in the local part or the
 //     domain, is refused (an `xn--` domain typed as ASCII is fine). IDN is
 //     deferred because the platforms disagree — WHATWG URL uses UTS #46
 //     non-transitional mapping (ß stays ß), Java's IDN is IDNA2003 (ß becomes

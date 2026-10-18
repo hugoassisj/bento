@@ -49,7 +49,8 @@ verify with one implementation and one set of test vectors. Until they land,
 marked **provisional**. They become imports of kernel's modules, with its
 vectors added to the rig.
 
-Phase 1 accepts **ASCII addresses only**: the platforms disagree on
+Phase 1 accepts **ASCII addresses only** (recommended, pending the
+maintainer's decision on international addresses): the platforms disagree on
 internationalised domains, so one address could otherwise bind as one mailbox
 and be looked up as another.
 
