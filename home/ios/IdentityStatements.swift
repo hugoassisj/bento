@@ -54,16 +54,36 @@ enum IdentityStatements {
         return t
     }
 
-    /// Display text a person sees: bounded, with no controls and no bidirectional
-    /// overrides that could make "alice ✓" read as something else.
-    private static func displayText(_ f: String) -> String? {
-        guard let t = freeText(f), !t.isEmpty, t.unicodeScalars.count <= 64 else { return nil }
-        for u in t.unicodeScalars {
-            let v = u.value
-            if v <= 0x1F || (0x7F...0x9F).contains(v) || (0x202A...0x202E).contains(v) || (0x2066...0x2069).contains(v) || v == 0x200E || v == 0x200F { return nil }
-        }
+    /// Display text a person sees (a name, a device label), as the kernel
+    /// defines it:
+    /// - at most 64 code points, and in NFC
+    /// - nothing in the frozen `IdentityDisplayTable` (Unicode 17.0, not the
+    ///   platform's categories, so every host refuses the same characters)
+    /// - ZWNJ/ZWJ only mid-text
+    static func displayText(_ f: String) -> String? {
+        guard let t = freeText(f), !t.isEmpty else { return nil }
+        let cps = Array(t.unicodeScalars)
+        guard cps.count <= 64 else { return nil }
+        // NFC needs Unicode 17.0 data (fixtures/README). Where the platform's is
+        // older, refuse rather than normalise with the wrong tables.
+        guard platformUnicodeIs17 else { return nil }
+        // compare SCALARS: String == is canonical equivalence, which would call
+        // a decomposed é equal to the composed one
+        guard Array(t.precomposedStringWithCanonicalMapping.unicodeScalars) == cps else { return nil }
+        guard !cps.contains(where: { IdentityDisplayTable.forbidden($0.value) }) else { return nil }
+        let zw: Set<UInt32> = [0x200C, 0x200D]
+        guard !zw.contains(cps[0].value), !zw.contains(cps[cps.count - 1].value) else { return nil }
         return t
     }
+
+    /// Whether the platform's normaliser (ICU) has Unicode 17.0 or later data.
+    static let platformUnicodeIs17: Bool = {
+        typealias GetVersion = @convention(c) (UnsafeMutablePointer<UInt8>) -> Void
+        guard let h = dlopen("/usr/lib/libicucore.dylib", RTLD_NOW), let sym = dlsym(h, "u_getUnicodeVersion") else { return false }
+        var v = [UInt8](repeating: 0, count: 4)
+        unsafeBitCast(sym, to: GetVersion.self)(&v)
+        return v[0] >= 17
+    }()
 
     static func sha256b64u(_ text: String) -> String { b64uEnc(Data(SHA256.hash(data: Data(text.utf8)))) }
 

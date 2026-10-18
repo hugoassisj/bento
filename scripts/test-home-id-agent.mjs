@@ -34,7 +34,9 @@ import { fileURLToPath } from 'node:url'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = ['HostDocStore.swift', 'IdentityKeys.swift', 'IdentityStatements.swift', process.env.ID_AGENT_SRC || 'IdentityAgent.swift']
   .map((f) => f.includes('/') ? f : join(ROOT, 'home/ios', f))
-try { execFileSync('swiftc', ['--version'], { stdio: 'pipe' }) } catch { console.log('home id agent: SKIPPED — no Swift toolchain.'); process.exit(0) }
+// Apple platforms only: the Linux CI runner has swiftc but no CryptoKit, Security
+// or LocalAuthentication, so probe for xcrun, which only Apple toolchains ship.
+try { execFileSync('xcrun', ['--find', 'swiftc'], { stdio: 'pipe' }) } catch { console.log('home id agent: SKIPPED — needs an Apple toolchain (CryptoKit, Security).'); process.exit(0) }
 
 const main = String.raw`
 import CryptoKit

@@ -25,7 +25,9 @@ import { webcrypto } from 'node:crypto'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = [join(ROOT, 'home/ios/HostDocStore.swift'), join(ROOT, process.env.ID_KEYS_SRC || 'home/ios/IdentityKeys.swift')]
-try { execFileSync('swiftc', ['--version'], { stdio: 'pipe' }) } catch { console.log('home id keys: SKIPPED — no Swift toolchain.'); process.exit(0) }
+// Apple platforms only: the Linux CI runner has swiftc but no CryptoKit, Security
+// or LocalAuthentication, so probe for xcrun, which only Apple toolchains ship.
+try { execFileSync('xcrun', ['--find', 'swiftc'], { stdio: 'pipe' }) } catch { console.log('home id keys: SKIPPED — needs an Apple toolchain (CryptoKit, Security).'); process.exit(0) }
 
 const main = String.raw`
 import CryptoKit

@@ -30,9 +30,11 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const FIXTURE = process.env.ID_FIXTURE || join(ROOT, 'kernel/fixtures/identity-v1.json')
-const SRC = ['HostDocStore.swift', 'IdentityKeys.swift', process.env.ID_STATEMENTS_SRC || 'IdentityStatements.swift'].map((f) => f.includes('/') ? f : join(ROOT, 'home/ios', f))
+const SRC = ['HostDocStore.swift', 'IdentityKeys.swift', 'IdentityDisplayTable.swift', process.env.ID_STATEMENTS_SRC || 'IdentityStatements.swift'].map((f) => f.includes('/') ? f : join(ROOT, 'home/ios', f))
 if (!existsSync(FIXTURE)) { console.log(`home id statements: the fixture is missing (${FIXTURE}) — it lands with K2.`); process.exit(1) }
-try { execFileSync('swiftc', ['--version'], { stdio: 'pipe' }) } catch { console.log('home id statements: SKIPPED — no Swift toolchain.'); process.exit(0) }
+// Apple platforms only: the Linux CI runner has swiftc but no CryptoKit, Security
+// or LocalAuthentication, so probe for xcrun, which only Apple toolchains ship.
+try { execFileSync('xcrun', ['--find', 'swiftc'], { stdio: 'pipe' }) } catch { console.log('home id statements: SKIPPED — needs an Apple toolchain (CryptoKit, Security).'); process.exit(0) }
 
 const main = String.raw`
 import Foundation
@@ -41,6 +43,7 @@ let F = try! JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWith
 let keys = F["keys"] as! [String: String], dirKeys = F["directoryKeys"] as! [String: String]
 let fNow = (F["now"] as! NSNumber).intValue
 var checks = 0, fails = 0
+var spendCalled = false
 func ok(_ c: Bool, _ m: String) { checks += 1; if !c { fails += 1 }; print("\(c ? "  ok  " : "  FAIL")  \(m)") }
 func check(_ r: [String: Any], _ text: String, _ sig: String) -> (Bool, String?, String?) {
   let now = (r["now"] as? NSNumber)?.intValue ?? fNow
@@ -54,8 +57,10 @@ func check(_ r: [String: Any], _ text: String, _ sig: String) -> (Bool, String?,
   case "cmp": let v = S.verifyCmp(text, sig, accountPub: keys["account"]!, bindText: r["bindText"] as! String); return (v.ok, v.reason, v.value.map { S.buildCmp(bindHash: $0.bindHash, code: $0.code) })
   case "cns":
     let spent = (r["challengeSpent"] as? Bool) ?? false
+    spendCalled = false
     let v = S.verifyConsent(text, sig, consentPub: keys["consent"]!, rp: r["rp"] as! String, audience: r["audience"] as! String,
-      challenge: r["challenge"] as! String, payloadText: r["payloadText"] as! String, docId: r["docId"] as? String, now: now, spend: { _ in !spent })
+      challenge: r["challenge"] as! String, payloadText: r["payloadText"] as! String, docId: r["docId"] as? String, now: now,
+      spend: { _ in spendCalled = true; return !spent })
     return (v.ok, v.reason, v.value.map(S.buildConsent))
   default: return (false, "unknown-type", nil)
   }
@@ -67,7 +72,15 @@ for r in rows {
   let want = (r["expect"] as! String) == "accept" ? "accept" : "reject:\(r["reason"] as? String ?? "?")"
   let got = accepted ? "accept" : "reject:\(reason ?? "?")"
   ok(got == want, "\(r["name"] as! String) → \(want)\(got == want ? "" : " (got \(got))")")
+  if let wantSpend = r["spendCalled"] as? Bool {
+    ok(spendCalled == wantSpend, "\(r["name"] as! String): the challenge is \(wantSpend ? "" : "NOT ")spent")
+  }
 }
+print("the embedded display table is the fixture's, exactly")
+let tbl = F["displayForbidden"] as! [String: Any]
+let fixtureFlat = (tbl["ranges"] as! [[Int]]).flatMap { $0 }.map(UInt32.init)
+ok(IdentityDisplayTable.flat == fixtureFlat && IdentityDisplayTable.unicode == (tbl["unicode"] as! String), "IdentityDisplayTable matches displayForbidden (\(fixtureFlat.count / 2) ranges, Unicode \(IdentityDisplayTable.unicode))")
+ok(S.platformUnicodeIs17, "this platform's normaliser has Unicode 17.0 data (where it doesn't, display text is refused)")
 print("accepted rows round-trip and refuse tampering")
 for r in rows where (r["expect"] as! String) == "accept" {
   let text = r["text"] as! String, sig = r["sig"] as! String, t = r["type"] as! String
