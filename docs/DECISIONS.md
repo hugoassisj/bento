@@ -11024,3 +11024,10 @@ verified by the relay with the OWNER key's signature, not with a consent-key
 an owner key held by the agent and gated on user verification. No consent-key
 (AAL3) guarantee exists for `inv.`/`rev.` before phase 2 adds room-audience
 consent (security §24).
+
+**UI rule: a display name is self-asserted.** A `bind.` name or a `dev.` label
+is whatever its holder typed. The kernel refuses invisible and layout characters,
+requires NFC, and caps the length. No filter stops homoglyphs, though: "Аlice"
+with a Cyrillic А passes. So no surface ever shows a name WITHOUT the verified
+address beside it, and the ✓ always belongs to the address, never to the name.
+(security, #764)

@@ -123,6 +123,30 @@ let bind1 = ''
   row({ name: 'bind: a raw (unencoded) email breaks the field count', type: 'bind', text: raw, sig: await sign(account, raw), expect: 'reject', reason: 'grammar' })
   const longName = buildBind({ ...base, name: 'x'.repeat(65) })
   row({ name: 'bind: a display name over 64 characters', type: 'bind', text: longName, sig: await sign(account, longName), expect: 'reject', reason: 'name' })
+  // display names: invisible and layout characters refused (security, #764)
+  for (const [c, what] of [
+    ['\u200B', 'zero-width space'], ['\u2060', 'word joiner'], ['\uFEFF', 'byte-order mark'],
+    ['\u061C', 'Arabic letter mark (bidi)'], ['\u200E', 'left-to-right mark'], ['\u202E', 'right-to-left override'],
+    ['\u2028', 'line separator'], ['\u2029', 'paragraph separator'], ['\u180E', 'Mongolian vowel separator'],
+    ['\u00AD', 'soft hyphen'], ['\u0007', 'a control character'], ['\uE000', 'private use'],
+    ['\u3164', 'Hangul filler (renders blank)'], ['\u115F', 'Hangul choseong filler'],
+  ] as const) {
+    const t = buildBind({ ...base, name: `Al${c}ice` })
+    row({ name: `bind: a name containing ${what} is refused`, type: 'bind', text: t, sig: await sign(account, t), expect: 'reject', reason: 'name' })
+  }
+  for (const [n, what] of [
+    ['\u200CAlice', 'ZWNJ at the start'], ['Alice\u200D', 'ZWJ at the end'], ['Ame\u0301lie', 'not in NFC (a decomposed é)'],
+  ] as const) {
+    const t = buildBind({ ...base, name: n })
+    row({ name: `bind: a name with ${what} is refused`, type: 'bind', text: t, sig: await sign(account, t), expect: 'reject', reason: 'name' })
+  }
+  for (const [n, what] of [
+    ['\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645', 'a Persian name with a mid-word ZWNJ'],
+    ['\u{1F469}\u200D\u{1F4BB} Dev', 'an emoji ZWJ sequence'], ['Améli', 'an NFC accented name'],
+  ] as const) {
+    const t = buildBind({ ...base, name: n })
+    row({ name: `bind: ${what} is accepted`, type: 'bind', text: t, sig: await sign(account, t), expect: 'accept' })
+  }
   const withKx = buildBind({ ...base, kx })
   const sKx = await sign(account, withKx)
   row({ name: 'bind: kx filled while placement is unruled', type: 'bind', text: withKx, sig: sKx, expect: 'reject', reason: 'kx' })

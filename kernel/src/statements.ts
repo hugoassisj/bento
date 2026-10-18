@@ -70,15 +70,28 @@ function freeText(f: string): string | null {
   return b64uEnc(utf8(t)) === f ? t : null
 }
 
-/** Display text a person sees (a name, a device label): bounded, and free of
- *  controls and bidirectional overrides, which could make "alice ✓" read as
- *  something else on screen. */
+/**
+ * Display text a person sees (a name, a device label): bounded, in NFC, and free
+ * of anything invisible or layout-changing that could make "alice ✓" read as
+ * something else on screen. Refused:
+ *   - controls (Cc), private use (Co), line and paragraph separators (Zl, Zp);
+ *   - every format character (Cf): bidi overrides and marks (including U+061C),
+ *     zero-width space, word joiner, BOM, soft hyphen, the Mongolian vowel
+ *     separator — EXCEPT ZWNJ/ZWJ (U+200C/U+200D), which Persian, Indic scripts
+ *     and emoji sequences need, and which are refused only at either end;
+ *   - the Hangul fill letters U+115F, U+1160, U+3164, U+FFA0, which render blank.
+ * No filter stops homoglyphs, so a name is SELF-ASSERTED and must never be shown
+ * without the verified address beside it (docs/DECISIONS.md).
+ */
 const MAX_DISPLAY = 64
-const DISPLAY_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩‎‏]/
+const DISPLAY_FORBIDDEN = /[\p{Cc}\p{Co}\p{Zl}\p{Zp}ᅟᅠㅤﾠ]|(?![‌‍])\p{Cf}/u
+const JOINER = /^[‌‍]|[‌‍]$/u
 function displayText(f: string): string | null {
   const t = freeText(f)
   if (t === null || t.length === 0) return null
-  if ([...t].length > MAX_DISPLAY || DISPLAY_FORBIDDEN.test(t)) return null
+  if ([...t].length > MAX_DISPLAY) return null
+  if (t.normalize('NFC') !== t) return null
+  if (DISPLAY_FORBIDDEN.test(t) || JOINER.test(t)) return null
   return t
 }
 
@@ -510,7 +523,10 @@ export function buildConsent(c: Consent): string {
  * OWN audience, the challenge it issued and the payload it is about to apply —
  * it never trusts a transcript from the request. `spend(challenge)` must mark
  * the challenge used and return false if it was already spent or has expired;
- * it is called first, so any attempt consumes the challenge.
+ * it is called first, so any attempt consumes the challenge. That is the right
+ * default for races (no second try against one challenge), and it relies on
+ * challenges being SESSION-BOUND: one issued to one session, so a stranger who
+ * spends it can only fail that session's attempt, never take it over.
  *
  * `consentPub` must come from a verified dev. certificate's consentPub field;
  * that is what makes it a consent key and not merely a key.
