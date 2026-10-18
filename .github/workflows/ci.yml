@@ -852,6 +852,25 @@ jobs:
         # the document's origin. Compiles the real HostDocStore; skips off Apple.
         run: node scripts/test-home-docstore-ios.mjs
 
+      - name: home/ios bento/id keys rig
+        # The agent's keys: the account key, the Secure Enclave routine and consent
+        # keys, raw low-S signatures (verified in WebCrypto), never minting over a
+        # store it could not read, and the §29 biometric-enrolment notice outbox.
+        # Apple toolchains only; skips elsewhere.
+        run: node scripts/test-home-id-keys.mjs
+
+      - name: home/ios bento/id statements rig
+        # The Swift statements against kernel/fixtures/identity-v1.json: verdict
+        # and reason on every row, round trips, tampering, transcripts, low-S,
+        # purposes, addresses, spendCalled and the frozen display table.
+        run: node scripts/test-home-id-statements.mjs
+
+      - name: home/ios bento/id agent rig
+        # sign() routing and the host-stamped consent statement (§2e (A)): what
+        # the page can name, what only the host stamps, and the verifier refusing
+        # a relay, replay, payload swap or docId swap.
+        run: node scripts/test-home-id-agent.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected
@@ -2680,6 +2699,31 @@ jobs:
         # instead of re-running it and failing over the gate; unlocking
         # replaces it with the real workbook.
         run: node scripts/test-dash-gate-browser.mjs
+
+  home-ios-swift:
+    # The home/ios Swift rigs need CryptoKit, Security and LocalAuthentication,
+    # so on the ubuntu validate job they print SKIPPED and pass. Here they run
+    # for real, and a rig that reports SKIPPED FAILS the step, so a missing
+    # toolchain can never pass quietly.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Toolchain
+        run: sw_vers && xcrun swiftc --version
+      - name: Swift rigs (a skip fails)
+        shell: bash
+        run: |
+          set -o pipefail
+          for rig in test-tray-releases.mjs test-home-origin.mjs test-home-docstore-ios.mjs; do
+            echo "::group::$rig"
+            node "scripts/$rig" | tee "$RUNNER_TEMP/rig.out"
+            echo "::endgroup::"
+            if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::$rig skipped on macOS"; exit 1; fi
+          done
 
   home-origin-probe-browser:
     # The probe that decides whether a file opened for the first time may keep
