@@ -70,6 +70,66 @@ already refuses frames. Defence in depth.
 20 cases. It fails against a path-only origin.
 
 ---
+## 2026-10-18 — Android: a document's web origin belongs to the document, not to its path
+
+**Supersedes one line of 2026-09-19** ("The native hosts were never exposed …
+cross-deck reads are impossible there"). That holds across different paths. It
+was false across ONE path reused by a different file.
+
+**What was measured** (emulator, Android 16, before this change). The Android
+host served each document from `https://<sha24(URI)>.bento-tray.invalid/`, and
+common document URIs are paths: the folder index's
+`primary:Documents/x.bento.html`, and the Files app's Downloads view, which
+hands over `raw:/storage/…` (a path) or `msf:<row>`, a MediaStore id that
+survives an overwrite. So a DIFFERENT file at the same place opened under the
+previous document's origin and read its localStorage, its autosave recovery
+copy and version history, and, because Android supplies no docstore, this
+device's member private key for that document. A different file elsewhere read
+nothing.
+
+**Decided.** The origin is a CLAIM in a device-local index, bound to the
+document (`DocumentOrigin.kt`, `OriginIndex.kt`):
+
+- **The docId refuses, never claims.** On every open, a URI's claim is reused
+  only for the same docId (a strict UUID read from the plaintext `#bento-doc`).
+  A different docId gets a fresh origin. A docId never selects an origin: an
+  unknown URI does not inherit another URI's claim because the docIds match.
+- **No docId** (an encrypted envelope, or a never-saved shell): reuse only for
+  exactly the bytes the host last read or wrote (SHA-256). Any other change gets
+  a fresh origin. A first save, which writes the docId the kernel just minted,
+  moves the claim to that docId, because the host itself wrote those bytes.
+- **New origins** are HMAC-SHA256(Keystore key, URI ‖ docId), or ‖ the content
+  hash when there is no docId. The key never leaves the device, and nothing in a
+  file selects or reproduces it.
+- **Legacy origins are adopted on update**, so existing recovery copies and
+  member keys survive. But only after an inspector page, served IN the legacy
+  origin before any document code runs there, finds no autosave record and no
+  member key belonging to another docId. Anything it can't attribute, or no
+  answer, gets a fresh origin.
+- **Nothing is cleared.** An abandoned origin's data stays, unreachable. Its
+  owner may have moved, and wiping it would destroy their recovery copy.
+- **A move or rename done outside the app gets a fresh origin.** The only
+  device-local evidence of a move would be the app performing it, and it has no
+  such feature. Letting a matching docId follow the file would let a docId claim
+  an origin, which is the hole this closes.
+
+**Verified on the emulator**, old build upgraded to new, app data kept:
+- the same document reopens on its legacy origin, with its own data;
+- a different document at a URI whose legacy storage holds another docId gets a
+  fresh origin and reads nothing;
+- an `msf:` overwrite by a different docId gets a fresh origin;
+- a successor at the same folder-index path after a delete gets a fresh origin;
+- a document reopened unchanged keeps its origin and data;
+- a never-saved shell keeps its storage across its first save and reopen.
+
+JVM rig: `DocumentOriginTest`, 18 cases. Removing the docId refusal fails 4;
+always adopting legacy storage fails 3. CI now runs the Android unit tests
+(`home-android-unit`); nothing ran them before.
+
+**Still open:** the member private key leaves localStorage only with a host
+docstore (`kernel/src/docstore.ts`). Android's, Keystore-backed and partitioned
+by this same claim, is next. iOS has the same path-derived origin and is fixing
+it in its own change.
 
 ## 2026-10-18 — The Mac app is the iOS app, built for Mac Catalyst; a Mac double-click edits in place
 

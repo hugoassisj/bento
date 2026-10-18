@@ -2365,6 +2365,27 @@ jobs:
         # The last section is two real sessions over a real BroadcastChannel.
         run: node --no-warnings scripts/test-sync-spaces-session.ts
 
+  home-android-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Android host unit tests
+        # The JVM rigs for home/android: which web origin a document may run
+        # under (a different file at a path a document used before must never
+        # read its storage), the signed new-document verifier, and the Kotlin
+        # port of the document index against home/fixtures. They need no
+        # emulator, and until this job nothing ran them — the corpus note above
+        # said "the Kotlin port under Gradle" of a step that did not exist.
+        # The runner image ships the Android SDK (ANDROID_HOME); the wrapper is
+        # pinned at 8.14.3 because AGP 8 cannot run on Gradle 9.6+.
+        working-directory: home/android
+        run: ./gradlew --no-daemon testDebugUnitTest
+
   type-find-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15

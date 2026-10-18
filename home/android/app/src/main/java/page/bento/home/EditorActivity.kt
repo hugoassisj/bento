@@ -34,7 +34,6 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
-import java.security.MessageDigest
 import java.util.concurrent.Executors
 
 /**
@@ -161,13 +160,12 @@ class EditorActivity : Activity() {
      */
     private val io = Executors.newSingleThreadExecutor()
 
-    /** Stable per-document host: a truncated SHA-256 of the document's URI.
-     *  Hex only, so it is always a valid host component. */
-    private val originHost: String by lazy {
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest((docUri?.toString() ?: "unsaved").toByteArray())
-        digest.joinToString("") { "%02x".format(it) }.take(24) + ".bento-tray.invalid"
-    }
+    /**
+     * The document's web origin, chosen by [DocumentOrigin] before the page
+     * loads: whose localStorage, autosave and member key this page can read.
+     * Hex only, so it is always a valid host component.
+     */
+    private var originHost = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -198,6 +196,9 @@ class EditorActivity : Activity() {
             } catch (e: Exception) {
                 Log.w(TAG, "open failed", e); null
             }
+            // Decoding and hashing a multi-megabyte deck belongs here, off the
+            // main thread, not in the origin decision that follows.
+            val facts = data?.let { factsOf(uri, it) }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (data == null) {
@@ -205,10 +206,93 @@ class EditorActivity : Activity() {
                 } else {
                     bytes = data
                     Recents.touch(this, uri, docName)
-                    startWebView()
+                    chooseOrigin(facts!!) { origin ->
+                        if (isFinishing || isDestroyed) return@chooseOrigin
+                        originHost = "$origin.bento-tray.invalid"
+                        startWebView()
+                    }
                 }
             }
         }.start()
+    }
+
+    /** What the host knows about the file it is about to serve. */
+    private fun factsOf(uri: Uri, data: ByteArray) = DocumentOrigin.Facts(
+        uri = uri.toString(),
+        docId = DocumentOrigin.extractDocId(data.toString(Charsets.UTF_8)),
+        contentSha256 = DocumentOrigin.hex(DocumentOrigin.sha256(data)),
+    )
+
+    /**
+     * Pick the origin for this open — see [DocumentOrigin] for the rules. The
+     * claim is re-recorded with the current facts every time, so the index
+     * always describes the instance this host last saw.
+     */
+    private fun chooseOrigin(facts: DocumentOrigin.Facts, then: (String) -> Unit) {
+        val fresh = { DocumentOrigin.freshOrigin(facts) { OriginIndex.hmac(this, it) } }
+        fun settle(origin: String) {
+            OriginIndex.record(this, facts.uri, DocumentOrigin.Claim(origin, facts.docId, facts.contentSha256))
+            then(origin)
+        }
+        when (val d = DocumentOrigin.decide(facts, OriginIndex.claim(this, facts.uri))) {
+            is DocumentOrigin.Decision.Reuse -> settle(d.origin)
+            is DocumentOrigin.Decision.Fresh -> settle(fresh())
+            is DocumentOrigin.Decision.InspectLegacy -> inspectLegacy(d.legacyOrigin) { found ->
+                settle(if (DocumentOrigin.mayAdoptLegacy(facts, found)) d.legacyOrigin else fresh())
+            }
+        }
+    }
+
+    /**
+     * Look inside a legacy origin before adopting it. The inspector page runs IN
+     * that origin — the only place its storage can be read from — in a separate,
+     * throwaway WebView, before any document code has run there. No answer in
+     * time counts as unattributable data, so the safe outcome (a fresh origin)
+     * is also the default.
+     */
+    private fun inspectLegacy(origin: String, done: (DocumentOrigin.Findings) -> Unit) {
+        val host = "$origin.bento-tray.invalid"
+        val probe = WebView(this)
+        var settled = false
+        fun finish(f: DocumentOrigin.Findings) {
+            if (settled) return
+            settled = true
+            probe.post { probe.destroy() }
+            done(f)
+        }
+        probe.settings.javaScriptEnabled = true
+        probe.settings.domStorageEnabled = true
+        probe.settings.allowFileAccess = false
+        probe.settings.allowContentAccess = false
+        probe.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                // Serve the inspector and nothing else; everything else on this
+                // origin answers 404, so the probe can never load the document.
+                if (request.url.host != host) return null
+                val body = if (request.url.path == DocumentOrigin.INSPECTOR_PATH)
+                    DocumentOrigin.INSPECTOR_HTML.toByteArray() else ByteArray(0)
+                val code = if (body.isEmpty()) 404 else 200
+                return WebResourceResponse("text/html", "utf-8", code, if (code == 200) "OK" else "Not Found",
+                    emptyMap(), ByteArrayInputStream(body))
+            }
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
+        }
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            finish(DocumentOrigin.Findings(emptySet(), true)); return
+        }
+        WebViewCompat.addWebMessageListener(probe, "__bentoInspect", setOf("https://$host")) { _, message, _, isMainFrame, _ ->
+            if (!isMainFrame) return@addWebMessageListener
+            val f = try {
+                val o = JSONObject(message.data ?: "")
+                val ids = o.getJSONArray("docIds")
+                DocumentOrigin.Findings((0 until ids.length()).map { ids.getString(it) }.toSet(), o.optBoolean("unattributed", true))
+            } catch (e: Exception) {
+                Log.w(TAG, "unreadable inspector report", e); DocumentOrigin.Findings(emptySet(), true)
+            }
+            finish(f)
+        }
+        probe.postDelayed({ finish(DocumentOrigin.Findings(emptySet(), true)) }, 8_000)
+        probe.loadUrl("https://$host${DocumentOrigin.INSPECTOR_PATH}")
     }
 
     private fun startWebView() {
@@ -643,8 +727,17 @@ class EditorActivity : Activity() {
         val data = text.toByteArray()
         io.execute {
             val err = writeBytes(uri, data)
+            // This host wrote these bytes, so the claim follows them: a
+            // never-saved document's first save gives it its docId here, and a
+            // docless document's claim tracks its new content. Computed on this
+            // thread — an autosave writes megabytes every few seconds.
+            val f = if (err == null) factsOf(uri, data) else null
             runOnUiThread {
-                if (err == null) bytes = data
+                if (err == null) {
+                    bytes = data
+                    OriginIndex.record(this, f!!.uri,
+                        DocumentOrigin.Claim(originHost.substringBefore('.'), f.docId, f.contentSha256))
+                }
                 reply(id, err == null, err)
             }
         }
