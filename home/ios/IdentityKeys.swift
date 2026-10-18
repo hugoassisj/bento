@@ -169,6 +169,8 @@ enum IdentityKeys {
         /// which new state it's about (a hash, never the state itself)
         let state: String
         let at: Int
+        /// who has confirmed receiving it: device keys, and "address"
+        var deliveredTo: Set<String> = []
     }
 
     static let outboxItem = "identity/notice-outbox"
@@ -211,7 +213,8 @@ enum IdentityKeys {
         }
     }
 
-    /// The notices still to deliver. The sender removes one only once it's sent.
+    /// The notices still to deliver. A notice leaves only when EVERY recipient
+    /// has confirmed it (see markDelivered).
     static func pendingNotices(in store: Store) -> [Notice]? {
         switch store.get(outboxItem) {
         case .found(let q): return try? JSONDecoder().decode([Notice].self, from: q)
@@ -220,10 +223,17 @@ enum IdentityKeys {
         }
     }
 
+    /// Record that `recipient` (a device key, or "address") confirmed receiving
+    /// `n`. The notice leaves the outbox only once every one of `recipients`
+    /// has: a partial send never clears it, because the device that never
+    /// heard is the one a thief would choose. `recipients` is the account's
+    /// devices plus "address", as the directory lists them at delivery time.
     @discardableResult
-    static func markSent(_ n: Notice, in store: Store) -> Bool {
-        guard var l = pendingNotices(in: store) else { return false }
-        l.removeAll { $0 == n }
+    static func markDelivered(_ n: Notice, to recipient: String, of recipients: Set<String>, in store: Store) -> Bool {
+        guard !recipients.isEmpty, recipients.contains(recipient), var l = pendingNotices(in: store),
+              let i = l.firstIndex(where: { $0.state == n.state && $0.device == n.device }) else { return false }
+        l[i].deliveredTo.insert(recipient)
+        if recipients.isSubset(of: l[i].deliveredTo) { l.remove(at: i) }
         guard let d = try? JSONEncoder().encode(l) else { return false }
         return store.set(outboxItem, d)
     }

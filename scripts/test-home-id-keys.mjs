@@ -107,8 +107,14 @@ do {
   e("gate.accept", IdentityKeys.acceptEnrolment(Y, in: restarted) && IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 4, in: restarted) == .proceed)
   e("gate.stillqueued", (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
   if let n = IdentityKeys.pendingNotices(in: restarted)?.first {
-    e("gate.sent", IdentityKeys.markSent(n, in: restarted) && (IdentityKeys.pendingNotices(in: restarted)?.isEmpty ?? false))
-  } else { e("gate.sent", "no notice was ever queued") }
+    let everyone: Set<String> = ["devA", "devB", "address"]
+    _ = IdentityKeys.markDelivered(n, to: "devA", of: everyone, in: restarted)
+    _ = IdentityKeys.markDelivered(n, to: "address", of: everyone, in: restarted)
+    e("gate.partial", (IdentityKeys.pendingNotices(in: restarted) ?? []).count == 1)
+    e("gate.stranger", !IdentityKeys.markDelivered(n, to: "mallory", of: everyone, in: restarted))
+    _ = IdentityKeys.markDelivered(n, to: "devB", of: everyone, in: restarted)
+    e("gate.sent", IdentityKeys.pendingNotices(in: restarted)?.isEmpty ?? false)
+  } else { e("gate.sent", "no notice was ever queued"); e("gate.partial", "none"); e("gate.stranger", "none") }
   let f = Mem(); _ = try! IdentityKeys.device(.consent, in: f, enclave: false, domainState: { X }); f.failReads = true
   e("gate.blind", IdentityKeys.enrolmentGate(Y, device: "iPhone", now: 5, in: f) == .refuse)
 }
@@ -161,7 +167,9 @@ ok(out['gate.changed'] === 'true' && out['gate.queued'] === 'true', 'a change qu
 ok(out['gate.survives'] === 'true', 'killed before acceptance: on restart the notice is still queued and the state still not accepted')
 ok(out['gate.idempotent'] === 'true', 'the gate after a restart neither drops nor repeats the notice')
 ok(out['gate.accept'] === 'true' && out['gate.stillqueued'] === 'true', 'accepting after re-confirmation leaves the notice queued until it is SENT')
-ok(out['gate.sent'] === 'true', 'the notice leaves the outbox only when the sender marks it sent')
+ok(out['gate.partial'] === 'true', 'a PARTIAL delivery (two of three recipients) leaves the notice queued')
+ok(out['gate.stranger'] === 'true', "a confirmation from someone who isn't a recipient is ignored")
+ok(out['gate.sent'] === 'true', 'the notice leaves the outbox only once EVERY device and the address confirmed it')
 ok(out['gate.blind'] === 'true', "a record or outbox that can't be read refuses the consent")
 console.log('biometric enrolment tripwire (§29):')
 ok(out['trip.same'] === 'true', 'the enrolment the consent key was created under reads unchanged')
