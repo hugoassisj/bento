@@ -10,14 +10,15 @@ import './styles.css'
 // AFTER styles.css: a design rule and the base rule it restyles often tie on
 // specificity, and the tie goes to the later sheet.
 import './designs.css'
-import { configureApp, appConfig } from '../../kernel/src/app.ts'
+import { configureApp } from '../../kernel/src/app.ts'
 import { startTheme } from '../../kernel/src/theme.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, registerPreview,
   saveFile, parseEnvelope, canWriteInPlace, decryptEnvelope, setEncryptionPassword,
   writeUpdatedFileAs, suggestedFileName,
-  isEncryptionActive,
+  isBodySealed,
 } from '../../kernel/src/save.ts'
+import { setTabTitle, setNeutralTabTitle } from './tabtitle.ts'
 import { putRecovery, getRecovery, clearRecovery, pruneOld, addVersion } from '../../kernel/src/autosave.ts'
 import { APP_VERSION, applyUpdateInPlace } from '../../kernel/src/update.ts'
 import { t, locale, applyDirection } from './i18n'
@@ -123,6 +124,8 @@ if (envelope) {
  * every later save stays encrypted.
  */
 async function passwordGate(): Promise<void> {
+  // neutral title while sealed, matching the saved file's title
+  setNeutralTabTitle()
   document.getElementById('bento-splash')?.remove()
   const wrap = document.createElement('div')
   wrap.className = 'sp-gate'
@@ -220,7 +223,7 @@ function gate(title: string, body: string, actions: Array<[string, () => void]>)
 }
 
 function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version'): void {
-  document.title = `${doc.title} — ${appConfig().appName}`
+  setTabTitle(doc.title)
   document.getElementById('bento-splash')?.remove()
 
   const store = new Store(doc)
@@ -383,8 +386,9 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     // editing runs, but the point somebody chose to write the file is the
     // point they would most want back, so it is never throttled away. The
     // version is the snapshot that was WRITTEN, not whatever is on screen now.
-    // Encrypted spaces keep nothing here, for the reason putRecovery does not.
-    if (!isEncryptionActive()) { void addVersion(out.doc); lastVersionAt = Date.now() }
+    // Sealed spaces (a password or the identity seal) keep nothing here, for the
+    // reason putRecovery does not.
+    if (!isBodySealed()) { void addVersion(out.doc); lastVersionAt = Date.now() }
     if (out.result === 'saved' && out.current) {
       // Only when the disk holds what is on screen: after a stale write the
       // recovery snapshot is the one copy of the newer edit.
@@ -447,8 +451,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // any means the app offered.
   //
   // So a version is added on a throttle while editing, and unthrottled on save.
-  // The kernel caps and prunes the timeline; both stores stay empty while a
-  // password is set.
+  // The kernel caps and prunes the timeline; both stores stay empty while the
+  // body is sealed (a password or the identity seal).
   let timer: ReturnType<typeof setTimeout> | undefined
   store.on('doc', () => {
     clearTimeout(timer)
@@ -469,7 +473,9 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     // Written DURING editing, not at save — so, unlike `revisions`, it counts
     // toward the recovery key (docclass.ts SPACES_NOT_EDIT does not list it).
     recordToday()
-    if (isEncryptionActive()) return
+    // isBodySealed, not isEncryptionActive: an identity-sealed space has no
+    // password, and its snapshot would be the same plaintext on disk.
+    if (isBodySealed()) return
     timer = setTimeout(() => {
       void putRecovery(store.doc)
       if (Date.now() - lastVersionAt > VERSION_EVERY_MS) {
@@ -485,7 +491,7 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // to read (slides holds it 8s). Never for an encrypted space.
   wireRecoveryOff({
     docId: () => store.doc.docId,
-    encrypted: isEncryptionActive,
+    encrypted: isBodySealed,
     say: (msg) => editor.status(msg, 8000),
   })
 

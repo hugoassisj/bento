@@ -2813,10 +2813,18 @@ jobs:
         run: |
           npm ci --prefix spaces
           npm run build:single --prefix spaces
+          npm run build:sealtest --prefix spaces
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-spaces-save-browser.mjs
+      - name: A sealed space writes nothing readable (spaces, Chromium)
+        # The build:sealtest shell booted identity-sealed through the shared
+        # helper, plus a password space: no recovery snapshot or version in
+        # IndexedDB (also across a reload), no preview and no plaintext in the
+        # saved file, a neutral tab title, no recovery-off notice. The unsealed
+        # control shows each check can see a leak.
+        run: node scripts/test-spaces-sealed-browser.mjs
       - name: One field look in Chromium (spaces)
         # Port of slides' fields rig: every chrome text field, select and
         # textarea (inspector incl. "Also known as", dialogs, view popovers,

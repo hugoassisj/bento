@@ -11200,3 +11200,22 @@ Follows the desktop agent core entry above.
 Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
 old pepper labels, losing O→0 when reading a code, and skipping the range
 check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
+
+## 2026-10-18 — bento/spaces: which checks ask isBodySealed, and the tab title while sealed
+
+Every plaintext-to-disk guard in spaces asks `isBodySealed()` (a password OR the
+identity seal): the recovery snapshot and throttled version on the autosave
+debounce, the version added on save, and the recovery-off notice (main.ts). The
+two places that still ask `isEncryptionActive()` are the password UI in
+doccmds.ts: the Change/Remove password rows act on a password an
+identity-sealed space does not have, and the version-history note names the
+password. A new guard on anything written beside the file asks
+`isBodySealed()`.
+
+Neutral title while sealed, matching the saved file's title. Every write to
+`document.title` goes through `spaces/src/tabtitle.ts` (boot, the password
+gate, rename, setting or removing a password).
+
+Guarded by `scripts/test-spaces-sealed-browser.mjs` on the build:sealtest
+shell, with an unsealed control. Reverting either main.ts guard, or the title
+helper, turns it red.

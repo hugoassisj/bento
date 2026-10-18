@@ -1375,6 +1375,11 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   recovery is off for this space — it’s too large to keep a backup copy. Save
   often." It says so once per space, and never for an encrypted space, which
   never keeps a recovery copy.
+- **A sealed space keeps no readable copy in this browser.** A space sealed
+  by a password or by the identity seal writes no crash-recovery copy and no
+  version, and shows no recovery-off notice. Neutral title while sealed,
+  matching the saved file's title: the tab reads "bento/spaces", from the
+  password prompt on.
 
 ## [0.1.0] — 2026-08-03
 
