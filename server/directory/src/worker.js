@@ -241,6 +241,10 @@ export class Address {
       if (!(await mayMail())) return out(202, { mail: null })
       const b = await readBind(a.stmt, a.sig, now)
       if (!b) return out(202, { mail: null })
+      // a LIVE binding never moves to another key by email alone (security §25):
+      // that is the 72-hour contestable rotation, which is not built yet. No mail.
+      const live = await s.get('cur')
+      if (live && live.b.expires > now && live.b.key !== b.accountPub) return out(202, { mail: null })
       const code = mintCode()
       await s.put('pend', { kind: 'bind', stmt: a.stmt, sig: a.sig, codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
       return out(202, { mail: { code, fp: (await hashOf(b.accountPub)).slice(0, 8) } })
@@ -257,11 +261,13 @@ export class Address {
       const cur = await s.get('cur')
       const live = cur && cur.b.expires > now ? cur : null
       if (live) {
+        if (b.accountPub !== live.b.key) return fail(p) // re-checked: it may have gone live since start
         if (b.seq !== live.b.seq + 1 || b.prev !== live.h) return fail(p)
       } else if (b.seq !== 1 && !(cur && b.seq === cur.b.seq + 1 && b.prev === cur.h)) {
         return fail(p) // a fresh start is seq 1; an expired binding may also be continued
       }
-      const rebound = !!live && live.b.key !== b.accountPub // a new key with no old-key signature: pinners warn
+      // a new key over an EXPIRED binding, proven by email alone: pinners warn
+      const rebound = !!cur && cur.b.key !== b.accountPub
       const dirKey = await importDirKey(this.env.DIR_KEY_JWK)
       const att = await attest(dirKey, this.env.DIR_KID, h, now, now)
       if (cur) await s.put('chain', [...((await s.get('chain')) || []), cur.h])
@@ -304,7 +310,11 @@ export class Address {
 
     if (a.op === 'deleteStart') {
       // only an address with something to delete is mailed; the HTTP answer is 202 either way
-      if (!(await s.get('cur')) || !(await mayMail())) return out(202, { mail: null })
+      // only an EXPIRED binding can be removed by mailbox alone: a live one is
+      // removed by its holder (del.), or, once rotation lands, by the 72-hour
+      // contestable path. Email never decides alone (security §25).
+      const cur = await s.get('cur')
+      if (!cur || cur.b.expires > now || !(await mayMail())) return out(202, { mail: null })
       const code = mintCode()
       await s.put('pend', { kind: 'delete', codeHash: await codeHash(code), expires: now + LIMITS.codeTtlMs, attempts: 0 })
       return out(202, { mail: { code } })
@@ -314,6 +324,8 @@ export class Address {
       const p = await pending('delete')
       if (!p) return out(400, { error: 'invalid' })
       if (!same(await codeHash(a.code), p.codeHash)) return fail(p)
+      const cur = await s.get('cur')
+      if (cur && cur.b.expires > now) return fail(p) // renewed since the code was mailed
       await tombstone('mailbox')
       return out(200, { deleted: true })
     }

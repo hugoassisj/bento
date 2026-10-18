@@ -32,7 +32,16 @@ day's hashes can't be linked to the next.
 | `POST /v1/bind/complete` `{email, code, sig}` | the code + the key's signature over `cmp.…` | 200 with the statement and a signed `att.…`, or a uniform 400 |
 | `GET /v1/lookup?e=` | none | 200 (statement + fresh attestation + chain), 410 (signed tombstone) or 404 (never existed *or* expired: the same answer). Exact address only |
 | `POST /v1/delete` `{email, ts, sig}` | the key's signature over `del.…`, ±5 min | 204, leaving a signed `tomb.…` |
-| `POST /v1/delete/start`, `/complete` | a mailed code (for a lost key) | 202, then 204 |
+| `POST /v1/delete/start`, `/complete` | a mailed code, for an EXPIRED binding only | 202, then 204 |
+
+**Email never changes a LIVE binding on its own** (security §25). While a
+binding is live, a new key proven by email alone is refused (start mails
+nothing), and so is a mailed-code delete. A live binding changes only by its
+holder: a renewal, or a holder-signed delete. The 72-hour contestable
+rotation, which is how a person who has lost every device moves on, arrives
+with the rotation states. Email alone may bind an address that is absent,
+expired or deleted; a new key over an expired one is flagged `rebound`, so
+pinners warn.
 | `GET /v1/keys` | none | the directory's public keys, for diagnosis (clients trust the list in the signed release) |
 
 **Limits:**

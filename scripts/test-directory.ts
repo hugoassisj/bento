@@ -117,7 +117,10 @@ async function stmtFor(p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: st
   return { text, sig: await p.k.sign(text) }
 }
 async function bind(p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: string) {
-  const s = await stmtFor(p, seq, prev)
+  return bindFor(p, seq, prev)
+}
+async function bindFor(p: Awaited<ReturnType<typeof person>>, seq = 1, prev?: string, life?: number) {
+  const s = await stmtFor(p, seq, prev, life)
   const st = await api('POST', '/v1/bind/start', { stmt: s.text, sig: s.sig })
   const code = codeFor(p.email)!
   const c = await api('POST', '/v1/bind/complete', { email: p.email, code, sig: await p.k.sign(completionText(await hashOf(s.text), code)) })
@@ -263,13 +266,27 @@ const alice = await person('alice@example.com', 'Alice')
   now += 2 * MIN
   const ren = await bind(alice, 2, h1)
   ok(ren.c.status === 200 && ren.c.j.rebound === false, 'renewal (same key, seq+1, prev) → accepted, not rebound')
-  // rebound by email: a NEW key continuing the chain, without an old-key signature
+  // a NEW key over the LIVE binding, proven by email alone: refused (security §25:
+  // a live binding moves only through the 72-hour contestable rotation)
   now += 2 * MIN
-  const alice2 = { ...(await person('alice@example.com')) }
-  const rb = await bind(alice2, 3, await hashOf(ren.s.text))
-  ok(rb.c.status === 200 && rb.c.j.rebound === true, 'a new key re-verified by email is flagged rebound (pinners warn)')
-  const l = await api('GET', '/v1/lookup?e=alice@example.com')
-  ok(l.j.rebound === true && (l.j.chain as string[]).length === 2, 'lookup carries rebound and the chain of earlier hashes')
+  const alice2 = await person('alice@example.com')
+  const rbs = await stmtFor(alice2, 3, await hashOf(ren.s.text))
+  const m0 = mailbox.length
+  ok((await api('POST', '/v1/bind/start', { stmt: rbs.text, sig: rbs.sig })).status === 202 && mailbox.length === m0, 'a new key over a LIVE binding: start → 202 and NO mail')
+  ok((await api('POST', '/v1/bind/complete', { email: alice.email, code: 'ABCDEFGH', sig: await alice2.k.sign(completionText(await hashOf(rbs.text), 'ABCDEFGH')) })).status === 400, '…and nothing to complete')
+  const still = await api('GET', '/v1/lookup?e=alice@example.com')
+  ok(still.status === 200 && String(still.j.binding) === ren.s.text && still.j.rebound === false, 'the live binding keeps its key, not rebound')
+
+  // control: a new key over an EXPIRED binding, by email → accepted, flagged rebound
+  const ivan = await person('ivan@example.com')
+  const iv1 = await bindFor(ivan, 1, undefined, 10 * MIN)
+  ok(iv1.c.status === 200, 'a short-lived binding')
+  now += 11 * MIN
+  const ivan2 = await person('ivan@example.com')
+  const iv2 = await bindFor(ivan2, 2, await hashOf(iv1.s.text))
+  ok(iv2.c.status === 200 && iv2.c.j.rebound === true, 'a new key over an EXPIRED binding, by email → accepted and flagged rebound (pinners warn)')
+  const il = await api('GET', '/v1/lookup?e=ivan@example.com')
+  ok(il.j.rebound === true && (il.j.chain as string[]).length === 1, 'lookup carries rebound and the chain of earlier hashes')
 }
 
 // =====================================================================
@@ -289,11 +306,51 @@ const alice = await person('alice@example.com', 'Alice')
   now += 2 * MIN
   const g = await person('gina@example.com'); await bind(g)
   now += 2 * MIN
-  ok((await api('POST', '/v1/delete/start', { email: g.email })).status === 202, 'delete by mailbox: start → 202')
-  const code = codeFor(g.email)!
-  ok(/remove this address/.test(mailbox[mailbox.length - 1].body), 'the removal mail says what it is for')
-  ok((await api('POST', '/v1/delete/complete', { email: g.email, code })).status === 204, 'delete by mailbox: the code → 204')
-  ok(String(((await api('GET', '/v1/lookup?e=gina@example.com')).j.tombstone as { text: string }).text).split('.')[4] === 'mailbox', 'tombstone says by mailbox')
+  const m1 = mailbox.length
+  ok((await api('POST', '/v1/delete/start', { email: g.email })).status === 202 && mailbox.length === m1, 'a LIVE binding: delete by mailbox → 202 and NO mail (email never decides alone)')
+  ok((await api('POST', '/v1/delete/complete', { email: g.email, code: 'ABCDEFGH' })).status === 400, '…and no code completes it')
+  ok((await api('GET', '/v1/lookup?e=gina@example.com')).status === 200, 'the live binding is untouched')
+
+  // control: an EXPIRED binding (still held) can be removed by mailbox
+  const jo = await person('jo@example.com')
+  const jo1 = await bindFor(jo, 1, undefined, 10 * MIN)
+  now += 11 * MIN
+  ok((await api('POST', '/v1/delete/start', { email: jo.email })).status === 202, 'an EXPIRED binding: delete by mailbox, start → 202')
+  const code = codeFor(jo.email)!
+  ok(!!code && mailbox[mailbox.length - 1].to === jo.email && /remove this address/.test(mailbox[mailbox.length - 1].body), 'the removal mail is sent, and says what it is for')
+  ok((await api('POST', '/v1/delete/complete', { email: jo.email, code })).status === 204, 'delete by mailbox: the code → 204')
+  ok(String(((await api('GET', '/v1/lookup?e=jo@example.com')).j.tombstone as { text: string }).text).split('.')[4] === 'mailbox', 'tombstone says by mailbox')
+  ok(jo1.c.status === 200, 'the expired control had been bound')
+  // a tombstoned address binds again by email (a fresh seq 1)
+  now += 2 * MIN
+  const jo2 = await person('jo@example.com')
+  ok((await bind(jo2)).c.status === 200, 'a TOMBSTONED address binds again by email (seq 1)')
+  // the complete-time re-checks guard a race the API can't produce today (one
+  // pending slot per address), so drive it in storage: the binding goes LIVE
+  // between the mail and the code
+  const storeOf = async (email: string) => { const k = await addressKey(email); return stores.find((m) => m.has(k))!.get(k)! }
+  const goLive = async (email: string) => {
+    const st = await storeOf(email); const cur = st.get('cur') as { b: { expires: number } }
+    cur.b.expires = now + DAY; st.set('cur', cur)
+  }
+  const kim = await person('kim@example.com')
+  const k1 = await bindFor(kim, 1, undefined, 10 * MIN)
+  now += 11 * MIN
+  const kim2 = await person('kim@example.com')
+  const ks = await stmtFor(kim2, 2, await hashOf(k1.s.text)) // chained correctly: only the key check stands in the way
+  await api('POST', '/v1/bind/start', { stmt: ks.text, sig: ks.sig })
+  const kc = codeFor(kim.email)!
+  await goLive(kim.email)
+  ok((await api('POST', '/v1/bind/complete', { email: kim.email, code: kc, sig: await kim2.k.sign(completionText(await hashOf(ks.text), kc)) })).status === 400, 'race: the binding went live after the mail → the email-only new key is refused at complete')
+  ok(((await storeOf(kim.email)).get('cur') as { b: { key: string } }).b.key === kim.k.pub, '…and the live key is unchanged')
+  const lee = await person('lee@example.com')
+  await bindFor(lee, 1, undefined, 10 * MIN)
+  now += 11 * MIN
+  await api('POST', '/v1/delete/start', { email: lee.email })
+  const lc = codeFor(lee.email)!
+  await goLive(lee.email)
+  ok((await api('POST', '/v1/delete/complete', { email: lee.email, code: lc })).status === 400 && (await storeOf(lee.email)).has('cur'), 'race: renewed after the removal mail → the mailed code no longer deletes it')
+
   const before = mailbox.length
   ok((await api('POST', '/v1/delete/start', { email: 'never@example.com' })).status === 202 && mailbox.length === before, 'delete/start for an unbound address: 202 and NO mail')
 }
