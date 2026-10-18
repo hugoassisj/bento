@@ -43,6 +43,7 @@ class DocStore(context: Context, private val claim: String) {
         const val MAX_BYTES = 64 * 1024 * 1024
         private const val KEY_ALIAS = "bento-docstore"
         private const val IV_BYTES = 12
+        private const val TAG_BYTES = 16
         private val CLAIM = Regex("^[0-9a-f]{24}$")
     }
 
@@ -65,8 +66,15 @@ class DocStore(context: Context, private val claim: String) {
         val f = file(name)
         if (!f.exists()) return null
         val blob = f.readBytes()
+        // Shorter than an IV plus a GCM tag cannot be an entry we wrote — the
+        // atomic rename rules out a torn write, so this is corruption. Absent,
+        // for the same reason a failed tag is: anything else would read as
+        // "unavailable" and wedge the member identity. (A Keystore or I/O fault
+        // still propagates as unavailable, so a transient one never overwrites a
+        // good key.)
+        if (blob.size < IV_BYTES + TAG_BYTES) return null
         val c = Cipher.getInstance("AES/GCM/NoPadding")
-        c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, blob, 0, IV_BYTES))
+        c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(TAG_BYTES * 8, blob, 0, IV_BYTES))
         c.updateAAD(boundTo(name))
         return try {
             c.doFinal(blob, IV_BYTES, blob.size - IV_BYTES)
