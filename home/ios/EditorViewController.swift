@@ -370,12 +370,18 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             let answer: (Bool, String?)
             switch op {
             case "store.list":
-                let names = self.docStore.list(in: partition).map(\.rawValue)
-                let json = (try? JSONSerialization.data(withJSONObject: names)).flatMap { String(data: $0, encoding: .utf8) }
-                answer = (true, json ?? "[]")
+                guard let names = self.docStore.list(in: partition)?.map(\.rawValue),
+                      let json = (try? JSONSerialization.data(withJSONObject: names)).flatMap({ String(data: $0, encoding: .utf8) })
+                else { answer = (false, "unavailable"); break }
+                answer = (true, json)
             case "store.get":
                 guard let name else { answer = (false, "refused"); break }
-                answer = (true, self.docStore.get(name, in: partition)?.base64EncodedString())
+                // a read that failed is NOT "absent": see HostDocStore.Read
+                switch self.docStore.get(name, in: partition) {
+                case .found(let d): answer = (true, d.base64EncodedString())
+                case .absent: answer = (true, nil)
+                case .unavailable: answer = (false, "unavailable")
+                }
             case "store.set":
                 guard let name else { answer = (false, "refused"); break }
                 guard let b64, let data = Data(base64Encoded: b64) else { answer = (false, "refused"); break }

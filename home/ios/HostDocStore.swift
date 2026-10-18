@@ -28,13 +28,21 @@ final class HostDocStore {
     /// Keychain failure). An unknown NAME is refused before it gets here.
     enum SetResult: Equatable { case stored, tooLarge, unavailable }
 
+    /// What a read found. ABSENT means the entry really isn't there, and nothing
+    /// else does: a read that failed is UNAVAILABLE. The difference is the
+    /// member key's life. Told "no key" after a transient Keychain failure, the
+    /// kernel would mint a new one and the write would replace the valid key,
+    /// losing this device's identity in the room for good. Told "unavailable",
+    /// it neither mints nor writes while blind (online.ts deviceIdentity).
+    enum Read: Equatable { case found(Data), absent, unavailable }
+
     /// One message per value; the recovery copy is the whole document JSON, and
     /// decks with media are large.
     static let maxBytes = 64 * 1024 * 1024
 
     /// Where small secrets live. The Keychain in the app; a stand-in in the rig.
     protocol Secrets {
-        func get(_ account: String) -> Data?
+        func get(_ account: String) -> Read
         func set(_ account: String, _ data: Data) -> Bool
         func delete(_ account: String)
     }
@@ -64,12 +72,20 @@ final class HostDocStore {
         !p.isEmpty && p.count <= 64 && p.unicodeScalars.allSatisfy { ("0"..."9").contains($0) || ("a"..."f").contains($0) }
     }
 
-    func get(_ name: Name, in partition: String) -> Data? {
-        guard Self.validPartition(partition) else { return nil }
+    func get(_ name: Name, in partition: String) -> Read {
+        // the partition is host-minted, so a bad one is the host's fault: never "absent"
+        guard Self.validPartition(partition) else { return .unavailable }
         return queue.sync {
             switch name {
             case .memberkey: return secrets.get(account(partition, name))
-            case .recovery: return file(partition, name).flatMap { try? Data(contentsOf: $0) }
+            case .recovery:
+                guard let u = file(partition, name) else { return .unavailable }
+                // only a file that isn't there is absent; one that is there and
+                // can't be read is unavailable, or the next autosave would
+                // replace a recovery copy that still exists
+                guard FileManager.default.fileExists(atPath: u.path) else { return .absent }
+                guard let d = try? Data(contentsOf: u) else { return .unavailable }
+                return .found(d)
             }
         }
     }
@@ -92,9 +108,18 @@ final class HostDocStore {
         }
     }
 
-    func list(in partition: String) -> [Name] {
-        guard Self.validPartition(partition) else { return [] }
-        return Name.allCases.filter { get($0, in: partition) != nil }
+    /// The names held, or nil when any of them couldn't be checked.
+    func list(in partition: String) -> [Name]? {
+        guard Self.validPartition(partition) else { return nil }
+        var held: [Name] = []
+        for n in Name.allCases {
+            switch get(n, in: partition) {
+            case .found: held.append(n)
+            case .absent: break
+            case .unavailable: return nil
+            }
+        }
+        return held
     }
 
     func delete(_ name: Name, in partition: String) {
@@ -120,10 +145,21 @@ struct KeychainSecrets: HostDocStore.Secrets {
          kSecAttrService as String: service,
          kSecAttrAccount as String: account]
     }
-    func get(_ account: String) -> Data? {
+    func get(_ account: String) -> HostDocStore.Read {
         var q = query(account); q[kSecReturnData as String] = true
         var out: CFTypeRef?
-        return SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess ? out as? Data : nil
+        let status = SecItemCopyMatching(q as CFDictionary, &out)
+        return Self.classify(status, out as? Data)
+    }
+
+    /// Only errSecItemNotFound is absence. Every other failure (locked,
+    /// interaction not allowed, missing entitlement, …) is unavailable.
+    static func classify(_ status: OSStatus, _ data: Data?) -> HostDocStore.Read {
+        switch status {
+        case errSecSuccess: return data.map { .found($0) } ?? .unavailable
+        case errSecItemNotFound: return .absent
+        default: return .unavailable
+        }
     }
     func set(_ account: String, _ data: Data) -> Bool {
         let q = query(account)

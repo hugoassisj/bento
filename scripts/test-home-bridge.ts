@@ -186,6 +186,11 @@ ok(exportCopy.includes('hasPrefix(') && exportCopy.includes('safeFileName(name)'
     "the store partition is this document's origin, never a value from the page")
   ok(/HostDocStore\.Name\.init\(rawValue:\)/.test(store) && /"refused"/.test(store),
     'a name the kernel does not use is refused')
+  // A read that FAILED must reach the kernel as 'unavailable', never as "no
+  // value": told "no key", it would mint a new one over the device's real key.
+  const getCase = store.slice(store.indexOf('case "store.get":'), store.indexOf('case "store.set":'))
+  ok(/case \.unavailable: answer = \(false, "unavailable"\)/.test(getCase) && /case \.absent: answer = \(true, nil\)/.test(getCase),
+    "a failed store read answers 'unavailable'; only real absence answers null")
   const sw = swift.slice(swift.indexOf('func userContentController('), swift.indexOf('case "store.get", "store.set"'))
   ok(sw.indexOf('BridgeSender.accepts') > 0,
     "store requests pass the same sender check as every other op (they're handled after it)")
