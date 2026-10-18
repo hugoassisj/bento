@@ -4,7 +4,7 @@
 import CryptoKit
 import Foundation
 
-/// bento/id's recovery code and key blobs (identity-design §2f, security §28), a
+/// bento/connect's recovery code and key blobs (identity-design §2f, security §28), a
 /// Swift port of kernel/src/recovery.ts held to every byte of
 /// kernel/fixtures/recovery-v1.json by scripts/test-home-id-recovery.mjs.
 ///

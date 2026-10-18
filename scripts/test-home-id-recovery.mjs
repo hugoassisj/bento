@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 /**
- * bento/id on iOS and the Mac: the recovery code and the key blobs
+ * bento/connect on iOS and the Mac: the recovery code and the key blobs
  * (home/ios/Argon2id.swift, home/ios/IdentityRecovery.swift) against every byte
  * of kernel/fixtures/recovery-v1.json.
  *
