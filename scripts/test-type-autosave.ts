@@ -355,8 +355,9 @@ H('what was DELETED before the crash stays deleted on Restore (recover, whole sn
   }
   // 5. cleared HISTORY — no path in type empties revisions today; when one does
   // (re-sign-to-trim), a whole snapshot's [] OR missing key must mean cleared.
-  // Today the missing case holds through parseDoc DEFAULTING absent revisions to
-  // [] (model.ts); this row is what notices if that default goes.
+  // The missing case holds twice over: the kernel removes an absent history
+  // field from a whole snapshot (#726), and parseDoc defaults absent revisions
+  // to [] (model.ts) before the restore sees them.
   for (const how of ['[]', 'missing'] as const) {
     const file = doc(); file.revisions = [rev('r1', 'negotiated away'), rev('r2', 'b')]
     const snap = JSON.parse(JSON.stringify(file)) as TypeDoc
@@ -365,6 +366,18 @@ H('what was DELETED before the crash stays deleted on Restore (recover, whole sn
     const s = recover(file, snap)
     ok(s.doc.revisions.length === 0 && !JSON.stringify(s.doc).includes('negotiated away'),
       `history cleared before the crash stays cleared — snapshot revisions ${how}`)
+  }
+  // 6. …but the history SALT is the one exception. A snapshot without it was
+  // autosaved BEFORE the first Sign (which mints it); a live document never
+  // loses its salt. Removing it would orphan every signature made over it.
+  {
+    const file = doc()                                       // fixture carries a salt
+    const stale = JSON.parse(JSON.stringify(file)) as TypeDoc
+    delete (stale as any).historySalt                        // …autosaved before the first Sign
+    ok(!!file.historySalt && !('historySalt' in stale), '  (the file has a salt, the stale snapshot genuinely lacks one)')
+    const s = recover(file, stale)
+    ok(s.doc.historySalt === file.historySalt,
+      'a snapshot from before the first signature keeps the live history salt — signatures made over it still match')
   }
 }
 
@@ -417,6 +430,8 @@ H('the restore rules themselves')
   ok((RESTORE_RULES.back.keepLive as Record<string, string>).signatures === 'live', 'signatures stay LIVE going back')
   ok(Object.keys(RESTORE_RULES.recover.keepLive ?? {}).join() === 'comments', 'recover overrides comments only — signatures follow the snapshot')
   ok(RESTORE_RULES.recover.wholeSnapshot === true, 'and recover states its snapshot is WHOLE')
+  ok(JSON.stringify(RESTORE_RULES.recover.keepLiveWhenAbsent) === '["historySalt"]',
+    'the only field whose absence keeps live is historySalt — never revisions, comments or signatures')
 }
 
 H('Sign is not undoable (ruling 7)')

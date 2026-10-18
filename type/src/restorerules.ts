@@ -57,11 +57,19 @@ export const RESTORE_RULES: Readonly<Record<RestoreDirection, RestoreRules>> = {
     // The kernel's default; stated here because the guarantee is load-bearing
     // (a resurrected redaction rides the next copy shared).
     //
-    // NOT covered by it: a history field left 'live' (revisions) keeps live when
-    // ABSENT. Type is safe today only because parseDoc defaults a missing
-    // `revisions` to [] before the restore sees it — pinned in
-    // test-type-autosave.ts, which goes red if that default is removed.
+    // Since kernel #726 this covers history fields left 'live' too: a whole
+    // snapshot without `revisions` means the history was cleared, and it stays
+    // cleared (parseDoc's [] default now only makes that doubly true).
     wholeSnapshot: true,
+    // …with ONE exception. `historySalt` is minted by the first Sign and never
+    // removed or replaced in a live document (only a projection drops it, and
+    // a projection is not a recovery snapshot). So a snapshot WITHOUT it was
+    // taken BEFORE the first signature, never after a clearing. Removing the
+    // salt then would orphan every signature already made over it — each
+    // would read its history "missing", and the next Sign would mint a new
+    // salt that the earlier commitments can never match. A kept random salt
+    // reveals nothing even if the revisions are gone.
+    keepLiveWhenAbsent: ['historySalt'],
   },
 };
 
