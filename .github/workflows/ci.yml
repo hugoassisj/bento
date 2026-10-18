@@ -2898,3 +2898,14 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq libtss2-dev swtpm swtpm-tools >/dev/null
           ./tpm-rig.sh
+      - name: Desktop agent no-TPM keyring rigs (gnome-keyring)
+        # On a Linux machine without a usable TPM the agent falls back to the
+        # Secret Service. Against a real gnome-keyring in a D-Bus session: the
+        # routine key signs and verifies; there is no consent key, so consent is
+        # refused (AAL3 routed elsewhere); wipe removes the keys; and the stated
+        # exposure is asserted: a second connection reads the account key with
+        # no prompt once the keyring is unlocked.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get install -y -qq gnome-keyring dbus >/dev/null
+          ./keyring-rig.sh
