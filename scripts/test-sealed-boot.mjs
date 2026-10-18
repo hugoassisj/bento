@@ -54,6 +54,20 @@ try {
     await context.close()
   }
 
+  console.log('\na fixed document, across a reload (for recovery rows keyed by docId)')
+  {
+    const base = await openSealed(browser, 'slides', { sealed: false })
+    const doc = await base.page.evaluate((m) => ({ ...structuredClone(window.bento.doc), title: m }), MARK)
+    await base.context.close()
+    const { page, context, reload } = await openSealed(browser, 'slides', { doc })
+    const first = await page.evaluate(() => ({ id: window.bento.doc.docId, title: window.bento.doc.title }))
+    ok(first.id === doc.docId && first.title === MARK, 'the fixed document booted, sealed, with its own docId')
+    await reload() // re-installs the handoff and re-proves the seal, or throws
+    const again = await page.evaluate(() => window.bento.doc.docId)
+    ok(again === doc.docId, 'after reload(): the same docId, and the seal proven again')
+    await context.close()
+  }
+
   console.log('\nunsealed control (same test shell, no key handed over)')
   {
     const { page, context } = await openSealed(browser, 'slides', { sealed: false })
