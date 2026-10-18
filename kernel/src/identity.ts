@@ -76,7 +76,8 @@ export type SignRefusal =
   | 'unavailable'
 
 export type SignResult =
-  /** `sig` is raw r‖s (64 bytes) base64url — never DER; `pub` is the key that signed */
+  /** `sig` is raw r‖s (64 bytes) base64url, low-S normalised — never DER;
+   *  `pub` is the key that signed */
   | { ok: true; sig: string; pub: string }
   | { ok: false; reason: SignRefusal }
 
@@ -105,7 +106,9 @@ export interface IdentityAgent {
   whoami(): Promise<PublicIdentity | null>
   /** Sign `payload` (the exact UTF-8 text) for `purpose` with this device's key. */
   sign(purpose: SignPurpose, payload: string): Promise<SignResult>
-  /** Who a key in the room (or, phase 2, an address) belongs to; null if unknown. */
+  /** Who a key in the room (or, phase 2, an address) belongs to; null if unknown.
+   *  A lookup by `{email}` is consent-gated and rate-limited by the HOST, so a
+   *  document cannot use it to probe which addresses have an identity. */
   resolve(query: ResolveQuery): Promise<ResolvedIdentity | null>
   /** PHASE 2: open the document key wrapped to this person (`collab.wraps`).
    *  Returns the raw key, or null when no wrap here is theirs. */
@@ -120,22 +123,50 @@ let held: IdentityAgent | undefined
  * The host's identity agent for this page, or null when there is none — in
  * which case the caller does what it always did.
  *
- * A valid agent is captured once, with its methods bound, so later changes to
- * the global cannot redirect a call. An absent or malformed one is not cached,
- * so an agent the host defines a moment late is still found on a later call.
+ * WHAT A HOST MUST DEFINE, or the document sees no agent:
+ *   - the global as a DATA property that is non-writable and non-configurable
+ *     (`Object.defineProperty(globalThis, '__bentoIdentity', { value, writable:
+ *     false, configurable: false })`) — never a getter, which could answer
+ *     differently on each read;
+ *   - the agent object itself FROZEN;
+ *   - its methods as CLOSURES that do not use `this`. They are called with
+ *     `this` undefined, so a method that reaches its transport through `this`
+ *     (or through anything page code could rewrite later) fails here instead of
+ *     being redirectable after capture. Capture the transport at definition time.
+ *
+ * A valid agent is captured once; later changes cannot redirect a call. An
+ * absent or malformed one is not cached, so an agent the host defines a moment
+ * late is still found on a later call.
  */
 export function identityAgent(): IdentityAgent | null {
   if (held) return held
-  let candidate: unknown
-  try { candidate = (globalThis as Record<string, unknown>)[IDENTITY_GLOBAL] } catch { return null }
-  const agent = capture(candidate)
+  const agent = detect(globalThis)
   if (agent) held = agent
   return agent
+}
+
+function detect(scope: object): IdentityAgent | null {
+  let candidate: unknown
+  try {
+    const d = Object.getOwnPropertyDescriptor(scope, IDENTITY_GLOBAL)
+    // a data property the page can neither overwrite nor redefine; no getters
+    if (!d || !('value' in d) || d.writable !== false || d.configurable !== false) return null
+    candidate = d.value
+  } catch { return null }
+  return capture(candidate)
+}
+
+/** detect() against a stand-in global, without caching. For the rig only: a
+ *  non-configurable property on the real globalThis could never be reset. */
+export function detectIdentityAgentForTest(scope: object): IdentityAgent | null {
+  return detect(scope)
 }
 
 function capture(c: unknown): IdentityAgent | null {
   try {
     if (!c || typeof c !== 'object') return null
+    // a frozen host object: no member can be swapped after this check
+    if (!Object.isFrozen(c)) return null
     const o = c as Record<string, unknown>
     if (o.contract !== IDENTITY_CONTRACT) return null
     const fn = (k: string) => (typeof o[k] === 'function' ? (o[k] as (...a: unknown[]) => unknown) : null)
@@ -144,13 +175,16 @@ function capture(c: unknown): IdentityAgent | null {
     // phase-2 members are optional, but if present they must be callable
     for (const k of ['unwrap', 'share']) if (o[k] !== undefined && !fn(k)) return null
     const unwrap = fn('unwrap'), share = fn('share')
+    // `this` undefined: a host method gets nothing a page could later rewrite
+    const call = <F>(f: (...a: unknown[]) => unknown) =>
+      ((...args: unknown[]) => Reflect.apply(f, undefined, args)) as unknown as F
     return Object.freeze({
       contract: IDENTITY_CONTRACT,
-      whoami: whoami.bind(c) as IdentityAgent['whoami'],
-      sign: sign.bind(c) as IdentityAgent['sign'],
-      resolve: resolve.bind(c) as IdentityAgent['resolve'],
-      ...(unwrap ? { unwrap: unwrap.bind(c) as NonNullable<IdentityAgent['unwrap']> } : {}),
-      ...(share ? { share: share.bind(c) as NonNullable<IdentityAgent['share']> } : {}),
+      whoami: call<IdentityAgent['whoami']>(whoami),
+      sign: call<IdentityAgent['sign']>(sign),
+      resolve: call<IdentityAgent['resolve']>(resolve),
+      ...(unwrap ? { unwrap: call<NonNullable<IdentityAgent['unwrap']>>(unwrap) } : {}),
+      ...(share ? { share: call<NonNullable<IdentityAgent['share']>>(share) } : {}),
     })
   } catch {
     // a hostile getter, a revoked proxy: no agent, never a throw into the caller

@@ -9,16 +9,22 @@
 // identity agent. It must return the agent ONLY when a host defined a valid one,
 // and null in every other case, so the caller falls back to today's behaviour.
 // It must never throw into the caller, whatever sits on the global. And once
-// found, the agent must not be swappable: a later change to the global cannot
-// redirect where a signature request goes. This PR ships the contract only, so
-// the rig also pins that nothing in the runtime calls it yet.
+// found, the agent must not be redirectable: not by swapping the global, not by
+// patching the host object, and not through `this` (a method that reaches its
+// transport through `this` is called with `this` undefined, so it can't be
+// pointed somewhere else after capture). This PR ships the contract only, so the
+// rig also pins that nothing in the runtime calls it yet.
+//
+// Most cases run against a STAND-IN global (detectIdentityAgentForTest): the
+// contract requires a non-configurable property, which on the real globalThis
+// could never be reset between cases. The real path (identityAgent() over
+// globalThis, with its capture-once cache) runs last.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  identityAgent, resetIdentityAgentForTest, IDENTITY_CONTRACT, IDENTITY_GLOBAL,
-  type IdentityAgent,
+  identityAgent, detectIdentityAgentForTest as detect, IDENTITY_CONTRACT, IDENTITY_GLOBAL,
 } from '../kernel/src/identity.ts'
 
 let failures = 0
@@ -29,112 +35,136 @@ function ok(cond: boolean, msg: string) {
   else console.log(`  ok    ${msg}`)
 }
 
-const G = globalThis as Record<string, unknown>
-const set = (v: unknown) => { resetIdentityAgentForTest(); G[IDENTITY_GLOBAL] = v }
-const clear = () => { resetIdentityAgentForTest(); delete G[IDENTITY_GLOBAL] }
+/** A stand-in global holding `value` the way a host must define it. */
+const scopeWith = (value: unknown, d: PropertyDescriptor = { writable: false, configurable: false }) => {
+  const s = {}
+  Object.defineProperty(s, IDENTITY_GLOBAL, { value, enumerable: true, ...d })
+  return s
+}
 
-/** A well-formed phase-1 agent (no phase-2 members), recording what it was asked. */
-function fakeAgent(tag = 'A') {
+/** A well-formed, FROZEN phase-1 agent whose methods are closures. */
+function fakeAgent(tag = 'A', extra: Record<string, unknown> = {}) {
   const calls: string[] = []
-  const agent = {
+  const agent = Object.freeze({
     contract: IDENTITY_CONTRACT,
     async whoami() { calls.push('whoami'); return null },
     async sign(purpose: string, payload: string) { calls.push(`sign:${purpose}:${payload}`); return { ok: true as const, sig: tag, pub: tag } },
     async resolve() { calls.push('resolve'); return null },
-  }
+    ...extra,
+  })
   return { agent, calls }
 }
 
 console.log('\nno host → null, the caller keeps today\'s behaviour')
 {
-  clear()
-  ok(identityAgent() === null, 'no global → null')
-  set(undefined); ok(identityAgent() === null, 'global undefined → null')
-  set(null); ok(identityAgent() === null, 'global null → null')
-  set('agent'); ok(identityAgent() === null, 'a string → null')
-  set(() => 0); ok(identityAgent() === null, 'a function → null')
+  ok(detect({}) === null, 'no property → null')
+  for (const [v, label] of [[undefined, 'undefined'], [null, 'null'], ['agent', 'a string'], [() => 0, 'a function']] as const) {
+    ok(detect(scopeWith(v)) === null, `${label} → null`)
+  }
+}
+
+console.log('\nthe global must be a locked data property')
+{
+  const { agent } = fakeAgent()
+  ok(detect(scopeWith(agent)) !== null, 'control: a non-writable, non-configurable data property with a frozen agent → found')
+  ok(detect(scopeWith(agent, { writable: true, configurable: false })) === null, 'a WRITABLE property → null (the page could overwrite it)')
+  ok(detect(scopeWith(agent, { writable: false, configurable: true })) === null, 'a CONFIGURABLE property → null (the page could redefine it)')
+  const getterScope = {}
+  Object.defineProperty(getterScope, IDENTITY_GLOBAL, { get: () => agent, configurable: false })
+  ok(detect(getterScope) === null, 'a GETTER, even one returning a valid agent → null (it could answer differently each read)')
+  const plain = { [IDENTITY_GLOBAL]: agent }
+  ok(detect(plain) === null, 'a plain assignment (writable + configurable) → null')
+}
+
+console.log('\nthe agent object must be frozen')
+{
+  const { agent } = fakeAgent()
+  const unfrozen = { ...agent }
+  ok(detect(scopeWith(unfrozen)) === null, 'an unfrozen agent → null (a member could be swapped after capture)')
+  const sealedOnly = Object.seal({ ...agent })
+  ok(detect(scopeWith(sealedOnly)) === null, 'a sealed-but-writable agent → null')
 }
 
 console.log('\na malformed agent is refused, never half-used')
 {
-  const { agent } = fakeAgent()
-  set({ ...agent, contract: undefined }); ok(identityAgent() === null, 'no contract version → null')
-  set({ ...agent, contract: IDENTITY_CONTRACT + 1 }); ok(identityAgent() === null, 'a newer, unknown contract → null (not misread)')
-  set({ ...agent, contract: String(IDENTITY_CONTRACT) }); ok(identityAgent() === null, 'a contract given as a string → null')
+  const base = fakeAgent().agent
+  const f = (o: Record<string, unknown>) => detect(scopeWith(Object.freeze(o)))
+  ok(f({ ...base, contract: undefined }) === null, 'no contract version → null')
+  ok(f({ ...base, contract: IDENTITY_CONTRACT + 1 }) === null, 'a newer, unknown contract → null (not misread)')
+  ok(f({ ...base, contract: String(IDENTITY_CONTRACT) }) === null, 'a contract given as a string → null')
   for (const k of ['whoami', 'sign', 'resolve'] as const) {
-    const bad: Record<string, unknown> = { ...agent }; delete bad[k]
-    set(bad); ok(identityAgent() === null, `missing ${k} → null`)
-    set({ ...agent, [k]: 'not a function' }); ok(identityAgent() === null, `${k} not callable → null`)
+    const bad: Record<string, unknown> = { ...base }; delete bad[k]
+    ok(f(bad) === null, `missing ${k} → null`)
+    ok(f({ ...base, [k]: 'not a function' }) === null, `${k} not callable → null`)
   }
-  set({ ...agent, unwrap: 42 }); ok(identityAgent() === null, 'a phase-2 member that is present but not callable → null')
-  set({ ...agent, share: {} }); ok(identityAgent() === null, 'share present but not callable → null')
+  ok(f({ ...base, unwrap: 42 }) === null, 'a phase-2 member present but not callable → null')
+  ok(f({ ...base, share: {} }) === null, 'share present but not callable → null')
 }
 
-console.log('\nhostile globals never throw into the caller')
+console.log('\nhostile values never throw into the caller')
 {
-  resetIdentityAgentForTest()
-  Object.defineProperty(G, IDENTITY_GLOBAL, { configurable: true, get() { throw new Error('boom') } })
-  let threw = false, got: unknown = 'unset'
-  try { got = identityAgent() } catch { threw = true }
-  ok(!threw && got === null, 'a throwing getter on the global → null, no throw')
-  delete G[IDENTITY_GLOBAL]
-
-  const hostile = new Proxy({}, { get() { throw new Error('trap') } })
-  set(hostile)
-  threw = false
-  try { got = identityAgent() } catch { threw = true }
-  ok(!threw && got === null, 'a throwing proxy → null, no throw')
-
+  const tryDetect = (s: object) => { try { return { r: detect(s), threw: false } } catch { return { r: undefined, threw: true } } }
+  const trap = new Proxy({}, { get() { throw new Error('trap') }, isExtensible() { throw new Error('trap') } })
+  let t = tryDetect(scopeWith(trap))
+  ok(!t.threw && t.r === null, 'a trapping proxy → null, no throw')
   const { proxy, revoke } = Proxy.revocable(fakeAgent().agent, {})
   revoke()
-  set(proxy)
-  threw = false
-  try { got = identityAgent() } catch { threw = true }
-  ok(!threw && got === null, 'a revoked proxy → null, no throw')
+  t = tryDetect(scopeWith(proxy))
+  ok(!t.threw && t.r === null, 'a revoked proxy → null, no throw')
+  const descTrap = new Proxy({}, { getOwnPropertyDescriptor() { throw new Error('trap') } })
+  t = tryDetect(descTrap)
+  ok(!t.threw && t.r === null, 'a global whose descriptor read throws → null, no throw')
 }
 
 console.log('\na valid agent is found, phase-2 members optional')
 {
   const { agent, calls } = fakeAgent()
-  set(agent)
-  const a = identityAgent()
-  ok(a !== null, 'a phase-1 agent (whoami, sign, resolve) is accepted')
-  ok(a?.contract === IDENTITY_CONTRACT, `it reports contract ${IDENTITY_CONTRACT}`)
+  const a = detect(scopeWith(agent))
+  ok(a !== null && a.contract === IDENTITY_CONTRACT, `a phase-1 agent is accepted and reports contract ${IDENTITY_CONTRACT}`)
   ok(a?.unwrap === undefined && a?.share === undefined, 'phase-2 members absent → not invented')
   const r = await a!.sign('frame', '1.abc')
   ok(r.ok === true && calls.includes('sign:frame:1.abc'), 'calls reach the host agent with their arguments')
-
-  const withP2 = { ...fakeAgent().agent, async unwrap() { return null }, async share() { return { ok: true as const } } }
-  set(withP2)
-  const b = identityAgent()
+  const b = detect(scopeWith(fakeAgent('B', { async unwrap() { return null }, async share() { return { ok: true } } }).agent))
   ok(!!b && typeof b.unwrap === 'function' && typeof b.share === 'function', 'an agent with phase-2 members exposes them')
+  ok(Object.isFrozen(a), 'the captured agent is itself frozen')
 }
 
-console.log('\nonce found, the agent cannot be swapped or patched')
+console.log('\nno redirect through `this` (security, #759)')
 {
-  const first = fakeAgent('FIRST')
-  set(first.agent)
-  const a = identityAgent() as IdentityAgent
-  // something later replaces the global, and patches the original object
-  G[IDENTITY_GLOBAL] = fakeAgent('SECOND').agent
-  ;(first.agent as Record<string, unknown>).sign = async () => ({ ok: true, sig: 'PATCHED', pub: 'PATCHED' })
-  ok(identityAgent() === a, 'a later global is ignored: the captured agent is returned')
-  const r = await a.sign('frame', '2.x')
-  ok(r.ok === true && r.sig === 'FIRST', `a method patched after capture does not redirect the call (got ${r.ok ? r.sig : r.reason})`)
-  ok(Object.isFrozen(a), 'the captured agent is frozen')
+  // Methods are called with `this` undefined, so they can only use closures.
+  let seenThis: unknown = 'unset'
+  const spy = Object.freeze({
+    contract: IDENTITY_CONTRACT,
+    async whoami() { return null },
+    async sign(this: unknown) { seenThis = this; return { ok: true as const, sig: 'S', pub: 'P' } },
+    async resolve() { return null },
+  })
+  await detect(scopeWith(spy))!.sign('frame', '1.x')
+  ok(seenThis === undefined, `a host method is called with this === undefined (got ${String(seenThis)})`)
+
+  // The measured attack: a host whose sign reaches its transport through
+  // `this.post`. With the host frozen the page cannot rewrite post — and with
+  // `this` undefined the method cannot even find it, so it fails CLOSED rather
+  // than signing through anything a page could reach.
+  const viaThis = Object.freeze({
+    contract: IDENTITY_CONTRACT,
+    post: (p: string) => ({ ok: true as const, sig: `genuine:${p}`, pub: 'P' }),
+    async whoami() { return null },
+    async sign(this: { post: (p: string) => unknown }, _purpose: string, payload: string) { return this.post(payload) },
+    async resolve() { return null },
+  })
+  let res: unknown, rejected = false
+  try { res = await detect(scopeWith(viaThis))!.sign('frame', '1.x') } catch { rejected = true }
+  ok(rejected && res === undefined, 'a `this`-dependent host method fails closed — no signature, never a redirected one')
+}
+
+console.log('\nonce found, the agent cannot be reassigned')
+{
+  const a = detect(scopeWith(fakeAgent('FIRST').agent))!
   const orig = a.sign
   let threw = false
   try { (a as unknown as Record<string, unknown>).sign = () => 0 } catch { threw = true }
-  ok(threw && a.sign === orig, 'and cannot be reassigned (strict-mode write throws, the method is unchanged)')
-}
-
-console.log('\nlate arrival: an absent agent is not cached as null')
-{
-  clear()
-  ok(identityAgent() === null, 'nothing yet')
-  G[IDENTITY_GLOBAL] = fakeAgent().agent
-  ok(identityAgent() !== null, 'the host defines it a moment late — found on the next call')
-  clear()
+  ok(threw && a.sign === orig, 'a write to the captured agent throws (strict mode) and changes nothing')
 }
 
 // K1 is contract only. Pin that no runtime file imports it yet, so this PR is
@@ -154,6 +184,25 @@ console.log('\ncontract only: nothing calls it yet')
   }
   for (const d of ['kernel/src', 'slides/src', 'spaces/src', 'type/src', 'dash/src']) walk(join(root, d))
   ok(hits.length === 0, `no runtime module imports kernel/src/identity.ts (${hits.join(', ') || 'none'})`)
+}
+
+// The real path, last: identityAgent() over globalThis, with its capture-once
+// cache. Once the property is defined non-configurable it can never be removed,
+// which is exactly why this runs at the end.
+console.log('\nthe real globalThis path')
+{
+  ok(identityAgent() === null, 'nothing on globalThis yet → null')
+  const G = globalThis as Record<string, unknown>
+  G[IDENTITY_GLOBAL] = fakeAgent('PLAIN').agent // a plain assignment
+  ok(identityAgent() === null, 'a plain assignment on globalThis → still null (absent results are not cached)')
+  delete G[IDENTITY_GLOBAL]
+  const first = fakeAgent('REAL').agent
+  Object.defineProperty(globalThis, IDENTITY_GLOBAL, { value: first, writable: false, configurable: false })
+  const a = identityAgent()
+  ok(a !== null, 'a host defining it correctly, a moment late → found on the next call')
+  ok(identityAgent() === a, 'the same captured agent on every later call')
+  const r = await a!.sign('frame', '3.x')
+  ok(r.ok === true && r.sig === 'REAL', 'it signs through the host that defined it')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
