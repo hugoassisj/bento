@@ -74,8 +74,20 @@ records. That includes `bento-blobcache`, which caches live-session media in
 plaintext. `scripts/test-home-inspector.mjs` runs the script as it ships; it
 also matched real Chromium IndexedDB case for case.
 
-**iOS** implements the same native contract in its own change, keeping the
-member key in the Keychain (this device only).
+**iOS** implements the same native contract (`home/ios/HostDocStore.swift`).
+The member key goes to the Keychain, this device only and never synchronised;
+the recovery copy goes to an app-private file. Both are partitioned by the
+origin string the iOS origin fix mints, so on iOS a moved document keeps its
+store. Measured on the iOS simulator with this bridge and a real invite copy
+joined as a member:
+- the private key lands in the Keychain, and localStorage keeps only `{pub}`
+- the key survives a fresh launch and a move
+- a different file at that path gets an empty partition and mints its own key
+
+An ad-hoc (unsigned) Mac Catalyst build can't reach the Keychain
+(`errSecMissingEntitlement`, -34018). Its store answers 'unavailable', and the
+kernel keeps the key for the session only, never in web storage. A signed build
+needs the Apple team. The iOS simulator works ad-hoc.
 
 ## 2026-10-18 — Android: every docId form the apps mint counts as a docId
 
@@ -10927,3 +10939,88 @@ Mutations, all red:
   `test-spaces-restore-gate.ts`, including every cleared-stays-cleared row
   (before this change, only the 2 pins caught it);
 - removing the list: 6 + 1, covering the trail rows.
+
+## 2026-10-18 — bento/id: the identity agent contract (kernel/src/identity.ts)
+
+The document's side of the identity agent is ONE kernel module, so the hosts
+build against a single definition instead of each inventing one. The host
+defines `globalThis.__bentoIdentity` before the runtime boots, and only on a
+verified, signed shell (gate 1). `identityAgent()` returns it, or null when it
+is absent or malformed. On null every caller keeps today's behaviour.
+
+Settled here, so other zones don't redefine them:
+- **The contract version** is `IDENTITY_CONTRACT = 1`, an exact match. A host
+  advertising another version is treated as absent, never misread. Optional
+  members are additions within a version, and a breaking change bumps it.
+- **The calls.** Phase 1 has `whoami`, `sign(purpose, payload)` and
+  `resolve({pub} | {email})`. `unwrap` and `share` (phase 2) are typed as
+  optional members now, so the contract doesn't churn.
+- **No call takes a docId or a caller name.** The host identifies the calling
+  document from what the platform reports, never from the page.
+- **Results only.** A signature is raw r‖s (64 bytes, base64url), never DER.
+  Private keys never cross the bridge.
+- **`SignPurpose`** is one word per existing statement family: `frame`, `prove`,
+  `delegate`, `show`, `invite`, `revoke`. A signature is locked to its purpose.
+  The shared payload matcher and its vectors come with the statement formats
+  (K2).
+- **What a host must define.** The global is a non-writable, non-configurable
+  DATA property, never a getter. The agent object is frozen. Its methods are
+  closures, because they are called with `this` undefined. Anything else is
+  treated as no agent. Together these rules mean neither the page nor anything
+  later can redirect a call after capture: not by swapping the global, not by
+  patching the object, and not through `this` (security, #759).
+- **Capture.** A valid agent is captured once. An absent agent is not cached,
+  so a host that defines it late is still found.
+
+This change is contract only, with no callers. `scripts/test-identity.ts` pins
+that no runtime module imports it yet.
+
+## 2026-10-18 — bento/id: the signed statements and their family rules (kernel/src/statements.ts)
+
+Every bento/id statement is defined once, in the kernel, with conformance
+vectors (`kernel/fixtures/identity-v1.json`) that every host must pass: the
+Swift, Kotlin and Rust agents, the extension and the directory. The rules are
+the shipped collab statements' rules, made strict:
+- **Exact bytes.** Dot-joined UTF-8 text, signed over its exact bytes and never
+  re-canonicalised. No JSON inside a statement.
+- **Every field is a closed, dot-free token or base64url free text.** Free
+  text means an email address or a display name, encoded as base64url without
+  padding. A raw email would break the split.
+- **Strict parse.** Split on `.`, keep empty fields, require the exact field
+  count, check each field's grammar, and accept printable ASCII only. An absent
+  value is an empty field.
+- **Units and versions.** Times are epoch ms. The version is in the prefix
+  (`bind2.`), never a field.
+- **Keys and signatures.** Keys are raw P-256 points. Signatures are raw r‖s,
+  low-S, base64url. DER and high-S signatures are refused.
+
+The statements:
+- `dev.`: the device cert. The account key signs both the device's routine key
+  and its hardware CONSENT key, so a consent signature can be tied to the person.
+  It's one cert, not two, because both keys share the device's lifetime and
+  revocation. The light tier has no hardware consent key, so its `consentPub` is
+  empty.
+- `bind.`: the person cert, holder-signed, with `seq` and a `prev` chain for
+  rotation.
+- `att.` and `tomb.`: signed by the directory's online key, with the binding
+  state inside the signature.
+- `del.` and `cmp.`: holder requests to the directory.
+- `cns.`: host-stamped consent (security §24). Its transcript binds the
+  audience, a single-use challenge and the exact authorised statement. The
+  verifier recomputes the transcript and never trusts one from the request.
+- `pk.` is reserved for the phase-2 passkey statement.
+
+Two placements are left open on purpose:
+- **kx** (identity-design §6b, a maintainer decision). Both `bind.` and `dev.`
+  carry a kx slot, and until the ruling BOTH must be empty, so nothing accepts a
+  placement nobody chose. Phase 1 shares nothing and needs no kx.
+- **Addresses are ASCII-only in phase 1** (a maintainer decision). Platforms
+  disagree on international domains, and an address two hosts read differently
+  is exactly what the shared normal form exists to prevent.
+
+**What phase 1 does NOT guarantee:** invite and revoke (`inv.`/`rev.`) are
+verified by the relay with the OWNER key's signature, not with a consent-key
+`cns.`. In phase 1, their high-authority protection is a host-drawn prompt plus
+an owner key held by the agent and gated on user verification. No consent-key
+(AAL3) guarantee exists for `inv.`/`rev.` before phase 2 adds room-audience
+consent (security §24).

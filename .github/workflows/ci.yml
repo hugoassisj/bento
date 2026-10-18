@@ -135,8 +135,23 @@ jobs:
         # and the restore DIRECTION matters: a version restore ('back') keeps a
         # live field; crash recovery ('recover') reconciles a live history field
         # with the newer snapshot. Recover hooks (newestListWins for unsigned
-        # lists) vs the default (signed-safe). Absent never wipes on recover.
+        # lists) vs the default (signed-safe). On recover, a field absent from a
+        # whole snapshot stays removed (deleted or cleared stays so) unless the
+        # rules opt it out (keepLiveWhenAbsent); a projection keeps the live value.
         run: node scripts/test-restore.ts
+
+      - name: identity agent contract
+        # bento/id: how a document finds the host's identity agent. A valid
+        # agent only, null otherwise (today's behaviour), never a throw, and
+        # once found it cannot be swapped. Contract only: nothing calls it yet.
+        run: node scripts/test-identity.ts
+
+      - name: identity statements and conformance vectors
+        # bento/id: every signed statement (dev., bind., att., tomb., del.,
+        # cmp., cns.) and the address normal form. The reference must pass
+        # every row of kernel/fixtures/identity-v1.json, which is the contract
+        # each native host is held to, and must refuse every tampered statement.
+        run: node scripts/test-statements.ts
 
       - name: Typecheck convert (standalone)
         # convert/ is a library beside the apps (the CLI and bento.page/import
@@ -801,6 +816,12 @@ jobs:
         # file's document identifier now; this compiles the real OriginIdentity
         # and checks every rule. CryptoKit only, so it skips off Apple platforms.
         run: node scripts/test-home-origin.mjs
+
+      - name: home/ios docstore rig
+        # The host's per-document store: this device's collab member private key
+        # in the Keychain, the recovery copy in an app-private file, partitioned by
+        # the document's origin. Compiles the real HostDocStore; skips off Apple.
+        run: node scripts/test-home-docstore-ios.mjs
 
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
@@ -2685,6 +2706,13 @@ jobs:
         # that refuses the recovery copy gets the notice once, held to read;
         # pt and de show slides' words. Planted in bento-spaces-autosave.
         run: node scripts/test-spaces-recovery-browser.mjs
+      - name: bento/id privacy notice and web deletion page (build rules + Chromium)
+        # A publishing build refuses any page still carrying a __PLACEHOLDER__;
+        # the deletion page's CSP pins its exact inline script and style and
+        # lets it reach only the directory. In Chromium with the API mocked:
+        # the start → code → done flow, its refusals, and that it never says
+        # whether an address exists.
+        run: node scripts/test-id-pages-browser.mjs
       - name: bento.page passkey association files never publish a placeholder
         # scripts/well-known.mjs fills /.well-known/apple-app-site-association
         # and assetlinks.json from site-src/well-known/ once the Apple team id
