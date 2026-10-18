@@ -444,7 +444,11 @@ console.log('\n=== what that looks like on one paragraph ===');
     // peer whose document carries an attacker's key passes none of it on
     const N = new TypeSync('n'); const O = new TypeSync('o');
     const dN = mk(); const dO = clone(dN); N.adopt(dN as never); O.adopt(dO as never);
+    // the attacker's replica RECORDS the change in its own sync state (a diff),
+    // as a real one would — the state is what a snapshot merge reads
+    const bN = clone(dN);
     dN.sigAuthority = { owner: 'ATTACKER-KEY' };
+    N.diff(bN as never, dN as never, { text: true });
     const out = N.outboundDoc(clone(dN)) as Record<string, unknown>;
     ok(!('sigAuthority' in out), 'the snapshot a replica sends carries no sigAuthority');
     const planted = { ...out, sigAuthority: { owner: 'ATTACKER-KEY' } };
