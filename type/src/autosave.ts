@@ -121,6 +121,15 @@ async function runAutosave(ctx: FeatureContext): Promise<void> {
 
 async function checkRecovery(ctx: FeatureContext): Promise<void> {
   const doc = ctx.store.doc;
+  // A SEALED body: plaintext copies this browser kept for this document in an
+  // earlier, unsealed session are never offered (no banner, nothing in
+  // version history) and are deleted — for THIS docId only; every other
+  // document's copies are untouched. Guarded by
+  // scripts/test-type-sealed-browser.mjs.
+  if (isBodySealed()) {
+    await Promise.all([clearRecovery(doc.docId), clearVersions(doc.docId)]);
+    return;
+  }
   const snap = await getRecovery(doc.docId);
   if (!snap) return;
   // A snapshot is foreign input (restoregate.ts): format-checked, and never
