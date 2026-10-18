@@ -39,7 +39,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          for rig in test-tray-releases.mjs test-home-origin.mjs test-home-docstore-ios.mjs; do
+          for rig in test-tray-releases.mjs test-home-origin.mjs test-home-docstore-ios.mjs \
+            test-home-id-keys.mjs test-home-id-statements.mjs test-home-id-agent.mjs; do
             echo "::group::$rig"
             node "scripts/$rig" | tee "$RUNNER_TEMP/rig.out"
             echo "::endgroup::"

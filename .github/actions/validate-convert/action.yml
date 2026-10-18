@@ -6,9 +6,10 @@
 # disk here. A failing step here fails `validate` and blocks the merge.
 #
 # Add a new rig's step to the slice of the zone that owns the rig, at the
-# end. Composite steps need `shell: bash` on every `run:`; GitHub refuses
-# the action without it. scripts/test-ci-registered.ts reads every file
-# under .github/, so a step here counts as registered.
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
 
 name: validate-convert
 description: validate, convert slice (runs inside the required validate job)
@@ -20,7 +21,7 @@ runs:
       # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
       # its own pass — the same as kernel's.
       working-directory: slides
-      shell: bash
+      shell: bento-step {0}
       run: node_modules/.bin/tsc -p ../convert
 
     - name: convert engine rigs
@@ -36,5 +37,5 @@ runs:
       # input gate, zip limits, exactly two requests), the built page's CSP,
       # and the boundary: no app imports convert/, and the engine touches no
       # DOM global.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-convert.ts

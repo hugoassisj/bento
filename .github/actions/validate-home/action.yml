@@ -6,9 +6,10 @@
 # disk here. A failing step here fails `validate` and blocks the merge.
 #
 # Add a new rig's step to the slice of the zone that owns the rig, at the
-# end. Composite steps need `shell: bash` on every `run:`; GitHub refuses
-# the action without it. scripts/test-ci-registered.ts reads every file
-# under .github/, so a step here counts as registered.
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
 
 name: validate-home
 description: validate, home slice (runs inside the required validate job)
@@ -21,7 +22,7 @@ runs:
       # launchQueue — lazily, so documents from older runtimes keep their first
       # silent save — and a launch request the host cannot meet is refused,
       # never turned into an export. Runs the real bridge against a fake host.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-home-launch.mjs
 
     - name: home per-document store rig
@@ -32,7 +33,7 @@ runs:
       # proves the store appears ONLY when the native side declares it — a
       # store advertised and then refused would lose the member key on every
       # reload — and that bytes round-trip as a Uint8Array the kernel accepts.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-home-docstore.mjs
 
     - name: home legacy-origin inspector rig
@@ -44,7 +45,7 @@ runs:
       # document — including bento-blobcache, which holds plaintext media —
       # refusing adoption. The JVM tests cover the decision; only this covers
       # the script.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-home-inspector.mjs
 
     - name: tray mark is one source
@@ -55,7 +56,7 @@ runs:
       # chrome reads by name. A hex value retyped into Swift is a value that can
       # disagree with the logo while looking almost right, which is the kind of
       # wrong nothing notices. This fails if any of it drifts.
-      shell: bash
+      shell: bento-step {0}
       run: node home/assets/make-icons.mjs --check
 
     - name: document index conformance corpus
@@ -66,5 +67,5 @@ runs:
       # with. It went unregistered and then unnoticed: the tray→home rename
       # left it importing ../tray/doc-index.mjs, and a rig nobody runs cannot
       # report its own import failure.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-doc-index.mjs

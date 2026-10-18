@@ -6,9 +6,10 @@
 # disk here. A failing step here fails `validate` and blocks the merge.
 #
 # Add a new rig's step to the slice of the zone that owns the rig, at the
-# end. Composite steps need `shell: bash` on every `run:`; GitHub refuses
-# the action without it. scripts/test-ci-registered.ts reads every file
-# under .github/, so a step here counts as registered.
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
 
 name: validate-kernel
 description: validate, kernel slice (runs inside the required validate job)
@@ -19,7 +20,7 @@ runs:
       # The element/plain-object split ran on HTMLElement||SVGElement, which
       # excludes MathML — formula symbols became plain-object tweens, with
       # opacity assigned as a JS property and no style ever written.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-anim-elements.ts
 
     - name: Transforms are not silently ignored
@@ -27,7 +28,7 @@ runs:
       # accepted, style.transform reads back verbatim, and the box never
       # moves. An animation on one reports perfect health and paints nothing,
       # which is exactly how it survived eight rounds of debugging once.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-anim-inline.ts
 
     - name: Typecheck kernel (standalone)
@@ -38,11 +39,11 @@ runs:
       # this step if a guard is weakened (no default cell, 'per-field' only in
       # the mode row, every mode field has a rule).
       working-directory: slides
-      shell: bash
+      shell: bento-step {0}
       run: node_modules/.bin/tsc -p ../kernel
 
     - name: Field-classification rig
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-field-class.ts
 
     - name: Whole-document restore rig (undo / version restore / crash recovery)
@@ -53,14 +54,14 @@ runs:
       # lists) vs the default (signed-safe). On recover, a field absent from a
       # whole snapshot stays removed (deleted or cleared stays so) unless the
       # rules opt it out (keepLiveWhenAbsent); a projection keeps the live value.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-restore.ts
 
     - name: identity agent contract
       # bento/id: how a document finds the host's identity agent. A valid
       # agent only, null otherwise (today's behaviour), never a throw, and
       # once found it cannot be swapped. Contract only: nothing calls it yet.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-identity.ts
 
     - name: identity statements and conformance vectors
@@ -68,7 +69,7 @@ runs:
       # cmp., cns.) and the address normal form. The reference must pass
       # every row of kernel/fixtures/identity-v1.json, which is the contract
       # each native host is held to, and must refuse every tampered statement.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-statements.ts
 
     - name: identity recovery code and key blobs
@@ -77,7 +78,7 @@ runs:
       # kernel/fixtures/recovery-v1.json: Argon2id against RFC 9106, the
       # code's printed form and forgiving parse (all five extra check symbols),
       # every derivation, every blob re-sealed byte for byte, every refusal.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-recovery.ts
 
     - name: identity seal — one "body is sealed" predicate
@@ -85,14 +86,14 @@ runs:
       # "is there a password". The identity-sealed body is a genuine bento/enc
       # v1 envelope (kdf hkdf-kdoc) that frozen shells read as sealed; fresh
       # salt per save; the password path unchanged; the two refuse each other.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-body-seal.ts
 
     - name: Language pack verification rig
       # Packs come off the network, so the signature + hash-pin chain is the
       # only thing between a hostile channel and the strings in the UI.
       # Tampered pack, tampered index, unsigned index — each must be refused.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-packs.ts
 
     - name: Tokenizer contract
@@ -100,7 +101,7 @@ runs:
       # the token stream, so losslessness is corruption-or-not; and multiline
       # tokens are declared, because a blockified token carrying \n collapses
       # a code block to one line with no error anywhere.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-tokenize.ts
 
     - name: Shared panel primitive rig
@@ -112,7 +113,7 @@ runs:
       # clamped on restore, the drawer that boots shut below a phone width —
       # plus the theming guard (every colour chain reaches a token each of the
       # four apps defines and themes). Each is mutation-caught.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-ui-panel.ts
 
     - name: Shared dialog primitive rig
@@ -124,7 +125,7 @@ runs:
       # card does not trigger, and a real focus trap (Tab wraps in the card) —
       # plus listener cleanup and the shared theming guard. Each is
       # mutation-caught; none is visible to a developer with a mouse.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-ui-dialog.ts
 
     - name: Shared tooltip primitive rig
@@ -136,7 +137,7 @@ runs:
       # renders in document.body as a fixed element so no scroll container
       # clips it (hard-won detail 10). Behaviours mutation-caught; themed
       # through the shared guard.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-ui-tooltip.ts
 
     - name: Shared toggle primitive rig
@@ -150,7 +151,7 @@ runs:
       # (whose alias-indirection fix — a token defined as var(--other) is
       # themed iff --other is — landed here so dash's --chrome-2: var(--hover)
       # resolves).
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-ui-toggle.ts
 
     - name: Shared menu primitive rig
@@ -162,7 +163,7 @@ runs:
       # per dropdown and removed none. Each of those is a check here, because
       # every one of them is a regression a sighted developer with a mouse
       # would never notice.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-ui-menu.ts
 
     - name: First-page preview rig
@@ -170,7 +171,7 @@ runs:
       # thumbnails. Two decisions in that path fail silently: an encrypted
       # deck must never carry one, and author content must never reach the
       # file carrying a script tag.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-preview.ts
 
     - name: Encrypted-title rig
@@ -179,7 +180,7 @@ runs:
       # the document title. Pins that encrypted output gets a generic title
       # and a neutral filename (source gate, always on), with a whole-file
       # scan where a DOM is present.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-enc-title.ts
 
     - name: Return-gate rig
@@ -189,7 +190,7 @@ runs:
       # replaces: firing over a real document, or offering a host that has no
       # release (telling an Android user to install a Chrome extension). This
       # pins both, and that the mobile rows degrade until those hosts ship.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-return-gate.ts
 
     - name: Offline-mode rig
@@ -204,14 +205,14 @@ runs:
       # kernel/src/net.ts may touch a network primitive at all, which is what
       # stops the NEXT call site being wrong, plus the chokepoint's own
       # behaviour (refusal, aborting what is already in flight, cross-tab).
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-offline.ts
 
     - name: Origin-trust rig
       # The release-manifest / sync / pack URL dev overrides live in
       # localStorage, which is shared across all file:// documents — so they
       # are honoured only from a real, isolated origin (sharedStorageOrigin).
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-origin-overrides.ts
 
     - name: Blob content-address rig
@@ -219,7 +220,7 @@ runs:
       # threat model treats as untrusted. Nothing verified that what came
       # back matched what was asked for, and the substitution was cached to
       # disk, so one poisoned response persisted.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-blobs.ts
 
     - name: Save-intent rig
@@ -228,7 +229,7 @@ runs:
       # that alone. It could not, and a browser extension overwrote a deck.
       # `id` is the signal; if the three purposes ever collapse to one value
       # every host silently loses the distinction.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-savepurpose.ts
 
     - name: Remember-the-file-handle rig
@@ -238,7 +239,7 @@ runs:
       # reconnected with a permission prompt inside the save gesture. Guards:
       # name-match, denied/NotFound -> picker + drop, only a real handle (never
       # a host polyfill), reconnect BEFORE serialize so activation stays fresh.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-file-handle.ts
 
     - name: DocStore (per-document storage under the extension)
@@ -246,7 +247,7 @@ runs:
       # half live in the extension's per-document store; localStorage keeps
       # only the public key its readers need. No host, or a host that refuses
       # or never answers: the old storage, unchanged.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-docstore.ts
 
     - name: Guarded storage rig
@@ -256,7 +257,7 @@ runs:
       # sandboxed iframe. The rig simulates each failure mode and pins the
       # regression: importing a module that reads storage on load must not
       # throw when storage does.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-storage.ts
 
     - name: Save queue rig
@@ -266,7 +267,7 @@ runs:
       # every app had). The rig pins serialization, the detached snapshot,
       # isCurrent() going stale on any later edit or same-id replacement, the
       # document-swap discard, and that a failed write never poisons the queue.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-savequeue.ts
 
     - name: Autosave per-app database rig
@@ -275,7 +276,7 @@ runs:
       # would make every SHIPPED shell of every other app throw VersionError
       # and lose autosave. Renaming without carrying the data over would empty
       # a visible feature, so the migration is tested in both directions.
-      shell: bash
+      shell: bento-step {0}
       run: |
         slides/node_modules/.bin/esbuild scripts/test-autosave.ts --bundle --platform=node --format=esm \
           --alias:fake-indexeddb/auto=./slides/node_modules/fake-indexeddb/auto/index.js \
@@ -288,7 +289,7 @@ runs:
       # ceiling), aborting the stream the instant it overflows — a crafted
       # archive that under-declares its size can no longer exhaust memory before
       # the size check runs. Every check is mutation-proven against a neutered cap.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-zip-bomb.ts
 
     - name: relay protocol — one wire format, two clients
@@ -300,7 +301,7 @@ runs:
       # is one app's users silently unable to join the other's rooms, on a
       # relay that cannot be rolled back independently of the shells already
       # in people's files. This diffs only what goes on the wire.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-relay-protocol.ts
 
     - name: relay broadcast rig
@@ -317,7 +318,7 @@ runs:
       # which hibernation evicts mid-show; and the presenter-loss grace timer
       # firing the DO's single alarm as the 30-day room WIPE. Each is a
       # mutation this rig turns red on.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-relay-broadcast.ts
 
     - name: relay authorization rig
@@ -331,7 +332,7 @@ runs:
       # reached is refused rather than allowed to prune the op log. Every
       # one of these is silent when it regresses — the relay keeps working
       # and simply trusts more than it should.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-relay-auth.ts
 
     - name: client vouch rig — the other half of read-only
@@ -345,7 +346,7 @@ runs:
       # snapshots refused, stamped ones applied, presence unaffected, legacy
       # r-rooms permissive. Bundled because the kernel transport uses
       # parameter properties, which node's strip-only loader rejects.
-      shell: bash
+      shell: bento-step {0}
       run: |
         slides/node_modules/.bin/esbuild scripts/test-sync-vouch.ts --bundle --platform=node --format=esm \
           --outfile="$RUNNER_TEMP/test-sync-vouch.mjs"
@@ -358,7 +359,7 @@ runs:
       # which leaks `stash` (deleted slides' notes) and the whole per-keystroke
       # text history past the projection; or a local op reaches the audience
       # without the app's projection applied. Both are mutation-caught here.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-sync-show.ts
 
     - name: CRDT property-removal rig
@@ -368,12 +369,12 @@ runs:
       # missed it through 300 seeds because its generator assigns properties
       # and never removes one — a property-based rig only explores the
       # mutations it was taught.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-crdt-delprop.ts
 
     - name: CRDT convergence rig
       # 40 seeds locally; deeper on CI where the seconds are free.
-      shell: bash
+      shell: bento-step {0}
       run: SEEDS=300 node scripts/test-sync.ts
 
     - name: CRDT equivalence rig (baseline vs candidate, byte for byte)
@@ -388,7 +389,7 @@ runs:
       # the field was written by. REQUIRE_LIVE=1 fails the build if the
       # candidate is ever repointed at something that resolves back to the
       # baseline — the quiet way a gate stops gating.
-      shell: bash
+      shell: bento-step {0}
       run: REQUIRE_LIVE=1 SEEDS=200 STEPS=60 ACTORS=4 node scripts/test-sync-equiv.ts
 
     - name: CRDT document-shape seam
@@ -400,7 +401,7 @@ runs:
       # restores as itself. Also pins the constructor contract: the shape has
       # no default, because a default is how a spaces call site silently ends
       # up holding slides' shape.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-sync-shape.ts
 
     - name: bento/spaces under the shared engine
@@ -411,7 +412,7 @@ runs:
       # a position key — two independent domains describing one tree. The
       # format half is REPORTED, not asserted, because the fix is a decision
       # nobody has taken yet; STRICT=1 turns it into a gate the day it is.
-      shell: bash
+      shell: bento-step {0}
       run: SEEDS=250 STEPS=80 ACTORS=4 node scripts/test-sync-spaces.ts
 
     - name: collaborative text on a parent node
@@ -423,7 +424,7 @@ runs:
       # document that stays valid and converges. Every other sync rig stayed
       # green through that bug, so this one carries a negative control: the
       # same scenario with the RGA off MUST lose an edit.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-sync-parent-text.ts
 
     - name: a flat document shape
@@ -433,7 +434,7 @@ runs:
       # token-by-token, and the document keeps its shape. The second matters
       # because an engine that quietly wrote `elements: []` onto every block
       # would converge perfectly while corrupting the format.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-sync-flat.ts
 
     - name: bento/type under the shared engine
@@ -446,7 +447,7 @@ runs:
       # index. Reported, not asserted, exactly as the spaces tree question
       # is: it is a format decision nobody has taken. STRICT=1 makes it a
       # gate the day one is.
-      shell: bash
+      shell: bento-step {0}
       run: SEEDS=250 STEPS=80 ACTORS=4 node scripts/test-sync-type.ts
 
     - name: the sync session layer
@@ -460,19 +461,19 @@ runs:
       # The last four sections bind bento/type to the same kernel session —
       # flat document, text on the parent, a store with one listener and no
       # dirty flag — so a surviving slides assumption shows up there.
-      shell: bash
+      shell: bento-step {0}
       run: node --no-warnings scripts/test-sync-session.ts
 
     - name: Room snapshot carries no capability fields
       # Every snapshot path (relay upload, fork broadcast, re-snap, flush-time
       # fork snap) builds from one helper that strips the never-synced fields.
-      shell: bash
+      shell: bento-step {0}
       run: node --no-warnings scripts/test-sync-snapshot-collab.ts
 
     - name: Remote ops and snapshots can't rewrite identity, capability or modes
       # The never-synced set is also the receive filter (applySet and
       # mergeSnapshot), and no prototype-shaped name reaches any object.
-      shell: bash
+      shell: bento-step {0}
       run: node --no-warnings scripts/test-sync-inbound-docfields.ts
 
     - name: Doc-level sync allowlist (field-class map)
@@ -481,7 +482,7 @@ runs:
       # inbound, whatever the sender claims; an unknown key (a newer build's
       # field) is applied but never re-emitted. With no map it is byte-for-byte
       # the shipped denylist. skipDoc is the floor under both.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-sync-allowlist.ts
 
     - name: Sync override for a history-class key (shape().syncHistory)
@@ -492,5 +493,5 @@ runs:
       # bound build stays mixed-version-compatible with an unbound one.
       # Restricted to history-class keys at runtime (shape throws) and at
       # compile time (historySyncKeys); skipDoc is still the floor.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-sync-history-override.ts

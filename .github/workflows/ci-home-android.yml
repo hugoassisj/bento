@@ -20,6 +20,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# No bento-step default here (see the other ci-<zone>.yml files): this job runs
+# Gradle, which prints SKIPPED as an ordinary task outcome, not a rig skip.
+
 jobs:
   home-android-unit:
     runs-on: ubuntu-latest

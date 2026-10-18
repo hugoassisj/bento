@@ -6,9 +6,10 @@
 # disk here. A failing step here fails `validate` and blocks the merge.
 #
 # Add a new rig's step to the slice of the zone that owns the rig, at the
-# end. Composite steps need `shell: bash` on every `run:`; GitHub refuses
-# the action without it. scripts/test-ci-registered.ts reads every file
-# under .github/, so a step here counts as registered.
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
 
 name: validate-home-webext
 description: validate, home-webext slice (runs inside the required validate job)
@@ -21,7 +22,7 @@ runs:
       # file is about to ship (probe/ is four capability probes — harmless to
       # us, alarming to a reviewer), and no permission is declared but unused.
       # A listing rejected for a missing 128px icon costs days of review.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/pack-webext.mjs --check
 
     - name: WebExtension background rig
@@ -30,7 +31,7 @@ runs:
       # and never from the page, and nothing is carried between messages,
       # because an MV3 service worker is evicted mid-save and state across that
       # gap fails intermittently on nobody's machine but the user's.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-background.ts
 
     - name: WebExtension bridge rig
@@ -39,7 +40,7 @@ runs:
       # overwrites the open document with no dialog — which it did once. The
       # decision is pure logic over an options bag, so it is checkable here
       # rather than by reloading an extension and pressing Cmd-S.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-bridge.ts
 
     - name: WebExtension route rig
@@ -50,7 +51,7 @@ runs:
       # every document in it silently opens something else. So it must prove,
       # never guess: the route resolves inside the grant AND dir.resolve()
       # agrees with the path's own tail.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-route.ts
 
     - name: WebExtension document-library rig
@@ -66,7 +67,7 @@ runs:
       # would have passed the bug this replaces, where a metadata reader hunted
       # for the document block's CLOSING tag and so found nothing in any
       # document carrying an image.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-library.ts
 
     - name: WebExtension release-trust rig
@@ -81,7 +82,7 @@ runs:
       # read `url` off the top level of a SIGNED ENVELOPE that has no top-level
       # url, so the + button had never worked in any version — and the rig
       # agreed, because its fixture was written to the shape the code wanted.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-release.ts
 
     - name: WebExtension update-notice rig
@@ -90,7 +91,7 @@ runs:
       # route has to be told — and told in exactly one direction: a store user
       # must never see a notice they cannot act on, and must not even cost a
       # request. Every failure mode here is silent by nature.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-update.ts
 
     - name: WebExtension placement rig
@@ -99,7 +100,7 @@ runs:
       # and by the grant itself — the property that matters is that a wrong
       # guess (same name, other bytes; same bytes, a copy elsewhere) is never
       # recorded. Also the title card drawn for a document with no preview.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-place.ts
 
     - name: WebExtension file-grant rig
@@ -108,7 +109,7 @@ runs:
       # the one-time offer. Each must write only the sender's own file, use a
       # handle only when proven to be that file (name and bytes), and fail to
       # the browser's own picker — never to nothing.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-filegrant.ts
 
     - name: WebExtension save-as rig
@@ -116,7 +117,7 @@ runs:
       # they can land beside the document. The page supplies a name, never a
       # place; a write lands only where the person chose and only for the
       # document that asked; a beside-name is never a path or the original.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-saveas.ts
 
     - name: WebExtension DocStore rig
@@ -126,7 +127,7 @@ runs:
       # partition, and a moved file's recovery follows it only when the old
       # path is gone (seen through a grant) and the content hash matches; the
       # member key never follows.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-store.ts
 
     - name: WebExtension bento/id rig
@@ -135,7 +136,7 @@ runs:
       # conformance contract in kernel/fixtures/identity-v1.json. The
       # passkey-wrapped account key must fail closed for the wrong passkey,
       # credential or binding; the recovery code is 80 random bits.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-id.ts
 
     - name: WebExtension localisation rig
@@ -144,7 +145,7 @@ runs:
       # falls back so a German page carries English sentences, and a dropped
       # $1 leaves a hole in a translated sentence. All of them are visible
       # only to someone who reads that language.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-i18n.ts
 
     - name: WebExtension assistant rig
@@ -153,5 +154,5 @@ runs:
       # slide, a page the user never allowed, an abort naming another tab's
       # turn, a describe or an error that echoes the key or the endpoint —
       # every one of those is silent in a browser and loud here.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-webext-assistant.ts

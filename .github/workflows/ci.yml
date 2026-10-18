@@ -57,6 +57,19 @@ jobs:
         working-directory: slides
         run: npm ci
 
+      - name: Install jsdom for the rigs' DOM halves
+        # Pinned outside the app packages, like the browser runtime in the
+        # ci-<zone>.yml jobs: jsdom is test tooling, never shipped in a document.
+        # The encrypted-title, type preview and type font rigs import it from
+        # the repo root. Until this step existed they skipped in every run.
+        run: npm install --prefix "$GITHUB_WORKSPACE" --no-save --no-package-lock --no-audit --no-fund jsdom@25.0.1
+
+      - name: Rig steps fail on a skip
+        # Puts scripts/ci on PATH, so every slice step below can declare
+        # `shell: bento-step {0}`: a rig that reports a skip CI does not allow
+        # fails its step. Reasoning and allowlist: scripts/lib/ci-skips.mjs.
+        run: echo "$GITHUB_WORKSPACE/scripts/ci" >> "$GITHUB_PATH"
+
       # Everything below is still THIS job — the required `validate` check —
       # run as composite actions, one per zone, each in
       # .github/actions/validate-<zone>/action.yml. They run in this order on

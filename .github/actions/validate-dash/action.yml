@@ -6,9 +6,10 @@
 # disk here. A failing step here fails `validate` and blocks the merge.
 #
 # Add a new rig's step to the slice of the zone that owns the rig, at the
-# end. Composite steps need `shell: bash` on every `run:`; GitHub refuses
-# the action without it. scripts/test-ci-registered.ts reads every file
-# under .github/, so a step here counts as registered.
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
 
 name: validate-dash
 description: validate, dash slice (runs inside the required validate job)
@@ -18,21 +19,21 @@ runs:
     # dash: the data app — same pipeline, same gate.
     - name: Install (dash)
       working-directory: dash
-      shell: bash
+      shell: bento-step {0}
       run: npm ci
 
     - name: Typecheck (dash)
       working-directory: dash
-      shell: bash
+      shell: bento-step {0}
       run: node_modules/.bin/tsc -b
 
     - name: Build single-file shell (dash)
       working-directory: dash
-      shell: bash
+      shell: bento-step {0}
       run: npm run build:single
 
     - name: Splice conformance gate (dash)
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/shell-gate.mjs dash/dist-single/Bento_Dash.bento.html
 
     - name: Release channel rehearsal (dash)
@@ -45,7 +46,7 @@ runs:
       # be rejected, and the conformance gate must refuse a shell whose doc
       # block closes its own script. A signing pipeline cannot be tested by
       # signing (the key never reaches CI), but this is everything except.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-release-channel.mjs --app dash
 
     - name: bento/dash model rig
@@ -54,7 +55,7 @@ runs:
       # a field this build does not recognise, and letting anything but an
       # ABSENT block reach the starter document (which then overwrites live
       # data on the first save). Both are asserted from both sides.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-model.ts
 
     - name: bento/dash store + undo rig
@@ -62,7 +63,7 @@ runs:
       # that costs what the EDIT costs — and risks a failure a snapshot cannot
       # have: an inverse that does not restore what it displaced. Every op is
       # checked apply → undo → identical, because that failure is silent.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-store.ts
 
     - name: bento/dash import rig
@@ -71,7 +72,7 @@ runs:
       # numbers are wrong. Two guards matter most and are checked from both
       # sides — an undecidable date order is REFUSED rather than guessed, and
       # the decimal convention is decided per COLUMN from the whole column.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-import.ts
 
     - name: bento/dash formula rig
@@ -79,7 +80,7 @@ runs:
       # dangerous ones are plausible rather than loud: an error that becomes a
       # zero, a cycle that resolves to something, a column computed before the
       # column it depends on. All three are asserted, each with a control.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-formula.ts
 
     - name: bento/dash chart rig
@@ -87,7 +88,7 @@ runs:
       # surface worth testing is the derivation. The failure that matters most
       # is a missing value drawn as a zero — "we sold nothing" instead of "we
       # do not know".
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-chart.ts
 
     # ── the rest of bento/dash. Each of these asserts a way a spreadsheet can
@@ -100,19 +101,19 @@ runs:
       # places we deliberately depart from Excel because Excel's default is a
       # trap: an approximate VLOOKUP on unsorted data, an IRR that converges
       # on nothing, a PERCENTILE that clamps instead of refusing.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-functions.ts
 
     - name: bento/dash cell formulas
       # Evaluation ORDER. A cell computed before the cell it reads writes a
       # stale number into the document, looking authoritative.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-cellformula.ts
 
     - name: bento/dash A1 references
       # `$` pins against a COPY and not against structure, and a reference
       # into a deleted row is #REF! rather than whatever slid up into it.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-a1.ts
 
     - name: bento/dash defined names
@@ -122,7 +123,7 @@ runs:
       # therefore never consulted, or DROPPED when its rows are deleted
       # instead of becoming #REF!. Ends by mounting the real grid, because an
       # engine the app never passes the name table to is invisible.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-names.ts
 
     - name: bento/dash array formulas and spill
@@ -132,7 +133,7 @@ runs:
       # shape must survive the operators (2×3, not 6×1 — the wrong answer is
       # right in the only cell anybody checks). Datasets deliberately do not
       # spill; a column formula is the columnar answer to the same need.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-spill.ts
 
     - name: bento/dash cross-sheet references and what row 1 means
@@ -148,29 +149,29 @@ runs:
       # one lower — safe only because the conversion shifts LOCAL references
       # and leaves QUALIFIED ones alone. That last one is measured against
       # both sheets, because it is the part that would rot in silence.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-xsheet.ts
 
     - name: bento/dash pivot
       # Subtotals are COMPUTED, not summed: an average of averages is a
       # different number, and a distinct count does not add up.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-pivot.ts
 
     - name: bento/dash dashboard
       # Cross-filter selections compose, and the categories of a column
       # PARTITION the sheet — no row dropped, none counted twice.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-dashboard.ts
 
     - name: bento/dash data story
       # A gap tweens as a gap. Interpolating an absent quarter through zero is
       # the animation telling a lie about the data.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-story.ts
 
     - name: bento/dash filter and sort
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-filter.ts
 
     - name: bento/dash filtering is REACHABLE
@@ -182,51 +183,51 @@ runs:
       # `store.order` ends up holding — plus that a truncated list never
       # pre-ticks itself, that a column's list honours the other columns'
       # filters and not its own, and that none of it dirties the document.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-filterui.ts
 
     - name: bento/dash rows and columns
       # Structure, and the rid watermark — a rid must never be minted twice,
       # which is collaboration's correctness precondition.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-rowcol.ts
 
     - name: bento/dash selection and clipboard
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-select.ts
 
     - name: bento/dash data entry through the real editor
       # Widget⇥12⇥4.50⏎ has to come home to column A. select.ts had the
       # Tab-run model and test-dash-select.ts proved it; the editor's finish()
       # never called it. This one drives typeInto + the cell's own onkeydown.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-entry.ts
 
     - name: bento/dash cross-sheet structure
       # Insert a row on Pipeline and =SUM(Pipeline!D1:D8) on Scratch has to
       # widen. a1.ts had the scope rule; Grid.shiftFormulas walked one sheet.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-xshift.ts
 
     - name: bento/dash sharing state
       # Start/stop/rotate sharing mark the workbook unsaved (a rotation is
       # revocation and must reach the file); only a writer copy offers write
       # auth or calls itself an Editor — an allowlist, failing closed.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-share-dirty.ts
 
     - name: bento/dash sync inbound
       # A peer cannot set this copy's room, docId, readonly, template,
       # format, version or policy — by relay op, by snapshot, or by a frame
       # injected on the same-origin BroadcastChannel.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-sync-inbound.ts
 
     - name: bento/dash room snapshot and inbound fields
       # A dash room snapshot carries no never-synced field (collab first); a
       # remote op or snapshot can't adopt one; no prototype-shaped name off the
       # wire reaches any object, and a prototype-named actor can't throw.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-snapshot-collab.ts
 
     - name: bento/dash save race (kernel SaveQueue)
@@ -235,11 +236,11 @@ runs:
       # update stops the old shell from writing again. Each guard is
       # sabotaged in the PR that introduced it; the rig carries two controls
       # that reproduce the bugs without the guard.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-save-revisions.ts
 
     - name: bento/dash conditional formatting
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-condfmt.ts
 
     - name: bento/dash conditional formatting is REACHABLE
@@ -249,7 +250,7 @@ runs:
       # with panels.ts's own KIT over a real DOM and asserts the rule OBJECT
       # that would reach the document — plus that the menu and the panel
       # actually mount it, which is what makes the rest of it visible.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-condfmtui.ts
 
     - name: bento/dash a formula column is typed by what it returns
@@ -259,7 +260,7 @@ runs:
       # JS type of the computed values, never their appearance — a numeric
       # STRING typed number is the SUM 0 bug (test-dash-coltype.ts) arriving
       # by a new door, and that is asserted by name.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-computedtype.ts
 
     - name: bento/dash paste special
@@ -271,7 +272,7 @@ runs:
       # all, and transpose is REFUSED on a dataset because its columns are
       # typed. Last section reads main.ts: the chord must reach the command,
       # and the clip must be snapshotted BEFORE ⌘X clears the selection.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-pastespecial.ts
 
     - name: bento/dash text to columns
@@ -281,11 +282,11 @@ runs:
       # named before it happens. And the outcome is checked in the DOCUMENT:
       # patches are committed to a real Store, the source column survives,
       # and re-running the recorded step reproduces the same bytes.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-tocolumns.ts
 
     - name: bento/dash side panels
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-panels.ts
 
     - name: bento/dash panel rhythm
@@ -293,11 +294,11 @@ runs:
       # the numbers — one row height, one pitch, one gutter, one radius — and
       # refuses a second spelling of any of them, so the next drift is a build
       # failure rather than a fourth screenshot.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-panelrhythm.ts
 
     - name: bento/dash About dialog
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-about.ts
 
     - name: bento/dash dialog surfaces
@@ -308,25 +309,25 @@ runs:
       # about how the file gets written. This holds the seam AND the size:
       # each surface fits a laptop screen without scrolling, measured through
       # a box model of about.css calibrated against that 1361px.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-surfaces.ts
 
     - name: bento/dash thumbnail preview
       # An encrypted workbook NEVER gets a preview — a plaintext title beside
       # the ciphertext is the leak the password exists to prevent.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-preview.ts
 
     - name: bento/dash zip
       # Verified against real unzip implementations, not only our own reader:
       # a reader and a writer that share a bug agree with each other perfectly.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-zip.ts
 
     - name: bento/dash xlsx
       # Both 1900 date epochs, including the leap-year bug — getting it wrong
       # shifts every date by four years, silently.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-xlsx.ts
 
     - name: bento/dash xlsx — what an import carries and what it says it dropped
@@ -336,22 +337,22 @@ runs:
       # the header-under-a-merged-title repair, and the freeze, per-cell
       # format and Excel-table totals row that used to be dropped in silence.
       # Builds real .xlsx bytes — the gate only ever sees real formula text.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-xlsx-carry.ts
 
     - name: bento/dash WebGL
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-gl.ts
 
     - name: bento/dash 3D scenes
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-viz3d.ts
 
     - name: bento/dash CRDT convergence
       # The big one: randomised concurrent edits across N replicas, asserted
       # to converge. It has caught every ordering bug in the engine, and the
       # two it did not catch were found by widening it.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-sync.ts
 
     - name: dash spreadsheet convergence rig
@@ -361,7 +362,7 @@ runs:
       # FALLBACK — a patch that would move cells must mint zero ops and arm
       # the whole-state path, because two replicas shifting addresses
       # concurrently renumber each other's writes and no ordering repairs it.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-canvassync.ts
 
     - name: dash validator rig
@@ -369,7 +370,7 @@ runs:
       # a column shorter than the sheet has rows, a dictionary index past the
       # end of its dict. Nothing here refuses to load a workbook; the point is
       # that the user is told, because neither of those looks wrong on screen.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-validate.ts
 
     - name: dash comments rig
@@ -377,7 +378,7 @@ runs:
       # sort. The checks that matter are the ORPHAN ones: a deleted row must
       # leave the thread dead and saying so, not silently re-pointed at
       # whoever inherited the row number.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-comments.ts
 
     - name: dash recovery rig
@@ -385,7 +386,7 @@ runs:
       # IndexedDB in it. A snapshot that cannot be parsed is not offered — a
       # Restore button that hands the app a document it will then refuse is a
       # dead end wearing a live button.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-recovery.ts
 
     - name: dash i18n rig
@@ -393,7 +394,7 @@ runs:
       # without a release, so drift has to fail here rather than in the field:
       # a catalog key the source no longer contains is a dead translation, and
       # a {placeholder} a translation dropped is a sentence with a hole in it.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-i18n.ts
 
     - name: dash sheet-tabs rig
@@ -401,7 +402,7 @@ runs:
       # reorder is an undoable patch whose inverse carries the ORIGINAL index
       # — one undo puts a dragged tab back where it was, not at the end. Also
       # guards that deleting the shown sheet steps to another TABLE sheet.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-tabs.ts
 
     - name: dash find rig
@@ -409,7 +410,7 @@ runs:
       # DOM — so the browser's own find reports "not there" for values that
       # are. These checks cover the matcher, the view vector (a hit must never
       # be a row the filter is hiding) and the replace refusals.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-find.ts
 
     - name: dash spreadsheet-cells rig
@@ -420,7 +421,7 @@ runs:
       # collaboration fallback — the CRDT has never heard of this op, and
       # localOne's default arm ships a whole-state snapshot rather than
       # dropping it.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-canvascells.ts
 
     - name: dash step engine
@@ -430,7 +431,7 @@ runs:
       # not discriminate between the two designs at this size, memory does
       # (2.5 MB against 16.8 MB), and memory is what decides whether a
       # workbook fits at all.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-steps.ts
 
     - name: dash SQL surface
@@ -440,7 +441,7 @@ runs:
       # checks that matter are the refusals: a plain JOIN declares card:'one'
       # so a non-unique key STOPS the pipeline instead of doubling every
       # total, and an edit statement is refused because a query is a question.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-sql.ts
 
     - name: dash spreadsheet rig
@@ -448,7 +449,7 @@ runs:
       # per cell. The check that matters is that a formula BELOW the data
       # lands in a cell that did not exist, without allocating the rows it
       # skipped: that gesture is why the kind exists.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-canvas.ts
 
     - name: dash promote/flatten rig
@@ -459,7 +460,7 @@ runs:
       # them silently. Also that a lifted column formula actually EVALUATES —
       # Column.formula is a bare expression, and an "=" in front of it ships
       # a column of #VALUE!.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-promote.ts
 
     - name: dash fill rig
@@ -469,7 +470,7 @@ runs:
       # implementation with the handle made it alternate two seed rows. The
       # two gestures are separate here, and a formula fills with its
       # references translated.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-fill.ts
 
     - name: dash spreadsheet formula rig
@@ -477,7 +478,7 @@ runs:
       # Sheet1!A1 used to bind to the LOCAL A1 — this sheet's number reported
       # under another sheet's name — and ranges over a sparse sheet must cost
       # the cells that exist, not the rectangle they span.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-canvasformula.ts
 
     - name: dash action-applicability rig
@@ -485,7 +486,7 @@ runs:
       # for every one that does not. Six toolbar buttons used to throw
       # "grid needs a table sheet" on a spreadsheet with nothing shown; the
       # rig fails if an action is kind-scoped without a reason string.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-actions.ts
 
     - name: dash cell format and type rig
@@ -494,7 +495,7 @@ runs:
       # silently become 1234, 1/2 must never become a date, an ambiguous
       # d/m/yyyy is refused rather than guessed, and formatting twenty cells
       # is ONE patch and ONE undo.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-cellprops.ts
 
     - name: dash theme rig
@@ -504,7 +505,7 @@ runs:
       # shadow in the app computed to "none". The light palette is also
       # diffed against slides' :root so the two cannot drift one grey at a
       # time again.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-theme.ts
 
     - name: dash file write-back
@@ -519,7 +520,7 @@ runs:
       # nobody awaits, and the refusals (read-only, template, no-handle) are
       # ORDERED, so a read-only workbook reports the permanent reason rather
       # than the incidental one.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-autosave.ts
 
     - name: dash print
@@ -533,7 +534,7 @@ runs:
       # column is ever clipped off the right edge at any wide-sheet setting,
       # and that author data reaching markup is escaped — a workbook is
       # untrusted input, and this path builds HTML by concatenation.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-print.ts
 
     - name: dash grid frontier
@@ -546,7 +547,7 @@ runs:
       # original bug, per-keystroke is a different one. Clicking must NOT
       # append, since a control that grows the file when you look at it is
       # worse than one that does nothing.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-frontier.ts
 
     - name: dash grid context menus
@@ -564,7 +565,7 @@ runs:
       # nothing until its dialog is answered; and finding 11 — a per-cell
       # formula is carried into a new row only when the column proves it
       # repeats, and the reader is told either way.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-menu.ts
 
     - name: dash accessibility
@@ -578,7 +579,7 @@ runs:
       # click and after a repaint (every paint replaces innerHTML, so without
       # restoration focus drops to BODY), one roving tab stop, and that
       # nothing here is a live region.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-a11y.ts
 
     - name: dash per-cell appearance
@@ -593,7 +594,7 @@ runs:
       # cannot smuggle a value or a type onto a dataset, where the COLUMN
       # type is authoritative, and that the CRDT splits content from
       # presentation so bolding a cell beside a concurrent retype keeps both.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-cellfmt.ts
 
     - name: dash column type vs storage
@@ -612,7 +613,7 @@ runs:
       # validator half is checked too, because store.ts can only stop this
       # state being created — it still arrives from files saved by the buggy
       # build and from hand-edited JSON, which PLATFORM §7 makes a way in.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-coltype.ts
 
     - name: dash starter workbook
@@ -627,7 +628,7 @@ runs:
       # re-points two totals on another sheet, and nothing about that is
       # visible in a diff. The addresses are pinned by column NAME and the
       # totals computed through the shipping code.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-starter.ts
 
     - name: dash — the off switch for a live session
@@ -643,7 +644,7 @@ runs:
       # still honoured), a control that STOPS something already happening may
       # not. Checked as CSS text because dash-dom.ts is a parser, not a layout
       # engine, and cannot say what a viewport width does to a declaration.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-stopsharing.ts
 
     - name: Grid surface rig
@@ -662,7 +663,7 @@ runs:
       # from the paper satisfies every structural check and renders as the
       # defect. The other half mounts a real Grid and asserts the note is one
       # node that survives 5,000 rows.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-surface.ts
 
     - name: Data validation rig
@@ -687,5 +688,5 @@ runs:
       # round trip in both directions, including Excel's INVERTED
       # `showDropDown` attribute (1 hides it), which reads correctly in code
       # that has it exactly backwards.
-      shell: bash
+      shell: bento-step {0}
       run: node scripts/test-dash-datavalid.ts

@@ -11232,3 +11232,29 @@ file is now split by zone, and nothing about merging changes:
 What this costs: in the Actions UI, a failing `validate` names the zone slice.
 To find the failing step inside it, open that slice's log.
 
+
+## 2026-10-18 — Under CI, a rig that skips fails its step
+
+A rig that can't run what it needs prints a skip line and exits 0, so its step
+went green. Three rigs had skipped in every CI run since they were written:
+encrypted-title (the #742 guard for shipped slides), type preview and type
+font. All three print "skipped: jsdom is not installed", and CI never
+installed jsdom.
+
+- `validate` installs a pinned jsdom at the repo root, as test tooling (it
+  never ships in a document). All three rigs now run.
+- Every rig step runs under `scripts/ci/bento-step`: the `shell:` of every
+  validate slice step, and the default shell of the `ci-<zone>.yml` jobs.
+  It runs the script as `shell: bash` would, then fails the step on any
+  output line that reads as a skip. The one exception is
+  `ci-home-android.yml`, where Gradle prints SKIPPED as a task outcome.
+- **The allowlist** (`ALLOWED_SKIPS` in `scripts/lib/ci-skips.mjs`) names the
+  rig, the exact line and the reason. It holds the dash xlsx/zip interop
+  checks, which need LibreOffice or a real Excel-made workbook, and, on Linux
+  only, the three home/ios Swift rigs, which need Apple frameworks and run for
+  real on a macOS job. An allowed line counts only in its own rig's step.
+- `scripts/test-ci-skips.mjs` is the positive control. It checks the detector
+  against the exact lines from a real main run, and runs the wrapper end to
+  end, including the encrypted-title rig with jsdom hidden, which must turn the
+  step red. It also checks that every allowlist entry's rig still prints its
+  line, and that every rig step in every CI file runs through the wrapper.
