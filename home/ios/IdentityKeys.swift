@@ -100,7 +100,13 @@ enum IdentityKeys {
             let (key, blob) = try mint(role, enclave: enclave)
             guard store.set(deviceItem(role), blob) else { throw Failure.unavailable }
             // the enrolment the consent key was born under: see Enrolment
-            if role == .consent { _ = recordEnrolment(domainState(), in: store) }
+            if role == .consent {
+                // never mint a consent key under an enrolment we can't read: its
+                // baseline would be missing, and the first consent a false alarm
+                let reading = domainState()
+                guard reading != cantTell else { store.delete(deviceItem(role)); throw Failure.unavailable }
+                _ = recordEnrolment(reading, in: store)
+            }
             return key
         }
     }
@@ -132,19 +138,38 @@ enum IdentityKeys {
     /// Stands in for "no biometrics enrolled", so losing them is a change too.
     private static let noBiometrics = Data("none".utf8)
 
+    /// The reading when biometrics exist but can't be read right now: locked out
+    /// after failed attempts, hardware unavailable, or any other error. It is NOT
+    /// "no biometrics": reading a lockout as "removed" would alarm every device
+    /// for nothing. The gate refuses on it instead (matching Android, where
+    /// BiometricManager's HW_UNAVAILABLE and the like refuse).
+    static let cantTell = Data("unknown".utf8)
+
     static func currentDomainState() -> Data? {
         let c = LAContext()
         var err: NSError?
-        _ = c.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err)
-        return c.evaluatedPolicyDomainState
+        let can = c.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err)
+        return reading(canEvaluate: can, errorCode: err?.code, state: c.evaluatedPolicyDomainState)
+    }
+
+    /// What a canEvaluatePolicy answer means for the tripwire:
+    /// - a readable state → that state
+    /// - biometryNotEnrolled (measured: -7 on the simulator) → nil, "no biometrics"
+    /// - anything else (lockout -8, not available -6, …) → `cantTell`
+    static func reading(canEvaluate: Bool, errorCode: Int?, state: Data?) -> Data? {
+        if canEvaluate { return state ?? cantTell }
+        if errorCode == LAError.biometryNotEnrolled.rawValue { return nil }
+        return cantTell
     }
 
     @discardableResult
     static func recordEnrolment(_ state: Data?, in store: Store) -> Bool {
-        store.set(enrolmentItem, state ?? noBiometrics)
+        guard state != cantTell else { return false }   // never a baseline
+        return store.set(enrolmentItem, state ?? noBiometrics)
     }
 
     static func checkEnrolment(_ current: Data?, in store: Store) -> Enrolment {
+        if current == cantTell { return .unknown }
         switch store.get(enrolmentItem) {
         case .found(let recorded): return recorded == (current ?? noBiometrics) ? .unchanged : .changed
         case .absent: return .changed

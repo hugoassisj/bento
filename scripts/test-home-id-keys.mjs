@@ -161,6 +161,24 @@ do {
     U.failReads = false
     e("recv.blindKeepsBaseline", (IdentityKeys.observeDeviceList(["devA"], signedBy: "devA", me: "devB", now: 3, in: U) ?? []).contains { $0.kind == .thisDeviceRemoved })
   }
+  // "can't tell" (locked out, hardware unavailable) is NOT "no biometrics"
+  do {
+    let L = Mem(), X = Data("faceX".utf8)
+    _ = try! IdentityKeys.device(.consent, in: L, enclave: false, domainState: { X })
+    let ct = IdentityKeys.cantTell
+    e("ct.check", IdentityKeys.checkEnrolment(ct, in: L) == .unknown)
+    e("ct.gate", IdentityKeys.enrolmentGate(ct, device: "iPhone", devices: ["devA"], now: 1, in: L) == .refuse && (IdentityKeys.pendingNotices(in: L) ?? []).isEmpty)
+    e("ct.noBaseline", !IdentityKeys.recordEnrolment(ct, in: L) && IdentityKeys.checkEnrolment(X, in: L) == .unchanged)
+    let F = Mem()
+    var threw = false
+    do { _ = try IdentityKeys.device(.consent, in: F, enclave: false, domainState: { ct }) } catch { threw = true }
+    e("ct.noMint", threw && F.get(IdentityKeys.deviceItem(.consent)) == .absent)
+    e("ct.map", IdentityKeys.reading(canEvaluate: true, errorCode: nil, state: X) == X
+      && IdentityKeys.reading(canEvaluate: false, errorCode: -7, state: nil) == nil
+      && IdentityKeys.reading(canEvaluate: false, errorCode: -8, state: nil) == ct
+      && IdentityKeys.reading(canEvaluate: false, errorCode: -6, state: nil) == ct
+      && IdentityKeys.reading(canEvaluate: true, errorCode: nil, state: nil) == ct)
+  }
   // without the address it NEVER clears, however long and however many devices confirm
   do {
     let a = Mem(); _ = try! IdentityKeys.device(.consent, in: a, enclave: false, domainState: { X })
@@ -243,6 +261,11 @@ ok(out['recv.other'] === 'true', 'and alerts for every other device it did not r
 ok(out['recv.durable'] === 'true', 'the alerts are recorded durably')
 ok(out['recv.ownRemoval'] === 'true', 'a removal this device made itself raises nothing')
 ok(out['recv.blind'] === 'true' && out['recv.blindKeepsBaseline'] === 'true', "an unreadable baseline is never replaced blind: the next good read still sees the removal")
+ok(out['ct.check'] === 'true', "a reading that can't be made (lockout, hardware) is UNKNOWN, not 'no biometrics'")
+ok(out['ct.gate'] === 'true', 'so the gate refuses the consent, and raises NO false notice')
+ok(out['ct.noBaseline'] === 'true', 'it is never recorded as a baseline; the real one stands')
+ok(out['ct.noMint'] === 'true', 'and no consent key is minted under it (its first consent would be a false alarm)')
+ok(out['ct.map'] === 'true', 'the mapping: a state is that state; not-enrolled (-7) is none; lockout (-8), unavailable (-6) and an empty success are unknown')
 ok(out['anchor.never'] === 'true', 'without the ADDRESS a notice never clears, whatever the devices do and however long')
 ok(out['anchor.then'] === 'true', 'and clears once the address confirms')
 ok(out['gate.blind'] === 'true', "a record or outbox that can't be read refuses the consent")
