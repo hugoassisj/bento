@@ -72,6 +72,24 @@ for enclave in (SecureEnclave.isAvailable ? [true, false] : [false]) {
   m.failReads = false
   e("\(tag).blind.kept", (try! IdentityKeys.device(.routine, in: m, enclave: enclave)).publicRaw == r.publicRaw)
 }
+// The biometric enrolment tripwire, with the domain state injected (a real
+// device's "different face" can't be simulated; gaining or losing them can).
+do {
+  let m = Mem(), X = Data("faceX".utf8), Y = Data("faceY".utf8)
+  _ = try! IdentityKeys.device(.consent, in: m, enclave: false, domainState: { X })
+  e("trip.same", IdentityKeys.checkEnrolment(X, in: m) == .unchanged)
+  e("trip.other", IdentityKeys.checkEnrolment(Y, in: m) == .changed)
+  e("trip.lost", IdentityKeys.checkEnrolment(nil, in: m) == .changed)
+  IdentityKeys.acceptEnrolment(Y, in: m)
+  e("trip.accepted", IdentityKeys.checkEnrolment(Y, in: m) == .unchanged && IdentityKeys.checkEnrolment(X, in: m) == .changed)
+  let n0 = Mem()
+  _ = try! IdentityKeys.device(.consent, in: n0, enclave: false, domainState: { nil })
+  e("trip.gained", IdentityKeys.checkEnrolment(X, in: n0) == .changed && IdentityKeys.checkEnrolment(nil, in: n0) == .unchanged)
+  let legacy = Mem()
+  e("trip.norecord", IdentityKeys.checkEnrolment(X, in: legacy) == .changed)
+  legacy.failReads = true
+  e("trip.unreadable", IdentityKeys.checkEnrolment(X, in: legacy) == .unknown)
+}
 `
 const dir = mkdtempSync(join(tmpdir(), 'bento-idkeys-'))
 let out
@@ -114,5 +132,13 @@ for (const tag of ['se', 'sw'].filter((t) => out[`${t}.routinepub`])) {
   ok(out[`${tag}.blind.device`] === 'true' && out[`${tag}.blind.account`] === 'true', 'a store that cannot be read never gets a key minted over it')
   ok(out[`${tag}.blind.kept`] === 'true', 'and the existing device key is still the one in use afterwards')
 }
+console.log('biometric enrolment tripwire (§29):')
+ok(out['trip.same'] === 'true', 'the enrolment the consent key was created under reads unchanged')
+ok(out['trip.other'] === 'true', 'a different enrolment is CHANGED (notify every device, re-confirm)')
+ok(out['trip.lost'] === 'true', 'biometrics removed is CHANGED')
+ok(out['trip.gained'] === 'true', 'biometrics added where there were none is CHANGED')
+ok(out['trip.accepted'] === 'true', 'after a re-confirmed consent the new enrolment is the baseline, and the old one would now be a change')
+ok(out['trip.norecord'] === 'true', 'a consent key with no recorded enrolment (made before the check) is CHANGED, re-confirmed once')
+ok(out['trip.unreadable'] === 'true', 'a record that cannot be read is UNKNOWN — the consent is refused, the check never skipped')
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

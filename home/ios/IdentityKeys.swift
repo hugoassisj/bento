@@ -58,6 +58,7 @@ enum IdentityKeys {
     typealias Store = HostDocStore.Secrets
 
     static let accountItem = "identity/account"
+    static let enrolmentItem = "identity/consent-enrolment"
     static func deviceItem(_ r: Role) -> String { "identity/device-\(r.rawValue)" }
 
     // MARK: account key
@@ -90,16 +91,67 @@ enum IdentityKeys {
 
     /// This device's key for `role`, minting it on first use. A device key is
     /// minted only when the store says it's truly absent.
-    static func device(_ role: Role, in store: Store, enclave: Bool = SecureEnclave.isAvailable) throws -> DeviceKey {
+    static func device(_ role: Role, in store: Store, enclave: Bool = SecureEnclave.isAvailable,
+                       domainState: () -> Data? = IdentityKeys.currentDomainState) throws -> DeviceKey {
         switch store.get(deviceItem(role)) {
         case .found(let blob): return try load(role, blob, enclave: enclave)
         case .unavailable: throw Failure.unavailable
         case .absent:
             let (key, blob) = try mint(role, enclave: enclave)
             guard store.set(deviceItem(role), blob) else { throw Failure.unavailable }
+            // the enrolment the consent key was born under: see Enrolment
+            if role == .consent { _ = recordEnrolment(domainState(), in: store) }
             return key
         }
     }
+
+    // MARK: biometric enrolment tripwire (threat model §29)
+
+    /// The consent key is `.userPresence`, so it accepts the passcode and
+    /// survives a change of enrolled faces or fingers. That's deliberate: it
+    /// doesn't lock out people without biometrics, or people whose biometrics
+    /// fail. Android's key is invalidated by a new enrolment instead. For
+    /// parity without the lockout, the enrolment is recorded when the consent
+    /// key is created and checked at every consent:
+    /// - UNCHANGED: go ahead.
+    /// - CHANGED: the agent tells every device and the address "biometrics
+    ///   changed on <device>", and asks for the consent to be re-confirmed;
+    ///   `acceptEnrolment` then records the new state.
+    /// - UNKNOWN: the record couldn't be read. Refuse the consent; never skip
+    ///   the check.
+    /// A missing record (a key from before this check) is CHANGED, so it gets
+    /// re-confirmed once. Measured on the simulator: gaining biometrics
+    /// (nil → state) and losing them (state → nil) both show; re-enrolling the
+    /// SAME simulated face reads identically. A different face or finger, a real
+    /// device's case, is a different state.
+    enum Enrolment: Equatable { case unchanged, changed, unknown }
+
+    /// Stands in for "no biometrics enrolled", so losing them is a change too.
+    private static let noBiometrics = Data("none".utf8)
+
+    static func currentDomainState() -> Data? {
+        let c = LAContext()
+        var err: NSError?
+        _ = c.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err)
+        return c.evaluatedPolicyDomainState
+    }
+
+    @discardableResult
+    static func recordEnrolment(_ state: Data?, in store: Store) -> Bool {
+        store.set(enrolmentItem, state ?? noBiometrics)
+    }
+
+    static func checkEnrolment(_ current: Data?, in store: Store) -> Enrolment {
+        switch store.get(enrolmentItem) {
+        case .found(let recorded): return recorded == (current ?? noBiometrics) ? .unchanged : .changed
+        case .absent: return .changed
+        case .unavailable: return .unknown
+        }
+    }
+
+    /// After the person has re-confirmed a consent under a changed enrolment.
+    @discardableResult
+    static func acceptEnrolment(_ current: Data?, in store: Store) -> Bool { recordEnrolment(current, in: store) }
 
     private static func access(_ role: Role) throws -> SecAccessControl {
         let flags: SecAccessControlCreateFlags = role == .consent ? [.privateKeyUsage, .userPresence] : [.privateKeyUsage]
