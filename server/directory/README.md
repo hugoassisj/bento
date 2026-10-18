@@ -42,6 +42,13 @@ rotation, which is how a person who has lost every device moves on, arrives
 with the rotation states. Email alone may bind an address that is absent,
 expired or deleted; a new key over an expired one is flagged `rebound`, so
 pinners warn.
+
+**Until the rotation states land, a live binding's key cannot change at
+all**, and a person who has lost every device cannot remove a live binding:
+it stays until it expires (13 months at most). That includes the web
+deletion page (bento.page/id/delete), which removes EXPIRED bindings only for
+now. For a live one it answers as usual and mails nothing. Accepted for phase
+1 by security; the 72-hour contestable path lifts it.
 | `GET /v1/keys` | none | the directory's public keys, for diagnosis (clients trust the list in the signed release) |
 
 **Limits:**
