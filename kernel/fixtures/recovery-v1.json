@@ -222,6 +222,17 @@
     },
     "prfKek": "cb2d620d31cc776d953b939c82d8196096591589f3a5bcc12ac21218b9406f06"
   },
+  "prf": {
+    "note": "The PRF extension evaluates input = UTF-8(prfInput). A host speaking CTAP hmac-secret directly (no WebAuthn PRF API) sends hmacSecretSalt = SHA-256(UTF-8(\"WebAuthn PRF\") ‖ 0x00 ‖ input) (WebAuthn L3 §10.1.4), so the authenticator returns the same 32 bytes a browser gets. Browsers apply this themselves: never twice.",
+    "prfInput": "bento/id/prf/v1",
+    "inputHex": "62656e746f2f69642f7072662f7631",
+    "hmacSecretSalt": "f99670d5db28529b25c8a9ec469959b60006b8d6625066cc77f075dab7ea3b77",
+    "wrong": {
+      "noSeparator": "9bd7977da368bf160952ba577eb62abcb1b4e105c29f0abc2ba3e41f2c09b240",
+      "rawInputHash": "0348893aa98ff0466b2e8bba1ebf6f13f6e7d5e773b2f8ab83d79e44bd02720d",
+      "rawInput": "62656e746f2f69642f7072662f7631"
+    }
+  },
   "blobs": {
     "keys": {
       "accountD": "e5526afbbded1a62046b9985419c6c5023b6f341313ed2f31642c4000c5fbad4",

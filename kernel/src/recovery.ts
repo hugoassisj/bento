@@ -105,6 +105,27 @@ export async function recoveryVerifier(code: Uint8Array, saltV: Uint8Array, argo
   return argon2(code, saltV)
 }
 
+/**
+ * The PRF extension's FIXED input (identity-design §2f), as UTF-8 bytes: every
+ * ceremony evaluates exactly this, so one passkey always yields one PRF output.
+ */
+export const PRF_INPUT = 'bento/id/prf/v1'
+
+/**
+ * What a host that speaks CTAP directly (libfido2 hmac-secret, no WebAuthn PRF
+ * API) must send as the hmac-secret salt so the authenticator returns the SAME
+ * 32 bytes a browser's PRF extension would. WebAuthn Level 3 §10.1.4:
+ * salt = SHA-256(UTF-8("WebAuthn PRF") ‖ 0x00 ‖ input). Forget the 0x00, or
+ * send the raw input, and the blob you seal can never be opened by a browser
+ * (and vice versa). Browsers do this themselves; never apply it twice.
+ */
+export async function prfHmacSecretSalt(input: Uint8Array = te.encode(PRF_INPUT)): Promise<Uint8Array> {
+  const label = te.encode('WebAuthn PRF')
+  const msg = new Uint8Array(label.length + 1 + input.length)
+  msg.set(label); msg[label.length] = 0; msg.set(input, label.length + 1)
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', msg as BufferSource))
+}
+
 /** The PRF blob's key: HKDF-SHA-256(PRF output, 32-byte salt, "bento/id/acct-wrap/v1"). */
 export async function prfKek(prfOutput: Uint8Array, salt: Uint8Array): Promise<Uint8Array> {
   checkLen(prfOutput, 32, 'PRF output'); checkLen(salt, 32, 'salt')
