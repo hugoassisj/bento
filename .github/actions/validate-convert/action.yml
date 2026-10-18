@@ -1,0 +1,40 @@
+# validate, convert slice: convert/: the standalone typecheck and the conversion engine rigs.
+#
+# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# action as steps INSIDE that one job, on the same runner, after the slices
+# listed before it there — so what earlier slices installed and built is on
+# disk here. A failing step here fails `validate` and blocks the merge.
+#
+# Add a new rig's step to the slice of the zone that owns the rig, at the
+# end. Composite steps need `shell: bash` on every `run:`; GitHub refuses
+# the action without it. scripts/test-ci-registered.ts reads every file
+# under .github/, so a step here counts as registered.
+
+name: validate-convert
+description: validate, convert slice (runs inside the required validate job)
+runs:
+  using: composite
+  steps:
+    - name: Typecheck convert (standalone)
+      # convert/ is a library beside the apps (the CLI and bento.page/import
+      # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
+      # its own pass — the same as kernel's.
+      working-directory: slides
+      shell: bash
+      run: node_modules/.bin/tsc -p ../convert
+
+    - name: convert engine rigs
+      # The pptx importer's resolver is where real decks' fidelity lives --
+      # 91% of colour and 71% of run properties are indirect, and every hop
+      # fails silently (a backwards clrMap still renders, just dark-on-dark).
+      # Negative controls proven against mutated implementations; load.ts is
+      # the gate that matters for import: every emitted document must pass the
+      # REAL slides parseDoc with zero validateDoc errors. The runner also
+      # covers the `bento convert` CLI (it needs the shell built above and
+      # Chrome for "it opens"; neither may skip in CI), the delivery chain
+      # behind bento.page/import (signature, pin, version floor, untrusted-
+      # input gate, zip limits, exactly two requests), the built page's CSP,
+      # and the boundary: no app imports convert/, and the engine touches no
+      # DOM global.
+      shell: bash
+      run: node scripts/test-convert.ts

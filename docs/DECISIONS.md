@@ -11200,3 +11200,35 @@ Follows the desktop agent core entry above.
 Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
 old pepper labels, losing O→0 when reading a code, and skipping the range
 check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
+
+## 2026-10-18 — CI is split by zone; `validate` stays one required job
+
+`.github/workflows/ci.yml` held every CI step, and every zone added its rig at
+the same few places: the end of its section of `validate`, or after the last
+job. So nearly every open PR conflicted with whichever PR merged before it. The
+file is now split by zone, and nothing about merging changes:
+
+- **The required check is still `validate`, and it is still ONE job.** Its
+  steps live in composite actions, one per zone
+  (`.github/actions/validate-<zone>/action.yml`). `ci.yml` runs them in order
+  on the same runner. Each app's slice builds its own shell, and the convert,
+  kernel, home and shared slices run after all four apps, so every step has at
+  least what was installed and built before it ran in the old order. Composite
+  actions were chosen over reusable workflows because reusable workflows would
+  make each zone a separate job. That would rename checks, rebuild every shell
+  once per job, and turn `validate` into an aggregator, where a skipped
+  dependency reads as success.
+- **Jobs outside `validate` live in `.github/workflows/ci-<zone>.yml`**, with
+  their job ids unchanged (the job id is the check name). Like before, they
+  are not required checks.
+- **Where a new rig goes:** at the end of your own zone's slice, or as a job in
+  your zone's `ci-<zone>.yml`. Never in `ci.yml`, which changes only when a
+  slice is added. Composite steps must say `shell:` on every `run:`.
+- `scripts/test-ci-registered.ts` and `test-spaces.mjs --manifest` read all of
+  it through `scripts/lib/ci-files.mjs`. An action counts only if a workflow
+  runs it, and the rig fails on an action nobody uses or a rig-running workflow
+  with no `pull_request` trigger. Those are the two silent holes a split opens.
+
+What this costs: in the Actions UI, a failing `validate` names the zone slice.
+To find the failing step inside it, open that slice's log.
+
