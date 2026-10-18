@@ -68,6 +68,21 @@ try {
     await context.close()
   }
 
+  console.log('\nboth seal states on ONE storage (a sealed boot after an unsealed session)')
+  {
+    const plain = await openSealed(browser, 'slides', { sealed: false })
+    await markDocument(plain.page)
+    ok((await scanIndexedDB(plain.page, MARK)).length > 0, 'the unsealed session leaves the marker in IndexedDB')
+    const docId = await plain.page.evaluate(() => window.bento.doc.docId)
+    const sealedPage = await openSealed(browser, 'slides', { context: plain.context, url: plain.url })
+    ok((await scanIndexedDB(sealedPage.page, MARK)).length > 0, 'a sealed page on the same context sees the same storage')
+    ok(await sealedPage.page.evaluate(() => !!globalThis.__bentoTestSealProbe), 'and it is sealed (the handoff is per page)')
+    await plain.reload()
+    ok(await plain.page.evaluate(() => !('__bentoTestSealProbe' in globalThis)), 'the unsealed page reloads unsealed: no page inherits a key')
+    ok(typeof docId === 'string', 'control: the session had a docId')
+    await plain.context.close()
+  }
+
   console.log('\nunsealed control (same test shell, no key handed over)')
   {
     const { page, context } = await openSealed(browser, 'slides', { sealed: false })

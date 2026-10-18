@@ -20,7 +20,7 @@
 // (openSealed(browser, app, { sealed: false })) and see the marker land in
 // IndexedDB: the positive control that the scan can see a leak at all.
 
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -35,11 +35,18 @@ const SHELLS = {
 /** A fixed TEST document key. Never a real one: the bodies it seals are throwaway. */
 export const TEST_KDOC = Array.from({ length: 32 }, (_, i) => (i * 7 + 3) & 0xff)
 
-/** The test shell for an app, by explicit path. Never a release (dist-single) shell. */
+/**
+ * The test shell for an app, by explicit path. Never a release (dist-single)
+ * shell. build:sealtest deletes dist-sealtest/ before it compiles, so a build
+ * that fails leaves NO shell rather than the previous one: a mutation that does
+ * not compile can't be scored against stale code (type and dash both hit this).
+ */
 export function sealtestShell(app) {
   const rel = SHELLS[app]
   if (!rel) throw new Error(`sealed-boot: no such app ${app}`)
-  return new URL(`../../${rel}`, import.meta.url)
+  const url = new URL(`../../${rel}`, import.meta.url)
+  if (!existsSync(url)) throw new Error(`sealed-boot: no ${rel}. Run npm run build:sealtest --prefix ${app}, and check its exit code: a failed build leaves no shell`)
+  return url
 }
 
 /**
@@ -67,17 +74,26 @@ export function sealtestShellWith(app, doc) {
  * save of the live document would write an identity-sealed envelope.
  *
  * `doc` boots a fixed document instead of the app's starter (sealtestShellWith).
- * `reload()` on the result reloads the same file in the same context, with the
- * handoff installed again and the seal proven again, so IndexedDB carries over.
+ * `reload()` on the result reloads the same page, keeping its seal state, with
+ * the handoff installed again and the state proven again.
+ * `context` opens the page in an existing context, so it shares that context's
+ * IndexedDB, and `url` reopens a file an earlier call returned. Together: an
+ * unsealed session leaves a plaintext snapshot, then
+ *   openSealed(browser, app, { context: first.context, url: first.url })
+ * boots the SAME document SEALED on the same storage, which must refuse it.
  */
-export async function openSealed(browser, app, { sealed = true, kdoc = TEST_KDOC, doc, viewport = { width: 1280, height: 900 } } = {}) {
-  const context = await browser.newContext({ viewport })
-  await context.route(/^https?:/, (route) => route.abort())
-  if (sealed) await context.addInitScript((k) => { globalThis.__bentoTestSeal = new Uint8Array(k) }, kdoc)
+export async function openSealed(browser, app, { sealed = true, kdoc = TEST_KDOC, doc, url, context, viewport = { width: 1280, height: 900 } } = {}) {
+  if (!context) {
+    context = await browser.newContext({ viewport })
+    await context.route(/^https?:/, (route) => route.abort())
+  }
   const page = await context.newPage()
+  // per PAGE, not per context: a second openSealed on the same context (same
+  // IndexedDB) can then boot the other seal state, and no page inherits a key
+  if (sealed) await page.addInitScript((k) => { globalThis.__bentoTestSeal = new Uint8Array(k) }, kdoc)
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
-  const url = (doc === undefined ? sealtestShell(app) : sealtestShellWith(app, doc)).href
+  url ??= (doc === undefined ? sealtestShell(app) : sealtestShellWith(app, doc)).href
   await page.goto(url)
   await provenState(page, app, sealed)
   const reload = async () => { await page.reload(); await provenState(page, app, sealed) }
