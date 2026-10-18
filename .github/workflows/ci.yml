@@ -2685,3 +2685,10 @@ jobs:
         # that refuses the recovery copy gets the notice once, held to read;
         # pt and de show slides' words. Planted in bento-spaces-autosave.
         run: node scripts/test-spaces-recovery-browser.mjs
+      - name: bento.page passkey association files never publish a placeholder
+        # scripts/well-known.mjs fills /.well-known/apple-app-site-association
+        # and assetlinks.json from site-src/well-known/ once the Apple team id
+        # and the Play signing fingerprint exist. It writes only what it was
+        # given, refuses a malformed value, and never emits a placeholder: the
+        # platforms cache these files, so a wrong one is worse than none.
+        run: node scripts/test-well-known.ts
