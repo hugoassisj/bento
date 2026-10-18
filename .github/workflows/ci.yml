@@ -2548,6 +2548,11 @@ jobs:
         # neutral <title> and filename, no preview, and no plaintext; the
         # unsealed control shows the same checks can see a leak.
         run: node scripts/test-sealed-boot.mjs
+      - name: A sealed slides deck keeps its content out of IndexedDB in Chromium
+        # The autosave and ⌘S checkpoints write no recovery copy or version for
+        # a deck sealed by identity; the password menu stays keyed to the
+        # password; the unsealed control shows the scan sees a leak.
+        run: node scripts/test-slides-sealed-guards-browser.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
