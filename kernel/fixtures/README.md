@@ -14,6 +14,31 @@ random, so a regeneration changes bytes but not verdicts.
 
 **The keys in this file are TEST KEYS ONLY.** Never use them for anything else.
 
+`recovery-v1.json` holds the recovery-code and key-blob vectors (identity-design
+§2f, signed by security §28). Unlike the statement vectors, every value in it is
+DETERMINISTIC (fixed codes, salts and IVs), so a host must reproduce the exact
+bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
+`scripts/test-recovery.ts`. Generator: `scripts/gen-recovery-vectors.ts`.
+
+- **Argon2id first.** Check your Argon2id against the `rfc9106` row (RFC 9106
+  §5.3, with its own parameters) before trusting it. Then use OUR parameters:
+  version 0x13, p = 1, m = 64 MiB, t = 3, a 32-byte tag, 16-byte salts.
+- **The code is 17 symbols: 16 data symbols and a check symbol**, printed
+  `XXXX-XXXX-XXXX-XXXX-C`. Data symbols are Crockford base32 (no I, L, O, U).
+  The check is the 80-bit value mod 37, with `* ~ $ = U` for 32 to 36. Every one
+  of those five has its own row, because that's where hosts disagree. Parsing
+  forgives case, spaces and hyphens, and reads O as 0 and I/L as 1. U is valid
+  ONLY as the check symbol. Argon2id takes the 10 decoded BYTES, never the
+  string.
+- **HKDF salt "empty" means zero-length** (equivalent to 32 zero bytes). AES-GCM
+  ciphertexts are `ciphertext ‖ 16-byte tag` with a 12-byte IV.
+- **Blob plaintext** is raw 32-byte big-endian private scalars: the account
+  scalar alone while kx is unruled, or with kx appended under modes A and C. On
+  import, each scalar must be in 1..n−1 AND its public point d·G must equal the
+  public key in the directory-signed binding. A swapped blob fails closed.
+- **The pepper layer** is the directory's (share implements it). Its rows exist
+  so the server code can be checked against the same bytes.
+
 ## What each section checks
 
 - `statements`: one row per case. `type` names the verifier. `text` and `sig`
