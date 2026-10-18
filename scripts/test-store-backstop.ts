@@ -64,8 +64,10 @@ console.log('\nthe refusal counter, directly: each refused call counts once, not
   setIdentitySeal(kdoc)
   await putRecovery(docOf('doc-c', 'c')); await addVersion(docOf('doc-c', 'c'))
   ok(storeRefusalCount() === n0 + 2, 'sealed: putRecovery + addVersion raise it by exactly 2')
+  await getRecovery('doc-c'); await listVersions('doc-c')
+  ok(storeRefusalCount() === n0 + 4, 'sealed: READS count too: getRecovery + listVersions raise it by 2 more')
   await clearRecovery('doc-c'); await clearVersions('doc-c')
-  ok(storeRefusalCount() === n0 + 2, 'sealed: the purge is not a refusal (unchanged)')
+  ok(storeRefusalCount() === n0 + 4, 'sealed: the purge is not a refusal (unchanged)')
   setIdentitySeal(null)
 }
 
