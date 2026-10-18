@@ -440,6 +440,17 @@ console.log('\n=== what that looks like on one paragraph ===');
     try { B.apply(dB as never, forged as never); } catch { /* refused outright is fine too */ }
     ok(!('sigAuthority' in dB) || (dB.sigAuthority as { owner?: string })?.owner !== 'ATTACKER-KEY',
       'nor APPLIES one a peer sends, so no collaborator can make their key the owner');
+    // the SNAPSHOT path too (a mailed-back copy reunites by mergeSnapshot): a
+    // peer whose document carries an attacker's key passes none of it on
+    const N = new TypeSync('n'); const O = new TypeSync('o');
+    const dN = mk(); const dO = clone(dN); N.adopt(dN as never); O.adopt(dO as never);
+    dN.sigAuthority = { owner: 'ATTACKER-KEY' };
+    const out = N.outboundDoc(clone(dN)) as Record<string, unknown>;
+    ok(!('sigAuthority' in out), 'the snapshot a replica sends carries no sigAuthority');
+    const planted = { ...out, sigAuthority: { owner: 'ATTACKER-KEY' } };
+    O.mergeSnapshot(dO as never, planted as never, N.toJSON() as never);
+    ok((dO.sigAuthority as { owner?: string } | undefined)?.owner !== 'ATTACKER-KEY',
+      'and merging a snapshot that DOES carry one leaves the receiver\'s untouched (snapshot merge)');
   }
 
   H('RULING 7: a removal crosses replicas, and stays (rows 2, 4, 5)');
