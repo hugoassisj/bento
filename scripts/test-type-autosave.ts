@@ -226,7 +226,7 @@ H('ruling 7: restore UNIONS signatures and removals, in both directions (securit
     const st = new Store(JSON.parse(JSON.stringify(file)))
     st.restore(gateRestored(JSON.stringify(preSign), st.doc)!, dir)
     const v = await verifyAll(st.doc, st.doc.signatures)
-    ok(v.entries.length === 1 && v.entries[0].ok, `a ${dir} restore from a snapshot taken BEFORE a signing keeps that signature, and it verifies`)
+    ok(v.entries.length === 1 && v.entries[0]?.ok, `a ${dir} restore from a snapshot taken BEFORE a signing keeps that signature, and it verifies`)
   }
   // a removal on EITHER side stays removed after the union
   const mk2 = async () => {
@@ -333,8 +333,8 @@ H('crash recovery brings content AND history back TOGETHER (recover)')
   const old = v.entries.find(e => e.sig.sig === vals(file.signatures)[0].sig)
   ok(v.entries.length === 2 && !!reSigned && !!old,
     'BOTH signatures are present after recovery — the union never drops one (ruling 7)')
-  ok(reSigned!.ok && reSigned!.history === 'matches', 'the re-signed one VERIFIES, its history matching the trimmed list')
-  ok(old!.ok && old!.history === 'changed', 'the pre-trim one still attests the content, its history honestly CHANGED')
+  ok(!!reSigned?.ok && reSigned?.history === 'matches', 'the re-signed one VERIFIES, its history matching the trimmed list')
+  ok(!!old?.ok && old?.history === 'changed', 'the pre-trim one still attests the content, its history honestly CHANGED')
   ok(store.doc.docId === file.docId, 'identity still comes from the live file')
   ok(store.undo() && store.doc.revisions.map(r => r.id).join() === 'r3',
     'undo of the restore reverts content but keeps history live — going back never discards')
@@ -433,7 +433,7 @@ H('restoring an older version of a SIGNED document reports changed, and does not
   store.commit(d => { d.signatures[sigId(d.docId, signed)] = signed })
   store.restore(older, 'back')
   const v = await verifyAll(store.doc, store.doc.signatures)
-  ok(v.entries.length === 1 && !v.entries[0].ok,
+  ok(v.entries.length === 1 && !v.entries[0]?.ok,
     'the live signature is kept and honestly reads changed — the content it signed is not what is open')
 }
 
