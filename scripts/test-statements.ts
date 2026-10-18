@@ -38,8 +38,9 @@ function ok(cond: boolean, msg: string) {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const F = JSON.parse(readFileSync(join(root, 'kernel/fixtures/identity-v1.json'), 'utf8'))
-type Row = Record<string, unknown> & { name: string; type: string; text: string; sig: string; expect: 'accept' | 'reject'; reason?: string }
+type Row = Record<string, unknown> & { name: string; type: string; text: string; sig: string; expect: 'accept' | 'reject'; reason?: string; spendCalled?: boolean }
 
+let spendCalls = 0
 async function check(r: Row, text = r.text, sig = r.sig): Promise<Verdict<unknown>> {
   const now = (r.now as number) ?? F.now
   const kxMode = (r.kxMode as KxMode) ?? F.kxModeDefault
@@ -53,7 +54,7 @@ async function check(r: Row, text = r.text, sig = r.sig): Promise<Verdict<unknow
     case 'cns': return verifyConsent(text, sig, {
       consentPub: F.keys.consent, rp: r.rp as string, audience: r.audience as string, challenge: r.challenge as string,
       payloadText: r.payloadText as string, docId: (r.docId as string | null) ?? null, now,
-      spend: () => !r.challengeSpent,
+      spend: () => { spendCalls++; return !r.challengeSpent },
     })
     default: throw new Error(`unknown row type ${r.type}`)
   }
@@ -75,10 +76,15 @@ function rebuild(type: string, v: unknown): string | null {
 
 console.log(`\nthe reference passes every statement row (${F.statements.length})`)
 for (const r of F.statements as Row[]) {
+  spendCalls = 0
   const v = await check(r)
   const got = v.ok ? 'accept' : `reject:${v.reason}`
   const want = r.expect === 'accept' ? 'accept' : `reject:${r.reason}`
   ok(got === want, `${r.name} → ${want}${got === want ? '' : ` (got ${got})`}`)
+  if (r.type === 'cns') {
+    ok((spendCalls > 0) === r.spendCalled,
+      `${r.name}: the challenge was ${r.spendCalled ? '' : 'NOT '}consumed (spend called ${spendCalls}×)`)
+  }
 }
 
 console.log('\nevery accepted statement round-trips, and refuses tampering')

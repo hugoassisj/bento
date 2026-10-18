@@ -318,6 +318,13 @@ const addresses = [
   { input: 'a@', reason: 'at-sign' },
 ]
 
+// Every cns. attempt that gets past the grammar check must CONSUME its challenge,
+// including one refused for rp, docId, transcript, expiry or signature — otherwise
+// a refused attempt's challenge stays live to be retried. A verdict alone cannot
+// show the order, so each row states whether the verifier must have called spend().
+// (home-desktop found the gap: a late spend passed every row.)
+for (const r of rows) if (r.type === 'cns') r.spendCalled = !(r.expect === 'reject' && r.reason === 'grammar')
+
 const fixture = {
   version: 1,
   note: 'bento/id conformance vectors. TEST KEYS ONLY — never use them for anything real. ' +

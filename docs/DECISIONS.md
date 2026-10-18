@@ -11019,11 +11019,15 @@ Two placements are left open on purpose:
   is exactly what the shared normal form exists to prevent.
 
 **What phase 1 does NOT guarantee:** invite and revoke (`inv.`/`rev.`) are
-verified by the relay with the OWNER key's signature, not with a consent-key
-`cns.`. In phase 1, their high-authority protection is a host-drawn prompt plus
-an owner key held by the agent and gated on user verification. No consent-key
-(AAL3) guarantee exists for `inv.`/`rev.` before phase 2 adds room-audience
-consent (security §24).
+verified by the relay with the room OWNER key's signature, not with a
+consent-key `cns.`. In phase 1, documents don't convert to identity mode, so
+the owner key still lives in the document file. The kernel signs `inv.`/`rev.`
+with it exactly as today: no agent prompt, no user-verification gate, no consent
+key. The agent holds an owner key only after conversion (phase 2). Then
+`inv.`/`rev.` get a host-drawn prompt and a user-verified owner key, and phase
+2's room-audience `cns.` (a relay change, deployed first) adds the consent-key
+guarantee. No consent-key (AAL3) guarantee exists for `inv.`/`rev.` before then
+(security §24).
 
 **UI rule: a display name is self-asserted.** A `bind.` name or a `dev.` label
 is whatever its holder typed. The kernel refuses invisible and layout characters,

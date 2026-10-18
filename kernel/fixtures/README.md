@@ -50,6 +50,13 @@ random, so a regeneration changes bytes but not verdicts.
   however your language allows, but pass every row. Phase 1 is ASCII-only: any
   character outside 0x21–0x7E is refused. A domain typed in its `xn--` form is
   accepted as typed.
+- **Spend the consent challenge FIRST.** A `cns.` attempt that gets past the
+  grammar check must consume its challenge even when it is refused (rp, docId,
+  transcript, expiry, signature). Otherwise a refused attempt's challenge stays
+  live to be retried. A verdict can't show the order, so every `cns` row carries
+  `spendCalled`: assert your spend callback was (or was not) invoked. A port
+  that spends late passes every verdict and fails these. (home-desktop found the
+  gap.)
 - **kx placement is unruled** (identity-design §6b). Both the `bind.` and the
   `dev.` kx slots must be EMPTY in the default mode. Rows with `kxMode` A, B or C
   show the format the ruling will select.
