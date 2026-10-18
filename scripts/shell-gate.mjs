@@ -450,9 +450,26 @@ function checkPreviewRulesAreImplemented() {
     fail('kernel/src/save.ts no longer places the remover immediately after the preview — a frame could paint between the two')
 }
 
+// A FOURTH invariant (security §31): no release shell carries the sealed TEST
+// document's key handoff. That hook seals a body to a key nobody holds a wrap
+// for in phase 1, so in a person's shell one stray global would make their file
+// unrecoverable. It is compiled only into `npm run build:sealtest` shells; this
+// scans the file AND every inflated payload, because the runtime ships deflated
+// and a plain scan of the HTML would never see it.
+const TEST_SEAL_MARK = '__bento' + 'TestSeal'
+
+/** Throws if the shell (or any payload inside it) carries the test-seal hook. */
+export function checkNoTestSeal(html, label = 'shell') {
+  if (html.includes(TEST_SEAL_MARK)) fail(`the ${label} carries the sealed-test key handoff (${TEST_SEAL_MARK}): a build:sealtest shell, never a release`)
+  for (const [id, text] of inflatePayloads(html)) {
+    if (text.includes(TEST_SEAL_MARK)) fail(`payload #${id} carries the sealed-test key handoff (${TEST_SEAL_MARK}): a build:sealtest shell, never a release (${label})`)
+  }
+}
+
 /** Throws with a GATE: message on the first violated invariant. */
 export function gateShell(shellPath) {
   const shell = readFileSync(shellPath, 'utf8')
+  checkNoTestSeal(shell)
   checkSpliceContract(shell, 'shell')
   checkDataBlocks(shell, 'shell')
   checkPackCarryingShell(shell)
@@ -462,7 +479,7 @@ export function gateShell(shellPath) {
   checkEscapeIsImplemented()
   checkPreviewRulesAreImplemented()
   console.log(
-    'conformance gate: old-updater splice contract OK (incl. pack- and preview-carrying shells)' +
+    'conformance gate: old-updater splice contract OK (incl. pack- and preview-carrying shells); no test-seal hook' +
       (compressed ? '; runtime ships deflated only' : ''),
   )
 }

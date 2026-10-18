@@ -182,6 +182,13 @@ jobs:
         # every derivation, every blob re-sealed byte for byte, every refusal.
         run: node scripts/test-recovery.ts
 
+      - name: identity seal — one "body is sealed" predicate
+        # bento/id §E: every plaintext-to-disk guard asks isBodySealed(), not
+        # "is there a password". The identity-sealed body is a genuine bento/enc
+        # v1 envelope (kdf hkdf-kdoc) that frozen shells read as sealed; fresh
+        # salt per save; the password path unchanged; the two refuse each other.
+        run: node scripts/test-body-seal.ts
+
       - name: Typecheck convert (standalone)
         # convert/ is a library beside the apps (the CLI and bento.page/import
         # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
@@ -195,6 +202,16 @@ jobs:
 
       - name: Splice conformance gate
         run: node scripts/shell-gate.mjs slides/dist-single/Bento_Slides.bento.html
+
+      - name: The gate refuses a sealed TEST shell
+        # Positive control for the gate's no-test-seal check (security §31): the
+        # build:sealtest shell carries the sealed test document's key handoff,
+        # inside its deflated runtime, and must be refused for it; the release
+        # shell from the same source must pass.
+        working-directory: slides
+        run: |
+          npm run build:sealtest
+          node ../scripts/test-seal-gate.mjs
 
       # spaces: a second app proving the kernel seam — same pipeline, same gate.
       - name: Install (spaces)
@@ -2504,6 +2521,14 @@ jobs:
         run: |
           npm ci --prefix slides
           npm run build:single --prefix slides
+          npm run build:sealtest --prefix slides
+      - name: The sealed TEST document in Chromium
+        # bento/id §E (security §31): the shared helper boots the build:sealtest
+        # shell with the identity seal set before the app's own boot, proves it
+        # took, and the saved file carries an identity-sealed envelope, a
+        # neutral <title> and filename, no preview, and no plaintext; the
+        # unsealed control shows the same checks can see a leak.
+        run: node scripts/test-sealed-boot.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |

@@ -85,6 +85,16 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   invisible. On top of the table: NFC is required, at most 64 code points, and
   ZWNJ/ZWJ (U+200C/U+200D) are allowed only mid-text. (home-desktop found the
   drift; security added the unassigned code points.)
+- **Compare normalised text by code points, not by string equality, in Swift.**
+  Swift's `String ==` is canonical equivalence, so a decomposed `é` compares
+  equal to its NFC form and an NFC check written as `s == nfc(s)` passes text
+  that isn't NFC. Compare `unicodeScalars` instead. (home-ios, measured)
+- **Check a recovered private scalar with the platform's key constructor, never
+  bignum arithmetic.** It's a secret, and a hand-rolled d·G is variable-time on
+  it. CryptoKit's `P256.Signing.PrivateKey(rawRepresentation:)` refuses 0, n,
+  n+1 and 2^256−1 and accepts 1 and n−1 (home-ios, measured). The Rust `p256`
+  crate's `SecretKey::from_slice` is likewise constant-time (home-desktop).
+  Derive the public key from it and compare that to the bound key.
 - **Compute NFC with Unicode 17.0 (or later) data.** Normalisation is stable
   across versions only for assigned characters, and the table refuses
   everything unassigned at 17.0. So any normaliser at 17.0 or later agrees on

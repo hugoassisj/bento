@@ -11076,3 +11076,34 @@ The passkey blob and the recovery code follow the exact bytes in the identity
 design's §2f (raw 32-byte scalars checked to lie in 1..n−1 and to match the
 binding; the code is 16 Crockford base-32 characters plus a mod-37 check
 symbol, and the 10 decoded bytes, never the string, feed the derivation).
+
+## 2026-10-18 — bento/id: one "body is sealed" predicate, and the sealed TEST document
+
+The kernel half of identity-kernel §E.2 (security §31):
+- **`isBodySealed()` is THE question for every plaintext-to-disk guard**
+  (recovery snapshots, version history, previews, filenames, native
+  indexes). It is true when the body is sealed by a password OR by the
+  identity seal. `isEncryptionActive()` stays, and means only "there is a
+  password": the password UI asks that, and a guard must not. A document sealed
+  to people has no password, so a guard asking the old question writes it to
+  disk in plaintext. Measured on slides before its guards switch: a sealed
+  deck's edit lands in both IndexedDB stores.
+- **`setIdentitySeal(kdoc)`** is synchronous, so the predicate is true from the
+  call on. It imports the 32-byte document key non-extractable as an HKDF base.
+  Each save draws a fresh 16-byte salt and IV, and bodyKey = HKDF(K_doc, salt,
+  "bento/body.v1"). The body is a GENUINE bento/enc v1 envelope with
+  `kdf:'hkdf-kdoc'`. Never v:2: an old shell's parseEnvelope would reject it,
+  boot the starter deck, and overwrite the sealed block on its next save. The
+  password path is unchanged and wins when both are set. Each path refuses the
+  other's envelope.
+- **The sealed TEST document is compiled only into test builds.** Phase 1 has no
+  real way to seal a document at boot (the per-recipient wraps are phase 2), so
+  `npm run build:sealtest` (→ `dist-sealtest/`) builds a shell whose
+  `capturePristine()` consumes a one-shot key handoff before any editor exists.
+  `scripts/lib/sealed-boot.mjs` is the one helper every app and security use. It
+  never runs in a release: in phase 1 nobody holds a wrap for such a body, so
+  one stray global would make a person's file unrecoverable. The flag
+  `__BENTO_TEST_SEAL__` is false in every release build and the minifier drops
+  the branch. shell-gate.mjs refuses any shell carrying the handoff's name,
+  scanning the deflated payloads too. `scripts/test-seal-gate.mjs` proves the
+  gate refuses a real test shell.
