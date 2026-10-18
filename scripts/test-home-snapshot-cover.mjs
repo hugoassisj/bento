@@ -100,17 +100,29 @@ function sceneSnapshots(since) {
   return out
 }
 
+/** Wait (up to a minute) until the document is on screen: a cold simulator can
+ *  take far longer than a warm one, and backgrounding before it shows would make
+ *  a clean snapshot mean nothing. Returns how much of the screen is its red. */
+function untilOnScreen(tag) {
+  let red = 0
+  for (let i = 0; i < 30 && red <= 0.5; i++) {
+    sleep(2)
+    const shot = join(work, `fg-${tag}-${i}.png`)
+    run('xcrun', ['simctl', 'io', DEV, 'screenshot', shot])
+    red = redOf([shot])[0]
+  }
+  return red
+}
+
 function background(path) {
   try { run('xcrun', ['simctl', 'terminate', DEV, BUNDLE]) } catch {}
   rmSync(join(DATA, 'Library/SplashBoard'), { recursive: true, force: true })
   const since = Date.now()
   run('xcrun', ['simctl', 'launch', DEV, BUNDLE], { env: { ...process.env, SIMCTL_CHILD_BENTO_RIG_OPEN: path } })
-  sleep(8)
-  const shot = join(work, `fg-${since}.png`)
-  run('xcrun', ['simctl', 'io', DEV, 'screenshot', shot])
+  const onScreen = untilOnScreen(since)
   run('xcrun', ['simctl', 'launch', DEV, 'com.apple.Preferences'])
   sleep(5)
-  return { onScreen: redOf([shot])[0], snapshots: redOf(sceneSnapshots(since)) }
+  return { onScreen, snapshots: redOf(sceneSnapshots(since)) }
 }
 
 try {
@@ -122,16 +134,15 @@ try {
   ok(s.snapshots.length > 0 && s.snapshots.every((r) => r === 0), `none of them shows the document (${s.snapshots.map((r) => (r * 100).toFixed(1) + '%').join(', ')} red)`)
   console.log('the control, an unsealed document:')
   const p = background(plainPath)
+  ok(p.onScreen > 0.5, `it is on screen while open (${(p.onScreen * 100).toFixed(0)}% red)`)
   ok(p.snapshots.some((r) => r > 0.5), `its snapshot shows it (${p.snapshots.map((r) => (r * 100).toFixed(1) + '%').join(', ')} red), so the measurement sees content when it is there`)
   console.log('back in the foreground:')
   run('xcrun', ['simctl', 'terminate', DEV, BUNDLE])
   run('xcrun', ['simctl', 'launch', DEV, BUNDLE], { env: { ...process.env, SIMCTL_CHILD_BENTO_RIG_OPEN: sealedPath } })
-  sleep(8)
+  untilOnScreen('again')
   run('xcrun', ['simctl', 'launch', DEV, 'com.apple.Preferences']); sleep(3)
-  run('xcrun', ['simctl', 'launch', DEV, BUNDLE]); sleep(4)
-  const back = join(work, 'back.png')
-  run('xcrun', ['simctl', 'io', DEV, 'screenshot', back])
-  const b = redOf([back])[0]
+  run('xcrun', ['simctl', 'launch', DEV, BUNDLE])
+  const b = untilOnScreen('back')
   ok(b > 0.5, `the sealed document shows again once the app is active (${(b * 100).toFixed(0)}% red): the cover comes off`)
 } finally {
   try { run('xcrun', ['simctl', 'terminate', DEV, BUNDLE]) } catch {}
