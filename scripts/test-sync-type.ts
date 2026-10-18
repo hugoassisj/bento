@@ -483,6 +483,29 @@ console.log('\n=== what that looks like on one paragraph ===');
     ok(sigId(dA.docId as string, s2) !== id, 'while signing again is a new SigId, untouched by the old removal');
   }
 
+  H('RULING 7: two replicas removing two DIFFERENT signatures at once both take effect');
+  {
+    const { sign, sigId, signRemoval, verifyAll, newKey, newHistorySalt } = await import('../type/src/canon.ts');
+    const A = new TypeSync('a'); const B = new TypeSync('b');
+    const d0 = mk(); d0.historySalt = newHistorySalt();
+    const ka = await newKey(), kb = await newKey();
+    const sa = await sign(d0 as never, ka, { name: 'Alice' }), sb = await sign(d0 as never, kb, { name: 'Bob' });
+    const ia = sigId(d0.docId as string, sa), ib = sigId(d0.docId as string, sb);
+    d0.signatures = { [ia]: sa, [ib]: sb };
+    const dA = clone(d0), dB = clone(d0); A.adopt(dA as never); B.adopt(dB as never);
+    const bA = clone(dA), bB = clone(dB);
+    const at = '2026-10-18T10:00:00.000Z';
+    dA.sigRemovals = { [ia]: await signRemoval(d0.docId as string, ia, ka, at) };   // Alice removes hers on A
+    dB.sigRemovals = { [ib]: await signRemoval(d0.docId as string, ib, kb, at) };   // Bob removes his on B, concurrently
+    const oA = A.diff(bA as never, dA as never, { text: true }), oB = B.diff(bB as never, dB as never, { text: true });
+    A.apply(dA as never, oB); B.apply(dB as never, oA);
+    for (const [who, d] of [['A', dA], ['B', dB]] as const) {
+      const v = await verifyAll(d as never, d.signatures as never, { removals: d.sigRemovals as never });
+      ok(v.entries.length === 2 && v.entries.every(e => e.removal === 'removed'),
+        `both concurrent removals take effect on ${who} (${v.entries.map(e => e.removal).join(',')}) — each its own key`);
+    }
+  }
+
   void DOC_NODE;
 }
 
