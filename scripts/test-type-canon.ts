@@ -31,6 +31,7 @@
 
 import {
   canonicalize, digest, sign, verify, verifyAll, sigId, signatureOrder, latestSignature, isLowS, newKey, exportPub, VOLATILE,
+  signRemoval, checkRemoval,
   SIGNED_EXCLUDE, historyCommitment, newHistorySalt, historyDisplay,
 } from '../type/src/canon.ts';
 import { readFileSync } from 'node:fs';
@@ -358,6 +359,54 @@ H('ruling 7: SigId is derived from what was signed (row 8)');
     const conv = parseDoc(JSON.stringify({ ...d, signatures: [s1, s2] }));
     ok(conv.ok && Object.keys(conv.doc.signatures).length === 2, 'an old array holding both converts to two keys, not one');
   }
+}
+
+H('ruling 7: a removal is a SIGNED tombstone, and only the signer or the owner can remove (rows 3, 6)');
+{
+  const d = doc();
+  const signer = await newKey(), owner = await newKey(), third = await newKey();
+  const ownerPub = await exportPub(owner);
+  const a = await sign(d, signer, { name: 'Alice' });
+  const id = idOf(d, a);
+  const at = '2026-10-18T10:00:00.000Z';
+  const bySigner = await signRemoval(d.docId, id, signer, at);
+  const byOwner = await signRemoval(d.docId, id, owner, at);
+  const byThird = await signRemoval(d.docId, id, third, at);
+  ok(await checkRemoval(d.docId, id, a, bySigner, ownerPub) === 'removed', "the signer's own removal REMOVES");
+  ok(await checkRemoval(d.docId, id, a, byOwner, ownerPub) === 'removed', "the owner's removal REMOVES");
+  ok(await checkRemoval(d.docId, id, a, byThird, ownerPub) === 'requested',
+     'a VALID removal by any other key is only REQUESTED — the signature stands (row 6)');
+  ok(await checkRemoval(d.docId, id, a, byOwner, null) === 'contested',
+     'with NO owner known, a removal by a key other than the signer\'s is CONTESTED — neither standing nor gone (§37)');
+  ok(await checkRemoval(d.docId, id, a, bySigner, null) === 'removed',
+     "while the signer's own removal needs no owner to be final");
+  // INVALID: removes nothing (row 3)
+  ok(await checkRemoval(d.docId, id, a, { ...bySigner, sig: byThird.sig }, ownerPub) === 'invalid', 'a forged signature is INVALID');
+  ok(await checkRemoval(d.docId, id, a, { by: a.pub, at, sig: '' } as never, ownerPub) === 'invalid', 'an unsigned tombstone is INVALID');
+  ok(await checkRemoval(d.docId, id, a, { ...bySigner, at: '2026-10-18T11:00:00.000Z' }, ownerPub) === 'invalid', 'a re-dated tombstone is INVALID (`at` is signed)');
+  const other = await sign(d, signer, { name: 'Alice', prev: id });
+  ok(await checkRemoval(d.docId, idOf(d, other), other, bySigner, ownerPub) === 'invalid', 'a tombstone for ANOTHER SigId removes nothing');
+  ok(await checkRemoval('doc-2', id, a, bySigner, ownerPub) === 'invalid', 'nor one minted for ANOTHER document');
+  // a high-S twin of a valid tombstone
+  const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+  const r = new Uint8Array(Buffer.from(bySigner.sig, 'base64url'));
+  ok(isLowS(r), 'signRemoval emits low-S');
+  const sv = BigInt('0x' + Buffer.from(r.slice(32)).toString('hex'));
+  const twin = new Uint8Array(64); twin.set(r.slice(0, 32)); twin.set(Buffer.from((N - sv).toString(16).padStart(64, '0'), 'hex'), 32);
+  ok(await checkRemoval(d.docId, id, a, { ...bySigner, sig: Buffer.from(twin).toString('base64url') }, ownerPub) === 'invalid',
+     'its high-S twin is INVALID');
+  // a SIGNATURE can never pose as a removal, nor the reverse (different tags)
+  ok(await checkRemoval(d.docId, id, a, { by: a.pub, at, sig: a.sig }, ownerPub) === 'invalid',
+     "a signature's bytes are not a removal");
+  // a removal of ONE signature must not move the content EVERY OTHER covers
+  const b = await sign(d, owner, { name: 'Bob', prev: id });
+  const withRemoval = { ...d, sigRemovals: { [id]: bySigner } };
+  const v = await verifyAll(withRemoval, keyed(d, a, b), { removals: withRemoval.sigRemovals, owner: ownerPub });
+  ok(await digest(withRemoval) === await digest(d), 'a removal does not change the content digest');
+  ok(v.entries.find(e => e.sig.name === 'Bob')!.ok && v.entries.find(e => e.sig.name === 'Bob')!.removal === null,
+     "so removing Alice's signature leaves Bob's valid and untouched");
+  ok(v.entries.find(e => e.sig.name === 'Alice')!.ok && v.entries.find(e => e.sig.name === 'Alice')!.removal === 'removed',
+     "and Alice's own bytes still verify, shown as removed"); 
 }
 
 H('ruling 7: old files convert on open (row 10)');

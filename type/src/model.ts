@@ -241,6 +241,22 @@ export interface Signature {
   at?: string;
 }
 
+/**
+ * The removal of a signature (ruling 7): SIGNED with the remover's key over
+ * "bento-type-sigdel.v1|docId|SigId|at", so it proves which KEY removed it,
+ * never which person. It lives in its own map, keyed by the SigId it removes,
+ * and never touches the signature itself: the bytes stay to be verified and
+ * shown. It removes only when valid AND by the signer's or the owner's key
+ * (canon.ts checkRemoval).
+ */
+export interface Tombstone {
+  /** the remover's raw P-256 public key, base64url */
+  by: string;
+  /** self-asserted, shown for context only, as with signatures */
+  at: string;
+  sig: string;
+}
+
 /** A recorded revision, kept so a redline can be produced with no server. */
 export interface Revision {
   id: string; at: string; label: string;
@@ -341,6 +357,10 @@ export interface TypeDoc {
    * 7). An entry under any key but its own SigId is invalid.
    */
   signatures: Record<string, Signature>;
+  /** Removals, keyed by the SigId each removes (ruling 7 §3). A separate map,
+   *  so a removal never overwrites a signature's bytes, and a re-added
+   *  signature can never clear its removal. */
+  sigRemovals?: Record<string, Tombstone>;
   /**
    * Is the document recording edits as tracked changes?
    *
@@ -835,6 +855,16 @@ export function parseDoc(raw: string): ParseResult {
     ...(json.track === true ? { track: true } : {}),
     signatures: readSignatures(json.signatures, typeof json.docId === 'string' ? json.docId : ''),
   };
+  // removals: well-formed tombstones only; an absent or junk map is none
+  const removals: Record<string, Tombstone> = {};
+  if (isObj(json.sigRemovals)) {
+    for (const [k, v] of Object.entries(json.sigRemovals)) {
+      if (isObj(v) && typeof v.by === 'string' && typeof v.at === 'string' && typeof v.sig === 'string') {
+        removals[k] = { by: v.by, at: v.at, sig: v.sig };
+      }
+    }
+  }
+  if (Object.keys(removals).length) doc.sigRemovals = removals; else delete doc.sigRemovals;
   if (Object.keys(styles).length) doc.styles = styles; else delete doc.styles;
   // A salt is 16 bytes, base64url without padding: exactly 22 characters. Anything
   // else is not a salt — dropped, so its signatures report the history MISSING

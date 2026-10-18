@@ -64,6 +64,9 @@ export const TYPE_FIELDS = {
   //               the history (canon.ts v2), so a view-only copy — no revisions,
   //               no salt — still verifies them, and they travel with it.
   signatures: 'content',
+  //   sigRemovals content too: a removal syncs and reaches a reader, so a copy
+  //               shows a signature as removed wherever it was removed (ruling 7).
+  sigRemovals: 'content',
   format: 'content',
   version: 'content',
   title: 'content',

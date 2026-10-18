@@ -25,7 +25,7 @@
 // ("excludes volatile fields ... that churn without a real edit"). This is the
 // same idea made exact enough to sign.
 
-import type { Signature } from './model.ts';
+import type { Signature, Tombstone } from './model.ts';
 import { sha256 } from './sha256.ts';
 import { TYPE_FIELDS } from './docclass.ts';
 
@@ -47,6 +47,8 @@ export interface SigEntry {
   id: string; sig: Signature;
   ok: boolean; why: string | null; history: HistoryState;
   after: string | null;
+  /** what a tombstone under this SigId does to it, or null when there is none */
+  removal: RemovalState | null;
 }
 export interface SigResult { ok: boolean; entries: SigEntry[] }
 
@@ -67,6 +69,8 @@ export const VOLATILE = new Set([
   'collab',        // credentials + room state
   'preview',       // cached first-page render
   'signatures',    // the chain itself — a signature cannot cover itself
+  'sigRemovals',   // removals of signatures (ruling 7): a removal of ONE must never
+                  // change the content every OTHER signature covers
   'autosave',
 ]);
 
@@ -412,6 +416,50 @@ async function historyState(doc: Signable, entry: Signature): Promise<HistorySta
 }
 
 /**
+ * A signature's REMOVAL (ruling 7 §3): signed by the remover's key over
+ *
+ *     bento-type-sigdel.v1|<docId>|<SigId>|<at>
+ *
+ * so it is bound to this document and to the one signature it removes, and
+ * says which key removed it. A different tag from a signature's, so neither
+ * can ever be replayed as the other.
+ */
+const removalText = (docId: string, id: string, at: string) =>
+  `bento-type-sigdel.v1|${str(docId)}|${id}|${str(at)}`;
+
+export async function signRemoval(docId: string, id: string, key: CryptoKeyPair, at: string): Promise<Tombstone> {
+  const raw = lowS(new Uint8Array(await crypto.subtle.sign(SIG, key.privateKey, enc.encode(removalText(docId, id, at)))));
+  return { by: await exportPub(key), at, sig: b64u(raw) };
+}
+
+/**
+ * What a tombstone does to the signature it names (ruling 7 §3, §3a):
+ *   'removed'   it verifies, AND it is by the signer's own key or the owner's;
+ *   'requested' it verifies, but by a key that is neither — the signature stands;
+ *   'contested' it verifies, by a key that is not the signer's, and this copy
+ *               knows no owner to check it against: neither standing nor gone
+ *               (security §37) — never shown as either;
+ *   'invalid'   it does not verify (bad signature, high s, another document,
+ *               another SigId) — it removes nothing.
+ * `owner` is the document owner's key when this copy knows it, else null.
+ */
+export type RemovalState = 'removed' | 'requested' | 'contested' | 'invalid';
+export async function checkRemoval(
+  docId: string, id: string, sig: Pick<Signature, 'pub'>, t: Tombstone, owner: string | null,
+): Promise<RemovalState> {
+  if (!t || typeof t.by !== 'string' || typeof t.sig !== 'string' || typeof t.at !== 'string') return 'invalid';
+  let raw: Uint8Array;
+  try { raw = unb64u(t.sig); } catch { return 'invalid'; }
+  if (!isLowS(raw)) return 'invalid';
+  let pub: CryptoKey;
+  try { pub = await crypto.subtle.importKey('raw', unb64u(t.by), EC, false, ['verify']); } catch { return 'invalid'; }
+  if (!(await crypto.subtle.verify(SIG, pub, raw as BufferSource, enc.encode(removalText(docId, id, t.at))))) return 'invalid';
+  if (t.by === sig.pub) return 'removed';
+  if (owner === null) return 'contested';
+  return t.by === owner ? 'removed' : 'requested';
+}
+
+/**
  * The display order (ruling 7): by `prev`, which is ordering information only.
  * A signature comes after the one it follows when this copy holds that one;
  * otherwise it starts a run of its own. Signatures that follow the same one (a
@@ -461,7 +509,10 @@ export function latestSignature(sigs: Readonly<Record<string, Signature>>): stri
  * its own fields, and the copy's content is what was signed. A fork, or a
  * `prev` this copy does not hold, never makes one invalid.
  */
-export async function verifyAll(doc: Signable, sigs: Readonly<Record<string, Signature>>): Promise<SigResult> {
+export async function verifyAll(
+  doc: Signable, sigs: Readonly<Record<string, Signature>>,
+  { removals = {}, owner = null }: { removals?: Readonly<Record<string, Tombstone>>; owner?: string | null } = {},
+): Promise<SigResult> {
   const entries: SigEntry[] = [];
   for (const { id, after } of signatureOrder(sigs)) {
     const s = sigs[id];
@@ -469,7 +520,11 @@ export async function verifyAll(doc: Signable, sigs: Readonly<Record<string, Sig
     let derived = '';
     try { derived = sigId(doc.docId, s); } catch { /* malformed: not its own id */ }
     const ok = r.ok && derived === id;
-    entries.push({ id, sig: s, ok, why: r.ok && !ok ? 'bad-id' : r.why, history: r.history, after });
+    // A removal lives in its own map, so the signature's bytes above are still
+    // verified and shown whatever any tombstone says.
+    const t = Object.hasOwn(removals, id) ? removals[id] : undefined;
+    const removal = t ? await checkRemoval(doc.docId, id, s, t, owner) : null;
+    entries.push({ id, sig: s, ok, why: r.ok && !ok ? 'bad-id' : r.why, history: r.history, after, removal });
   }
   return { ok: entries.every(e => e.ok), entries };
 }
