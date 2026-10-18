@@ -187,7 +187,11 @@ object DocumentOrigin {
     }
   } catch (e) { unattributed = true }
   try {
-    const dbs = indexedDB.databases ? await indexedDB.databases() : []
+    // No way to list databases means no way to know what is here: that is
+    // unattributable, never "empty". Only names that already exist are
+    // opened, at their own version, so looking never creates a database.
+    if (!indexedDB.databases) throw new Error('cannot list databases')
+    const dbs = await indexedDB.databases()
     for (const { name } of dbs) {
       if (!name || !/autosave$/.test(name)) { if (name) unattributed = true; continue }
       const db = await new Promise((res, rej) => { const r = indexedDB.open(name); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) })
