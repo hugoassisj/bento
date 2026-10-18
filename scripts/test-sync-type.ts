@@ -442,6 +442,47 @@ console.log('\n=== what that looks like on one paragraph ===');
       'nor APPLIES one a peer sends, so no collaborator can make their key the owner');
   }
 
+  H('RULING 7: a removal crosses replicas, and stays (rows 2, 4, 5)');
+  {
+    const { sign, sigId, signRemoval, verifyAll, newKey, newHistorySalt } = await import('../type/src/canon.ts');
+    const A = new TypeSync('a'); const B = new TypeSync('b');
+    const dA = mk(); dA.historySalt = newHistorySalt();
+    const dB = clone(dA); A.adopt(dA as never); B.adopt(dB as never);
+    const k = await newKey();
+    const s1 = await sign(dA as never, k, { name: 'Alice' });
+    const id = sigId(dA.docId as string, s1);
+    // Alice signs on A; B receives it
+    let bA = clone(dA); (dA.signatures as Record<string, unknown>)[id] = s1;
+    B.apply(dB as never, A.diff(bA as never, dA as never, { text: true }));
+    ok(Object.hasOwn(dB.signatures as object, id), "  (B holds Alice's signature)");
+    // row 2: Alice removes it on A; the removal reaches B and reads removed there
+    bA = clone(dA);
+    dA.sigRemovals = { [id]: await signRemoval(dA.docId as string, id, k, '2026-10-18T10:00:00.000Z') };
+    B.apply(dB as never, A.diff(bA as never, dA as never, { text: true }));
+    const onB = await verifyAll(dB as never, dB.signatures as never, { removals: dB.sigRemovals as never });
+    ok(onB.entries.length === 1 && onB.entries[0]?.removal === 'removed', "a removal on one replica arrives on the other and reads REMOVED there (row 2)");
+    ok(onB.entries[0]?.ok === true, "and the removed signature's own bytes still verify — the removal never touched them");
+    // row 4: a MALLEATED (r, n-s) copy is re-added on B: same SigId, still removed
+    const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+    const r = new Uint8Array(Buffer.from(s1.sig, 'base64url'));
+    const sv = BigInt('0x' + Buffer.from(r.slice(32)).toString('hex'));
+    const tw = new Uint8Array(64); tw.set(r.slice(0, 32)); tw.set(Buffer.from((N - sv).toString(16).padStart(64, '0'), 'hex'), 32);
+    const twin = { ...s1, sig: Buffer.from(tw).toString('base64url') };
+    ok(sigId(dB.docId as string, twin) === id, 'a malleated copy has the SAME SigId (row 4)');
+    let bB = clone(dB); (dB.signatures as Record<string, unknown>)[id] = twin;
+    A.apply(dA as never, B.diff(bB as never, dB as never, { text: true }));
+    const onA = await verifyAll(dA as never, dA.signatures as never, { removals: dA.sigRemovals as never });
+    ok(onA.entries.length === 1 && onA.entries[0]?.removal === 'removed', 'so it lands on the removed key and STAYS removed — it can never pose as a new signature');
+    // row 5: re-adding the ORIGINAL after a valid removal: still removed (final)
+    bB = clone(dB); (dB.signatures as Record<string, unknown>)[id] = s1;
+    A.apply(dA as never, B.diff(bB as never, dB as never, { text: true }));
+    const again = await verifyAll(dA as never, dA.signatures as never, { removals: dA.sigRemovals as never });
+    ok(again.entries.length === 1 && again.entries[0]?.removal === 'removed', 'a re-add after a valid removal stays REMOVED — removal is final (row 5)');
+    // and signing again is a NEW act, a NEW key: never blocked by the old removal
+    const s2 = await sign(dA as never, k, { name: 'Alice', prev: id });
+    ok(sigId(dA.docId as string, s2) !== id, 'while signing again is a new SigId, untouched by the old removal');
+  }
+
   void DOC_NODE;
 }
 
