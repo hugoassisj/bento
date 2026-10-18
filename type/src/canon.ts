@@ -484,6 +484,32 @@ export async function checkRemoval(
 }
 
 /**
+ * What THIS device's signer should be told (ruling 7 §5), as CODES — the panel
+ * maps each to a literal t('…') call. `mine` is the SigIds this device's key
+ * produced (kept in localStorage per docId, never in the file):
+ *   'removed'    one of mine has a valid, authorised removal;
+ *   'requested'  a valid removal by a key that may not remove it;
+ *   'contested'  a valid removal by another key, no owner known to check it;
+ *   'invalid'    a removal of mine that does not verify (forged or corrupted);
+ *   'vanished'   one of mine is gone with NO tombstone (only an edit outside
+ *                bento can do that: sync always leaves one).
+ * Nothing for anyone else's signatures.
+ */
+export type SignerNotice = { id: string; kind: 'removed' | 'requested' | 'contested' | 'invalid' | 'vanished'; by?: string };
+export function signerNotices(
+  mine: readonly string[], entries: readonly SigEntry[], removals: Readonly<Record<string, Tombstone>>,
+): SignerNotice[] {
+  const byId = new Map(entries.map(e => [e.id, e] as const));
+  const out: SignerNotice[] = [];
+  for (const id of mine) {
+    const e = byId.get(id);
+    if (!e) { if (!Object.hasOwn(removals, id)) out.push({ id, kind: 'vanished' }); continue; }
+    if (e.removal) out.push({ id, kind: e.removal, by: removals[id]?.by });
+  }
+  return out;
+}
+
+/**
  * The display order (ruling 7): by `prev`, which is ordering information only.
  * A signature comes after the one it follows when this copy holds that one;
  * otherwise it starts a run of its own. Signatures that follow the same one (a

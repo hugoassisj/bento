@@ -35,7 +35,7 @@ import { register } from 'node:module';
 register('./lib/ts-resolve-hooks.mjs', import.meta.url);
 import {
   canonicalize, digest, sign, verify, verifyAll, sigId, signatureOrder, latestSignature, isLowS, newKey, exportPub, VOLATILE,
-  signRemoval, checkRemoval, signatureOwner, withSigAuthority,
+  signRemoval, checkRemoval, signatureOwner, withSigAuthority, signerNotices,
   SIGNED_EXCLUDE, historyCommitment, newHistorySalt, historyDisplay,
 } from '../type/src/canon.ts';
 import { readFileSync } from 'node:fs';
@@ -451,6 +451,36 @@ H('§37: the owner key in a copy, and who it lets remove');
     ok((st.doc as any).sigAuthority?.owner === ownerPub, `a ${dir} restore keeps the LIVE sigAuthority, never the snapshot's`);
   }
   void withSigAuthority;
+}
+
+H('ruling 7: what the signer is told (row 11)');
+{
+  const d = doc();
+  const me = await newKey(), them = await newKey(), owner = await newKey(), third = await newKey();
+  const ownerPub = await exportPub(owner);
+  const at = '2026-10-18T10:00:00.000Z';
+  const mk = async (k: CryptoKeyPair, name: string) => { const x = await sign(d, k, { name }); return { x, id: idOf(d, x) }; };
+  const m1 = await mk(me, 'Me'), m2 = await mk(me, 'Me again'), m3 = await mk(me, 'Me thrice'), m4 = await mk(me, 'Me four'), gone = await mk(me, 'Me gone');
+  const o1 = await mk(them, 'Them');
+  const removals = {
+    [m1.id]: await signRemoval(d.docId, m1.id, owner, at),                      // valid, by the owner
+    [m2.id]: await signRemoval(d.docId, m2.id, third, at),                      // valid, unauthorised
+    [m3.id]: { ...(await signRemoval(d.docId, m3.id, me, at)), at: 'tampered' }, // does not verify
+    [o1.id]: await signRemoval(d.docId, o1.id, them, at),                       // someone ELSE's, removed
+  };
+  const sigs = keyed(d, m1.x, m2.x, m3.x, m4.x, o1.x);                         // `gone` is not here, and has no tombstone
+  const v = await verifyAll(d, sigs, { removals, owner: ownerPub });
+  const notes = signerNotices([m1.id, m2.id, m3.id, m4.id, gone.id], v.entries, removals);
+  const kind = (id: string) => notes.find(n => n.id === id)?.kind;
+  ok(kind(m1.id) === 'removed' && notes.find(n => n.id === m1.id)?.by === ownerPub, 'mine, removed by the owner → "removed", naming the key');
+  ok(kind(m2.id) === 'requested', 'mine, a valid removal by a key that may not → "requested"');
+  ok(kind(m3.id) === 'invalid', 'mine, a removal that does not verify → "invalid", DISTINCT from requested');
+  ok(kind(gone.id) === 'vanished', 'mine, gone with no tombstone → "vanished"');
+  ok(kind(m4.id) === undefined, 'mine and untouched → nothing');
+  ok(kind(o1.id) === undefined && notes.every(n => [m1.id, m2.id, m3.id, gone.id].includes(n.id)),
+     "someone else's removed signature → nothing for me");
+  const vNo = await verifyAll(d, sigs, { removals, owner: null });
+  ok(signerNotices([m1.id], vNo.entries, removals)[0]?.kind === 'contested', 'with no owner known, the owner\'s removal of mine → "contested"');
 }
 
 H('ruling 7: old files convert on open (row 10)');
