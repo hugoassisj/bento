@@ -50,9 +50,21 @@ storage. Written beside the entry, then renamed, so a crash leaves the old
 entry, not a truncated one. Capped at 64 MB. Runs on the same ordered thread
 as file writes.
 
+Each entry is authenticated with its claim and name (AES-GCM additional data):
+an entry file copied into another document's directory, or renamed from
+`recovery` to `memberkey`, fails authentication instead of decrypting as that
+document's (measured: a renamed genuine entry is refused, and the real one still
+reads). Such an entry reads as ABSENT, not as unavailable. The kernel refuses to
+mint a member key while the store "cannot answer", so treating it as unavailable
+would wedge that document's member identity for good. Absent lets it mint a
+fresh one; the next write replaces the bad entry.
+
 **Verified.** The rig drives the real bridge with the kernel's real client: no
 capability means no store at all; with the capability, 1 MiB round-trips and
-refusals pass through. Removing the capability gate fails the three no-store
+refusals pass through. The kernel's real `deviceIdentity` runs through it too:
+an existing member key in localStorage is adopted unchanged, with its private
+half moved into the store and only `{pub}` left behind; a new key is minted
+straight into the store; without the capability, nothing moves (the control). Removing the capability gate fails the three no-store
 checks. On the emulator the kernel's own autosave moved its recovery copy into
 the native store, and IndexedDB recovery came back empty.
 
