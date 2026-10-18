@@ -11201,7 +11201,7 @@ Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
 old pepper labels, losing O→0 when reading a code, and skipping the range
 check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
 
-## 2026-10-18 — bento/id on Android: the agent's two keys, the routine session, and host-stamped consent
+## 2026-10-18 — bento/connect on Android (Bento ID): the agent's two keys, the routine session, and host-stamped consent
 
 The Android agent core (phase-1 plan A1). It isn't wired to any page yet: the
 `__bentoIdentity` global goes in only after the Android host verifies the
@@ -11255,7 +11255,12 @@ shell it serves (gate 1, A2).
   re-confirms, then the canary is re-minted under the new enrolment. There is
   no forced re-link; that rested on an invalidation that doesn't happen. The
   canary and the baseline are made WITH the consent key, so a brand-new
-  identity's first consent reads unchanged and sends no false notice.
+  identity's first consent reads unchanged and sends no false notice. A busy
+  sensor (`HW_UNAVAILABLE`, often transient) doesn't block a consent the PIN
+  could complete: under a "bio" record the canary, a Keystore check, decides
+  alone. Under a "none" record it can't tell whether biometrics were added,
+  so it refuses, as does any answer the platform can't name. No baseline is
+  ever recorded under a state the platform can't name.
 - **Notices follow §29a, ported from home/ios** (`Notices.kt`). Recipients are
   snapshotted when a notice is queued: the devices then, plus the address.
   Removed devices still receive it and still hold it back. It never clears

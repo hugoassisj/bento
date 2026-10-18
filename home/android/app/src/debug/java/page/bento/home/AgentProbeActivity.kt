@@ -23,7 +23,7 @@ import java.security.spec.X509EncodedKeySpec
  */
 class AgentProbeActivity : AppCompatActivity() {
     private fun log(m: String) = Log.i("BentoAgentProbe", m)
-    private val msg = "bento/id probe".toByteArray()
+    private val msg = "bento/connect probe".toByteArray()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,7 +48,7 @@ class AgentProbeActivity : AppCompatActivity() {
         val allowed = if (Build.VERSION.SDK_INT >= 30) Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL
                       else Authenticators.BIOMETRIC_STRONG
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("bento/id probe").setSubtitle("Approve a consent signature")
+            .setTitle("bento/connect probe").setSubtitle("Approve a consent signature")
             .setAllowedAuthenticators(allowed)
             .apply { if (Build.VERSION.SDK_INT < 30) setNegativeButtonText("Cancel") }
             .build()
@@ -110,7 +110,7 @@ class AgentProbeActivity : AppCompatActivity() {
         val text = Consent.stamp(purpose, intent.getStringExtra("docId"), challenge, payload, System.currentTimeMillis())
         if (text == null) { log("consent: host REFUSED to stamp"); log("DONE"); return }
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Link a new device?").setSubtitle("bento/id probe")
+            .setTitle("Link a new device?").setSubtitle("bento/connect probe")
             .setAllowedAuthenticators(Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL)
             .build()
         BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {

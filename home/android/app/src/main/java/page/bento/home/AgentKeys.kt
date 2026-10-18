@@ -20,7 +20,7 @@ import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
 
 /**
- * The device's bento/id keys (phase-1 plan A1). Two keys, because the Keystore
+ * The device's bento/connect keys (phase-1 plan A1). Two keys, because the Keystore
  * attaches user authentication to a KEY, not to a call:
  *
  * - **routine** — signs edit batches and presence many times a minute; never
@@ -53,7 +53,7 @@ object AgentKeys {
         val ks = keystore()
         if (!ks.containsAlias(ROUTINE)) generate(ROUTINE, consent = false, strongBox = false)
         // (Requires a secure lock screen: without one, generation throws and
-        // the caller reports no identity. A bento/id key on a phone anyone can
+        // the caller reports no identity. A Bento ID key on a phone anyone can
         // pick up and use would vouch for nobody.)
         if (!ks.containsAlias(CONSENT)) {
             // The canary and the enrolment baseline are made WITH the consent

@@ -137,7 +137,7 @@ dependencies {
     // nothing from Material and would only inherit the inflation requirements.
     implementation("com.google.android.material:material:1.12.0")
 
-    // bento/id (phase-1 plan A1): BiometricPrompt with a CryptoObject, so the
+    // bento/connect (phase-1 plan A1): BiometricPrompt with a CryptoObject, so the
     // consent key signs only inside an authentication the person just gave.
     implementation("androidx.biometric:biometric:1.1.0")
 
