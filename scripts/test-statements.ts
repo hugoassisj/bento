@@ -23,7 +23,8 @@ import {
   verifyDev, verifyBind, verifyAtt, verifyTomb, verifyDel, verifyCmp, verifyConsent,
   buildDev, buildBind, buildAtt, buildTomb, buildDel, buildCmp, buildConsent,
   consentTranscript, webauthnChallengeFor, lowS, verifyStatementSig, payloadMatchesPurpose,
-  b64uDec, b64uEnc, KX_MODE, RESERVED_PREFIXES, type Verdict, type KxMode,
+  b64uDec, b64uEnc, KX_MODE, RESERVED_PREFIXES, DISPLAY_FORBIDDEN_RANGES, DISPLAY_FORBIDDEN_UNICODE,
+  displayForbidden, type Verdict, type KxMode,
 } from '../kernel/src/statements.ts'
 import { normalizeAddress } from '../kernel/src/address.ts'
 import type { SignPurpose } from '../kernel/src/identity.ts'
@@ -154,6 +155,29 @@ console.log('\nstrict base64url')
 
 console.log('\nreserved prefixes')
 ok(RESERVED_PREFIXES.includes('pk'), 'pk. is reserved for the phase-2 passkey statement')
+ok(RESERVED_PREFIXES.includes('drev'), 'drev. is reserved for device revocation (arrives with per-device kx)')
+
+console.log('\nthe display refusal set is FROZEN, not read from the platform\'s Unicode tables')
+{
+  ok(JSON.stringify(F.displayForbidden.ranges) === JSON.stringify(DISPLAY_FORBIDDEN_RANGES) &&
+    F.displayForbidden.unicode === DISPLAY_FORBIDDEN_UNICODE, `the fixture carries the same table (Unicode ${DISPLAY_FORBIDDEN_UNICODE})`)
+  const ascending = DISPLAY_FORBIDDEN_RANGES.every(([a, b], i, r) => a <= b && (i === 0 || a > r[i - 1][1] + 1))
+  ok(ascending, 'ranges are sorted, disjoint and non-adjacent (one canonical table)')
+  // The categories it was frozen from. Compared only on a runtime whose tables ARE
+  // that version; on another Node the categories may differ, which is the point.
+  const re = /[\p{Cc}\p{Co}\p{Zl}\p{Zp}\u115F\u1160\u3164\uFFA0]|(?![\u200C\u200D])\p{Cf}/u
+  if (process.versions.unicode === DISPLAY_FORBIDDEN_UNICODE) {
+    let same = true
+    for (let c = 0; c <= 0x10ffff; c++) {
+      if (c >= 0xd800 && c <= 0xdfff) continue
+      if (re.test(String.fromCodePoint(c)) !== displayForbidden(c)) { same = false; break }
+    }
+    ok(same, `on Unicode ${process.versions.unicode} the frozen table equals the categories it was built from`)
+  } else {
+    console.log(`  note  runtime is Unicode ${process.versions.unicode}; the frozen table (${DISPLAY_FORBIDDEN_UNICODE}) is authoritative, category check skipped`)
+  }
+  ok(!displayForbidden(0x200c) && !displayForbidden(0x200d), 'ZWNJ and ZWJ are not in the table (refused only at either end)')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

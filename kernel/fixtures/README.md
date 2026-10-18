@@ -50,6 +50,14 @@ random, so a regeneration changes bytes but not verdicts.
   however your language allows, but pass every row. Phase 1 is ASCII-only: any
   character outside 0x21–0x7E is refused. A domain typed in its `xn--` form is
   accepted as typed.
+- **Display names: embed the fixture's `displayForbidden` table.** Don't use
+  your platform's `\p{Cf}`-style categories. Those come from each platform's
+  Unicode tables, so a character newly assigned to a category would be refused
+  on one host and accepted on another, and a name would verify on one device
+  and not the next. The table is frozen at Unicode 17.0 as explicit ranges, and
+  changing it is a format decision. On top of the table: NFC is required, at
+  most 64 code points, and ZWNJ/ZWJ (U+200C/U+200D) are allowed only mid-text.
+  (home-desktop found the drift.)
 - **Spend the consent challenge FIRST.** A `cns.` attempt that gets past the
   grammar check must consume its challenge even when it is refused (rp, docId,
   transcript, expiry, signature). Otherwise a refused attempt's challenge stays

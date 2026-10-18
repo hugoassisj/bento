@@ -82,16 +82,39 @@ function freeText(f: string): string | null {
  *   - the Hangul fill letters U+115F, U+1160, U+3164, U+FFA0, which render blank.
  * No filter stops homoglyphs, so a name is SELF-ASSERTED and must never be shown
  * without the verified address beside it (docs/DECISIONS.md).
+ *
+ * The set is FROZEN as explicit code-point ranges, not resolved through `\p{…}`.
+ * General categories come from each platform's Unicode tables, so a character
+ * newly assigned to Cf would be refused by one host and accepted by another until
+ * both updated, and a name would verify on one device and not the next. These
+ * ranges are the categories above as of Unicode 17.0 (the fixture carries the
+ * same table for the native hosts, and the rig recomputes it). Changing them is
+ * a deliberate format decision, never a side effect of a platform update.
  */
 const MAX_DISPLAY = 64
-const DISPLAY_FORBIDDEN = /[\p{Cc}\p{Co}\p{Zl}\p{Zp}ᅟᅠㅤﾠ]|(?![‌‍])\p{Cf}/u
-const JOINER = /^[‌‍]|[‌‍]$/u
+export const DISPLAY_FORBIDDEN_UNICODE = '17.0'
+export const DISPLAY_FORBIDDEN_RANGES: ReadonlyArray<readonly [number, number]> = Object.freeze([
+  [0x0000, 0x001f], [0x007f, 0x009f], [0x00ad, 0x00ad], [0x0600, 0x0605], [0x061c, 0x061c],
+  [0x06dd, 0x06dd], [0x070f, 0x070f], [0x0890, 0x0891], [0x08e2, 0x08e2], [0x115f, 0x1160],
+  [0x180e, 0x180e], [0x200b, 0x200b], [0x200e, 0x200f], [0x2028, 0x202e], [0x2060, 0x2064],
+  [0x2066, 0x206f], [0x3164, 0x3164], [0xe000, 0xf8ff], [0xfeff, 0xfeff], [0xffa0, 0xffa0],
+  [0xfff9, 0xfffb], [0x110bd, 0x110bd], [0x110cd, 0x110cd], [0x13430, 0x1343f], [0x1bca0, 0x1bca3],
+  [0x1d173, 0x1d17a], [0xe0001, 0xe0001], [0xe0020, 0xe007f], [0xf0000, 0xffffd], [0x100000, 0x10fffd],
+].map((r) => Object.freeze(r) as readonly [number, number]))
+export function displayForbidden(cp: number): boolean {
+  for (const [a, b] of DISPLAY_FORBIDDEN_RANGES) { if (cp < a) return false; if (cp <= b) return true }
+  return false
+}
+const ZWNJ = 0x200c, ZWJ = 0x200d
 function displayText(f: string): string | null {
   const t = freeText(f)
   if (t === null || t.length === 0) return null
-  if ([...t].length > MAX_DISPLAY) return null
+  const cps = [...t].map((c) => c.codePointAt(0)!)
+  if (cps.length > MAX_DISPLAY) return null
   if (t.normalize('NFC') !== t) return null
-  if (DISPLAY_FORBIDDEN.test(t) || JOINER.test(t)) return null
+  if (cps.some(displayForbidden)) return null
+  const ends = [cps[0], cps[cps.length - 1]]
+  if (ends.some((c) => c === ZWNJ || c === ZWJ)) return null
   return t
 }
 
@@ -577,10 +600,15 @@ export const webauthnChallengeFor = (cnsText: string): Promise<string> => sha256
 
 /**
  * Prefixes reserved for statements not defined yet, so nothing else takes them:
- *   pk. — an account-signed passkey statement (phase 2), for room-audience
- *         verifiers of light-tier consent. Never the dev. consentPub slot.
+ *   pk.   — an account-signed passkey statement (phase 2), for room-audience
+ *           verifiers of light-tier consent. Never the dev. consentPub slot.
+ *   drev. — an account-signed device revocation. Not needed in phase 1: a device
+ *           retired without rotating the account key is one whose hardware-wrapped
+ *           keys were destroyed by a confirmed wipe, so its dev. cert names a key
+ *           nobody holds. It arrives with per-device kx, when senders wrap to
+ *           device keys (security §25b).
  */
-export const RESERVED_PREFIXES: readonly string[] = Object.freeze(['pk'])
+export const RESERVED_PREFIXES: readonly string[] = Object.freeze(['pk', 'drev'])
 
 // --- routine signing: what payload each SignPurpose (identity.ts) may sign ----
 

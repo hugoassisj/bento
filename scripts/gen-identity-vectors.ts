@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 import {
   b64uEnc, signStatement, sha256b64u, buildDev, buildBind, buildAtt, buildTomb, buildDel, buildCmp,
   buildConsent, consentTranscript, webauthnChallengeFor, lowS, CONSENT_MAX_TTL_MS,
+  DISPLAY_FORBIDDEN_RANGES, DISPLAY_FORBIDDEN_UNICODE,
 } from '../kernel/src/statements.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -340,6 +341,8 @@ const fixture = {
   lowS: lowSPairs,
   purposes,
   addresses,
+  // the frozen display-text refusal table: embed THIS, not your platform's \p{} tables
+  displayForbidden: { unicode: DISPLAY_FORBIDDEN_UNICODE, ranges: DISPLAY_FORBIDDEN_RANGES.map(([a, b]) => [a, b]) },
 }
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, JSON.stringify(fixture, null, 2) + '\n')
