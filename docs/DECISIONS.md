@@ -11292,3 +11292,19 @@ shell it serves (gate 1, A2).
 
 Still for a real phone: TEE and StrongBox residency (the emulator reports
 software keys), and the API 26–29 consent path, which allows biometrics only.
+
+## 2026-10-18 — bento/connect: the plaintext store refuses while sealed (a backstop)
+
+Each app guards its own calls to the recovery and version store, about 11
+sites across four apps. kernel/src/autosave.ts is the one place they all go
+through, so it now fails closed (security): while `isBodySealed()`,
+`putRecovery` and `addVersion` refuse, and `getRecovery` and `listVersions`
+offer nothing. Deleting still works (`clearRecovery`, `clearVersions`): a sealed
+boot purges plaintext copies left from an earlier unsealed session, for that
+document only, and depends on it. The apps KEEP their guards and their purge
+calls. So the backstop can't mask a missing guard, each refusal is counted, and
+the count is readable only through the test-build probe. The sealed-test helper
+fails any sealed page whose rig leaned on it (`close()`/`reload()` throw), so an
+app's guard mutants stay red with no local kernel mutant. `build:sealtest` also
+writes `dist-sealtest/.complete` as its last step, and the helper refuses a shell
+without it: a build that fails after vite wrote the shell can no longer be scored.

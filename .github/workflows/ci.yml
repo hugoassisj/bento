@@ -1084,6 +1084,19 @@ jobs:
           BENTO_TEST_APP=bento-slides node "$RUNNER_TEMP/test-autosave.mjs"
           BENTO_TEST_APP=bento-spaces node "$RUNNER_TEMP/test-autosave.mjs"
 
+
+      - name: The plaintext store refuses while sealed (bento/connect backstop)
+        # kernel/src/autosave.ts: while the body is sealed (password or identity
+        # seal), putRecovery/addVersion refuse and getRecovery/listVersions offer
+        # nothing, so an app missing one of its own guards still can't write or
+        # offer plaintext. The purge (clearRecovery/clearVersions) still works
+        # while sealed, for that document only.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-store-backstop.ts --bundle --platform=node --format=esm \
+            --alias:fake-indexeddb/auto=./slides/node_modules/fake-indexeddb/auto/index.js \
+            --outfile="$RUNNER_TEMP/test-store-backstop.mjs"
+          node "$RUNNER_TEMP/test-store-backstop.mjs"
+
       - name: Publish deletion-gate rig
         # A publish assembles site/ for ONE app and mirrors it authoritatively.
         # Measured: a spaces-shaped site/ deleted 47 live files — the signed

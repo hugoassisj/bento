@@ -72,6 +72,7 @@ function consumeTestSeal() {
     body: (doc: KernelDoc) => encodeDocBody(doc),
     file: (doc: KernelDoc) => serializeAuto(doc),
     fileName: (doc: KernelDoc) => suggestedFileName(doc),
+    storeRefusals: () => storeRefusals,
   })
 }
 
@@ -529,6 +530,15 @@ export function setIdentitySeal(kdoc: Uint8Array | null): void {
  * writes it to disk in plaintext.
  */
 export const isBodySealed = () => encPassword !== null || sealBodyKey !== null
+
+/**
+ * How many times the plaintext store (autosave.ts) refused a write or a read
+ * because the body is sealed. The store's refusal is a BACKSTOP under each app's
+ * own guards: an app that leans on it has a missing guard. Readable only through
+ * the test probe, so the sealed-test rigs can fail on any refusal (security).
+ */
+let storeRefusals = 0
+export function noteStoreRefusal(): void { storeRefusals++ }
 
 /** Parse a data-block body as an encryption envelope; null if it is not one. */
 export function parseEnvelope(text: string): EncEnvelope | null {

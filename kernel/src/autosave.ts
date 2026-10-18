@@ -18,6 +18,23 @@
 import type { KernelDoc } from './doc.ts'
 import { appConfig } from './app.ts'
 import { docStore, getJSON, setJSON } from './docstore.ts'
+import { isBodySealed, noteStoreRefusal } from './save.ts'
+
+/**
+ * The BACKSTOP (security): while the body is sealed, by a password or the
+ * identity seal, this store neither keeps nor offers a plaintext copy. Every app
+ * already guards its own calls; this is the one place they all go through, so an
+ * app that misses one of its sites still cannot write or offer plaintext.
+ * Deleting stays allowed (clearRecovery, clearVersions): the purge of copies left
+ * from an earlier unsealed session depends on it. Each refusal is counted
+ * (save.ts noteStoreRefusal), and the sealed-test rigs fail on any, so an app
+ * that relies on this instead of its own guard still fails its own rig.
+ */
+function sealedRefusal(): boolean {
+  if (!isBodySealed()) return false
+  noteStoreRefusal()
+  return true
+}
 
 /**
  * One database PER APP.
@@ -211,6 +228,7 @@ export function onRecoveryOff(fn: (docId: string, reason: string) => void): () =
 }
 
 export async function putRecovery(doc: KernelDoc): Promise<boolean> {
+  if (sealedRefusal()) return false
   const snap: Snapshot = { docId: doc.docId, at: Date.now(), title: doc.title, json: contentOnly(doc) }
   // Under a host with a per-document store (docstore.ts), the recovery copy
   // lives THERE — out of the storage origin every local file shares — and any
@@ -239,6 +257,7 @@ export async function putRecovery(doc: KernelDoc): Promise<boolean> {
 }
 
 export async function getRecovery(docId: string): Promise<Snapshot | null> {
+  if (sealedRefusal()) return null
   const ds = docStore()
   if (ds) {
     try {
@@ -284,15 +303,16 @@ export async function clearRecovery(docId: string): Promise<void> {
  *  encrypted: the plaintext snapshots written before encryption was enabled must
  *  not linger in IndexedDB (they'd defeat the encryption the user just turned on). */
 export async function clearVersions(docId: string): Promise<void> {
-  const all = await listVersions(docId)
+  const all = await versionsOf(docId) // NOT listVersions: it reads nothing while sealed, and this must still delete
   await Promise.all(all.map((v) => tx(VERSIONS, 'readwrite', (s) => s.delete(v.id!))))
 }
 
 export async function addVersion(doc: KernelDoc): Promise<void> {
+  if (sealedRefusal()) return
   await tx(VERSIONS, 'readwrite', (s) =>
     s.add({ docId: doc.docId, at: Date.now(), title: doc.title, json: contentOnly(doc) } as Snapshot))
   // prune to the newest MAX_VERSIONS for this doc
-  const all = await listVersions(doc.docId)
+  const all = await versionsOf(doc.docId)
   if (all.length > MAX_VERSIONS) {
     const doomed = all.slice(MAX_VERSIONS)
     await Promise.all(doomed.map((v) => tx(VERSIONS, 'readwrite', (s) => s.delete(v.id!))))
@@ -300,6 +320,13 @@ export async function addVersion(doc: KernelDoc): Promise<void> {
 }
 
 export async function listVersions(docId: string): Promise<Snapshot[]> {
+  if (sealedRefusal()) return []
+  return versionsOf(docId)
+}
+
+/** Every version snapshot for a docId, newest first, whatever the seal: for
+ *  this module's own pruning and purging, never handed to an app. */
+async function versionsOf(docId: string): Promise<Snapshot[]> {
   const db = await openDb()
   if (!db) return []
   return new Promise((resolve) => {
