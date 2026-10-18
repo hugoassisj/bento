@@ -11,6 +11,12 @@ p256 = { version = "0.13", features = ["ecdsa"] }
 sha2 = "0.10"
 base64 = "0.22"
 zeroize = "1"
+unicode-general-category = "1"
+unicode-normalization = "0.1"
+
+[features]
+# the in-memory software key store: tests and rigs only, never a shipped path
+test-store = []
 
 [dev-dependencies]
 serde_json = "1"

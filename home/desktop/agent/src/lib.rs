@@ -10,5 +10,6 @@
 // JS string semantic), it is mirrored here and commented.
 
 pub mod address;
+pub mod agent;
 pub mod b64u;
 pub mod statements;

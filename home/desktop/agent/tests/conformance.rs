@@ -69,7 +69,17 @@ fn check(c: &Ctx, r: &Value, text: &str, sig: &str) -> Result<Parsed, &'static s
                 now,
             };
             let spent = r["challengeSpent"].as_bool().unwrap_or(false);
-            st::verify_consent(text, sig, &o, |_| !spent).map(Parsed::Cns)
+            let called = std::cell::Cell::new(false);
+            let v = st::verify_consent(text, sig, &o, |_| { called.set(true); !spent }).map(Parsed::Cns);
+            // The verdict cannot show WHEN spend runs; the fixture says whether
+            // it must have been called (spend FIRST, after the grammar check).
+            // Only on the fixture's own text: a tampered text may fail grammar.
+            if text == s(r, "text") {
+                if let Some(want) = r["spendCalled"].as_bool() {
+                    assert_eq!(called.get(), want, "spendCalled: {}", s(r, "name"));
+                }
+            }
+            v
         }
         t => panic!("unknown row type {t}"),
     }
@@ -104,6 +114,9 @@ fn every_statement_row_reaches_its_verdict_and_reason() {
     let mut bad = vec![];
     let rows = f["statements"].as_array().unwrap();
     assert!(rows.len() >= 60, "the statement rows shrank: {}", rows.len());
+    let cns = rows.iter().filter(|r| r["type"] == "cns").count();
+    assert_eq!(rows.iter().filter(|r| r["type"] == "cns" && r["spendCalled"].is_boolean()).count(), cns,
+        "every cns row carries spendCalled");
     for r in rows {
         let got = match check(&c, r, s(r, "text"), s(r, "sig")) {
             Ok(_) => "accept".to_string(),

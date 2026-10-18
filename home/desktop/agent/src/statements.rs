@@ -31,18 +31,42 @@ fn free_text(f: &str) -> Option<String> {
 
 const MAX_DISPLAY: usize = 64;
 
-/// statements.ts DISPLAY_FORBIDDEN: C0, DEL + C1, the bidi embeddings and
-/// overrides (U+202A–U+202E), the isolates (U+2066–U+2069), LRM and RLM.
+/// statements.ts DISPLAY_FORBIDDEN:
+/// `/[\p{Cc}\p{Co}\p{Zl}\p{Zp}ᅟᅠㅤﾠ]|(?![‌‍])\p{Cf}/u` — controls, private use,
+/// line and paragraph separators, the blank-rendering Hangul fillers, and every
+/// format character except ZWNJ/ZWJ (which only JOIN, and are refused at either
+/// end by JOINER below). Category tables follow the crate's Unicode version;
+/// a newly assigned Cf could make hosts disagree — the vectors pin today's.
 fn display_forbidden(c: char) -> bool {
-    matches!(c, '\u{0000}'..='\u{001f}' | '\u{007f}'..='\u{009f}' | '\u{202a}'..='\u{202e}'
-        | '\u{2066}'..='\u{2069}' | '\u{200e}' | '\u{200f}')
+    use unicode_general_category::{get_general_category, GeneralCategory as G};
+    if matches!(c, '\u{115F}' | '\u{1160}' | '\u{3164}' | '\u{FFA0}') {
+        return true;
+    }
+    match get_general_category(c) {
+        G::Control | G::PrivateUse | G::LineSeparator | G::ParagraphSeparator => true,
+        G::Format => !matches!(c, '\u{200C}' | '\u{200D}'),
+        _ => false,
+    }
+}
+fn is_joiner(c: char) -> bool {
+    matches!(c, '\u{200C}' | '\u{200D}')
 }
 
 /// A name or device label a person sees. `[...t].length` in JS counts code
-/// points, which is `chars().count()` here.
+/// points (`chars().count()`); the text must already be NFC.
 fn display_text(f: &str) -> Option<String> {
+    use unicode_normalization::UnicodeNormalization;
     let t = free_text(f)?;
-    if t.is_empty() || t.chars().count() > MAX_DISPLAY || t.chars().any(display_forbidden) {
+    if t.is_empty() || t.chars().count() > MAX_DISPLAY {
+        return None;
+    }
+    if t.nfc().collect::<String>() != t {
+        return None;
+    }
+    if t.chars().any(display_forbidden)
+        || t.chars().next().is_some_and(is_joiner)
+        || t.chars().last().is_some_and(is_joiner)
+    {
         return None;
     }
     Some(t)
