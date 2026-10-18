@@ -469,7 +469,8 @@ here rather than discovered later.
 | behaviour | `home/ios` | `home/android` | |
 |---|---|---|---|
 | FSA polyfill | `home/bridge.js` | `home/bridge.js` | **one shared file** |
-| per-document origin | `bento-tray://<sha24>` custom scheme | `https://<sha24>.bento-tray.invalid`, intercepted | same |
+| per-document origin | `bento-tray://<host>`: follows the FILE (its document identifier), not the path — `OriginIdentity` | `https://<sha24>.bento-tray.invalid`, intercepted — from the URI | **differs** (Android fixing) |
+| a document is served only under its own host | ✓ | — | — |
 | document served from memory, never parsed | ✓ | ✓ | same |
 | bridge injected at document start | `WKUserScript(.atDocumentStart)` | `addDocumentStartJavaScript` | same |
 | bridge reachable only from the document | every message checked: main frame + own origin (`BridgeSender`) | `allowedOriginRules` + `isMainFrame` | same |
