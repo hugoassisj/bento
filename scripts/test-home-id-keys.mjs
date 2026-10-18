@@ -144,6 +144,23 @@ do {
       && IdentityKeys.queueDeviceListChange(before: ["devA", "devB"], after: ["devA"], by: "devA", now: 6, in: L)
       && (IdentityKeys.pendingNotices(in: L) ?? []).filter { $0.kind == "devices-changed" }.count == 1)
   }
+  // the receiver's own check: a HOSTILE publisher skips the gate entirely
+  do {
+    let B = Mem()   // device B's own store
+    e("recv.baseline", IdentityKeys.observeDeviceList(["devA", "devB", "devC"], signedBy: "devA", me: "devB", now: 1, in: B) == [])
+    // devA publishes A,B,C → A without ever calling queueDeviceListChange / mayPublishDeviceList
+    let got = IdentityKeys.observeDeviceList(["devA"], signedBy: "devA", me: "devB", now: 2, in: B) ?? []
+    e("recv.self", got.contains { $0.kind == .thisDeviceRemoved && $0.device == "devB" && $0.by == "devA" })
+    e("recv.other", got.contains { $0.kind == .deviceRemoved && $0.device == "devC" && $0.by == "devA" })
+    e("recv.durable", (IdentityKeys.localAlerts(in: B) ?? []).count == got.count && got.count == 2)
+    let C = Mem()   // device C removed devD itself: no alert for that one
+    _ = IdentityKeys.observeDeviceList(["devC", "devD"], signedBy: "devC", me: "devC", now: 1, in: C)
+    e("recv.ownRemoval", IdentityKeys.observeDeviceList(["devC"], signedBy: "devC", me: "devC", removedHere: ["devD"], now: 2, in: C) == [])
+    let U = Mem(); _ = IdentityKeys.observeDeviceList(["devA", "devB"], signedBy: "devA", me: "devB", now: 1, in: U); U.failReads = true
+    e("recv.blind", IdentityKeys.observeDeviceList(["devA"], signedBy: "devA", me: "devB", now: 2, in: U) == nil)
+    U.failReads = false
+    e("recv.blindKeepsBaseline", (IdentityKeys.observeDeviceList(["devA"], signedBy: "devA", me: "devB", now: 3, in: U) ?? []).contains { $0.kind == .thisDeviceRemoved })
+  }
   // without the address it NEVER clears, however long and however many devices confirm
   do {
     let a = Mem(); _ = try! IdentityKeys.device(.consent, in: a, enclave: false, domainState: { X })
@@ -220,6 +237,12 @@ ok(out['list.toBefore'] === 'true', 'the list-change notice goes to the list as 
 ok(out['list.faceExcludes'] === 'true', 'the reverse-order attack: the later face notice really does exclude the dropped devices…')
 ok(out['list.waitsForRemoved'] === 'true' && out['list.removedGetIt'] === 'true', '…but the dropped devices still receive the list-change notice, which waits for them')
 ok(out['list.idempotent'] === 'true', 'queuing the same change twice queues one notice')
+ok(out['recv.baseline'] === 'true', "the receiver's first fetch only records the list")
+ok(out['recv.self'] === 'true', 'a hostile publisher skips the gate and drops B: B raises its OWN alert on its next fetch, naming who did it')
+ok(out['recv.other'] === 'true', 'and alerts for every other device it did not remove itself')
+ok(out['recv.durable'] === 'true', 'the alerts are recorded durably')
+ok(out['recv.ownRemoval'] === 'true', 'a removal this device made itself raises nothing')
+ok(out['recv.blind'] === 'true' && out['recv.blindKeepsBaseline'] === 'true', "an unreadable baseline is never replaced blind: the next good read still sees the removal")
 ok(out['anchor.never'] === 'true', 'without the ADDRESS a notice never clears, whatever the devices do and however long')
 ok(out['anchor.then'] === 'true', 'and clears once the address confirms')
 ok(out['gate.blind'] === 'true', "a record or outbox that can't be read refuses the consent")

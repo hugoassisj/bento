@@ -285,6 +285,86 @@ enum IdentityKeys {
         return pendingNotices(in: store)?.contains(where: { $0.state == tag && $0.kind == "devices-changed" }) ?? false
     }
 
+    // MARK: the receiver's own check (threat model §29, defence in depth)
+
+    /// `mayPublishDeviceList` binds only an honest publisher. Where any
+    /// same-user process can use the account key (desktop, §26), a hostile one
+    /// can skip it. So every device also checks the synced list for itself, and
+    /// raises its OWN local alert when it finds:
+    /// - itself removed: "this device was removed from your account by <device>"
+    /// - any device removed that it didn't remove itself
+    /// That happens whether or not any notice arrives. A thief can choose not to
+    /// send one, but can't stop a removed device noticing on its next read.
+    /// The alert is recorded durably BEFORE the new list becomes the baseline,
+    /// so a crash between the two can't swallow it.
+    struct Alert: Codable, Equatable {
+        enum Kind: String, Codable { case thisDeviceRemoved, deviceRemoved, unknown }
+        let kind: Kind
+        /// the device removed (thisDeviceRemoved: this device)
+        let device: String
+        /// the device that signed the new list
+        let by: String
+        let at: Int
+    }
+
+    static let lastListItem = "identity/last-device-list"
+    static let alertsItem = "identity/local-alerts"
+
+    /// Run on every fetch of the synced device list. `current` is the list as
+    /// fetched, `signedBy` the device that published it, `me` this device's key,
+    /// and `removedHere` the devices this device itself removed (they raise
+    /// nothing). Returns the alerts raised, or nil if the check couldn't be made;
+    /// the caller must then not treat the list as checked.
+    static func observeDeviceList(_ current: Set<String>, signedBy: String, me: String,
+                                  removedHere: Set<String> = [], now: Int, in store: Store) -> [Alert]? {
+        var last: Set<String>?
+        switch store.get(lastListItem) {
+        case .found(let d):
+            guard let l = try? JSONDecoder().decode(Set<String>.self, from: d) else {
+                // a baseline that can't be decoded: say so, and never adopt the new list blind
+                _ = raise([Alert(kind: .unknown, device: me, by: signedBy, at: now)], in: store)
+                return nil
+            }
+            last = l
+        case .absent: last = nil          // the first fetch sets the baseline
+        case .unavailable: return nil     // never adopt a list blind
+        }
+        var alerts: [Alert] = []
+        if let last {
+            if last.contains(me) && !current.contains(me) {
+                alerts.append(Alert(kind: .thisDeviceRemoved, device: me, by: signedBy, at: now))
+            }
+            for gone in last.subtracting(current).subtracting([me]).subtracting(removedHere).sorted() {
+                alerts.append(Alert(kind: .deviceRemoved, device: gone, by: signedBy, at: now))
+            }
+        }
+        // the alert first, then the new baseline
+        guard alerts.isEmpty || raise(alerts, in: store) else { return nil }
+        guard let d = try? JSONEncoder().encode(current), store.set(lastListItem, d) else { return nil }
+        return alerts
+    }
+
+    private static func raise(_ new: [Alert], in store: Store) -> Bool {
+        var all: [Alert] = []
+        switch store.get(alertsItem) {
+        case .found(let d): guard let l = try? JSONDecoder().decode([Alert].self, from: d) else { return false }; all = l
+        case .absent: break
+        case .unavailable: return false
+        }
+        all.append(contentsOf: new)
+        guard let d = try? JSONEncoder().encode(all) else { return false }
+        return store.set(alertsItem, d)
+    }
+
+    /// The alerts this device has raised and not yet shown and dismissed.
+    static func localAlerts(in store: Store) -> [Alert]? {
+        switch store.get(alertsItem) {
+        case .found(let d): return try? JSONDecoder().decode([Alert].self, from: d)
+        case .absent: return []
+        case .unavailable: return nil
+        }
+    }
+
     /// Record that `recipient` confirmed receiving `n`. It counts only if it's
     /// in the notice's own snapshotted recipients (removed devices included);
     /// nothing the caller passes can add to or shrink that set.
