@@ -695,6 +695,8 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
                 // writing behind UIDocument's back.
                 document.updateChangeCount(.done)
                 document.save(to: document.fileURL, for: .forOverwriting) { [weak self] ok in
+                    // the library and Spotlight see this save now, not at the next walk
+                    if ok, let url = self?.document.fileURL { LibraryIndex.shared.refresh(url) }
                     if ok, let self, let h = self.originHint { OriginStore.shared.refreshHint(h, for: self.document.fileURL) }
                     self?.reply(id, ok: ok, value: ok ? nil : "write failed")
                 }

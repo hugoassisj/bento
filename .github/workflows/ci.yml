@@ -844,6 +844,12 @@ jobs:
         # the document's origin. Compiles the real HostDocStore; skips off Apple.
         run: node scripts/test-home-docstore-ios.mjs
 
+      - name: home/ios Spotlight rig
+        # What the system search index holds for a document and keeping it current
+        # after a save: replaced at once, delete-before-add when sealed, and
+        # entries removed for documents a walk no longer finds. Apple only.
+        run: node scripts/test-home-spotlight.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected

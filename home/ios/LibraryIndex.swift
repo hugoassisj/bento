@@ -122,11 +122,39 @@ final class LibraryIndex {
                 self.walk(folders, cache: snapshot)
             }
             DispatchQueue.main.async {
+                let gone = SpotlightPlan.removals(before: self.documents.map(\.path), after: found.map(\.path))
                 self.cache = fresh
                 self.documents = found.sorted { $0.modified > $1.modified }
                 self.save()
-                self.donate(found)
+                // documents deleted or moved out of a granted folder leave the index
+                self.apply([.delete(gone), .add(found.map(self.entry))])
                 self.indexing = false
+                self.onChange?()
+            }
+        }
+    }
+
+    /// Bring ONE document's entry up to date right after the app has written it
+    /// in place, so the library and Spotlight match the saved file without
+    /// waiting for the next full walk. Only a document the index already holds
+    /// is touched; anything outside the granted folders was never indexed.
+    func refresh(_ url: URL) {
+        let want = url.standardizedFileURL.resolvingSymlinksInPath().path
+        let same = { (d: IndexedDocument) in URL(fileURLWithPath: d.path).standardizedFileURL.resolvingSymlinksInPath().path == want }
+        guard let old = documents.first(where: same) else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            let doc: IndexedDocument? = FolderGrants.shared.withAccess { _ in
+                let v = try? URL(fileURLWithPath: old.path).resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+                return self.describe(URL(fileURLWithPath: old.path), name: old.name, folder: old.folder,
+                                     size: v?.fileSize ?? 0, modified: v?.contentModificationDate ?? Date())
+            }
+            DispatchQueue.main.async {
+                guard let doc, let i = self.documents.firstIndex(where: same) else { return }
+                self.documents[i] = doc
+                self.cache["\(doc.path):\(doc.size):\(doc.modified.timeIntervalSince1970)"] = doc
+                self.save()
+                self.apply(SpotlightPlan.refresh(self.entry(doc), sealed: doc.encrypted))
                 self.onChange?()
             }
         }
@@ -225,27 +253,39 @@ final class LibraryIndex {
 
     // MARK: - CoreSpotlight
 
-    private func donate(_ docs: [IndexedDocument]) {
-        let items: [CSSearchableItem] = docs.map { doc in
-            let attrs = CSSearchableItemAttributeSet(contentType: UTType.html)
-            attrs.title = doc.title
-            attrs.displayName = doc.title
-            attrs.contentURL = URL(fileURLWithPath: doc.path)
-            // The whole point: the document's own prose, searchable from the
-            // system. Encrypted documents carry nil here because nothing was
-            // ever extracted from them.
-            attrs.textContent = doc.text
-            attrs.contentDescription = doc.encrypted
-                ? "Encrypted Bento document"
-                : (doc.text.map { String($0.prefix(200)) } ?? doc.folder)
-            attrs.keywords = [doc.app, "bento"].compactMap { $0 }
-            return CSSearchableItem(uniqueIdentifier: doc.path,
-                                    domainIdentifier: domain,
-                                    attributeSet: attrs)
-        }
-        guard !items.isEmpty else { return }
-        CSSearchableIndex.default().indexSearchableItems(items) { error in
-            if let error { NSLog("spotlight index failed: %@", String(describing: error)) }
+    private func entry(_ doc: IndexedDocument) -> SpotlightPlan.Entry {
+        SpotlightPlan.entry(path: doc.path, title: doc.title, base: doc.base, app: doc.app,
+                            sealed: doc.encrypted, text: doc.text, folder: doc.folder)
+    }
+
+    /// Carry out a plan against the system index, in order: each step starts
+    /// only once the one before it has finished.
+    private func apply(_ ops: [SpotlightPlan.Op]) {
+        guard let op = ops.first else { return }
+        let rest = Array(ops.dropFirst())
+        switch op {
+        case .delete(let ids):
+            guard !ids.isEmpty else { return apply(rest) }
+            CSSearchableIndex.default().deleteSearchableItems(withIdentifiers: ids) { [weak self] error in
+                if let error { NSLog("spotlight delete failed: %@", String(describing: error)) }
+                DispatchQueue.main.async { self?.apply(rest) }
+            }
+        case .add(let entries):
+            guard !entries.isEmpty else { return apply(rest) }
+            let items: [CSSearchableItem] = entries.map { e in
+                let attrs = CSSearchableItemAttributeSet(contentType: UTType.html)
+                attrs.title = e.title
+                attrs.displayName = e.title
+                attrs.contentURL = URL(fileURLWithPath: e.id)
+                attrs.textContent = e.text
+                attrs.contentDescription = e.description
+                attrs.keywords = e.keywords
+                return CSSearchableItem(uniqueIdentifier: e.id, domainIdentifier: domain, attributeSet: attrs)
+            }
+            CSSearchableIndex.default().indexSearchableItems(items) { [weak self] error in
+                if let error { NSLog("spotlight index failed: %@", String(describing: error)) }
+                DispatchQueue.main.async { self?.apply(rest) }
+            }
         }
     }
 
