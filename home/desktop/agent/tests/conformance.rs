@@ -282,3 +282,13 @@ fn every_consent_attempt_spends_its_challenge_even_one_refused_for_another_reaso
     assert_eq!(v.unwrap_err(), "rp");
     assert!(spent, "a consent refused for its rp still spent the challenge");
 }
+
+#[test]
+fn the_display_table_is_the_fixtures_frozen_table() {
+    let f = fixture();
+    let d = &f["displayForbidden"];
+    assert_eq!(d["unicode"], "17.0");
+    let want: Vec<(u32, u32)> = d["ranges"].as_array().unwrap().iter()
+        .map(|r| (r[0].as_u64().unwrap() as u32, r[1].as_u64().unwrap() as u32)).collect();
+    assert_eq!(st::DISPLAY_FORBIDDEN_RANGES.to_vec(), want, "the embedded table drifted from the fixture");
+}

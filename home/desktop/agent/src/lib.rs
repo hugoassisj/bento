@@ -13,3 +13,6 @@ pub mod address;
 pub mod agent;
 pub mod b64u;
 pub mod statements;
+
+#[cfg(all(target_os = "linux", feature = "tpm"))]
+pub mod tpm_linux;

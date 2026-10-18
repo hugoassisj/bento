@@ -31,22 +31,30 @@ fn free_text(f: &str) -> Option<String> {
 
 const MAX_DISPLAY: usize = 64;
 
-/// statements.ts DISPLAY_FORBIDDEN:
-/// `/[\p{Cc}\p{Co}\p{Zl}\p{Zp}ᅟᅠㅤﾠ]|(?![‌‍])\p{Cf}/u` — controls, private use,
-/// line and paragraph separators, the blank-rendering Hangul fillers, and every
-/// format character except ZWNJ/ZWJ (which only JOIN, and are refused at either
-/// end by JOINER below). Category tables follow the crate's Unicode version;
-/// a newly assigned Cf could make hosts disagree — the vectors pin today's.
+/// The display refusal set, FROZEN as explicit code-point ranges at Unicode
+/// 17.0 (statements.ts DISPLAY_FORBIDDEN_RANGES; identity-v1.json
+/// `displayForbidden`). Explicit ranges, not Unicode-category lookups, so every
+/// host refuses the same characters whatever Unicode tables its platform
+/// ships. The conformance test checks this table equals the fixture's.
+pub const DISPLAY_FORBIDDEN_RANGES: [(u32, u32); 30] = [
+    (0x0000, 0x001f), (0x007f, 0x009f), (0x00ad, 0x00ad), (0x0600, 0x0605), (0x061c, 0x061c),
+    (0x06dd, 0x06dd), (0x070f, 0x070f), (0x0890, 0x0891), (0x08e2, 0x08e2), (0x115f, 0x1160),
+    (0x180e, 0x180e), (0x200b, 0x200b), (0x200e, 0x200f), (0x2028, 0x202e), (0x2060, 0x2064),
+    (0x2066, 0x206f), (0x3164, 0x3164), (0xe000, 0xf8ff), (0xfeff, 0xfeff), (0xffa0, 0xffa0),
+    (0xfff9, 0xfffb), (0x110bd, 0x110bd), (0x110cd, 0x110cd), (0x13430, 0x1343f), (0x1bca0, 0x1bca3),
+    (0x1d173, 0x1d17a), (0xe0001, 0xe0001), (0xe0020, 0xe007f), (0xf0000, 0xffffd), (0x100000, 0x10fffd),
+];
 fn display_forbidden(c: char) -> bool {
-    use unicode_general_category::{get_general_category, GeneralCategory as G};
-    if matches!(c, '\u{115F}' | '\u{1160}' | '\u{3164}' | '\u{FFA0}') {
-        return true;
+    let cp = c as u32;
+    for (a, b) in DISPLAY_FORBIDDEN_RANGES {
+        if cp < a {
+            return false;
+        }
+        if cp <= b {
+            return true;
+        }
     }
-    match get_general_category(c) {
-        G::Control | G::PrivateUse | G::LineSeparator | G::ParagraphSeparator => true,
-        G::Format => !matches!(c, '\u{200C}' | '\u{200D}'),
-        _ => false,
-    }
+    false
 }
 fn is_joiner(c: char) -> bool {
     matches!(c, '\u{200C}' | '\u{200D}')
