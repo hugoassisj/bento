@@ -245,6 +245,23 @@ jobs:
             --outfile="$RUNNER_TEMP/test-spaces-restore-gate.mjs"
           node "$RUNNER_TEMP/test-spaces-restore-gate.mjs"
 
+      - name: Spaces restore directions rig (several timezones)
+        # Every whole-document restore resolves through the kernel's
+        # applyRestore over one rule set (spaces/src/store.ts RESTORE_RULES):
+        # undo/redo, version restore, Replace from JSON and loadDoc go 'back'
+        # (history kept live), the recovery banner goes 'recover' (revisions
+        # follow the snapshot, the trail unions by day without counting a day
+        # twice). Undo keeps the asset pool its checkpoints omit. The trail
+        # hook does day arithmetic on labels, hence the timezone loop.
+        # (Bundled: store.ts imports './model' extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-restore.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-restore.mjs"
+          for tz in UTC Europe/Berlin Pacific/Kiritimati Pacific/Niue; do
+            echo "--- $tz"
+            TZ=$tz node "$RUNNER_TEMP/test-spaces-restore.mjs"
+          done
+
       - name: Spaces in-file history rig
         # doc.revisions (spaces/src/history.ts): every entry is the kernel's
         # Revision envelope with the patch under body; what it covers is the
@@ -553,6 +570,14 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Encrypted-title rig
+        # An encrypted file must not announce its subject in plaintext: the
+        # <title> and the suggested download filename both used to derive from
+        # the document title. Pins that encrypted output gets a generic title
+        # and a neutral filename (source gate, always on), with a whole-file
+        # scan where a DOM is present.
+        run: node scripts/test-enc-title.ts
+
       - name: sidebar multi-select — a block move keeps order and carries states
         # Discussion #514. The unit is a parent with its states; the old
         # single-index splice left states behind, which this rig shows.
@@ -705,6 +730,25 @@ jobs:
         # silent save — and a launch request the host cannot meet is refused,
         # never turned into an export. Runs the real bridge against a fake host.
         run: node scripts/test-home-launch.mjs
+      - name: home per-document store rig
+        # The shared bridge relays the kernel's per-document store
+        # (kernel/src/docstore.ts) to a native host, which keeps the recovery
+        # copy and the member key out of the page's own web storage. Driven end
+        # to end here: the real bridge, the real kernel client, a fake host. It
+        # proves the store appears ONLY when the native side declares it — a
+        # store advertised and then refused would lose the member key on every
+        # reload — and that bytes round-trip as a Uint8Array the kernel accepts.
+        run: node scripts/test-home-docstore.mjs
+      - name: home legacy-origin inspector rig
+        # Before an Android document adopts the storage it used under the old
+        # per-path origins, an inspector page reports which documents own data
+        # there. This runs that script as it ships (extracted from
+        # DocumentOrigin.kt) against kernel-shaped storage: every app's autosave
+        # attributed, bento-handles by key, and anything it cannot tie to a
+        # document — including bento-blobcache, which holds plaintext media —
+        # refusing adoption. The JVM tests cover the decision; only this covers
+        # the script.
+        run: node scripts/test-home-inspector.mjs
 
       - name: tray mark is one source
         # tray-icon.svg is the only drawing of the mark. Everything else is
@@ -749,6 +793,14 @@ jobs:
         # runner has) and skips loudly. A Mac must run it before Releases.swift
         # changes.
         run: node scripts/test-tray-releases.mjs
+
+      - name: home/ios origin identity rig
+        # Which storage origin a document runs in. It used to be a hash of the
+        # file's path, so a different file that later took the same path read
+        # the previous one's recovery copy and member key. The origin follows the
+        # file's document identifier now; this compiles the real OriginIdentity
+        # and checks every rule. CryptoKit only, so it skips off Apple platforms.
+        run: node scripts/test-home-origin.mjs
 
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
@@ -2332,6 +2384,50 @@ jobs:
         # The last section is two real sessions over a real BroadcastChannel.
         run: node --no-warnings scripts/test-sync-spaces-session.ts
 
+  home-android-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Android host unit tests
+        # The JVM rigs for home/android: which web origin a document may run
+        # under (a different file at a path a document used before must never
+        # read its storage), the signed new-document verifier, and the Kotlin
+        # port of the document index against home/fixtures. They need no
+        # emulator, and until this job nothing ran them — the corpus note above
+        # said "the Kotlin port under Gradle" of a step that did not exist.
+        # The runner image ships the Android SDK (ANDROID_HOME); the wrapper is
+        # pinned at 8.14.3 because AGP 8 cannot run on Gradle 9.6+.
+        working-directory: home/android
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+  type-find-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: Find opens from the button, Cmd-F and Ctrl-F
+        # The find box lives in Navigate → Results; a selector naming a tab
+        # that no longer existed made both do nothing, silently.
+        run: node scripts/test-type-find-browser.mjs
+
   slides-font-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -2365,15 +2461,41 @@ jobs:
         # opens only its URL in a new tab with no opener, and says it needs
         # the network.
         run: node scripts/test-slides-import-link-browser.mjs
+      - name: The unsupported-browser notice names the app in Chromium
+        # Each app's shell, built with the flags its own build:single passes,
+        # says what it is ("a bento/slides presentation", …) — it said "a
+        # bento/dash spreadsheet" in every app.
+        run: node scripts/test-shell-unsupported-notice-browser.mjs
       - name: Under-specified documents boot in Chromium
         # parseDoc fills required fields only where absent and drops elements
         # that cannot render; unknown keys and element types survive (additivity).
         run: node scripts/test-slides-minimal-doc-browser.mjs
+      - name: A table with no style opens in Chromium
+        # A full document whose table omits `style` (absent, null, a string)
+        # loads by file, loadDoc and Replace from JSON, gets the theme's table
+        # style, and selecting it opens the table panel without a page error.
+        run: node scripts/test-slides-table-nostyle-browser.mjs
       - name: Top bar in Chromium
         # 30px row and 44px phone targets, the wordmark as a named button, Save
         # primary in both themes, and N language rebuilds leaving one set of
         # window/document listeners and bar observers.
         run: node scripts/test-slides-topbar-browser.mjs
+      - name: One field look in Chromium
+        # Every chrome text field, select and textarea (each element kind's
+        # panel, About, the save-as dialogs, Share, comments) has the shared
+        # field look and amber focus ring in both themes, never the UA's dress.
+        run: node scripts/test-slides-fields-browser.mjs
+      - name: A password-protected deck opens in Chromium
+        # One password gate and no loader failure card (1.2.0–1.2.8 showed
+        # three gates under "every loader path was refused"); wrong then right
+        # password; the same with only the blob import allowed; the ⌘S re-save
+        # and the self-update re-splice open again.
+        run: node scripts/test-slides-encrypted-open-browser.mjs
+      - name: The loader reads what the app published in Chromium
+        # Toy shells from the real postbuild: an app that is running, locked at
+        # a gate, or refused (and threw) runs ONCE and gets no loader card; only
+        # an app that published nothing does. Every path, blob only, import.meta.
+        run: node scripts/test-shell-loader-published-browser.mjs
       - name: Top bar holds still in Chromium
         # #546: a real auto-save "Saved" flash and a file-chip change (rename to
         # the file's name, then undo) leave Undo/Redo exactly where they were,
@@ -2450,6 +2572,81 @@ jobs:
         # beside the caret has no ring-blue in it; the text does not move.
         run: node scripts/test-slides-caret-ring-browser.mjs
 
+  dash-fields-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix dash
+          npm run build:single --prefix dash
+      - name: Every dash field wears the suite's one field look
+        # Slides' rig, ported: every text field, select and textarea on 17
+        # surfaces, light and dark, has the 1px --line border, --field fill,
+        # 6px radius and 26px height, and the --accent-ink focus ring; each
+        # surface must show fields in its own container, and a planted
+        # browser-dressed field must be flagged.
+        run: node scripts/test-dash-fields-browser.mjs
+
+  dash-gate-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix dash
+          npm run build:single --prefix dash
+      - name: An encrypted or unopenable dash file opens to its gate
+        # window.bento = { format, locked: true } before the password gate and
+        # the refusal page, so the shell's loader counts the app as mounted
+        # instead of re-running it and failing over the gate; unlocking
+        # replaces it with the real workbook.
+        run: node scripts/test-dash-gate-browser.mjs
+
+  home-origin-probe-browser:
+    # The probe that decides whether a file opened for the first time may keep
+    # the storage origin it had before origins followed the file. It runs in
+    # WebKit on iOS, so it's tested in WebKit, against storage laid out the way
+    # the kernel lays it out AND against a real slides deck's own autosave.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps webkit
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the slides shell the real-deck case opens
+        run: |
+          npm ci --prefix slides
+          npm run build:single --prefix slides
+      - name: Origin probe in WebKit
+        run: node scripts/test-home-origin-probe.mjs
+
   spaces-save-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -2472,6 +2669,23 @@ jobs:
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-spaces-save-browser.mjs
+      - name: One field look in Chromium (spaces)
+        # Port of slides' fields rig: every chrome text field, select and
+        # textarea (inspector incl. "Also known as", dialogs, view popovers,
+        # pickers, Share, comments, a designed space, the password gate) has
+        # the shared field look and amber focus ring in light, dark and
+        # OS-dark, never the UA's dress. "Also known as" shipped in it.
+        run: node scripts/test-spaces-fields-browser.mjs
+      - name: An encrypted space opens (one password gate, no loader failure)
+        run: node scripts/test-spaces-encrypted-browser.mjs
+      - name: Spaces recovery banner and recovery-off notice in Chromium
+        # An older recovery snapshot gets the warning with "Keep the file" the
+        # focused default (keeping deletes nothing; "Restore anyway" restores);
+        # a newer or equal one the plain banner that claims nothing; a host
+        # that refuses the recovery copy gets the notice once, held to read;
+        # pt and de show slides' words. Planted in bento-spaces-autosave.
+        run: node scripts/test-spaces-recovery-browser.mjs
+
   type-fields-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -2495,4 +2709,3 @@ jobs:
         # the focus ring, measured on twelve real surfaces, plus a planted
         # browser-default field that must be flagged.
         run: node scripts/test-type-fields-browser.mjs
-

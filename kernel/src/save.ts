@@ -57,7 +57,12 @@ export function readEmbeddedDoc(): string | null {
  * lookalike — which is linear, where a regex over an unterminated `<script` is
  * quadratic. CRLF is normalised so a file saved with CRLF line endings still
  * compares equal. The body is <-escaped at write time so it can never itself
- * contain the close tag. null if there is no block. */
+ * contain the close tag. Returns '' for a present-but-EMPTY block (a pristine
+ * New shell), and null only when there is NO readable block at all — the two are
+ * different documents, and the launch adopter (consumeLaunchQueue) must tell a
+ * pristine shell from a non-Bento file. (readEmbeddedDoc deliberately still
+ * collapses both to null — dash's boot dispatcher depends on that; this is the
+ * string-level extractor, where '' vs null is meaningful.) */
 const DOC_BLOCK_ID_ATTR = ` id="${DATA_BLOCK_ID}"`
 export function embeddedDocBlock(html: string): string | null {
   const at = html.indexOf(DOC_BLOCK_ID_ATTR)
@@ -66,7 +71,7 @@ export function embeddedDocBlock(html: string): string | null {
   if (start < 0) return null
   const end = html.indexOf(SCRIPT_CLOSE, start + 1)
   if (end < 0) return null
-  return html.slice(start + 1, end).replace(/\r\n/g, '\n').trim() || null
+  return html.slice(start + 1, end).replace(/\r\n/g, '\n').trim()
 }
 
 /**
@@ -152,8 +157,19 @@ function serializeBody(shell: Document, body: string, doc: KernelDoc): string {
 
   writePreview(clone, body, doc)
 
+  // An encrypted file must not carry the document title in plaintext: the
+  // <title> would sit in the file beside the ciphertext that exists to hide the
+  // content, readable by anything that lists the file. Same veto as the preview
+  // (previewAllowed covers both the live password flag and an already-encrypted
+  // body), so write a generic title — the app name — instead. This touches only
+  // the CLONE written to disk; the live tab's title is set elsewhere and keeps
+  // the real title after unlock.
   const titleEl = clone.querySelector('title')
-  if (titleEl) titleEl.textContent = doc.title + ' — ' + appConfig().appName
+  if (titleEl) {
+    titleEl.textContent = previewAllowed(body)
+      ? doc.title + ' — ' + appConfig().appName
+      : appConfig().appName
+  }
 
   const html = '<!DOCTYPE html>\n' + clone.documentElement.outerHTML
   // Belt-and-braces: an unescaped close tag anywhere in generated output would
@@ -519,7 +535,11 @@ export async function serializeAuto(doc: KernelDoc): Promise<string> {
 }
 
 export function suggestedFileName(doc: KernelDoc, suffix = ''): string {
-  const base = doc.title.replace(/[^\w\d-]+/g, '_').replace(/^_+|_+$/g, '') || 'Untitled'
+  // An encrypted deck should not carry its title in the download filename
+  // either — use a neutral default (the app name). The real title is kept in the
+  // live tab and returns to the filename once the password is cleared.
+  const source = isEncryptionActive() ? appConfig().appName : doc.title
+  const base = source.replace(/[^\w\d-]+/g, '_').replace(/^_+|_+$/g, '') || 'Untitled'
   return `${base}${suffix ? `-${suffix}` : ''}.bento.html`
 }
 
@@ -880,15 +900,22 @@ export function consumeLaunchQueue(): void {
   }
   const lq = w.launchQueue
   if (!lq || typeof lq.setConsumer !== 'function') return
-  // The open document's #bento-doc, captured now (boot, before any edit), CRLF
-  // normalised to match embeddedDocBlock. The handle we adopt must still hold THIS
-  // document: a host bug that vends the wrong file would otherwise have the first
-  // autosave silently overwrite it.
-  const booted = readEmbeddedDoc()?.replace(/\r\n/g, '\n') ?? null
+  // The open document's #bento-doc, captured now (boot, before any edit), read
+  // from the element directly and normalised EXACTLY as embeddedDocBlock does, so
+  // the two compare equal. This distinguishes a present-but-EMPTY block (a pristine
+  // New document → '') from a MISSING one (not a Bento document → null), which
+  // readEmbeddedDoc collapses: a New document must still adopt the host's handle
+  // (B6), or its first ⌘S becomes a Save-As picker that writes a second file. The
+  // handle we adopt must still hold THIS document: a host bug that vends the wrong
+  // file would otherwise have the first autosave silently overwrite it.
+  const blockEl = document.getElementById(DATA_BLOCK_ID)
+  const booted = blockEl ? (blockEl.textContent ?? '').replace(/\r\n/g, '\n').trim() : null
   try {
     lq.setConsumer(async (params) => {
       const handle = params?.files?.[0]
-      if (!handle || !booted || typeof handle.getFile !== 'function') return
+      // booted === null means no block at all (not a Bento document) — nothing to
+      // verify against; '' (a pristine shell) is a real, adoptable document.
+      if (!handle || booted === null || typeof handle.getFile !== 'function') return
       try {
         const text = await (await handle.getFile()).text()
         // Adopt only if the file is still this document AND nothing claimed a handle

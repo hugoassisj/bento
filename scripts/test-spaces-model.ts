@@ -452,10 +452,12 @@ for (const [label, input, err] of [
   // checkpoints undo first, which is what makes the note "Restoring is
   // undoable" true rather than reassuring.
   ok(/listVersions\(/.test(about), 'Version history… reads the timeline')
-  // (through restoreInto since the restore gate: the stored entry is foreign
-  // input, gated first — restoregate.ts — and then handed to replaceDoc)
+  // (through restoreVersion → restoreInto since the restore gate: the stored
+  // entry is foreign input, gated first — restoregate.ts — and then handed to
+  // replaceDoc, going 'back')
   const gate = fs.readFileSync(new URL('../spaces/src/restoregate.ts', import.meta.url), 'utf8')
-  ok(/restoreInto\(h\.store, v\.json\)/.test(about) && /store\.replaceDoc\(g\.doc\)/.test(gate),
+  ok(/restoreVersion\(h\.store, v\.json\)/.test(about) && /store\.replaceDoc\(g\.doc, direction/.test(gate) &&
+    /function restoreVersion\([^)]*\)[^{]*\{\s*return restoreInto\(store, json, 'back'\)/.test(gate),
     '…and restores through replaceDoc, so ⌘Z walks it back')
 }
 

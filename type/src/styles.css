@@ -282,7 +282,7 @@ html, body {
    The suite's reference: dash, spaces and type copy this block as it stands.
    Every chrome field gets it with no class to remember, so a new field cannot
    come out in the browser's own dress — the grey inset 2px border, square
-   corners, and in dark theme a #3b3b3b fill nobody chose (five of slides'
+   corners, and in dark theme a dark-grey fill nobody chose (five of slides'
    fields had exactly that, each with its own rule that forgot one property).
 
    :where() keeps the specificity at ZERO, so a context rule that only sizes a

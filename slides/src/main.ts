@@ -85,6 +85,13 @@ applyDirection()
 const embedded = readEmbeddedDoc()
 const envelope = embedded ? parseEnvelope(embedded) : null
 if (envelope) {
+  // Published BEFORE the gate, synchronously: the shell's loader decides the
+  // app mounted by reading window.bento as soon as this script returns, and an
+  // app waiting for a password has no doc yet. Without this stub every loader
+  // path read as refused, re-ran the app (one gate per path) and painted
+  // "every loader path was refused" over the gates (1.2.4–1.2.8). bootWith
+  // replaces it wholesale after unlock.
+  ;(window as any).bento = { format: 'bento/slides', locked: true }
   void passwordGate()
 } else {
   const parsed = embedded ? parseDoc(embedded) : null

@@ -30,7 +30,14 @@ targets:
       base:
         INFOPLIST_FILE: Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: page.bento.home
-        TARGETED_DEVICE_FAMILY: "1,2"   # iPhone and iPad
+        TARGETED_DEVICE_FAMILY: "1,2,6"   # iPhone, iPad, and the Mac via Catalyst
+        # The Mac app is this app, built for Mac Catalyst (ruled 2026-10-18).
+        # Locally, with no team, build it ad-hoc:
+        #   xcodebuild -scheme BentoTray -destination 'platform=macOS,variant=Mac Catalyst' CODE_SIGN_IDENTITY=-
+        # The Mac bundle id stays page.bento.home rather than Xcode's derived
+        # "maccatalyst." variant, so it is one app on every Apple platform.
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
         SWIFT_VERSION: "5.0"
         # Signing. The SIMULATOR needs none of this — it signs ad-hoc, which is
         # why every build so far has just worked. A real device needs a team.

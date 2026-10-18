@@ -240,6 +240,37 @@ export function historyIsForeign(doc: SpacesDoc): boolean {
   return !Array.isArray(r) || !r.every(readable)
 }
 
+/**
+ * The `revisions` RECOVER HOOK (kernel docfields.ts `RecoverHook`), bound in
+ * store.ts `RESTORE_RULES` and consulted only by the crash-recovery banner
+ * ('recover'), only when the snapshot carries the key. In this ORDER:
+ *
+ *   1. `[]` — CLEARED. Return `undefined` so the key is REMOVED, exactly as
+ *      Clear history deletes it and never stores `[]`. (A snapshot with NO
+ *      `revisions` never reaches this hook: the kernel removes an absent
+ *      history key from a whole snapshot itself, #726, and RECOVER_RULES does
+ *      not opt `revisions` out.) Cleared stays cleared: otherwise drafts
+ *      somebody cleared before sharing came back with Restore and left in the
+ *      next copy — confidentiality beats integrity behind a banner the person
+ *      accepted.
+ *   2. FOREIGN incoming — not an array, or any entry failing `readable` (the
+ *      check a file's list passes, `historyIsForeign`) → keep LIVE. A recovery
+ *      snapshot is foreign input (file:// documents share its IndexedDB); one
+ *      unreadable entry used to replace the live, readable log.
+ *   3. FOREIGN live → keep LIVE. A foreign list is never written over (#671),
+ *      which also preserves a newer build's history.
+ *   4. Otherwise the readable recovered list FOLLOWS the snapshot — the crash
+ *      case: a revision a save wrote into the snapshot must survive.
+ *
+ * It never merges and never picks entries: a list is taken or refused WHOLE.
+ */
+export function revisionsRecover(live: unknown, incoming: unknown): unknown {
+  if (Array.isArray(incoming) && incoming.length === 0) return undefined
+  if (!Array.isArray(incoming) || !incoming.every(readable)) return live
+  if (live !== undefined && (!Array.isArray(live) || !live.every(readable))) return live
+  return incoming
+}
+
 /** `doc.revisions`, when this build can read every entry of it; else none. */
 export function revisionsOf(doc: SpacesDoc): SpacesRevision[] {
   const r = (doc as { revisions?: unknown }).revisions

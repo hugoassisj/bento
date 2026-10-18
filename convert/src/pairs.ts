@@ -13,7 +13,7 @@
 
 import { pptxToBento, LimitError } from './api.ts'
 import { bentoToPptx } from './export.ts'
-import { extractDoc, spliceIntoShell } from './deliver.ts'
+import { extractDoc, spliceIntoShell, spliceVerbatim, fileApp, opensEncrypted, APPS } from './deliver.ts'
 import type { FidelityReport } from './report.ts'
 import type { BentoDoc } from '../../slides/src/model.ts'
 
@@ -88,7 +88,10 @@ export function describe(d: Detected): { title: string; meta: string } {
   if (d.kind === 'pptx') return { title: d.name, meta: `PowerPoint presentation · ${size(d.bytes.length)}` }
   if (d.kind === 'unknown') return { title: d.name, meta: d.reason }
   const app = APP_NAMES[d.format] ?? d.format
-  if (d.format === 'bento/enc') return { title: d.name, meta: 'A password-protected Bento file' }
+  if (d.format === 'bento/enc') {
+    const own = fileApp(d.text)
+    return { title: d.name, meta: `A password-protected ${own ? APPS[own].name : 'Bento'} file. It can be moved to the latest version without the password: it stays encrypted.` }
+  }
   const title = typeof d.doc.title === 'string' && d.doc.title ? d.doc.title : d.name
   const slides = Array.isArray(d.doc.slides) ? d.doc.slides.filter((s) => !(s as { stateOf?: unknown })?.stateOf).length : 0
   const sz = d.doc.size as { width?: unknown; height?: unknown } | undefined
@@ -111,7 +114,7 @@ const size = (n: number) => n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024
 
 export interface Env {
   /** the current signed bento/slides shell (deliver.ts fetchVerifiedShell) */
-  shell(): Promise<{ version: string; html: string }>
+  shell(appId?: string): Promise<{ version: string; html: string }>
   /** document JSON → a full, gated slides document, expanding a compact one.
    *  The page passes its own loader (convert/page/load-json.ts: slides'
    *  expansion and gate). `provisional` lists the slide id of each text box
@@ -234,6 +237,44 @@ export const CONVERSIONS: Conversion[] = [
         bytes: enc.encode(spliceIntoShell(s.html, loaded.doc)), fileName: `${base(d.name)}.bento.html`, mime: 'text/html', report,
         stats: [{ label: 'slides', value: slides }, { label: 'values removed', value: loaded.dropped.length }],
         meta: `Built on bento/slides ${s.version}, signature verified`,
+      }
+    },
+  },
+  {
+    id: 'update-shell',
+    label: 'The same file, on the latest version (.bento.html)',
+    hint: 'Puts this document into the latest release of its app, signature checked. Use it when a file won’t open, or can’t update itself.',
+    network: true,
+    accepts: (d) => {
+      if (d.kind !== 'bento' || d.source !== 'html') return false
+      if (!fileApp(d.text)) return 'This file doesn’t say which Bento app made it, so there is no release to move it to.'
+      return true
+    },
+    async run(d, env) {
+      if (d.kind !== 'bento') throw new Error('not a Bento file')
+      const appId = fileApp(d.text)
+      if (!appId) throw new Error('this file does not say which Bento app made it')
+      let s: { version: string; html: string }
+      try { s = await env.shell(appId) } catch (e) {
+        if (/\(404\)/.test(String((e as Error).message)))
+          throw new Error(`there is no published release of ${APPS[appId].name} yet, so this file can’t be moved to one`)
+        throw e
+      }
+      const r = spliceVerbatim(s.html, d.text, appId)
+      if (r.encrypted && !opensEncrypted(appId, s.version))
+        throw new Error(`the latest ${APPS[appId].name} is ${s.version}, which can’t open password-protected files either. The fixed version isn’t out yet; try again once it is. Your file is unchanged`)
+      const report = emptyReport()
+      if (r.packsLeft) {
+        report.entries.push({ code: 'language-packs-not-carried', verdict: 'approximated', where: 'document',
+          detail: `${r.packsLeft} language pack(s) the file carried are not in the updated copy; add them again from About`, count: r.packsLeft })
+        report.counts.approximated += r.packsLeft
+      }
+      const name = d.name.replace(/(\.bento)?\.html?$/i, '') + '.bento.html'
+      return {
+        bytes: enc.encode(r.html), fileName: name, mime: 'text/html', report, stats: [],
+        meta: `Now on ${APPS[appId].name} ${s.version}, signature verified. ` + (r.encrypted
+          ? 'The document came across byte for byte, still encrypted: no password was needed, and nothing was decrypted.'
+          : 'The document came across byte for byte.'),
       }
     },
   },

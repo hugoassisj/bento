@@ -912,7 +912,9 @@ export class Editor {
     ;(n as any)._t = setTimeout(() => n?.classList.remove('sp-on'), 3600)
   }
 
-  status(msg: string): void {
+  /** The transient save status. `ms` is how long it stays up: a sentence the
+   *  author must read (crash recovery is off) needs longer than "Saved". */
+  status(msg: string, ms = 1800): void {
     this.statusEl.textContent = msg
     this.statusEl.classList.add('sp-on')
     clearTimeout((this.statusEl as any)._t)
@@ -925,7 +927,7 @@ export class Editor {
       setTimeout(() => {
         if (!this.statusEl.classList.contains('sp-on')) this.statusEl.textContent = ''
       }, 260)
-    }, 1800)
+    }, ms)
   }
 
   // ---- the page tree ------------------------------------------------------

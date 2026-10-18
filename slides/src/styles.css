@@ -106,11 +106,43 @@ select, option, input, textarea, [contenteditable='true'] {
    Pair with the color-scheme meta in index.html; the explicit background/color
    below keeps contrast even under a force-dark engine that ignores both. */
 :root { color-scheme: only light; }
-select, .ed-row input, .ed-row textarea {
-  background: var(--field);
-  color: var(--ink-2);
-}
 option { background: var(--field); color: var(--ink); }
+
+/* ————— THE FIELD — one look for every text field, select and textarea ———————
+   The suite's reference: dash, spaces and type copy this block as it stands.
+   Every chrome field gets it with no class to remember, so a new field cannot
+   come out in the browser's own dress — the grey inset 2px border, square
+   corners, and in dark theme a #3b3b3b fill nobody chose (five of slides'
+   fields had exactly that, each with its own rule that forgot one property).
+
+   :where() keeps the specificity at ZERO, so a context rule that only sizes a
+   field (width, flex, font-weight) layers on top without restating the look,
+   and a field that is deliberately not a box (the ghost title, the password
+   gate's own card) overrides it with an ordinary class. The ring sits ON the
+   border (offset -1px), so no scroll container can clip it. Checkboxes,
+   radios, ranges and file pickers keep their native controls. Guarded by
+   scripts/test-slides-fields-browser.mjs. */
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='hidden']), select, textarea) {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+:where(textarea) { height: auto; padding: 6px 8px; line-height: 1.5; resize: vertical; }
+:where(input[type='color']) {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 1px 2px;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+:where(input, select, textarea):focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
 
 /* ————— THE DOCUMENT NEVER MIRRORS —————————————————————————————————————————
    An Arabic/Hebrew viewer gets an RTL *chrome* (i18n.ts applyDirection sets
@@ -189,18 +221,18 @@ option { background: var(--field); color: var(--ink); }
 }
 .ed-logo-mark { display: block; border-radius: 5px; }
 
+/* The deck title is a GHOST field: no box at rest, the shared field's border
+   on hover, its fill and amber ring once focused. Its height is the bar's. */
 .ed-title {
-  font: inherit;
+  height: auto;
   font-size: 14px;
-  color: var(--ink);
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border-color: transparent;
   padding: 5px 8px;
   width: 220px;
   background: transparent;
 }
 .ed-title:hover { border-color: var(--line); }
-.ed-title:focus { border-color: var(--blue); outline: none; background: var(--field); }
+.ed-title:focus { border-color: var(--line); background: var(--field); }
 
 /* The file this deck is open AS — quieter than the deck title beside it.
    Shows the BASE name only: every Bento file ends in ".bento.html", so the
@@ -393,15 +425,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   margin-top: 2px;
 }
 
-.ed-row input[type='text'] {
-  width: 110px;
-  font: inherit;
-  font-size: 12.5px;
-  padding: 4px 6px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--ink);
-}
+.ed-row input[type='text'] { width: 110px; }
 
 /* ————— canvas ————— */
 
@@ -657,52 +681,16 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   color: var(--ink-2);
 }
 .ed-row > span { flex: none; }
-.ed-row input[type='number'], .ed-row select {
-  width: 110px;
-  font: inherit;
-  font-size: 12.5px;
-  padding: 4px 6px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--field);
-  color: var(--ink);
-}
-.ed-row input[type='color'] {
-  width: 110px;
-  height: 26px;
-  padding: 1px 2px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--field);
-}
+.ed-row input[type='number'], .ed-row select, .ed-row input[type='color'] { width: 110px; }
 
 .ed-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
 .ed-mini { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink-2); }
-.ed-mini input {
-  width: 100%;
-  min-width: 0;
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 5px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
+.ed-mini input { width: 100%; min-width: 0; padding: 0 5px; }
 
 .ed-ops { display: flex; gap: 4px; margin-bottom: 10px; }
 .ed-btn-icon { border: 1px solid var(--line); padding: 6px; }
 
-.ed-notes {
-  width: 100%;
-  min-height: 130px;
-  font: inherit;
-  font-size: 12.5px;
-  line-height: 1.5;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  resize: vertical;
-  color: var(--ink);
-}
+.ed-notes { width: 100%; min-height: 130px; }
 
 .ed-hint {
   font-size: 11.5px;
@@ -884,14 +872,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 /* wrap instead of stacking: three actions fit in one or two rows */
 .ed-about-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ed-about-actions .ed-btn { max-width: 100%; }
-.ed-about-json {
-  width: 100%;
-  font: 11px/1.4 ui-monospace, Menlo, monospace;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px;
-  resize: vertical;
-}
+.ed-about-json { width: 100%; font: 11px/1.4 ui-monospace, Menlo, monospace; }
 .ed-about-fine {
   font-size: 10.5px;
   line-height: 1.5;
@@ -1056,14 +1037,9 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 /* chart option JSON editor */
 .ed-chart-json {
   width: 100%;
-  resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
   line-height: 1.45;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 8px;
-  color: var(--ink);
 }
 .ed-chart-json.ed-invalid { border-color: #c9302c; outline: 1px solid #c9302c; }
 
@@ -1198,24 +1174,14 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-series-row .ed-series-name { flex: 1 1 auto; min-width: 0; }
 .ed-series-row select { flex: 0 0 auto; }
-.ed-series-row input[type='text'],
-.ed-series-row select {
-  height: 26px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 0 6px;
-  font-size: 12px;
-  background: var(--field);
-  color: var(--ink);
-}
-.ed-series-row input[type='color'] { flex: 0 0 auto; width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
-.ed-series-row .ed-pie-val { width: 62px; height: 26px; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: 12px; }
+.ed-series-row input[type='color'] { flex: 0 0 auto; width: 26px; padding: 0; }
+.ed-series-row .ed-pie-val { width: 62px; }
 .ed-series-rm { flex: 0 0 auto; color: #9aa4b2; }
 .ed-series-rm:hover { color: #c9302c; }
 .ed-chart-add { margin: 4px 0 2px; }
 .ed-chart-add .ed-btn { width: 100%; justify-content: center; font-size: 12px; }
 .ed-axis-range { display: flex; gap: 6px; }
-.ed-axis-range input { width: 100%; height: 26px; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: 12px; }
+.ed-axis-range input { width: 100%; }
 .ed-chart-grid-wrap { overflow-x: auto; margin: 2px 0; }
 .ed-chart-grid { border-collapse: collapse; width: 100%; }
 .ed-chart-grid th {
@@ -1229,17 +1195,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   white-space: nowrap;
 }
 .ed-chart-grid td { padding: 1px 2px; }
-.ed-chart-grid input {
-  width: 100%;
-  min-width: 52px;
-  height: 24px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 0 5px;
-  font-size: 12px;
-  background: var(--field);
-  color: var(--ink);
-}
+.ed-chart-grid input { width: 100%; min-width: 52px; padding: 0 5px; }
 .ed-chart-grid td:first-child input { font-weight: 600; }
 .ed-chart-grid .ed-btn-icon { padding: 2px; color: #9aa4b2; }
 .ed-chart-grid .ed-btn-icon:hover { color: #c9302c; }
@@ -1463,16 +1419,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-comment-entry b { font-size: 12.5px; }
 .ed-comment-entry .ed-comment-time { font-size: 11px; color: var(--muted); margin-inline-start: 5px; }
 .ed-comment-entry p { margin: 2px 0 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
-.ed-comment-reply {
-  width: 100%;
-  margin-top: 10px;
-  font: inherit;
-  font-size: 12.5px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 7px 9px;
-  resize: vertical;
-}
+.ed-comment-reply { width: 100%; margin-top: 10px; }
 .ed-comment-pop-foot { display: flex; gap: 6px; margin-top: 8px; }
 .ed-comment-pop-foot .ed-btn { border: 1px solid var(--line); flex: 1; justify-content: center; padding: 5px 6px; font-size: 12px; }
 
@@ -2228,16 +2175,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-about-h { font-weight: 700; font-size: 13px; margin: 2px 0; }
 .ed-about-meta { display: flex; align-items: center; gap: 8px; }
 .ed-about-meta label { flex: 0 0 80px; font-size: 12px; color: var(--ink-2); }
-.ed-about-meta input {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  font-size: 13px;
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--field);
-}
+.ed-about-meta input { flex: 1; min-width: 0; }
 
 /* collaborate popover: your-name field */
 .ed-share-name {
@@ -2247,15 +2185,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 12px;
   color: var(--muted);
 }
-.ed-share-name input {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font: inherit;
-  font-size: 12.5px;
-}
+.ed-share-name input { flex: 1; min-width: 0; }
 
 /* --- responsive topbar: labels give way, never a scrollbar ----------------
    The tiers are CLASSES, not width breakpoints. editor.ts fitTopbar()
@@ -2569,7 +2499,10 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   line-height: 1.2;
 }
 .ed-pwcard p, .ed-playercard p { font-size: 14px; line-height: 1.5; }
+/* The password gate is its own dark card on the boot splash, not the chrome:
+   it overrides the shared field look on purpose (and its height with it). */
 .ed-pwcard input {
+  height: auto;
   width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
@@ -2615,15 +2548,7 @@ dialog.ed-pwdialog label {
   font-weight: 600;
   color: #334;
 }
-dialog.ed-pwdialog input {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-  padding: 8px 10px;
-  border: 1px solid #ccd;
-  border-radius: 8px;
-  font-size: 14px;
-}
+dialog.ed-pwdialog input { display: block; width: 100%; margin-top: 4px; }
 dialog.ed-pwdialog .ed-pwerr { color: #C33; }
 .ed-dialog-actions {
   display: flex;
@@ -2773,10 +2698,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-lang-txt b { font-size: 13px; font-weight: 600; }
 .ed-lang-txt span { font-size: 11.5px; color: var(--muted); }
 .ed-lang-blurb { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin: -2px 0 6px; }
-.ed-lang-search {
-  width: 100%; margin: 4px 0 6px; padding: 7px 10px; font-size: 13px;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
-}
+.ed-lang-search { width: 100%; margin: 4px 0 6px; }
 .ed-lang-scroll {
   max-height: 240px; overflow-y: auto;
   /* Keep the row's action button clear of the scrollbar — without this the
