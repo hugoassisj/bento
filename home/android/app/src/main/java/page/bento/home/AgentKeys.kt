@@ -54,12 +54,24 @@ object AgentKeys {
             val sb = Build.VERSION.SDK_INT >= 28 &&
                 context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
             try {
-                generate(CONSENT, consent = true, strongBox = sb)
-            } catch (e: StrongBoxUnavailableException) {
-                generate(CONSENT, consent = true, strongBox = false)
+                try {
+                    generate(CONSENT, consent = true, strongBox = sb)
+                } catch (e: StrongBoxUnavailableException) {
+                    generate(CONSENT, consent = true, strongBox = false)
+                }
+            } catch (e: java.security.GeneralSecurityException) {
+                // API 26–29 has no per-use key that accepts the device PIN: with
+                // no enrolled biometric there is no consent key (security §29,
+                // option a). The routine key above still stands, so the device
+                // does everyday work. A later ensure() mints the consent key
+                // once a fingerprint is enrolled. From 30 on this is a real fault.
+                if (Build.VERSION.SDK_INT >= 30) throw e
             }
         }
     }
+
+    /** False on API 26–29 with no enrolled biometric: this device cannot consent. */
+    fun hasConsentKey(): Boolean = keystore().containsAlias(CONSENT)
 
     private fun generate(alias: String, consent: Boolean, strongBox: Boolean) {
         val b = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)

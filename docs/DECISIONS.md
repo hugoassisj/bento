@@ -10996,7 +10996,14 @@ shell it serves (gate 1, A2).
   passes user verification. Notification to every device, the contest/freeze
   and the recovery code catch that, not the key. On API 26–29, a per-use key
   accepts biometrics only, so a phone without one gets no consent key: it can
-  do routine work but not consent. That fallback awaits security's ruling.
+  do routine work but not consent (security §29, option a). A time-windowed
+  PIN key was rejected: it breaks "one prompt, one signature". Requiring API
+  30 was rejected too: it excludes people for no gain. In phase 1 that device
+  can't authorise link, rotate or unbind. Invite and revoke are unaffected,
+  since they are still owner-key statements the kernel signs (§24b). It can
+  still BE linked, because the consenting device or the passkey authorises
+  that. Its message reads: "Approving new devices or account changes needs a
+  fingerprint on this Android version. Do it from another device."
 - **§2e (B) is enforced in two layers, each with its own bound.** The routine
   key carries a Keystore validity window of the OVERALL timeout (24 h). That is
   the hardware floor, and it means "since the device was last unlocked": a
