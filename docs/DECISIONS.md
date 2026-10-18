@@ -11036,6 +11036,66 @@ with a Cyrillic А passes. So no surface ever shows a name WITHOUT the verified
 address beside it, and the ✓ always belongs to the address, never to the name.
 (security, #764)
 
+## 2026-10-18 — bento/id: the desktop agent core and its Linux key store (home/desktop/agent)
+
+The Windows/Linux identity agent is a Rust library crate, `home/desktop/agent`.
+The Tauri host will call it after its own checks. Settled here, so the host and
+other zones build on the same ground:
+
+- **The statements are a PORT, and the vectors are the contract.**
+  `kernel/fixtures/identity-v1.json` is re-read on every run, never pinned.
+  Every row must reach the reference's verdict AND reason. Accepted rows must
+  round-trip through the builders and refuse three kinds of tampering. Every
+  `cns.` row must spend its challenge when `spendCalled` says so. The display
+  refusal set is embedded as the fixture's frozen Unicode 17.0 ranges, and a
+  test fails if the two ever differ. JavaScript string semantics that change
+  verdicts (`trim()`'s whitespace set, UTF-16 `length`) are reproduced on
+  purpose.
+- **One way in.** The agent answers only a `Caller` the host built after its
+  per-webview capability check, on a verified shell, carrying the docId the
+  host read from the file itself. It never takes a docId or a caller name from
+  the page.
+- **Routine signing** (`frame`, `prove`, `delegate`, `show`) uses the device
+  key, unprompted, inside a session: 1 h idle and 24 h overall by default, or
+  15 min and 12 h for organisations at AAL3. Past either limit, even routine
+  signatures are refused until the person re-authenticates.
+- **Consent is host-stamped.** The rp (`bento`), the audience (`dir`, phase 1's
+  only one), the docId and a 2-minute expiry are chosen by the host. The page
+  supplies only the statement and the directory's challenge. The consent key
+  signs, and prompts every time.
+- **`sign('invite' | 'revoke')` is refused** with `unavailable`. Those are signed
+  by the room's owner key, which the kernel holds in phase 1.
+- **The Linux key store** is the TPM, and the TPM counts only if this user can
+  open it:
+  - the routine key is created in the TPM, non-exportable, and needs no prompt;
+  - the consent key is created in the TPM with the person's PIN as its
+    authValue, so every use needs the PIN and the TPM's lockout limits guessing;
+  - the account key is shared across devices, so it can't be created inside
+    one TPM. It is sealed under the same PIN and unsealed only for a prompted
+    use, then zeroized.
+  What sits on disk are TPM-wrapped blobs that only this TPM can load.
+- **Two desktop-specific residuals, stated rather than hidden.**
+  - On a phone, other apps can't use our keys at all. On a desktop, any process
+    running as the same user can ask the TPM to sign with the routine key, so it
+    can edit as the person in rooms they already belong to. It can't copy the
+    key off the machine, and it can't use the consent or account key without
+    the PIN.
+  - The session timers bind the genuine agent only. A process calling the TPM
+    directly bypasses them.
+  Both are accepted: same-user malware can already edit the person's files and
+  drive the app.
+- **No key-agreement key** anywhere until its placement is ruled.
+
+Rigs:
+- `home/desktop/agent/tests/conformance.rs`, the vectors plus the mutations
+  that showed each check bites: accepting high-S, a late spend, and a dropped
+  display range;
+- `tests/tpm_linux.rs` via `tpm-rig.sh`, against two independent swtpm TPMs:
+  the routine key signs and verifies; a wrong PIN is the TPM's own AUTH_FAIL;
+  the sealed account key unseals only with the PIN; the key files fail on a
+  second TPM; and a second connection without the PIN gets neither the consent
+  key nor the account key, while the routine residual is asserted so it stays
+  visible.
 ## 2026-10-18 — bento/id: the recovery code and key blobs (kernel/src/recovery.ts)
 
 The bytes behind identity-design §2f, signed by security §28, with
