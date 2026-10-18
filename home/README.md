@@ -326,6 +326,18 @@ that carries it is generated and gitignored, so nothing personal is committed.
 Leave it unset and `DEVELOPMENT_TEAM` is simply absent — simulator builds are
 unaffected.
 
+**The Mac app is this app**, built for Mac Catalyst. Without a team, build it
+ad-hoc, for this Mac only:
+
+```
+xcodebuild -project BentoTray.xcodeproj -scheme BentoTray \
+  -destination 'platform=macOS,variant=Mac Catalyst' CODE_SIGN_IDENTITY=- build
+```
+
+Distributing it means Developer ID signing and notarisation, which need the team.
+On the Mac, a file handed over by a double-click or Open With is edited **where it
+is**; it is never imported (see `openIncoming`).
+
 Find it in **Xcode ▸ Settings ▸ Accounts**, or developer.apple.com ▸ Membership.
 A free Apple ID signs for your own devices on a **7-day** profile that must then
 be re-signed; TestFlight and the App Store need the paid programme.

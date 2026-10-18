@@ -14,6 +14,39 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-18 — The Mac app is the iOS app, built for Mac Catalyst; a Mac double-click edits in place
+
+**Decision (maintainer, 2026-10-18).** Native desktop apps are the primary desktop
+host, and macOS comes from building the existing `home/ios` app for **Mac
+Catalyst**, not from a SwiftUI rewrite or a separate AppKit target. It ships with
+**Developer ID first** (notarised, outside the store); the Mac App Store comes
+later. A `.bento.html` double-click reaches the app through a per-file "open with"
+binding on documents it saves, plus an "Edit in bento/home" hand-off from the
+browser. A `.bento` extension is ruled out: a Bento file stays an HTML file that
+opens anywhere.
+
+**Why Catalyst.** The app builds for Catalyst with no source changes, so every
+host fix lands on the Mac for free.
+
+**Why a type can't do it.** macOS types a file by its last extension, so
+`x.bento.html` is always `public.html`. Measured: a declared, registered
+`bento.html` type with the app as Owner still left a double-click going to the
+browser.
+
+**What changes in code now.** On the Mac, a file the system hands over is opened
+**where it is**. iOS's `revealDocument(importIfNeeded:)` is right on a phone and
+wrong on a Mac: an unsandboxed Mac app's Documents is the person's real
+`~/Documents`, so the import wrote a copy there, and every save went to the copy.
+On the Mac, a double-click means "edit this file".
+
+The Mac bundle id stays `page.bento.home`: one app on every Apple platform.
+
+**Still open.** The browser hand-off's URL scheme needs a security ruling. Signing,
+notarisation, the keychain, passkeys and associated domains all wait on the paid
+Apple team. The scoping is in the private design notes.
+
+---
+
 ## 2026-09-10 — bento/spaces footnotes: the reference is a TEXT TOKEN, and the number is derived
 
 **Decision.** A footnote in `bento/spaces` is `doc.footnotes` (a document-level
