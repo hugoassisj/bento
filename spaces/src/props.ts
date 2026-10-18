@@ -381,7 +381,7 @@ export class PropsPanel {
     // had one, or every space that ever opened this panel grows an `aliases:
     // []` nobody asked for.
     if (!this.app.locked()) {
-      const aliases = mk('input', 'sp-insp-text') as HTMLInputElement
+      const aliases = mk('input', 'sp-insp-txt') as HTMLInputElement
       aliases.type = 'text'
       aliases.value = aliasesOf(page).join(', ')
       aliases.placeholder = t('NYC, the Big Apple')

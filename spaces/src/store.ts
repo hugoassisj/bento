@@ -15,8 +15,12 @@ type Scope = 'doc' | 'page'
 
 import { type SpacesDoc, type Page, type Block, buildIndex, type SpaceIndex, homePage } from './model'
 import { buildTagIndex, type TagIndex } from './tags.ts'
-import { FROM_LIVE, keepLiveIdentity as keepLive } from '../../kernel/src/docfields.ts'
+import {
+  FROM_LIVE, applyRestore, validateRestoreRules, type RestoreDirection, type RestoreRules,
+} from '../../kernel/src/docfields.ts'
 import { SPACES_FIELDS } from './docclass.ts'
+import { trailRecover } from './trail.ts'
+import { revisionsRecover } from './history.ts'
 
 type Listener = () => void
 type Event = 'doc' | 'page' | 'tree' | 'selection' | 'dirty'
@@ -47,46 +51,111 @@ const UNDO_BUDGET = 24 * 1024 * 1024
  * NOT on the list, deliberately: `theme` (and any design setting) is content
  * and undoes like content; `format`/`version`/`policy` describe how the content
  * is encoded and travel with it; `assets` is kept by undo/redo for a different
- * reason — snapshots omit it for size — and a replaceDoc brings its own.
+ * reason — snapshots omit it for size (UNDO_RULES) — and a replaceDoc brings
+ * its own.
  *
- * The shared list now lives in the kernel (kernel/src/docfields.ts) and is
- * re-exported here, so restoregate.ts keeps importing it from `./store.ts`.
+ * The list is the kernel's (kernel/src/docfields.ts) and is re-exported here;
+ * what ENFORCES it now is the field map's classes (identity / mode /
+ * capability, docclass.ts) through `applyRestore`, whose floor keeps those
+ * classes live in every direction and refuses an override that says otherwise.
  */
 export { FROM_LIVE }
 
-/** Overwrite `next`'s FROM_LIVE keys with `live`'s — including deleting one the
- *  live document does not have. Mutates and returns `next`. The kernel's
- *  keepLiveIdentity does the work, so this app and the kernel cannot disagree
- *  about what "kept live" means. */
-function keepLiveIdentity(live: SpacesDoc, next: SpacesDoc): SpacesDoc {
-  keepLive(next as Record<string, unknown>, live as Record<string, unknown>)
-  keepLiveHistory(live, next)
-  return next
+/**
+ * THE restore rules: one map, one call (`applyRestore`), two directions.
+ *
+ *   'back'    — undo, redo, a version restore (either timeline), Replace from
+ *               JSON and bento.loadDoc. Content follows what is restored (an
+ *               ABSENT content field is dropped — a restored version is the
+ *               whole document); identity, modes, capability AND history keep
+ *               the live value. History is a LOG of the space (`revisions`,
+ *               `trail`), not its content: without that, ⌘Z after a save
+ *               un-recorded the revision that save wrote, a paste of Copy
+ *               document JSON (which carries no history) deleted it, and a
+ *               pasted or restored document could INSTALL a forged one.
+ *   'recover' — the crash-recovery banner only. The snapshot is a NEWER copy of
+ *               this space, so history is reconciled with it rather than kept:
+ *               `revisions` follows the snapshot when it carries a READABLE
+ *               list, is REMOVED when the snapshot has none (a whole snapshot
+ *               without it was CLEARED — the kernel's default since #726), and
+ *               a foreign list on either side keeps live (history.ts
+ *               `revisionsRecover`); `trail` unions by day (trail.ts
+ *               `trailRecover`), so an absent trail keeps the live rows.
+ *               Content absent from the snapshot was removed and stays removed
+ *               (RECOVER_RULES, wholeSnapshot).
+ *
+ * Identity, mode and capability are live in BOTH directions; the kernel's floor
+ * holds that even against a mistaken override.
+ */
+export const RESTORE_RULES: RestoreRules = {
+  classes: SPACES_FIELDS,
+  recover: { trail: trailRecover, revisions: revisionsRecover },
 }
+validateRestoreRules(RESTORE_RULES)
 
 /**
- * The fields the kernel's map classes 'history' (docclass.ts: `revisions`,
- * `trail`). They are a LOG of the space, not its content, so — like identity —
- * every whole-document restore keeps the LIVE value, and undo snapshots omit
- * them (they would be up to 128 KB per entry, identical in nearly every one).
- *
- * Without this, three ordinary actions silently rewrote the file's history:
- * ⌘Z after a save un-recorded the revision that save wrote; "Replace from
- * JSON" with the output of Copy document JSON (which drops history by the
- * copy table) deleted it outright; and restoring a version or a recovery
- * snapshot rolled the list back to whatever it was when that copy was taken.
- * Read from the map, so a history field added later is kept the same way.
+ * The recovery banner's rules: RESTORE_RULES with `wholeSnapshot: true`,
+ * stated EXPLICITLY although the kernel (#716) defaults to it. The recovery
+ * snapshot is kernel autosave's `contentOnly(doc)` — the WHOLE document — so a
+ * content or unknown key absent from it is one the person REMOVED after the
+ * last save (a design, footnotes, a journal template), and it must stay
+ * removed rather than come back from the file. History is exempt in the
+ * kernel (an absent `trail`/`revisions` still keeps live), and the identity /
+ * mode / capability floor is unchanged. Only 'recover' reads the flag; every
+ * 'back' path already drops an absent field.
  */
-const HISTORY_KEYS: readonly string[] = Object.entries(SPACES_FIELDS)
-  .filter(([, cls]) => cls === 'history').map(([k]) => k)
+export const RECOVER_RULES: RestoreRules = {
+  ...RESTORE_RULES,
+  wholeSnapshot: true,
+  // Since kernel #726 a whole snapshot REMOVES an absent history key (absent =
+  // the person cleared it). That is right for `revisions` — cleared history
+  // must stay cleared, so it is deliberately NOT listed here — but not for
+  // `trail`: nobody "clears" a trail by omission; a snapshot without one means
+  // "no rows yet" (recorded nothing before the crash), and the live rows are
+  // observations nobody can recompute. ONLY 'trail', never 'revisions'.
+  // This list is the ONE thing keeping cleared history cleared on recovery
+  // (spaces no longer normalises an absent `revisions` itself):
+  // scripts/test-spaces-restore.ts pins it to exactly ['trail'] and proves a
+  // variant listing 'revisions' brings cleared drafts back.
+  keepLiveWhenAbsent: ['trail'],
+}
+validateRestoreRules(RECOVER_RULES)
 
-function keepLiveHistory(live: SpacesDoc, next: SpacesDoc): void {
-  const n = next as Record<string, unknown>, l = live as Record<string, unknown>
-  for (const k of HISTORY_KEYS) {
-    if (Object.hasOwn(l, k) && l[k] !== undefined) n[k] = l[k]
-    else delete n[k]
+/** The rules a direction restores by: the recovery banner's for 'recover'
+ *  (the only caller of that direction), the shared ones for 'back'. */
+export const rulesFor = (direction: RestoreDirection): RestoreRules =>
+  direction === 'recover' ? RECOVER_RULES : RESTORE_RULES
+
+/**
+ * Undo and redo only. Their checkpoints OMIT `assets` (the largest thing in the
+ * document, and unchanged by an ordinary edit — see `snapshot()`), and
+ * `applyRestore` on 'back' reads an absent content field as DROPPED. Fed a
+ * checkpoint as-is it would delete every embedded image. So on this one path
+ * the pool keeps the LIVE value — exactly what undo did before the kernel took
+ * over: undoing an image insert removes the block's `asset:` reference, never
+ * the bytes (the pool is pruned on save, where nothing else can still be
+ * pointing at it). Version restore and Replace from JSON carry their own pool,
+ * so there `assets` follows like any content.
+ */
+const UNDO_RULES: RestoreRules = { ...RESTORE_RULES, keepLive: { assets: 'live' } }
+validateRestoreRules(UNDO_RULES)
+
+/** The whole-doc times a recover hook compares, as epoch ms on both sides
+ *  (kernel `RecoverHook`): the live document's `modified`, and the snapshot's
+ *  own time. A live space with no `modified` gives `live: undefined`, which the
+ *  hook treats as OLDER. */
+export function restoreAt(live: SpacesDoc, incomingAt?: number): { live?: number; incoming?: number } {
+  const l = typeof live.modified === 'string' ? Date.parse(live.modified) : NaN
+  return {
+    live: Number.isFinite(l) ? l : undefined,
+    incoming: typeof incomingAt === 'number' && Number.isFinite(incomingAt) ? incomingAt : undefined,
   }
 }
+
+/** History-class keys (docclass.ts: `revisions`, `trail`), read from the map so
+ *  a history field added later is omitted from undo checkpoints the same way. */
+const HISTORY_KEYS: readonly string[] = Object.entries(SPACES_FIELDS)
+  .filter(([, cls]) => cls === 'history').map(([k]) => k)
 
 /**
  * One undoable step.
@@ -310,7 +379,7 @@ export class Store {
   private snapshot(): string {
     // assets are excluded: they are the largest thing in the document and never
     // change during an ordinary edit, so snapshotting them 100 times is waste.
-    // History fields are excluded too, and restored from live (keepLiveHistory).
+    // History fields are excluded too; 'back' keeps them live (RESTORE_RULES).
     // That includes `trail`: a row is an OBSERVATION written outside any
     // commit, so an undo that restored it could put a stale row over a newer
     // one. `periods` is content, NOT excluded: starting a period is something a
@@ -355,9 +424,9 @@ export class Store {
       // CONTENT moves, identity does not: the snapshot's docId/collab/readonly
       // are whatever they were when it was taken, and Stop sharing, a key
       // rotation or a mode change since then must survive ⌘Z and ⌘⇧Z alike.
-      const live = this.doc
-      const assets = live.assets
-      this.doc = keepLiveIdentity(live, { ...(JSON.parse(entry.json) as SpacesDoc), ...(assets ? { assets } : {}) })
+      // 'back', with the pool kept live: the checkpoint has no `assets` key
+      // (UNDO_RULES says why), and absent-means-dropped would empty it.
+      this.doc = applyRestore(this.doc, JSON.parse(entry.json) as SpacesDoc, 'back', UNDO_RULES)
     }
     this.pageId = entry.viewId
     this.reindex()
@@ -415,12 +484,17 @@ export class Store {
    * recovery path. Content is replaced; identity is not (FROM_LIVE): a version
    * from before Stop sharing or Rotate keys, or JSON pasted from another space,
    * never brings its own docId, room credentials or file mode with it.
+   *
+   * `direction` is REQUIRED, so no caller gets one by default: 'recover' for
+   * the crash-recovery banner (with `at` from `restoreAt`), 'back' for
+   * everything else (RESTORE_RULES). Untrusted input is gated BEFORE it gets
+   * here (restoregate.ts); this only decides which side each field comes from.
    */
-  replaceDoc(next: SpacesDoc): void {
+  replaceDoc(next: SpacesDoc, direction: RestoreDirection, at: { live?: number; incoming?: number } = {}): void {
     this.dirty = true
     this.endRun()
     this.checkpoint()
-    this.doc = keepLiveIdentity(this.doc, next)
+    this.doc = applyRestore(this.doc, next, direction, rulesFor(direction), at)
     this.reindex()
     this.pageId = homePage(next)?.id ?? ''
     this.emit('doc')

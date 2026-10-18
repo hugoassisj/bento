@@ -326,6 +326,18 @@ that carries it is generated and gitignored, so nothing personal is committed.
 Leave it unset and `DEVELOPMENT_TEAM` is simply absent — simulator builds are
 unaffected.
 
+**The Mac app is this app**, built for Mac Catalyst. Without a team, build it
+ad-hoc, for this Mac only:
+
+```
+xcodebuild -project BentoTray.xcodeproj -scheme BentoTray \
+  -destination 'platform=macOS,variant=Mac Catalyst' CODE_SIGN_IDENTITY=- build
+```
+
+Distributing it means Developer ID signing and notarisation, which need the team.
+On the Mac, a file handed over by a double-click or Open With is edited **where it
+is**; it is never imported (see `openIncoming`).
+
 Find it in **Xcode ▸ Settings ▸ Accounts**, or developer.apple.com ▸ Membership.
 A free Apple ID signs for your own devices on a **7-day** profile that must then
 be re-signed; TestFlight and the App Store need the paid programme.
@@ -450,6 +462,12 @@ be — but the question it asked was the right one, and it was asked first.
 
 ### Parity with the iOS host
 
+**Encrypting a document changes which storage it gets on Android.** An
+encrypted document carries no readable docId, so its storage is tied to its
+exact bytes instead — and the first save after adding a password writes
+different bytes. The document keeps working; its previous recovery copy and
+member key stay in the storage it had, which it no longer opens.
+
 The two hosts are meant to behave identically from inside the document. Where
 they cannot, it is because the platform forces it — and that is written down
 here rather than discovered later.
@@ -457,7 +475,10 @@ here rather than discovered later.
 | behaviour | `home/ios` | `home/android` | |
 |---|---|---|---|
 | FSA polyfill | `home/bridge.js` | `home/bridge.js` | **one shared file** |
-| per-document origin | `bento-tray://<sha24>` custom scheme | `https://<sha24>.bento-tray.invalid`, intercepted | same |
+| per-document origin | `bento-tray://<host>`: follows the FILE (its document identifier), not the path — `OriginIdentity` | `https://<claim>.bento-tray.invalid`: a claim bound to the document's docId in a device-local index, not the URI — `DocumentOrigin` | same |
+| a document is served only under its own host | ✓ | ✓ (by code: the interceptor answers only the document's own host) | same |
+| a moved document keeps its storage | ✓ (the document identifier follows the file) | ✗ by design: a move outside the app gets a fresh claim; the old storage is left, never cleared — SAF has no device-local anchor | **differs** |
+| per-document store for the recovery copy and member key (`__bentoHost`) | — | ✓ Keystore-encrypted, no-backup app storage, partitioned by the claim — `DocStore` | **differs** (iOS in progress) |
 | document served from memory, never parsed | ✓ | ✓ | same |
 | bridge injected at document start | `WKUserScript(.atDocumentStart)` | `addDocumentStartJavaScript` | same |
 | bridge reachable only from the document | every message checked: main frame + own origin (`BridgeSender`) | `allowedOriginRules` + `isMainFrame` | same |

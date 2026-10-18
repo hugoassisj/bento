@@ -26,8 +26,8 @@ import type { Dialog } from '../../kernel/src/ui/dialog.ts'
 import { t } from './i18n'
 import { ICONS } from './icons'
 import { row, type Menu } from './menus.ts'
-import { docForExport, parseDoc, uid, type SpacesDoc } from './model'
-import { restoreInto } from './restoregate'
+import { docForExport, uid, type SpacesDoc } from './model'
+import { restoreVersion, replaceFromJson } from './restoregate'
 import {
   revisionsOf, historyIsForeign, changesAt, restoredDoc, clearHistory, historyBytes,
   tooLargeForHistory, type ChangeReport,
@@ -213,9 +213,10 @@ function openHistory(h: DocHost): void {
           // every file:// document shares this IndexedDB. A refusal applies
           // nothing and leaves the entry where it is.
           if (h.store.readOnly) { h.notice(t('This file is open read-only')); return }
-          // replaceDoc (inside restoreInto) checkpoints undo first, so ⌘Z walks
-          // this back — the same contract the recovery banner's Restore honours.
-          if (!restoreInto(h.store, v.json)) { h.notice(t('That version could not be read')); return }
+          // replaceDoc (inside restoreVersion) checkpoints undo first, so ⌘Z
+          // walks this back — the same contract the recovery banner's Restore
+          // honours. A version goes BACK: its content, the live history.
+          if (!restoreVersion(h.store, v.json)) { h.notice(t('That version could not be read')); return }
           h.repaint()
           close()
           h.notice(t('Restored the version from {when} — ⌘Z undoes it', { when }))
@@ -234,7 +235,7 @@ function openHistory(h: DocHost): void {
  *
  * A row's summary is DERIVED here, in the reader's language, from the patch;
  * the file stores no sentence. Restore goes through the same gate as the
- * browser-local timeline (restoregate.ts restoreInto): the version is the
+ * browser-local timeline (restoregate.ts restoreVersion): the version is the
  * document's own, but what is applied is still parsed, sanitized and given the
  * live identity, and replaceDoc checkpoints undo so ⌘Z walks it back.
  */
@@ -268,7 +269,7 @@ function openFileHistory(h: DocHost): void {
         b.addEventListener('click', () => {
           if (h.store.readOnly) { h.notice(t('This file is open read-only')); return }
           const next = restoredDoc(h.store.doc, i)
-          if (!next || !restoreInto(h.store, JSON.stringify(next))) { h.notice(t('That version could not be read')); return }
+          if (!next || !restoreVersion(h.store, JSON.stringify(next))) { h.notice(t('That version could not be read')); return }
           h.repaint()
           close()
           h.notice(t('Restored the version from {when} — ⌘Z undoes it', { when }))
@@ -361,17 +362,16 @@ function openReplaceJson(h: DocHost): void {
     ta.placeholder = t('Paste document JSON here…')
     body.append(ta)
     const apply = button(t('Replace'), () => {
-      const res = parseDoc(ta.value)
-      if (!res.ok) {
+      // The live session belongs to THIS document, not to the pasted text:
+      // replaceFromJson parses and applies going BACK (restoregate.ts), so the
+      // live docId, collab, file mode and history all stay — for this and
+      // bento.loadDoc alike.
+      if (!replaceFromJson(h.store, ta.value)) {
         ta.classList.add('sp-ab-bad')
         apply.textContent = t('That is not a bento/spaces document')
         setTimeout(() => { apply.textContent = t('Replace') }, 2000)
         return
       }
-      // The live session belongs to THIS document, not to the pasted text:
-      // replaceDoc keeps the live docId, collab and file mode itself
-      // (store.ts FROM_LIVE), for this and every other whole-document restore.
-      h.store.replaceDoc(res.doc)
       h.repaint()
       close()
       h.notice(t('Document replaced — ⌘Z undoes'))

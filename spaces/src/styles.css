@@ -183,10 +183,10 @@
     --ink-2: #b3bcca;
     --bg: #14181e;
     --surface: #1b2027;
-    --field: #10141a;
+    --field: #12151a;
     --chrome: #1e232b;
     --chrome-2: #272d36;
-    --line: #2e353f;
+    --line: #333a45;
     --edge: #454e5c;
     --muted: #8b95a4;
     --accent: #f7a600;
@@ -229,10 +229,10 @@
     --ink-2: #b3bcca;
     --bg: #14181e;
     --surface: #1b2027;
-    --field: #10141a;
+    --field: #12151a;
     --chrome: #1e232b;
     --chrome-2: #272d36;
-    --line: #2e353f;
+    --line: #333a45;
     --edge: #454e5c;
     --muted: #8b95a4;
     --accent: #f7a600;
@@ -285,14 +285,51 @@ html, body {
   overscroll-behavior: none;
 }
 #app { height: 100%; }
-:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
+/* fields take THE FIELD's own ring below; this one would also round them to 4px */
+:where(:not(input, select, textarea)):focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
 select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; user-select: auto; }
-/* Native controls follow the theme through `color-scheme` on :root, so a
-   <select> is dark when the chrome is. Its ink and ground are still stated
-   here: a force-dark engine that ignores color-scheme would otherwise paint a
-   dark popup and leave our dark ink on it. */
-select, input, textarea { background: var(--field); color: var(--ink); }
 option { background: var(--field); color: var(--ink); }
+
+/* Copied from slides/src/styles.css as it stands (the suite's one field look,
+   docs/DECISIONS.md 2026-10-17). spaces' --field, --line, --ink and
+   --accent-ink are the same roles; a design (#559) re-points them inside its
+   page surface. Context rules below only SIZE a field. In spaces the block is
+   guarded by scripts/test-spaces-fields-browser.mjs. */
+/* ————— THE FIELD — one look for every text field, select and textarea ———————
+   The suite's reference: dash, spaces and type copy this block as it stands.
+   Every chrome field gets it with no class to remember, so a new field cannot
+   come out in the browser's own dress — the grey inset 2px border, square
+   corners, and in dark theme a #3b3b3b fill nobody chose (five of slides'
+   fields had exactly that, each with its own rule that forgot one property).
+
+   :where() keeps the specificity at ZERO, so a context rule that only sizes a
+   field (width, flex, font-weight) layers on top without restating the look,
+   and a field that is deliberately not a box (the ghost title, the password
+   gate's own card) overrides it with an ordinary class. The ring sits ON the
+   border (offset -1px), so no scroll container can clip it. Checkboxes,
+   radios, ranges and file pickers keep their native controls. Guarded by
+   scripts/test-slides-fields-browser.mjs. */
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='hidden']), select, textarea) {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+:where(textarea) { height: auto; padding: 6px 8px; line-height: 1.5; resize: vertical; }
+:where(input[type='color']) {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 1px 2px;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+:where(input, select, textarea):focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
 
 /* ————— shell ————— */
 .sp-app { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
@@ -327,13 +364,14 @@ option { background: var(--field); color: var(--ink); }
   /* Sized, not greedy: a title input that eats the slack pushed undo/redo away
      from the document they belong to and left them floating mid-bar. The
      spacer is the right group's margin-inline-start:auto. */
+  /* a GHOST field, as slides' deck title: no box at rest, the shared field's
+     border on hover, its fill and amber ring once focused */
   flex: 0 1 220px; width: 220px; min-width: 48px;
-  font: inherit; font-size: 14px; font-weight: 400; color: var(--ink);
-  background: transparent; border: 1px solid transparent;
-  border-radius: 6px; padding: 5px 8px;
+  height: auto; font-size: 14px; font-weight: 400;
+  background: transparent; border-color: transparent; padding: 5px 8px;
 }
 .sp-doctitle:hover { border-color: var(--line); }
-.sp-doctitle:focus { background: var(--field); border-color: var(--blue); outline: none; }
+.sp-doctitle:focus { background: var(--field); border-color: var(--line); }
 .sp-status {
   font-size: 12px; color: var(--muted); white-space: nowrap;
   opacity: 0; transition: opacity .18s;
@@ -594,10 +632,7 @@ option { background: var(--field); color: var(--ink); }
 .sp-fmt-btn:hover { background: var(--chrome-2); color: var(--ink); }
 .sp-fmt-btn.sp-fmt-on { background: var(--chrome-2); color: var(--blue); }
 .sp-fmt-gap { margin-inline-start: 4px; border-inline-start: 1px solid var(--line); border-radius: 0 6px 6px 0; }
-.sp-fmt-url {
-  font: inherit; font-size: 13px; width: 240px; max-width: 46vw;
-  padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink);
-}
+.sp-fmt-url { width: 240px; max-width: 46vw; }
 .sp-fmt-url.sp-fmt-bad { border-color: var(--c-red); }
 .sp-fmt-go { color: var(--blue); font-weight: 600; }
 /* the palette takes the bar over while it is open — two rows, so the bar
@@ -999,11 +1034,7 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
   font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--muted); margin: 2px 4px 8px;
 }
-.sp-find {
-  width: 100%; font: inherit; font-size: 13px; padding: 5px 8px; color: var(--ink);
-  background: var(--field); border: 1px solid var(--line); border-radius: 6px;
-}
-.sp-find:focus { border-color: var(--blue); outline: none; }
+.sp-find { width: 100%; }
 .sp-results { list-style: none; margin: 8px 0 0; padding: 0; }
 .sp-result {
   display: flex; align-items: center; gap: 10px;
@@ -1043,6 +1074,10 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); font-size: 13.5px;
 }
 .sp-banner .sp-btn { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent-ink) 30%, transparent); }
+/* the default action (the recovery banner's "Keep the file") is slides' primary
+   on its banner: ink ground, page text, not the wash-coloured outline */
+.sp-banner .sp-primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.sp-banner .sp-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
 .sp-gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--chrome); }
 .sp-gate-card {
   max-width: 620px; background: var(--surface); padding: 26px;
@@ -1113,7 +1148,7 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
 /* a labelled field, the shape slides' document properties use */
 .sp-ab-field { display: flex; align-items: center; gap: 10px; padding: 2px 4px 8px; }
 .sp-ab-field label { flex: 0 0 auto; font-size: 12px; color: var(--muted); }
-.sp-ab-field .sp-input { flex: 1 1 auto; min-width: 0; font-size: 13px; padding: 5px 8px; border-radius: 6px; background: var(--field); }
+.sp-ab-field .sp-input { flex: 1 1 auto; min-width: 0; }
 
 /* `.sp-btn` is transparent by design — the topbar is icon-only and a row of
    outlined boxes there would be noise. In THIS card the same class has to read
@@ -1172,12 +1207,7 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
 .sp-ab-confirm .sp-actions { padding: 0; }
 .sp-about .sp-ab-go { background: #a3231a; color: #fff; border-color: #a3231a; }
 .sp-about .sp-ab-go:hover { background: #8a1d15; }
-.sp-ab-json {
-  width: 100%; margin-bottom: 8px;
-  font: 11.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--ink); background: #fff;
-  border: 1px solid var(--line); border-radius: 8px; padding: 8px; resize: vertical;
-}
+.sp-ab-json { width: 100%; margin-bottom: 8px; font: 11.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .sp-ab-json.sp-ab-bad { border-color: #a3231a; }
 
 .sp-ab-fine {
@@ -1188,7 +1218,6 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
    sticky footer inside a scroll container is one more thing to clip. */
 .sp-ab-foot { display: flex; justify-content: flex-end; padding: 10px 4px 2px; }
 .sp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px; font-size: 14px; }
-.sp-select { font: inherit; font-size: 13px; padding: 6px 8px; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 8px; }
 .sp-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 4px; }
 .sp-mono { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 
@@ -1580,7 +1609,7 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: 0 12px 34px rgb(var(--shade) / .2);
 }
-.sp-findbar .sp-find { width: 190px; padding: 6px 9px; font-size: 13.5px; }
+.sp-findbar .sp-find { width: 190px; }
 .sp-findcount { font-size: 12px; color: var(--muted); min-width: 68px; text-align: center; }
 .sp-b.sp-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 4px; transition: background .5s; }
 
@@ -2077,13 +2106,8 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
 }
 .sp-insp-lbl { color: var(--ink-2); flex: 0 1 auto; min-width: 0; }
 .sp-insp-row > :not(.sp-insp-lbl) { flex: 0 0 auto; max-width: 60%; }
-.sp-insp-txt, .sp-insp-num {
-  font: inherit; font-size: 12.5px; color: var(--ink);
-  background: var(--field); border: 1px solid var(--line); border-radius: 7px;
-  padding: 4px 7px; width: 148px; min-width: 0;
-}
+.sp-insp-txt, .sp-insp-num { width: 148px; min-width: 0; }
 .sp-insp-num { width: 64px; }
-.sp-insp-txt:focus, .sp-insp-num:focus { outline: none; border-color: var(--blue); }
 .sp-insp-tog { width: 15px; height: 15px; accent-color: var(--blue); }
 .sp-insp-step { display: inline-flex; align-items: center; gap: 2px; }
 .sp-insp-step .sp-btn { padding: 2px 8px; line-height: 1.2; }
@@ -2441,7 +2465,7 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
    a fixed popover would instead grow to the cap as soon as a note wraps */
 .sp-pop.sp-people:not(.sp-sheet) { width: 250px; }
 .sp-share-name { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-.sp-share-name .sp-input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 6px; font-size: 12.5px; background: var(--field); }
+.sp-share-name .sp-input { flex: 1; min-width: 0; }
 /* a stacked field (the link card's) */
 .sp-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .sp-field-lbl { font-size: 12px; color: var(--muted); }
@@ -2449,10 +2473,7 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
   font-size: 10.5px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.07em; color: var(--muted); margin-top: 3px;
 }
-.sp-input {
-  font: inherit; padding: 6px 8px; border: 1px solid var(--line);
-  border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%;
-}
+.sp-input { width: 100%; }
 .sp-plist { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
 .sp-pitem {
   display: flex; align-items: center; gap: 8px; width: 100%;
@@ -2560,10 +2581,7 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 .sp-cm-entry b { font-size: 12.5px; }
 .sp-cm-time { color: var(--muted); font-size: 11px; margin-inline-start: 6px; }
 .sp-cm-entry p { margin: 2px 0 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.sp-cm-reply {
-  width: 100%; resize: vertical; font: inherit; font-size: 13px;
-  padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--field);
-}
+.sp-cm-reply { width: 100%; }
 .sp-cm-foot { display: flex; gap: 6px; padding: 8px 6px 4px; }
 @media (max-width: 820px) {
   /* no end margin is reserved at this width — the marker tucks into the
@@ -3144,6 +3162,6 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
 .sp-dsg-item .bkm-ico { align-items: center; }
 .sp-dsg-item .sp-dsg-sw b { height: 16px; }
 .sp-insp-dsg { max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-dsg-cols input[type='color'] { width: 44px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
+.sp-dsg-cols input[type='color'] { width: 44px; }
 @media (max-width: 720px) { .sp-dsg-panel { top: auto; height: 62vh; inset-inline: 8px; width: auto; } }
 @media print { .sp-dsg-panel { display: none !important; } }

@@ -622,6 +622,9 @@ class DocumentsActivity : AppCompatActivity() {
         col.addView(empty)
 
         list = GridView(this).apply {
+            // Over the cards, not under them: each card paints an opaque
+            // surface that would hide a selector drawn beneath it.
+            isDrawSelectorOnTop = true
             adapter = RowAdapter()
             horizontalSpacing = dp(10)
             verticalSpacing = dp(10)
@@ -809,8 +812,11 @@ class DocumentsActivity : AppCompatActivity() {
                 strokeWidth = dp(1)
                 strokeColor = themed(com.google.android.material.R.attr.colorOutlineVariant)
                 setCardBackgroundColor(themed(com.google.android.material.R.attr.colorSurfaceContainerLow))
-                isClickable = true
-                isFocusable = true
+                // NOT clickable. A clickable child consumes the touch, so the
+                // GridView's item click and long click never fire: tapping a
+                // document in grid view did nothing, and Remove was unreachable.
+                // The press feedback the card used to draw comes from the
+                // grid's selector instead, drawn on top (drawSelectorOnTop).
                 addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(8), dp(8), dp(8), dp(10))

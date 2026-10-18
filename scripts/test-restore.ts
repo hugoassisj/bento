@@ -35,6 +35,7 @@ let failures = 0, checks = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 const H = (s: string) => console.log(`\n=== ${s} ===`)
 const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+const throws = (fn: () => void, m: string) => { let t = false; try { fn() } catch { t = true } ok(t, m) }
 type Rec = Record<string, unknown>
 
 const CLASSES = {
@@ -93,16 +94,60 @@ H('recover of a WHOLE snapshot (the default): a deleted field stays removed — 
   // capability — so an absent field means the user DELETED it before the crash.
   // wholeSnapshot defaults true. Removal keys on EFFECTIVE keepLive, not class:
   // an effective-'follows' field (content, unknown, AND a history field OVERRIDDEN
-  // to 'follows' like comments) absent → REMOVED; a history field at its default
-  // 'live' keep (revisions) absent → kept live. (comments is the case security
-  // required: a deleted comment/redaction must not resurrect and ride the next
-  // shared copy. Regression first introduced in #701, partly fixed in #716.)
+  // to 'follows' like comments) absent → REMOVED; a DEFAULT-live history field
+  // (revisions) absent is ALSO removed — the snapshot carries history, so an
+  // absent key was cleared. (comments is the case security required: a deleted
+  // comment/redaction must not resurrect and ride the next shared copy.
+  // Regression first introduced in #701, fixed across #716/#722/this.)
   const inc = incoming(); delete inc.body; delete inc.mystery; delete inc.revisions; delete inc.comments
   const r = applyRestore(live(), inc, 'recover', RULES) as Rec
   ok(!('body' in r), 'a CONTENT field the user deleted stays removed (not brought back)')
   ok(!('mystery' in r), 'an UNKNOWN field absent from the whole snapshot is removed too')
   ok(!('comments' in r), 'an OVERRIDDEN history field (comments, keepLive follows) deleted stays removed')
-  ok(eq(r.revisions, live().revisions), 'but a DEFAULT-live history field (revisions) absent keeps the live value')
+  ok(!('revisions' in r), 'a cleared DEFAULT-live history field (revisions) stays removed — not resurrected')
+}
+
+H('recover: a whole-snapshot cleared history field stays cleared; keepLiveWhenAbsent opts out')
+{
+  // The redaction-resurrection class for DEFAULT-live history: clearHistory →
+  // crash → Restore must not bring the cleared drafts back (they would ride the
+  // next shared copy). But a field whose absence is NOT a user clear (a per-day
+  // trail, a recomputed sub-field) opts out and keeps live. (security, measured
+  // on spaces #714 with real clearHistory.)
+  const KLA: RestoreRules = { ...RULES, keepLiveWhenAbsent: ['trail'] }
+  const live2 = (): Rec => ({ ...live(), trail: [{ day: '2026-01-01' }] })
+  const inc = incoming(); delete inc.revisions; delete inc.trail // both cleared/absent from the whole snapshot
+  const r = applyRestore(live2(), inc, 'recover', KLA) as Rec
+  ok(!('revisions' in r), 'a cleared history field with no opt-out stays removed under a whole snapshot')
+  ok(eq(r.trail, live2().trail), 'an opted-out history field (trail) keeps live when absent (absence is not a clear)')
+  // projection: absence is not a clear regardless of opt-out
+  const proj = applyRestore(live2(), { ...inc }, 'recover', { ...RULES, wholeSnapshot: false }) as Rec
+  ok(eq(proj.revisions, live2().revisions), 'under a projection an absent history field keeps live even without an opt-out')
+}
+
+H('recover: the opt-out governs ONLY the absent case — a carried field still runs its hook')
+{
+  // keepLiveWhenAbsent is about absence. When the snapshot CARRIES the field, its
+  // recover hook runs as usual. (security ask: pin that the opt-out does not
+  // short-circuit the present-case hook.)
+  const RH: RestoreRules = { classes: CLASSES, recover: { revisions: newestListWins }, keepLiveWhenAbsent: ['revisions'] }
+  const incNew = incoming({ revisions: [{ id: 'r1', at: '2026-01-01' }, { id: 'r2', at: '2026-02-01' }, { id: 'r3', at: '2026-03-01' }] })
+  const carried = (applyRestore(live(), incNew, 'recover', RH) as Rec).revisions as unknown[]
+  ok(carried.length === 3, 'a CARRIED history field still runs its recover hook (newestListWins took the newer snapshot)')
+  const gone = incoming(); delete gone.revisions
+  const r = applyRestore(live(), gone, 'recover', RH) as Rec
+  ok(eq(r.revisions, live().revisions), 'and the opt-out keeps it live only when ABSENT')
+}
+
+H('validateRestoreRules: keepLiveWhenAbsent must name a default-live history field')
+{
+  throws(() => validateRestoreRules({ classes: CLASSES, keepLiveWhenAbsent: ['body'] }),
+    'rejects a CONTENT field (it already follows the whole-snapshot rule)')
+  throws(() => validateRestoreRules({ classes: CLASSES, keepLive: { comments: 'follows' }, keepLiveWhenAbsent: ['comments'] }),
+    'rejects a history field OVERRIDDEN to follows (it is governed by the follows branch)')
+  throws(() => validateRestoreRules({ classes: CLASSES, keepLiveWhenAbsent: ['docId'] }),
+    'rejects an identity/floor field')
+  validateRestoreRules({ classes: CLASSES, keepLiveWhenAbsent: ['trail', 'revisions'] }) // default-live history: ok
 }
 
 H('recover of a PROJECTION snapshot (wholeSnapshot:false): absent keeps live')
@@ -150,7 +195,9 @@ H('a recover hook is called ONLY when the snapshot HAS the field')
 {
   let calls = 0
   const blind: RecoverHook = (_l, inc) => { calls++; return inc } // returns incoming (undefined if absent) blindly
-  const RB: RestoreRules = { classes: CLASSES, recover: { revisions: blind } }
+  // Opt out so the absent case keeps live (a whole snapshot would remove it) —
+  // this test is about the HOOK CONTRACT, that a blind hook never sees undefined.
+  const RB: RestoreRules = { classes: CLASSES, recover: { revisions: blind }, keepLiveWhenAbsent: ['revisions'] }
   // snapshot LACKS revisions → the hook must NOT run, live is kept untouched
   const inc = incoming(); delete inc.revisions
   const r = applyRestore(live(), inc, 'recover', RB) as Rec

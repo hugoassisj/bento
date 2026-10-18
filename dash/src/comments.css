@@ -202,19 +202,8 @@
 }
 .dxc-who input { flex: 1 1 auto; min-width: 0; }
 
-.dxc-text {
-  width: 100%;
-  font: inherit;
-  font-size: 12.5px;
-  line-height: 1.45;
-  padding: 6px 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--ink);
-  resize: vertical;
-}
-.dxc-text:focus { outline: none; border-color: var(--cmt); }
+/* The look is THE FIELD (styles.css); this only sizes. */
+.dxc-text { width: 100%; }
 
 .dxc-foot {
   display: flex;

@@ -1341,6 +1341,40 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   sync engine which document fields are content, so a collaborator's copy only
   ever sends those. A field written by a newer version of Bento is kept in your
   file when it arrives, but never passed on to the rest of the room.
+- **Dark chrome's borders and fields match Bento Slides.** In dark mode the
+  interface's dividers and outlines are a shade lighter (`#333a45`, was
+  `#2e353f`) and text fields, selects and inputs are a shade lighter
+  (`#12151a`, was `#10141a`) — the values slides uses. A page's design keeps
+  its own colours.
+- **Every field looks like slides' fields.** Text fields, selects and text
+  boxes in the panels, dialogs and popovers now share the look slides uses: a
+  thin border, rounded corners, the theme's field colour, 26px tall, and an
+  amber ring when focused. Before this, the page inspector's **Also known as**
+  field and the **Save as template** name field showed the browser's grey,
+  square, sunken box. In dark theme, the **Replace from JSON** box was white,
+  and the link card, view filter and Add property fields sat on a different
+  shade from the rest.
+- **Restoring after a crash keeps the progress record from both copies.**
+  When the "Unsaved changes from a previous session" banner restores, every
+  day recorded in either the file or the recovered copy is kept. If both have
+  the same day, the newer copy's reading wins. A day is never counted twice
+  when one copy has thinned older days into weekly or monthly rows. Version
+  history comes back with the recovered copy. If you cleared the version
+  history before the crash, it stays cleared. Undo, restoring a version and
+  pasting document JSON still leave both records exactly as they are.
+- **The recovery banner warns when the recovered copy looks older than the
+  file.** It now says "This recovered copy looks older than the file you
+  opened. Keep the file unless you know it’s newer." **Keep the file** is the
+  default and has focus. It closes the banner and deletes nothing, because two
+  devices' clocks can disagree. **Restore anyway** still brings the copy back.
+  When the copy is not older, the banner keeps its usual wording, and
+  **Restore** is now its default button. The words and behaviour match
+  bento/slides.
+- **Spaces says when crash recovery is off.** When bento/home declines to keep
+  a recovery copy because the space is too large, the save status says "Crash
+  recovery is off for this space — it’s too large to keep a backup copy. Save
+  often." It says so once per space, and never for an encrypted space, which
+  never keeps a recovery copy.
 
 ## [0.1.0] — 2026-08-03
 

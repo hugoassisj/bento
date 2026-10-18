@@ -20,6 +20,7 @@
 
 import { detect, describe, optionsFor, nothingFor, LimitError, type Detected, type Conversion, type Env } from '../src/pairs.ts'
 import { fetchVerifiedShell, LIMITS } from '../src/api.ts'
+import { APPS, manifestPath } from '../src/deliver.ts'
 import { foldReport, type FidelityReport } from '../src/report.ts'
 import { loadDocJson } from './load-json.ts'
 import { rasteriseToPng } from './rasterise.ts'
@@ -56,16 +57,21 @@ function say(text: string, kind: 'busy' | 'error' | 'idle' = 'busy') {
 
 // A verified shell is fetched once per page load and reused. A refused shell
 // is forgotten, never retried into a fallback.
-let shell: Promise<{ version: string; html: string }> | null = null
+const shells = new Map<string, Promise<{ version: string; html: string }>>()
 const env: Env = {
-  shell() {
-    say('Fetching the latest bento/slides and checking its signature…')
+  shell(appId = 'bento-slides') {
+    say(`Fetching the latest ${APPS[appId]?.name ?? appId} and checking its signature…`)
     // Both requests go to THIS origin: the manifest by relative path, and the
     // shell by re-rooting the signed URL's path here (deliver.ts `resolve`).
     // That is what lets the CSP be `connect-src 'self'` with no exceptions.
-    shell ??= fetchVerifiedShell('/releases/slides/manifest.json', fetch,
-      (u) => new URL(new URL(u).pathname, location.href).href)
-    return shell
+    let p = shells.get(appId)
+    if (!p) {
+      p = fetchVerifiedShell(manifestPath(appId), fetch, (u) => new URL(new URL(u).pathname, location.href).href, appId)
+      shells.set(appId, p)
+      // a refused shell is forgotten, never kept as a settled answer
+      p.catch(() => shells.delete(appId))
+    }
+    return p
   },
   loadDocJson,
   rasterise: rasteriseToPng,
@@ -124,7 +130,6 @@ async function run() {
     status.hidden = true
     show(c, r.fileName, r.mime, r.bytes, r.report, r.stats, r.meta)
   } catch (err) {
-    if (c.network) shell = null
     const msg = err instanceof LimitError
       ? `This file was refused: ${err.message}.`
       : /signature|pin|manifest|release server/i.test(String((err as Error)?.message))
@@ -178,6 +183,7 @@ const PLAIN: Record<string, string> = {
   'path-approximated': 'A drawn shape could not be read in full, so it stops where the problem began.',
   'image-fit-approximated': 'Some pictures are stretched to their frame, where bento crops them to fit.',
   'missing-image': 'Some pictures could not be included (an unsupported format, or a missing file).',
+  'language-packs-not-carried': 'Extra languages added to this file are not in the updated copy. Add them again from About.',
   'states-as-hidden-slides': 'Interactive states are hidden slides, right after the slide they belong to. Links still lead to them, and the show skips them.',
   'image-converted-png': 'WebP and similar pictures were converted to PNG for PowerPoint. They look the same; the file is a little larger.',
   'text-height-provisional': 'Some text boxes had no height, so they start one line tall. Select one in bento/slides and use Fit height to text.',

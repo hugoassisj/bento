@@ -1003,4 +1003,8 @@ export const pt: Catalog = {
   "Leave version history out": "Deixar de fora o histórico de versões",
   "Versions include text that was deleted. This file keeps them either way.": "As versões incluem texto que foi apagado. Este arquivo as mantém de qualquer forma.",
   "Save invite…": "Salvar convite…",
+  "This recovered copy looks older than the file you opened. Keep the file unless you know it’s newer.": "Esta cópia recuperada parece mais antiga do que o arquivo que você abriu. Mantenha o arquivo, a menos que saiba que a cópia é mais recente.",
+  "Keep the file": "Manter o arquivo",
+  "Restore anyway": "Restaurar mesmo assim",
+  "Crash recovery is off for this space — it’s too large to keep a backup copy. Save often.": "A recuperação de falhas está desativada para este espaço: ele é grande demais para manter uma cópia de segurança. Salve com frequência.",
 }

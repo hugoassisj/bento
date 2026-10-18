@@ -35,7 +35,7 @@ import { join } from 'node:path'
 import { Store } from '../spaces/src/store.ts'
 import { parseDoc, docContentKey, FORMAT, type SpacesDoc } from '../spaces/src/model.ts'
 import { SPACES_FIELDS, SPACES_NOT_EDIT } from '../spaces/src/docclass.ts'
-import { restoreInto } from '../spaces/src/restoregate.ts'
+import { restoreVersion, replaceFromJson } from '../spaces/src/restoregate.ts'
 import { extractSpace } from '../spaces/src/portable.ts'
 import { starterDoc } from '../spaces/src/starter.ts'
 import { validateRevision } from '../kernel/src/docfields.ts'
@@ -173,7 +173,7 @@ console.log('\n2. what is covered comes from the field map\n')
   recordOnSave(store)                                       // "this week"
   const thisWeek = J(contentOf(store.doc))
   const next = restoredDoc(store.doc, 0)!
-  ok(restoreInto(store, J(next)), 'restoring last week goes through the gate and is accepted')
+  ok(restoreVersion(store, J(next)), 'restoring last week goes through the gate and is accepted')
   const back = store.doc
   ok(J(back.footnotes) === J({ 1: 'last week’s note' }), 'last week\'s FOOTNOTES are back')
   ok(back.design === 'almanac' && J(back.designs) === J({ mine: { base: 'riso', label: 'Mine' } }), 'last week\'s DESIGN and design registry are back')
@@ -274,11 +274,11 @@ console.log('\n5. history is a log: the dot, the recovery key, undo, replace\n')
   const pasted = clone(store.doc) as SpacesDoc & Obj
   delete pasted.revisions
   pasted.title = 'Pasted'
-  store.replaceDoc(pasted)
+  ok(replaceFromJson(store, J(pasted)), 'Replace from JSON accepts Copy document JSON\'s output')
   ok(store.doc.title === 'Pasted' && J(store.doc.revisions) === two, 'a whole-document replace keeps the LIVE history (a paste never deletes it)')
   const forged = clone(store.doc) as SpacesDoc & Obj
   forged.revisions = [{ id: 'forged', at: 't', body: { doc: { title: 'x' } } }] as never
-  store.replaceDoc(forged)
+  ok(replaceFromJson(store, J(forged)), 'Replace from JSON accepts a document carrying a history')
   ok(J(store.doc.revisions) === two, '…and never installs the pasted document\'s history either')
 }
 
@@ -301,7 +301,7 @@ console.log('\n6. a crafted revision cannot smuggle identity, capability or scri
   ok(next.docId === 'd-hist' && (next.collab as Obj).room === 'wROOM' && !('template' in next),
     'body.doc only ever applies COVERED fields — docId, collab and the modes are ignored')
   ok(next.title === 'Owned', '…while a covered field in it does apply')
-  ok(restoreInto(store, J(next)), 'restored through the gate')
+  ok(restoreVersion(store, J(next)), 'restored through the gate')
   const html = store.doc.pages[0].blocks[0].html ?? ''
   ok(!/onerror|<script/i.test(html) && /hi/.test(html), `block html is sanitized on the way in (${J(html)})`)
   ok(store.doc.docId === 'd-hist' && (store.doc.collab as Obj).room === 'wROOM', 'identity and the room are the live space\'s')

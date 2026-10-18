@@ -193,7 +193,20 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
     /// AirDrop, or tapping a file in Files. `revealDocument` imports it into the
     /// browser's storage when it lives somewhere we cannot keep hold of, and
     /// surfaces it in the UI so the user can find it again afterwards.
+    ///
+    /// NOT on the Mac. There the system hands us a file because someone
+    /// double-clicked it, or chose Open With, and that means "edit this file",
+    /// never "keep a copy of it". Importing there was worse than redundant: an
+    /// unsandboxed Mac app's Documents directory is the person's real
+    /// ~/Documents, so the import silently wrote a COPY there, the editor saved
+    /// to the copy, and the file they had opened never changed (measured on a
+    /// Catalyst build, 2026-10-18). A sandboxed build would copy into its
+    /// container instead, which is the same failure somewhere less visible.
     func openIncoming(_ url: URL) {
+        #if targetEnvironment(macCatalyst)
+        openEditor(url)
+        return
+        #else
         revealDocument(at: url, importIfNeeded: true) { [weak self] revealed, error in
             guard let self else { return }
             // Falling back to the original URL matters: reveal fails for a file
@@ -202,6 +215,7 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
             self.openEditor(revealed ?? url)
             if let error { NSLog("reveal failed, opened in place: %@", String(describing: error)) }
         }
+        #endif
     }
 
     private func openEditor(_ url: URL) {

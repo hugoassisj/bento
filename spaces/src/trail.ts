@@ -471,6 +471,89 @@ function stampCut(trail: Trail): Trail {
 export const wasCut = (trail: Trail, series = ''): boolean =>
   seriesRows(trail, series)[0]?.row.cut === true
 
+// ---- crash recovery: the per-day union -------------------------------------
+
+/**
+ * The trail's RECOVER HOOK (kernel docfields.ts `RecoverHook`): what a crash
+ * recovery keeps when the open file and the recovered snapshot BOTH carry a
+ * trail. Bound in store.ts `RESTORE_RULES` for direction 'recover' only — the
+ * kernel never consults it on undo, redo, a version restore or a paste, which
+ * all keep the live trail outright.
+ *
+ * Neither side is simply newer. The recovery snapshot holds rows written while
+ * editing that the file never got (main.ts recordToday writes outside any
+ * save), and the file may hold days written AFTER the snapshot (it was saved
+ * from another tab, or the snapshot is stale). Taking either whole map loses
+ * observations nobody can recompute, so it is a UNION BY DAY:
+ *
+ *   1. a key on ONE side only is kept — it is an observation the other side
+ *      never made;
+ *   2. a key on BOTH sides goes to the side whose WHOLE DOCUMENT is later
+ *      (`at`, epoch ms): incoming when `at.incoming > at.live`; a tie keeps
+ *      live; an unknown live time (a file with no `modified`) counts as OLDER,
+ *      so a known incoming time wins it; an unknown incoming time never wins;
+ *   3. no day is counted twice. A thinned row stands for the `s` days ENDING on
+ *      its own key, so a bucket row from one side and single-day rows inside
+ *      its span from the other would both claim those days. Rows are walked
+ *      newest-anchor first, per series, and a row whose own day lies inside the
+ *      span of a row already kept is dropped. (That is "drop a single day inside
+ *      a kept bucket", generalised: two overlapping buckets resolve the same
+ *      way, and no two kept rows of a series ever cover the same day.) Day
+ *      arithmetic is `dayIndex` on the LABEL and only ever within one series —
+ *      never `new Date(label)`, and `sprint/2026-09-11` never meets
+ *      `2026-09-11`;
+ *   4. the result goes through `pruneTrail`, so a union can never exceed the
+ *      budget either side was held to.
+ *
+ * A side that is not a trail object (a newer build's shape — `trailIsForeign`)
+ * is never written over: an open foreign trail stays, and a foreign incoming
+ * one does not replace a readable live one. Keys this build cannot parse are
+ * carried by rules 1 and 2 untouched, and never take part in rule 3.
+ */
+export function trailRecover(
+  live: unknown, incoming: unknown, at: { live?: number; incoming?: number },
+): unknown {
+  if (live === undefined) return incoming
+  if (!isObj(live) || !isObj(incoming)) return live
+  const incomingWins = at.incoming !== undefined && (at.live === undefined || at.incoming > at.live)
+  const merged: Record<string, unknown> = {}
+  const put = (k: string, v: unknown): void => {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') return
+    merged[k] = v
+  }
+  // LIVE's key order first, then the snapshot's new keys: a snapshot holding
+  // nothing the file lacks merges to a map byte-identical to the live one, so
+  // the recovery check (which compares serialized content) raises no banner
+  for (const k of Object.keys(live)) {
+    put(k, Object.hasOwn(incoming, k) && incomingWins ? incoming[k] : live[k])
+  }
+  for (const k of Object.keys(incoming)) {
+    if (!Object.hasOwn(live, k)) put(k, incoming[k])
+  }
+
+  // 3. one claim per day, per series: newest anchor first
+  const bySeries = new Map<string, Array<{ k: string; day: number; span: number }>>()
+  for (const k of Object.keys(merged)) {
+    const addr = parseTrailKey(k)
+    const row = merged[k]
+    if (!addr || !isObj(row)) continue
+    const list = bySeries.get(addr.series) ?? []
+    list.push({ k, day: dayIndex(addr.day), span: spanOf(row as unknown as TrailRow) })
+    bySeries.set(addr.series, list)
+  }
+  for (const [, list] of bySeries) {
+    list.sort((a, b) => b.day - a.day)
+    const kept: Array<{ from: number; to: number }> = []
+    for (const r of list) {
+      if (kept.some((c) => r.day >= c.from && r.day <= c.to)) { delete merged[r.k]; continue }
+      kept.push({ from: r.day - r.span + 1, to: r.day })
+    }
+  }
+
+  // 4. the budget
+  return pruneTrail(merged as Trail)
+}
+
 // ---- drawing slots ---------------------------------------------------------
 
 /**

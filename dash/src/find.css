@@ -78,21 +78,11 @@
 
 .dx-find-line[hidden] { display: none; }
 
+/* The look and the focus ring are THE FIELD (styles.css); this only sizes. */
 .dx-find input[type='search'],
 .dx-find .dx-find-r {
   flex: 1 1 auto;
   min-width: 0;
-  font: inherit;
-  color: var(--ink);
-  background: var(--bg);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  padding: 5px 8px;
-}
-
-.dx-find input:focus-visible {
-  outline: 2px solid var(--sel-ring);
-  outline-offset: -1px;
 }
 
 /* Tabular figures, so "9 of 47" does not shuffle sideways into "10 of 47"
@@ -133,15 +123,6 @@
 
 .dx-find-opts { flex-wrap: wrap; }
 
-.dx-find select {
-  font: inherit;
-  font-size: var(--fs-small);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  padding: 3px 4px;
-}
 
 /* Where the refusals are written down. It is never decorative: if it is
    visible, something was NOT replaced and the reader has to be able to read

@@ -11,6 +11,38 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.9] — 2026-10-17
+
+- **Password-protected decks open again.** Since 1.2.0, a deck saved with a
+  password showed "This file could not start" instead of asking for the
+  password. It now asks for the password and opens as before. Nothing in the
+  file was lost: the deck was intact, it just could not show the prompt.
+- **A password-protected deck that won't open can be moved to the latest
+  version on bento.page/convert.** Drop the `.bento.html` and choose "The
+  same file, on the latest version". The page puts the file's document,
+  still encrypted and byte for byte, into the newest signed release of its
+  app. It never asks for the password and never decrypts anything. Open the
+  new file and enter your password as usual. It works for any Bento file
+  whose app has a published release, encrypted or not. As always, nothing is
+  uploaded. An encrypted deck is only moved onto a release that can open it
+  (1.2.9 or later).
+- **Security: update this file. This release closes an issue found in our own
+  review.** After updating, **open each password-protected deck, unlock it, and
+  save it once.** What the issue was is described here once people have had time to
+  update.
+- **A browser too old for Bento now names the right app.** The notice it shows
+  said every file was a spreadsheet; a deck now says it is a presentation.
+- **A table written without a style opens.** A deck from another tool or an AI
+  agent whose table had no style settings stopped the properties panel from
+  opening; it now uses the default style.
+
+- **Every text field looks the same.** Text boxes, dropdowns and text areas
+  across the editor share one look: the same height, rounded corners, border
+  and background, and Bento's amber focus ring instead of the browser's blue.
+  The Appearance menu no longer has the browser's plain look, and in the dark
+  theme the speaker notes, comment replies, position and size boxes, chart JSON
+  and the Share name field no longer show a grey browser fill.
+
 ## [1.2.8] — 2026-10-16
 
 - **Indent and outdent bullets.** While editing text, Tab moves the bullet

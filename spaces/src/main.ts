@@ -23,7 +23,8 @@ import { APP_VERSION, applyUpdateInPlace } from '../../kernel/src/update.ts'
 import { t, locale, applyDirection } from './i18n'
 import { i18nApi } from '../../kernel/src/i18n.ts'
 import { parseDoc, uid, newPage, type SpacesDoc, type ParseResult } from './model'
-import { recoveryOffered, restoreInto } from './restoregate'
+import { recoveryOffered, recoverInto, replaceFromJson } from './restoregate'
+import { recoveryBanner, wireRecoveryOff, type RecoveryAction } from './recoverynotice'
 import { recordTrail } from './observe.ts'
 import { protectedDays } from './periods.ts'
 import {
@@ -82,6 +83,14 @@ const embedded = readEmbeddedDoc()
 const envelope = embedded ? parseEnvelope(embedded) : null
 
 if (envelope) {
+  // MOUNTED, though locked. The shell's loader (scripts/postbuild-compress.mjs)
+  // decides whether this app started by looking for `window.bento`; a space
+  // waiting at its password gate has no document to publish yet, so without
+  // this every loader path read as a failure, each one ran the app AGAIN (a
+  // second and third gate), and the loader's failure card covered the lot — an
+  // encrypted space could not be opened at all. `locked` is the suite's agreed
+  // shape (slides and type set the same); the real object replaces it on unlock.
+  ;(window as unknown as { bento: unknown }).bento = { format: 'bento/spaces', locked: true }
   void passwordGate()
 } else {
   const res = parseDoc(embedded ?? '')
@@ -96,6 +105,11 @@ if (envelope) {
     doc.docId = uid('doc')
     boot(doc, [], undefined)
   } else {
+    // MOUNTED, though refused — the same reason as `locked` above: without it
+    // the loader reads "no app", runs the app again on every path (one refusal
+    // card per path) and paints its own failure over the explanation this file
+    // owes its reader. `refused` is the suite's shape (DECISIONS 2026-10-17).
+    ;(window as unknown as { bento: unknown }).bento = { format: 'bento/spaces', refused: true }
     refuse(res)
   }
 }
@@ -466,6 +480,14 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   })
   void pruneOld()
   void offerRecovery(doc, store, editor)
+  // A host that refuses the recovery copy (too large) turns crash recovery off
+  // for this space; say so once, where the save status shows, held long enough
+  // to read (slides holds it 8s). Never for an encrypted space.
+  wireRecoveryOff({
+    docId: () => store.doc.docId,
+    encrypted: isEncryptionActive,
+    say: (msg) => editor.status(msg, 8000),
+  })
 
   // ---- the AI round-trip (PLATFORM §7) -----------------------------------
   //
@@ -649,9 +671,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     },
     loadDoc: (json: string): boolean => {
       if (store.readOnly) return false
-      const r = parseDoc(json)
-      if (!r.ok) return false
-      store.replaceDoc(r.doc)
+      // Replace from JSON's own path ('back': content, never identity or history)
+      if (!replaceFromJson(store, json)) return false
       editor.repaint()
       return true
     },
@@ -688,18 +709,23 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     .catch(() => { /* an unreachable server is not an error here */ })
 }
 
-function banner(text: string, actions: Array<[string, () => void]> = []): void {
+/** A strip across the top. An action marked primary is styled as the default;
+ *  one marked focus takes focus when the banner appears. The two are separate
+ *  because slides' recovery banner separates them. */
+function banner(text: string, actions: Array<[string, () => void, boolean?, boolean?]> = []): void {
   const bar = document.createElement('div')
   bar.className = 'sp-banner'
   const span = document.createElement('span')
   span.textContent = text
   bar.append(span)
-  for (const [label, fn] of actions) {
+  let focused: HTMLButtonElement | undefined
+  for (const [label, fn, isPrimary, takesFocus] of actions) {
     const b = document.createElement('button')
-    b.className = 'sp-btn'
+    b.className = isPrimary ? 'sp-btn sp-primary' : 'sp-btn'
     b.textContent = label
     b.addEventListener('click', () => { fn(); bar.remove() })
     bar.append(b)
+    if (takesFocus) focused ??= b
   }
   const close = document.createElement('button')
   close.className = 'sp-btn'
@@ -708,6 +734,7 @@ function banner(text: string, actions: Array<[string, () => void]> = []): void {
   close.addEventListener('click', () => bar.remove())
   bar.append(close)
   document.body.prepend(bar)
+  focused?.focus()
 }
 
 /**
@@ -722,14 +749,23 @@ function banner(text: string, actions: Array<[string, () => void]> = []): void {
 async function offerRecovery(doc: SpacesDoc, store: Store, editor: Editor): Promise<void> {
   if (store.readOnly) return // a reading copy, a view-only follower or a frozen file is never rewritten
   const snap = await getRecovery(doc.docId)
-  if (!snap || !recoveryOffered(snap.json, doc)) return
-  banner(t('Unsaved changes from a previous session were found.'), [
-    [t('Restore'), () => {
-      // re-gated against the space as it is NOW (restoreInto). A refusal
+  if (!snap || !recoveryOffered(snap.json, doc, snap.at)) return
+  // What the banner SAYS is recoverynotice.ts: when the snapshot looks older
+  // than the file it warns, and "Keep the file" is the default — but the
+  // snapshot is still offered, and keeping the file deletes nothing.
+  const spec = recoveryBanner(snap, store.doc)
+  const run: Record<RecoveryAction, () => void> = {
+    restore: () => {
+      // re-gated against the space as it is NOW (recoverInto). A refusal
       // applies nothing and keeps the entry; only Discard deletes it.
-      if (!restoreInto(store, snap.json)) { editor.status(t('That version could not be read')); return }
+      // 'recover': the snapshot is a newer copy of this space, so its history
+      // is reconciled (trail unioned by day) rather than kept from the file.
+      if (!recoverInto(store, snap)) { editor.status(t('That version could not be read')); return }
       editor.repaint()
-    }],
-    [t('Discard'), () => { void clearRecovery(doc.docId) }],
-  ])
+    },
+    discard: () => { void clearRecovery(doc.docId) },
+    // a clock-skewed "older" must never cost work: the entry stays
+    keep: () => {},
+  }
+  banner(spec.text, spec.buttons.map((b) => [b.label, run[b.action], b.primary, b.focus]))
 }

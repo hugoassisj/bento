@@ -141,7 +141,5 @@
    like `.dx-ask-in`, which was written for inputs. Same box, same focus ring —
    a second dialog style is a second thing to keep in step with the theme. */
 .dx-print-card select.dx-ask-in {
-  appearance: auto;
-  height: 32px;
   cursor: pointer;
 }
