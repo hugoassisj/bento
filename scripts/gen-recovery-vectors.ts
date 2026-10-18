@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   ARGON2, formatRecoveryCode, parseRecoveryCode, recoveryWrapKey, recoveryVerifier, prfKek,
-  sealPrfBlob, sealRecoveryInner, pepperKeys, pepperVerifierTag, pepperSeal, publicKeyOf, type Argon2id,
+  sealPrfBlob, sealRecoveryInner, pepperKeys, pepperVerifierTag, pepperSeal, publicKeyOf, PRF_INPUT, prfHmacSecretSalt, type Argon2id,
 } from '../kernel/src/recovery.ts'
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'kernel/fixtures/recovery-v1.json')
@@ -92,6 +92,26 @@ const derivations = {
 }
 derivations.prfKek = hex(await prfKek(bytes(32, (i) => 0xa0 + i), bytes(32, (i) => 0x70 + i)))
 
+// --- the PRF input, and the CTAP hmac-secret salt for hosts without a PRF API -------------
+// WebAuthn L3 §10.1.4. The two "wrong" values are the easy mistakes, published so
+// a host can see it has made one rather than silently sealing unopenable blobs.
+const sha256hex = async (b: Uint8Array) => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', b as BufferSource)))
+const prfInputBytes = new TextEncoder().encode(PRF_INPUT)
+const label = new TextEncoder().encode('WebAuthn PRF')
+const prf = {
+  note: 'The PRF extension evaluates input = UTF-8(prfInput). A host speaking CTAP hmac-secret directly ' +
+    '(no WebAuthn PRF API) sends hmacSecretSalt = SHA-256(UTF-8("WebAuthn PRF") ‖ 0x00 ‖ input) (WebAuthn L3 §10.1.4), ' +
+    'so the authenticator returns the same 32 bytes a browser gets. Browsers apply this themselves: never twice.',
+  prfInput: PRF_INPUT,
+  inputHex: hex(prfInputBytes),
+  hmacSecretSalt: hex(await prfHmacSecretSalt()),
+  wrong: {
+    noSeparator: await sha256hex(Uint8Array.from([...label, ...prfInputBytes])),
+    rawInputHash: await sha256hex(prfInputBytes),
+    rawInput: hex(prfInputBytes),
+  },
+}
+
 // --- whole blobs (end to end) --------------------------------------------------------------
 // Test keys are DETERMINISTIC (fixed scalars), so regenerating this file changes
 // nothing unless a rule changes: porters can build against stable bytes.
@@ -146,6 +166,7 @@ const fixture = {
   codes,
   parse,
   derivations,
+  prf,
   blobs,
   scalars,
 }

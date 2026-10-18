@@ -36,6 +36,24 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   scalar alone while kx is unruled, or with kx appended under modes A and C. On
   import, each scalar must be in 1..n−1 AND its public point d·G must equal the
   public key in the directory-signed binding. A swapped blob fails closed.
+- **The PRF input is the UTF-8 bytes of `bento/id/prf/v1`.** A host that
+  speaks CTAP `hmac-secret` directly, with no WebAuthn PRF API (libfido2 on
+  desktop), must send `prf.hmacSecretSalt`: SHA-256("WebAuthn PRF" ‖ 0x00 ‖
+  input), per WebAuthn L3 §10.1.4. Then the same security key returns the same
+  32 bytes in a browser and on the desktop, and a blob sealed on one opens on
+  the other. The `prf.wrong` values are the easy mistakes. (home-desktop)
+
+  Apply that hash EXACTLY ONCE, and only where nothing else does (security §34):
+
+  | Path | Who hashes | What you pass |
+  |---|---|---|
+  | CTAP `hmac-secret` directly (libfido2: Linux, any host driving the key itself) | **you** | `prf.hmacSecretSalt` |
+  | a browser's WebAuthn PRF extension | the browser | the input (`prf.inputHex`), never the salt |
+  | Windows `webauthn.dll` with the PRF extension | Windows | the input, never the salt |
+  | a platform's own WebAuthn PRF API (Apple AuthenticationServices, Android Credential Manager) | the platform | the input, never the salt |
+
+  Passing the salt to an API that hashes again gives the `SHA-256` of the salt:
+  a third value, and a blob nothing else can open.
 - **The pepper layer** is the directory's (share implements it). Its rows exist
   so the server code can be checked against the same bytes.
 
@@ -85,6 +103,16 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   invisible. On top of the table: NFC is required, at most 64 code points, and
   ZWNJ/ZWJ (U+200C/U+200D) are allowed only mid-text. (home-desktop found the
   drift; security added the unassigned code points.)
+- **Compare normalised text by code points, not by string equality, in Swift.**
+  Swift's `String ==` is canonical equivalence, so a decomposed `é` compares
+  equal to its NFC form and an NFC check written as `s == nfc(s)` passes text
+  that isn't NFC. Compare `unicodeScalars` instead. (home-ios, measured)
+- **Check a recovered private scalar with the platform's key constructor, never
+  bignum arithmetic.** It's a secret, and a hand-rolled d·G is variable-time on
+  it. CryptoKit's `P256.Signing.PrivateKey(rawRepresentation:)` refuses 0, n,
+  n+1 and 2^256−1 and accepts 1 and n−1 (home-ios, measured). The Rust `p256`
+  crate's `SecretKey::from_slice` is likewise constant-time (home-desktop).
+  Derive the public key from it and compare that to the bound key.
 - **Compute NFC with Unicode 17.0 (or later) data.** Normalisation is stable
   across versions only for assigned characters, and the table refuses
   everything unassigned at 17.0. So any normaliser at 17.0 or later agrees on

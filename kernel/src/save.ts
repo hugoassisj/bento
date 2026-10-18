@@ -38,6 +38,41 @@ let pristine: Document | null = null
 /** Call first thing at boot, before any DOM mutation. */
 export function capturePristine() {
   pristine = document.cloneNode(true) as Document
+  if (typeof __BENTO_TEST_SEAL__ !== 'undefined' && __BENTO_TEST_SEAL__) consumeTestSeal()
+}
+
+/**
+ * TEST BUILDS ONLY (security §31): the sealed TEST document's key handoff.
+ * Phase 1 has no real path that seals a document at boot (the per-recipient
+ * wraps are phase 2), yet all four apps' plaintext-to-disk guards must be
+ * exercised end to end against an identity-sealed document. A rig installs a
+ * one-shot global with the raw document key before the page loads (Playwright
+ * addInitScript, scripts/lib/sealed-boot.mjs). Every app calls capturePristine()
+ * at boot before its editor exists, so the seal is in place before any autosave
+ * can start: the §E.2 ordering invariant, by construction.
+ *
+ * NEVER in a release shell. In phase 1 nobody holds a wrap for such a body, so a
+ * stray global (an extension, a host user script, a future bug) would seal a
+ * person's file to a key no one can recover. Each app's vite config defines
+ * __BENTO_TEST_SEAL__ false unless BENTO_TEST_SEAL=1, the minifier drops this
+ * branch, and the release conformance gate (shell-gate.mjs) refuses any shell
+ * containing the global's name.
+ */
+declare const __BENTO_TEST_SEAL__: boolean | undefined
+function consumeTestSeal() {
+  const g = globalThis as { __bentoTestSeal?: unknown; __bentoTestSealProbe?: unknown }
+  const key = g.__bentoTestSeal
+  delete g.__bentoTestSeal
+  if (!(key instanceof Uint8Array)) return
+  setIdentitySeal(key)
+  // What the rigs read back: did the seal take, and what would a save write?
+  // (Its name carries the same mark, so the gate refuses it in a release too.)
+  g.__bentoTestSealProbe = Object.freeze({
+    sealed: () => isBodySealed(),
+    body: (doc: KernelDoc) => encodeDocBody(doc),
+    file: (doc: KernelDoc) => serializeAuto(doc),
+    fileName: (doc: KernelDoc) => suggestedFileName(doc),
+  })
 }
 
 export function readEmbeddedDoc(): string | null {
@@ -236,7 +271,7 @@ export function registerPreview(fn: PreviewProvider): void {
  * Pure and exported so `scripts/test-preview.ts` can exercise it directly —
  * the surrounding DOM work is not unit-testable in node, this decision is.
  */
-export function previewAllowed(body: string, encrypted = isEncryptionActive()): boolean {
+export function previewAllowed(body: string, encrypted = isBodySealed()): boolean {
   return !encrypted && parseEnvelope(body) === null
 }
 
@@ -415,7 +450,10 @@ export function serializeFile(doc: KernelDoc): string {
 export interface EncEnvelope {
   format: 'bento/enc'
   v: 1
-  it: number
+  /** PBKDF2 rounds (password envelopes) */
+  it?: number
+  /** 'hkdf-kdoc' = identity-sealed (§E.1): opened by the document key, never a password */
+  kdf?: 'hkdf-kdoc'
   salt: string
   iv: string
   data: string
@@ -462,6 +500,36 @@ export function setEncryptionPassword(p: string | null) {
 
 export const isEncryptionActive = () => encPassword !== null
 
+/**
+ * The identity seal (identity-kernel §E.2): K_doc as an HKDF base key, set when
+ * a person's agent unwraps the document key, cleared on lock. With no password
+ * set, every save seals the body under it (encodeDocBody).
+ */
+let sealBodyKey: Promise<CryptoKey> | null = null
+
+/**
+ * Set (or clear with null) the identity seal. `kdoc` is the raw 32-byte
+ * document key, imported NON-EXTRACTABLE as an HKDF base. Synchronous on
+ * purpose: isBodySealed() is true from this call on, before the import settles,
+ * so no guard can slip a plaintext write into that gap. A failed import fails
+ * every later save closed rather than letting it write plaintext.
+ */
+export function setIdentitySeal(kdoc: Uint8Array | null): void {
+  if (kdoc === null) { sealBodyKey = null; return }
+  if (!(kdoc instanceof Uint8Array) || kdoc.length !== 32) throw new Error('the document key is 32 bytes')
+  sealBodyKey = crypto.subtle.importKey('raw', kdoc.slice() as BufferSource, 'HKDF', false, ['deriveKey'])
+}
+
+/**
+ * Is the body sealed on disk, by a password OR the identity seal? THE question
+ * for every plaintext-to-disk guard (recovery snapshots, version history,
+ * previews, the filename). `isEncryptionActive()` answers only "is there a
+ * password", which is what the password UI wants and what a guard must not ask:
+ * an identity-sealed document has no password, so a guard reading that flag
+ * writes it to disk in plaintext.
+ */
+export const isBodySealed = () => encPassword !== null || sealBodyKey !== null
+
 /** Parse a data-block body as an encryption envelope; null if it is not one. */
 export function parseEnvelope(text: string): EncEnvelope | null {
   try {
@@ -498,6 +566,48 @@ async function encryptBody(json: string, password: string): Promise<string> {
   return JSON.stringify(env)
 }
 
+const BODY_INFO = new TextEncoder().encode('bento/body.v1')
+
+/** bodyKey = HKDF-SHA-256(K_doc, salt, "bento/body.v1") as an AES-256-GCM key. */
+const bodyKeyFor = (kdoc: CryptoKey, salt: Uint8Array) => crypto.subtle.deriveKey(
+  { name: 'HKDF', hash: 'SHA-256', salt: salt as BufferSource, info: BODY_INFO as BufferSource },
+  kdoc, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+
+/**
+ * The identity-sealed body: a GENUINE bento/enc v1 envelope (§E.1), so frozen
+ * shells, previewAllowed and convert all read it as sealed. Never v:2, never
+ * without salt: an old parseEnvelope would reject it, boot the starter deck, and a
+ * later save would overwrite the sealed block. `salt` is the real HKDF salt,
+ * fresh on every save as the password path's is, and `kdf` (ignored by old
+ * shells) says which key opens it.
+ */
+async function sealBody(json: string, kdoc: CryptoKey): Promise<string> {
+  const salt = new Uint8Array(16)
+  const iv = new Uint8Array(12)
+  crypto.getRandomValues(salt)
+  crypto.getRandomValues(iv)
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv as BufferSource }, await bodyKeyFor(kdoc, salt), new TextEncoder().encode(json))
+  const env: EncEnvelope = {
+    format: 'bento/enc', v: 1, kdf: 'hkdf-kdoc',
+    salt: eb64.enc(salt), iv: eb64.enc(iv), data: eb64.enc(new Uint8Array(ct)),
+  }
+  return JSON.stringify(env)
+}
+
+/** Open an identity-sealed envelope with the raw document key; null if it isn't one or the key is wrong. */
+export async function openIdentitySealed(env: EncEnvelope, kdoc: Uint8Array): Promise<string | null> {
+  if (env.kdf !== 'hkdf-kdoc') return null
+  try {
+    const base = await crypto.subtle.importKey('raw', kdoc as BufferSource, 'HKDF', false, ['deriveKey'])
+    const pt = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: eb64.dec(env.iv) as BufferSource }, await bodyKeyFor(base, eb64.dec(env.salt)), eb64.dec(env.data) as BufferSource)
+    return new TextDecoder().decode(pt)
+  } catch {
+    return null
+  }
+}
+
 /** Decrypt an envelope with a candidate password; null on wrong password. */
 export async function decryptEnvelope(env: EncEnvelope, password: string): Promise<string | null> {
   try {
@@ -521,7 +631,9 @@ export async function decryptEnvelope(env: EncEnvelope, password: string): Promi
  * it is DOM-free, so it is the seam a rig can drive the real write path with.
  */
 export async function encodeDocBody(doc: KernelDoc): Promise<string> {
-  return encPassword ? encryptBody(JSON.stringify(doc), encPassword) : JSON.stringify(doc)
+  if (encPassword) return encryptBody(JSON.stringify(doc), encPassword)
+  if (sealBodyKey) return sealBody(JSON.stringify(doc), await sealBodyKey)
+  return JSON.stringify(doc)
 }
 
 export async function serializeDocInto(shell: Document, doc: KernelDoc): Promise<string> {
@@ -538,7 +650,7 @@ export function suggestedFileName(doc: KernelDoc, suffix = ''): string {
   // An encrypted deck should not carry its title in the download filename
   // either — use a neutral default (the app name). The real title is kept in the
   // live tab and returns to the filename once the password is cleared.
-  const source = isEncryptionActive() ? appConfig().appName : doc.title
+  const source = isBodySealed() ? appConfig().appName : doc.title
   const base = source.replace(/[^\w\d-]+/g, '_').replace(/^_+|_+$/g, '') || 'Untitled'
   return `${base}${suffix ? `-${suffix}` : ''}.bento.html`
 }
