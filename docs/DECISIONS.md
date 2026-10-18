@@ -11208,9 +11208,16 @@ editor turns off its app-switcher snapshot (`setRecentsScreenshotEnabled(false)`
 API 33+), so the recents card is blank. The decision comes from the bytes the
 host opened or last wrote (`DocumentIndex.isEncrypted`), so it switches on at
 the save that encrypts the file and back off at the save that removes the
-password. Below API 33 the only tool is `FLAG_SECURE`, which also blocks
+password. The page can also say so first, over the bridge (`seal` capability,
+`seal.state {sealed}`, fire-and-forget), the moment a password is set and
+before any save lands. It can only ADD blanking: recents stays blank while
+the file OR the page says sealed. It comes back only when the file was
+written unsealed AND the page says unsealed (security). Below API 33 the only tool is `FLAG_SECURE`, which also blocks
 screenshots, so it is not set by default there; it can come later as an
 opt-in setting. Measured on the emulator (API 36), with recents opened from
 Home so the stored snapshot is what shows: a sealed document's card is blank;
 the same file on a build without this change shows its screen; an unsealed
-document's card still shows its content.
+document's card still shows its content. With the page signal (sent here
+through the same postMessage channel the kernel will use): an unsealed file
+whose page says sealed is blank; a sealed file whose page says unsealed is
+still blank; an unsealed file whose page says unsealed again shows content.

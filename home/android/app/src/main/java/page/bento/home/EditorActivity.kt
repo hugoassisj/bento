@@ -409,6 +409,9 @@ class EditorActivity : Activity() {
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 openDocumentVended = false
                 exportTargets.clear()
+                // a new page says nothing yet; only the file speaks until it does
+                pageSealed = false
+                applySealedPrivacy()
             }
         }
 
@@ -467,7 +470,7 @@ class EditorActivity : Activity() {
         // Capabilities first, then the shared bridge, in one injected script:
         // bridge.js advertises the per-document store to the page ONLY when
         // the host declares it here, so a host without one never offers it.
-        val src = "window.__bentoHostCaps = ['store'];\n" +
+        val src = "window.__bentoHostCaps = ['store', 'seal'];\n" +
             assets.open("bridge.js").use { it.readBytes().toString(Charsets.UTF_8) }
         WebViewCompat.addDocumentStartJavaScript(web, src, rules)
     }
@@ -613,6 +616,12 @@ class EditorActivity : Activity() {
         }
         val id = m.optInt("id", -1)
         when (m.optString("op")) {
+            "seal.state" -> {
+                // Fire-and-forget. The page can only ADD blanking (security):
+                // see applySealedPrivacy.
+                pageSealed = m.optBoolean("sealed", false)
+                applySealedPrivacy()
+            }
             "begin" -> {
                 if (!openDocumentVended && canWriteInPlace) {
                     openDocumentVended = true
@@ -733,15 +742,30 @@ class EditorActivity : Activity() {
      * Neutral recents while a sealed document is open (threat model §30.6): an
      * encrypted or identity-sealed file gets no app-switcher snapshot, since the
      * snapshot is a picture of the unlocked content. Decided from the bytes this
-     * host opened or just wrote, so encrypting a document and saving it over
-     * itself takes effect at that save, and removing the password restores
-     * the snapshot. API 33+; below that the only tool is FLAG_SECURE, which
+     * host opened or just wrote, OR from the page's own "sealed" signal (bridge
+     * 'seal'), which arrives the moment a password is set — before any save. API 33+; below that the only tool is FLAG_SECURE, which
      * also blocks screenshots, so it is an opt-in there and not set here.
      */
     private fun applySealedPrivacy(data: ByteArray) {
-        if (Build.VERSION.SDK_INT < 33) return
         val head = String(data, 0, minOf(data.size, DocumentIndex.HEAD_CHARS), Charsets.UTF_8)
-        setRecentsScreenshotEnabled(!DocumentIndex.isEncrypted(head))
+        fileSealed = DocumentIndex.isEncrypted(head)
+        applySealedPrivacy()
+    }
+
+    /** The file the host opened or last wrote is sealed. */
+    private var fileSealed = false
+    /** The page says the document is sealed (a password set, not yet saved). */
+    private var pageSealed = false
+
+    /**
+     * Blank while EITHER says sealed. The page's signal can only add: a page
+     * claiming "unsealed" never re-enables the snapshot of a file the host
+     * knows is sealed. It comes back only once both say unsealed — the file
+     * was written unsealed AND the page reports so.
+     */
+    private fun applySealedPrivacy() {
+        if (Build.VERSION.SDK_INT < 33) return
+        setRecentsScreenshotEnabled(!(fileSealed || pageSealed))
     }
 
     private fun writeInPlace(id: Int, text: String) {
