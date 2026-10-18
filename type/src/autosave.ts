@@ -33,7 +33,7 @@
 //
 // Registered once, at import time, mirroring every other feature module.
 
-import { isEncryptionActive } from '../../kernel/src/save.ts';
+import { isBodySealed } from '../../kernel/src/save.ts';
 import {
   putRecovery, getRecovery, clearRecovery, addVersion, listVersions, pruneOld,
   clearVersions, recoveryLooksOlder, onRecoveryOff, type Snapshot,
@@ -77,16 +77,16 @@ export function docContentKey(doc: TypeDoc): string {
 /**
  * May the CURRENT document's plaintext touch IndexedDB right now?
  *
- * bento/type has no encryption feature yet — `isEncryptionActive()` can
- * never return true today — but the guard costs nothing and is the one line
- * that must already be correct the day encryption ships, exactly as it is in
- * slides/src/autosave.ts. Never remove this without confirming that day has
- * not arrived. Exported (rather than kept as a private `if`) so the rig can
+ * Not while the body is SEALED — by a password or by the identity seal
+ * (`isBodySealed()`, kernel save.ts): a sealed document's plaintext must
+ * never reach a recovery snapshot or version history. bento/type has no
+ * password feature of its own, but a document sealed to people opens here,
+ * so this is live, not hypothetical. Exported (rather than kept as a private `if`) so the rig can
  * assert the guard directly against the kernel's real encryption state,
  * instead of trusting that the call site was written correctly.
  */
 export function canSnapshot(): boolean {
-  return !isEncryptionActive();
+  return !isBodySealed();
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 2500;

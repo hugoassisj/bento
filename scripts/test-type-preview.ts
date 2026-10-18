@@ -44,7 +44,7 @@
 import { register } from 'node:module';
 register('./lib/ts-resolve-hooks.mjs', import.meta.url);
 
-import { isEncryptionActive, setEncryptionPassword } from '../kernel/src/save.ts';
+import { isEncryptionActive, setEncryptionPassword, setIdentitySeal, isBodySealed } from '../kernel/src/save.ts';
 import { emptyDoc, type TypeDoc, type Block } from '../type/src/model.ts';
 
 let checks = 0, bad = 0;
@@ -73,6 +73,17 @@ console.log('\n— the encryption veto, which buildTypePreview checks itself —
   ok(buildTypePreview(withBody) === null, 'an encrypted document gets NO preview, even with real content');
   setEncryptionPassword(null);
   ok(!isEncryptionActive(), 'cleared for the rest of this file');
+  // The IDENTITY seal has no password: a document sealed to people. Its body is
+  // just as sealed, so it gets no preview either.
+  setIdentitySeal(new Uint8Array(32).fill(7));
+  ok(isBodySealed() && !isEncryptionActive(), 'an identity-sealed body is sealed, with no password set');
+  // a guard that let it through would go on to BUILD a preview (here, in node,
+  // that throws for want of a DOM), so a throw counts as "a preview was made"
+  let sealedPreview: unknown = 'built';
+  try { sealedPreview = buildTypePreview(withBody); } catch { /* it tried to build one */ }
+  ok(sealedPreview === null, 'an identity-sealed document gets NO preview either');
+  setIdentitySeal(null);
+  ok(!isBodySealed(), 'the seal is cleared for the rest of this file');
 }
 
 console.log('\n— an empty document gets no preview either —');
