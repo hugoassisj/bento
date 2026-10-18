@@ -802,6 +802,12 @@ jobs:
         # and checks every rule. CryptoKit only, so it skips off Apple platforms.
         run: node scripts/test-home-origin.mjs
 
+      - name: home/ios docstore rig
+        # The host's per-document store: this device's collab member private key
+        # in the Keychain, the recovery copy in an app-private file, partitioned by
+        # the document's origin. Compiles the real HostDocStore; skips off Apple.
+        run: node scripts/test-home-docstore-ios.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected
