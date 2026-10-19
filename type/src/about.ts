@@ -17,7 +17,7 @@
 // product.
 
 import { checkForUpdates, applyUpdate, APP_VERSION, type ReleaseInfo } from '../../kernel/src/update.ts';
-import { canWriteInPlace, openedFileName } from '../../kernel/src/save.ts';
+import { canWriteInPlace, openedFileName, isBodySealed } from '../../kernel/src/save.ts';
 import { setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
 import type { Store } from './store.ts';
 import { wordCount, docForExport } from './model.ts';
@@ -258,7 +258,9 @@ export function openAbout({ store, pages, onReplaceDoc, onRestoreDoc }: AboutHoo
 async function openVersionHistory(
   { store, onRestoreDoc, close: closeAbout }: { store: Store; onRestoreDoc(json: string): void; close(): void },
 ): Promise<void> {
-  const versions = await listVersions(store.doc.docId);
+  // nothing while the body is sealed: its plaintext versions are not offered
+  // (autosave.ts checkRecovery deletes them; this covers the moment before)
+  const versions = isBodySealed() ? [] : await listVersions(store.doc.docId);
 
   const back = document.createElement('div');
   back.className = 't-overlay';

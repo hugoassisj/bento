@@ -869,20 +869,20 @@ jobs:
         # the document's origin. Compiles the real HostDocStore; skips off Apple.
         run: node scripts/test-home-docstore-ios.mjs
 
-      - name: home/ios bento/id keys rig
+      - name: home/ios bento/connect keys rig
         # The agent's keys: the account key, the Secure Enclave routine and consent
         # keys, raw low-S signatures (verified in WebCrypto), never minting over a
         # store it could not read, and the §29 biometric-enrolment notice outbox.
         # Apple toolchains only; skips elsewhere.
         run: node scripts/test-home-id-keys.mjs
 
-      - name: home/ios bento/id statements rig
+      - name: home/ios bento/connect statements rig
         # The Swift statements against kernel/fixtures/identity-v1.json: verdict
         # and reason on every row, round trips, tampering, transcripts, low-S,
         # purposes, addresses, spendCalled and the frozen display table.
         run: node scripts/test-home-id-statements.mjs
 
-      - name: home/ios bento/id agent rig
+      - name: home/ios bento/connect agent rig
         # sign() routing and the host-stamped consent statement (§2e (A)): what
         # the page can name, what only the host stamps, and the verifier refusing
         # a relay, replay, payload swap or docId swap.
@@ -2750,7 +2750,15 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          for rig in test-tray-releases.mjs test-home-origin.mjs test-home-docstore-ios.mjs; do
+          rigs=(
+            test-tray-releases.mjs
+            test-home-origin.mjs
+            test-home-docstore-ios.mjs
+            test-home-id-keys.mjs
+            test-home-id-statements.mjs
+            test-home-id-agent.mjs
+          )
+          for rig in "${rigs[@]}"; do
             echo "::group::$rig"
             node "scripts/$rig" | tee "$RUNNER_TEMP/rig.out"
             echo "::endgroup::"
@@ -2916,3 +2924,24 @@ jobs:
         run: |
           sudo apt-get install -y -qq gnome-keyring dbus >/dev/null
           ./keyring-rig.sh
+
+  type-sealed-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the sealed TEST shell
+        run: |
+          npm ci --prefix type
+          npm run build:sealtest --prefix type
+      - name: A sealed document leaves no plaintext and shows a neutral title
+        run: node scripts/test-type-sealed-browser.mjs

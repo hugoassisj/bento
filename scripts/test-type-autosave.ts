@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { configureApp } from '../kernel/src/app.ts'
-import { setEncryptionPassword } from '../kernel/src/save.ts'
+import { setEncryptionPassword, setIdentitySeal, isBodySealed } from '../kernel/src/save.ts'
 import { docContentKey, canSnapshot, recoveryBanner } from '../type/src/autosave.ts'
 import { sign, newKey, verifyChain, newHistorySalt } from '../type/src/canon.ts'
 import { RESTORE_RULES } from '../type/src/restorerules.ts'
@@ -90,6 +90,10 @@ H('canSnapshot refuses while encryption is active')
   ok(!canSnapshot(), 'encryption active — canSnapshot refuses, so runAutosave never reaches putRecovery')
   setEncryptionPassword(null)
   ok(canSnapshot(), 'clearing the password restores snapshotting')
+  setIdentitySeal(new Uint8Array(32).fill(7))
+  ok(isBodySealed() && !canSnapshot(), 'an identity-sealed body (no password) — canSnapshot refuses too')
+  setIdentitySeal(null)
+  ok(canSnapshot(), 'clearing the seal restores snapshotting')
 }
 
 H('restoring a recovered snapshot round-trips the document exactly')
