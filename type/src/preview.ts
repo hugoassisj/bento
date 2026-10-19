@@ -44,7 +44,7 @@
 // and a remote URL here would be a preview that phones home from a context
 // where nobody could consent.
 
-import { registerPreview, isEncryptionActive } from '../../kernel/src/save.ts';
+import { registerPreview, isBodySealed } from '../../kernel/src/save.ts';
 import type { Block, TypeDoc } from './model.ts';
 import { registerReady } from './features.ts';
 import { groupBlocks, blockHtml, renderBody, TAG } from './render.ts';
@@ -319,7 +319,7 @@ function titleCard(doc: TypeDoc): HTMLElement {
  * plaintext beside the ciphertext that exists to hide them.
  */
 export function buildTypePreview(doc: TypeDoc): HTMLElement | null {
-  if (isEncryptionActive()) return null;
+  if (isBodySealed()) return null;
   if (!doc?.body?.length) return null;
 
   const pageOne = firstPageBlocks(doc);
