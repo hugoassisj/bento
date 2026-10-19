@@ -8,7 +8,7 @@
 import './styles.css';
 import { configureApp } from '../../kernel/src/app.ts';
 import {
-  capturePristine, readEmbeddedDoc, saveFile, currentFileName, canWriteInPlace,
+  capturePristine, readEmbeddedDoc, saveFile, currentFileName, canWriteInPlace, isBodySealed,
 } from '../../kernel/src/save.ts';
 import { ICONS } from './icons.ts';
 import { t } from './i18n.ts';
@@ -102,6 +102,10 @@ if (parsed.ok) {
   line('p', parsed.detail);
   line('p', 'Nothing has been changed. Close this tab rather than saving over it.', 'color:#8d95a3');
   document.body.replaceChildren(card);
+  // Neutral title while sealed, matching the saved file's title. A file this
+  // refuses may be sealed (bento/type opens no envelope itself), so the title
+  // is the app's name, whatever the shell's <title> says.
+  document.title = 'bento/type';
   // Tell the shell loader this was a deliberate refusal, not a failed start
   // (its contract: { doc } running, { locked } at a password gate, { refused }
   // painted its own refusal). Without it the loader counts the throw below as
@@ -986,7 +990,8 @@ const markDirty = () => { dirty = true; paintTitle(); };
 function paintTitle() {
   const name = currentFileName();
   const docTitle = store.doc.title || t('Untitled');
-  document.title = `${dirty ? '• ' : ''}${docTitle} — bento/type`;
+  // Neutral title while sealed, matching the saved file's title.
+  document.title = isBodySealed() ? 'bento/type' : `${dirty ? '• ' : ''}${docTitle} — bento/type`;
   const btn = document.getElementById('save')!;
   // Update the LABEL only. Setting textContent here wiped the icon that
   // label() had just installed, so the button silently lost its glyph the
