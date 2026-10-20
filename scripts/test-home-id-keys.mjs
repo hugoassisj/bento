@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 /**
- * bento/id on iOS and the Mac — the agent's keys (home/ios/IdentityKeys.swift).
+ * bento/connect on iOS and the Mac — the agent's keys (home/ios/IdentityKeys.swift).
  *
  *   node scripts/test-home-id-keys.mjs
  *
@@ -201,10 +201,23 @@ const dir = mkdtempSync(join(tmpdir(), 'bento-idkeys-'))
 let out
 try {
   writeFileSync(join(dir, 'main.swift'), main)
-  execFileSync('swiftc', ['-O', '-D', 'BENTO_SOFTWARE_DEVICE_KEYS', '-o', join(dir, 'k'), ...SRC, join(dir, 'main.swift')], { stdio: 'pipe' })
+  execFileSync('swiftc', ['-O', '-D', 'DEBUG', '-D', 'BENTO_SOFTWARE_DEVICE_KEYS', '-o', join(dir, 'k'), ...SRC, join(dir, 'main.swift')], { stdio: 'pipe' })
   out = Object.fromEntries(execFileSync(join(dir, 'k'), { maxBuffer: 1 << 26 }).toString().trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)))
 } catch (err) { console.error('swiftc or run failed:\n' + (err.stderr?.toString() ?? err.message)); process.exit(2) }
 finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
+
+// A release build (no DEBUG) that sets the software-keys flag must not compile.
+let releaseRefused = false, releaseError = ''
+{
+  const rd = mkdtempSync(join(tmpdir(), 'bento-idkeys-rel-'))
+  try {
+    writeFileSync(join(rd, 'main.swift'), 'print("built")\n')
+    execFileSync('swiftc', ['-O', '-D', 'BENTO_SOFTWARE_DEVICE_KEYS', '-o', join(rd, 'r'), ...SRC, join(rd, 'main.swift')], { stdio: 'pipe' })
+  } catch (err) {
+    releaseError = err.stderr?.toString() ?? ''
+    releaseRefused = /BENTO_SOFTWARE_DEVICE_KEYS is for DEBUG builds only/.test(releaseError)
+  } finally { try { rmSync(rd, { recursive: true, force: true }) } catch {} }
+}
 
 const d64 = (s) => Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
 const halfN = BigInt('0x7FFFFFFF800000007FFFFFFFFFFFFFFFDE737D56D38BCF4279DCE5617E3192A8')
@@ -279,5 +292,7 @@ ok(out['trip.gained'] === 'true', 'biometrics added where there were none is CHA
 ok(out['trip.accepted'] === 'true', 'after a re-confirmed consent the new enrolment is the baseline, and the old one would now be a change')
 ok(out['trip.norecord'] === 'true', 'a consent key with no recorded enrolment (made before the check) is CHANGED, re-confirmed once')
 ok(out['trip.unreadable'] === 'true', 'a record that cannot be read is UNKNOWN — the consent is refused, the check never skipped')
+console.log('release builds:')
+ok(releaseRefused, 'a build without DEBUG that sets BENTO_SOFTWARE_DEVICE_KEYS does not compile' + (releaseRefused ? '' : ` (${releaseError.split('\n')[0] || 'it compiled'})`))
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 /**
- * bento/id on iOS and the Mac — the Swift statements against the conformance
+ * bento/connect on iOS and the Mac — the Swift statements against the conformance
  * contract, kernel/fixtures/identity-v1.json.
  *
  *   node scripts/test-home-id-statements.mjs        (ID_FIXTURE=<path> to point elsewhere)
@@ -23,7 +23,7 @@
  * Apple platforms only (CryptoKit); skips elsewhere.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -32,6 +32,27 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const FIXTURE = process.env.ID_FIXTURE || join(ROOT, 'kernel/fixtures/identity-v1.json')
 const SRC = ['HostDocStore.swift', 'IdentityKeys.swift', 'IdentityDisplayTable.swift', process.env.ID_STATEMENTS_SRC || 'IdentityStatements.swift'].map((f) => f.includes('/') ? f : join(ROOT, 'home/ios', f))
 if (!existsSync(FIXTURE)) { console.log(`home id statements: the fixture is missing (${FIXTURE}) — it lands with K2.`); process.exit(1) }
+// A floor on the fixture: a shrunken or truncated file must not pass quietly
+// with fewer rows to fail. These are the counts the fixture had when this rig
+// was written; raise them as it grows, never lower them.
+{
+  const F = JSON.parse(readFileSync(FIXTURE, 'utf8'))
+  const n = {
+    statements: F.statements?.length ?? 0,
+    cns: (F.statements ?? []).filter((r) => r.type === 'cns').length,
+    transcripts: F.transcripts?.length ?? 0,
+    purposes: F.purposes?.length ?? 0,
+    addresses: F.addresses?.length ?? 0,
+    displayRanges: F.displayForbidden?.ranges?.length ?? 0,
+  }
+  const FLOOR = { statements: 95, cns: 15, transcripts: 5, purposes: 15, addresses: 23, displayRanges: 746 }
+  const short = Object.entries(FLOOR).filter(([k, min]) => n[k] < min)
+  if (short.length) {
+    console.log(`home id statements: the fixture is SHORT: ${short.map(([k, min]) => `${k} ${n[k]} < ${min}`).join(', ')}`)
+    process.exit(1)
+  }
+  console.log(`fixture floor met: ${Object.entries(n).map(([k, v]) => `${k} ${v}`).join(', ')}`)
+}
 // Apple platforms only: the Linux CI runner has swiftc but no CryptoKit, Security
 // or LocalAuthentication, so probe for xcrun, which only Apple toolchains ship.
 try { execFileSync('xcrun', ['--find', 'swiftc'], { stdio: 'pipe' }) } catch { console.log('home id statements: SKIPPED — needs an Apple toolchain (CryptoKit, Security).'); process.exit(0) }

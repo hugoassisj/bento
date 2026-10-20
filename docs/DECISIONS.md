@@ -11201,6 +11201,98 @@ Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
 old pepper labels, losing O→0 when reading a code, and skipping the range
 check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
 
+## 2026-10-18 — bento/connect on Android (Bento ID): the agent's two keys, the routine session, and host-stamped consent
+
+The Android agent core (phase-1 plan A1). It isn't wired to any page yet: the
+`__bentoIdentity` global goes in only after the Android host verifies the
+shell it serves (gate 1, A2).
+
+- **Two Keystore keys.** The ROUTINE key signs collaboration traffic without a
+  prompt. The CONSENT key needs an authentication for every use: a
+  BiometricPrompt authorises exactly one signature (a CryptoObject), and the
+  Keystore, not the UI, refuses a second (measured on the emulator). The
+  consent key lives in StrongBox where the device has one. A `dev.`
+  certificate names it as `consentPub`, and it is a different key from the
+  routine one.
+- **The consent key accepts the device credential as well as a strong
+  biometric (API 30+), as security ruled (threat model §29).** People without
+  biometrics aren't excluded, matching iOS's `.userPresence`. An organisation
+  setting, "biometric-only consent", is OFF by default and not built yet. The
+  residual risk, stated plainly: a thief holding the phone AND its passcode
+  passes user verification. Notification to every device, the contest/freeze
+  and the recovery code catch that, not the key. On API 26–29, a per-use key
+  accepts biometrics only, so a phone without one gets no consent key: it can
+  do routine work but not consent (security §29, option a). A time-windowed
+  PIN key was rejected: it breaks "one prompt, one signature". Requiring API
+  30 was rejected too: it excludes people for no gain. In phase 1 that device
+  can't authorise link, rotate or unbind. Invite and revoke are unaffected,
+  since they are still owner-key statements the kernel signs (§24b). It can
+  still BE linked, because the consenting device or the passkey authorises
+  that. Its message reads: "Approving new devices or account changes needs a
+  fingerprint on this Android version. Do it from another device."
+- **§2e (B) is enforced in two layers, each with its own bound.** The routine
+  key carries a Keystore validity window of the OVERALL timeout (24 h). That is
+  the hardware floor, and it means "since the device was last unlocked": a
+  lock-screen unlock reopens it with no app prompt (measured, with a control).
+  `RoutineGate` enforces "since Bento was last used": idle 1 h, overall 24 h,
+  tightenable by an organisation (15 min / 12 h) but never loosened. A clock
+  that goes backwards locks the session.
+- **Enrolling a fingerprint doesn't destroy the routine key**
+  (`setInvalidatedByBiometricEnrollment(false)`). It carries no consent, and
+  losing it would drop the device from every room it is in.
+- **Nor does it invalidate the consent key, so a CANARY is the tripwire
+  (threat model §29b).** Measured on the emulator with a positive control:
+  a per-use key that also accepts the device credential survives new
+  fingerprints. Only a biometric-ONLY key is invalidated, and a control key
+  read `KeyPermanentlyInvalidatedException` after a new finger. Removing a
+  fingerprint invalidates neither (measured). So a biometric-only canary key
+  stands beside the consent key. It never signs: before every consent it is
+  read with `initSign`, which needs no prompt. A missing or invalidated canary,
+  biometrics gone under a "bio" record, biometrics present under a "none"
+  record, or no record at all reads CHANGED. A Keystore error reads UNKNOWN
+  and refuses. On CHANGED the gate is home/ios's: the notice "biometrics
+  changed on <device>" goes to the durable outbox FIRST, then the person
+  re-confirms, then the canary is re-minted under the new enrolment. There is
+  no forced re-link; that rested on an invalidation that doesn't happen. The
+  canary and the baseline are made WITH the consent key, so a brand-new
+  identity's first consent reads unchanged and sends no false notice. A busy
+  sensor (`HW_UNAVAILABLE`, often transient) doesn't block a consent the PIN
+  could complete: under a "bio" record the canary, a Keystore check, decides
+  alone. Under a "none" record it can't tell whether biometrics were added,
+  so it refuses, as does any answer the platform can't name. No baseline is
+  ever recorded under a state the platform can't name.
+- **Notices follow §29a, ported from home/ios** (`Notices.kt`). Recipients are
+  snapshotted when a notice is queued: the devices then, plus the address.
+  Removed devices still receive it and still hold it back. It never clears
+  without the address. A silent device stops holding it back after 7 days,
+  and only once the address has confirmed. A device-list change sends its own
+  notice to the list as it was BEFORE the change, and may not be published
+  until that notice is queued. Every device also checks each fetched list
+  itself and raises a local alert if it, or a device it didn't remove, is
+  gone. The alert is written before the new list becomes the baseline.
+- **Signatures leave as raw r‖s, low-S.** The Keystore emits DER and doesn't
+  normalise, so the host converts and folds s.
+- **The host stamps every field of a `cns.`.** The relying party is the app's
+  own (`bento`). The audience is phase 1's only one (`dir`). The docId is the
+  one the host read from the file it opened (#755's rule), never one the page
+  names. The expiry is 2 minutes. A page supplies only the statement and the
+  verifier's challenge. The host refuses to stamp a request a verifier would
+  refuse: wrong family, a document-scoped purpose without a docId, or a
+  malformed challenge.
+- **Conformance is kernel's fixture, re-read on every run.** `ConsentTest`
+  reaches the stated verdict on every `cns` row, rebuilds every accepted row's
+  text byte for byte, and passes the transcript, purpose and low-S rows. It
+  never pins a signature.
+- **Measured end to end on the emulator.** A consent signed inside a
+  BiometricPrompt by the real Keystore key is accepted by kernel's reference
+  `verifyConsent`. Re-presenting it is rejected as `replay`; presenting it to
+  a room verifier, or applying it to another statement, as `transcript`;
+  checking it against another relying party as `rp`; checking it against the
+  routine key as `signature`; and presenting it after expiry as `expired`.
+
+Still for a real phone: TEE and StrongBox residency (the emulator reports
+software keys), and the API 26–29 consent path, which allows biometrics only.
+
 ## 2026-10-18 — Android: no recents snapshot while a sealed document is open
 
 While the open document is password-protected or identity-sealed, the Android
