@@ -96,6 +96,29 @@ function open(name: string): Promise<IDBDatabase | null> {
   })
 }
 
+/**
+ * Open a database ONLY if it already exists. indexedDB.open() creates a
+ * missing one, and the sealed purge runs on every sealed boot: in a browser
+ * that never had the legacy database it would leave an empty one behind, a new
+ * side effect whose name alone says something (security). So when the open has
+ * to create it (an upgrade from version 0), abort that upgrade: the browser
+ * then discards the database it was creating, and this resolves null.
+ */
+function openExisting(name: string): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') { resolve(null); return }
+    let req: IDBOpenDBRequest
+    try { req = indexedDB.open(name) } catch { resolve(null); return }
+    let created = false
+    req.onupgradeneeded = (e) => {
+      if (e.oldVersion === 0) { created = true; req.transaction?.abort() }
+    }
+    req.onsuccess = () => { if (created) { req.result.close(); resolve(null) } else resolve(req.result) }
+    req.onerror = (e) => { e.preventDefault(); resolve(null) } // the abort lands here
+    req.onblocked = () => resolve(null)
+  })
+}
+
 /** Everything in one store of a database, or [] on any failure. */
 function readAll(db: IDBDatabase, store: string): Promise<Snapshot[]> {
   return new Promise((resolve) => {
@@ -322,7 +345,7 @@ async function purgeLegacy(docId: string, store: typeof RECOVERY | typeof VERSIO
   let name: string
   try { name = dbName() } catch { return }
   if (name === LEGACY_DB_NAME) return // already purged above
-  const legacy = await open(LEGACY_DB_NAME)
+  const legacy = await openExisting(LEGACY_DB_NAME)
   if (!legacy) return
   try {
     await new Promise<void>((resolve) => {

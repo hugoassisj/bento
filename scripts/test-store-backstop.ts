@@ -84,6 +84,16 @@ ok((await listVersions('doc-b')).length === 1, "another document's versions surv
 console.log('\nthe sealed purge reaches the legacy shared database too (shipped shells write there)')
 {
   const LEGACY = 'bento-autosave'
+  // FIRST: a browser that never had the legacy database must not gain one.
+  // indexedDB.open() creates a missing database, and the purge runs on every
+  // sealed boot (security).
+  const names = async () => (await indexedDB.databases()).map((d) => d.name)
+  await new Promise<void>((res) => { const q = indexedDB.deleteDatabase(LEGACY); q.onsuccess = q.onerror = q.onblocked = () => res() })
+  ok(!(await names()).includes(LEGACY), 'setup: no legacy database in this browser')
+  setIdentitySeal(kdoc)
+  await clearRecovery('doc-x'); await clearVersions('doc-x')
+  setIdentitySeal(null)
+  ok(!(await names()).includes(LEGACY), 'a sealed purge in a browser with no legacy database leaves none behind')
   const openLegacy = (): Promise<IDBDatabase> => new Promise((res, rej) => {
     const q = indexedDB.open(LEGACY, 1)
     q.onupgradeneeded = () => {
