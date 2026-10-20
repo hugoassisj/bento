@@ -104,6 +104,26 @@ console.log('\noverlap: the EARLIER table in sheet order keeps its place')
   ok(!!sheet(doc, 'beside').placed, 'CONTROL: a table touching but not overlapping keeps its placement')
 }
 
+console.log('\na MERGED state no file held: drawing applies the same rule live, without parse')
+{
+  // Two replicas each moved a table somewhere valid; the merge overlaps them.
+  // Built as an object, NOT parsed — collab state never goes back through parseDoc.
+  const doc = {
+    format: 'bento/dash', version: 1, docId: 'd', title: 't',
+    sheets: [
+      grid('g'),
+      table('a', 3, 3, { placed: { on: 'g', r: 0, c: 0 } }),
+      table('b', 3, 3, { placed: { on: 'g', r: 1, c: 1 } }),
+      table('orphan', 1, 1, { placed: { on: 'deleted-grid', r: 0, c: 0 } }),
+    ],
+  } as unknown as DashDoc
+  ok(P.tableAt(doc, 'g', 1, 1)?.table.id === 'a', 'the overlapped cell belongs to the EARLIER table')
+  ok(P.tableAt(doc, 'g', 3, 3) === null, 'the later table draws nothing on the grid — not even its own corner')
+  const tabs = doc.sheets.filter((s) => P.isTab(doc, s)).map((s) => s.id)
+  ok(JSON.stringify(tabs) === '["g","b","orphan"]', `the later table and the orphan show as their own tabs (got ${JSON.stringify(tabs)})`)
+  ok(!!(doc.sheets[2] as TableSheet).placed, 'drawing never rewrites the document — the placement is still there to win back')
+}
+
 console.log('\na FROZEN file (newer policy) is never repaired, and still shows every table')
 {
   const r = parseDoc(docOf([grid('g'), table('t', 1, 1, { placed: { on: 'future-kind-sheet', r: 0, c: 0 } })], { policy: 'bento-dash-99' }))

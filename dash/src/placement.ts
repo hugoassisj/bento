@@ -57,15 +57,55 @@ export const overlaps = (a: Rect, b: Rect): boolean =>
 export const contains = (a: Rect, r: number, c: number): boolean =>
   r >= a.r0 && r <= a.r1 && c >= a.c0 && c <= a.c1
 
-/** Every table placed on `canvasId`, in sheet order, with its rectangle. */
-export function placedOn(doc: DashDoc, canvasId: string): Array<{ table: TableSheet; at: Placement; rect: Rect }> {
-  const out: Array<{ table: TableSheet; at: Placement; rect: Rect }> = []
+/** Why a placement is not honoured — reported as a repair at parse. */
+export type PlacementProblem = 'malformed' | 'no-host' | 'host-not-grid' | 'overlap'
+
+export interface Judged { table: TableSheet; at: Placement; rect: Rect }
+
+/**
+ * THE rule for which placements are honoured — one pure function of the
+ * document, read by parse AND by every surface that draws.
+ *
+ * Parse alone is not enough. Under collaboration a document reaches a state no
+ * file ever held: two people each move a table somewhere valid and the merge
+ * overlaps them, or one deletes a grid while another places a table on it.
+ * That document never passes through `parseDoc` again, so the drawing code has
+ * to apply the same rule live — and because it is a pure function of converged
+ * state, every replica draws the same thing.
+ *
+ * A table whose placement is not honoured fills its own sheet: a tab, which is
+ * also what an older build shows. Overlap keeps the EARLIER table in sheet
+ * order — sheet order is document order, so every replica picks the same one.
+ */
+export function judgePlacements(doc: DashDoc): { honoured: Map<string, Judged>; problems: Array<{ id: string; problem: PlacementProblem }> } {
+  const honoured = new Map<string, Judged>()
+  const problems: Array<{ id: string; problem: PlacementProblem }> = []
+  const byId = new Map(doc.sheets.map((s) => [s.id, s] as const))
+  const kept = new Map<string, Rect[]>()
   for (const s of doc.sheets) {
-    if (s.kind !== 'table') continue
-    const at = placementOf(s as TableSheet)
-    if (at && at.on === canvasId) out.push({ table: s as TableSheet, at, rect: tableRect(s as TableSheet, at) })
+    if (s.kind !== 'table' || (s as TableSheet).placed === undefined) continue
+    const t = s as TableSheet
+    const at = placementOf(t)
+    const host = at ? byId.get(at.on) : undefined
+    const rect = at ? tableRect(t, at) : null
+    const problem: PlacementProblem | null =
+      !at ? 'malformed'
+      : !host ? 'no-host'
+      : host.kind !== 'canvas' ? 'host-not-grid'
+      : (kept.get(at.on) ?? []).some((k) => overlaps(k, rect!)) ? 'overlap'
+      : null
+    if (problem) { problems.push({ id: t.id, problem }); continue }
+    const list = kept.get(at!.on) ?? []
+    list.push(rect!)
+    kept.set(at!.on, list)
+    honoured.set(t.id, { table: t, at: at!, rect: rect! })
   }
-  return out
+  return { honoured, problems }
+}
+
+/** Every table honoured on `canvasId`, in sheet order, with its rectangle. */
+export function placedOn(doc: DashDoc, canvasId: string): Judged[] {
+  return [...judgePlacements(doc).honoured.values()].filter((j) => j.at.on === canvasId)
 }
 
 /** The table under grid cell (r, c) of `canvasId`, and which part of it. */
@@ -84,54 +124,24 @@ export function tableAt(doc: DashDoc, canvasId: string, r: number, c: number):
 }
 
 /**
- * Whether a sheet is a tab of its own: everything except a table placed on a
- * grid that exists. Asks for the host rather than trusting `placed`, because a
- * file from a NEWER build opens frozen and is never repaired — and a table
- * whose placement cannot be honoured must still show somewhere, as its own tab,
- * rather than vanish from both the tab strip and every grid.
+ * Whether a sheet is a tab of its own: everything except a table whose
+ * placement is honoured. A table that cannot be placed — a frozen file from a
+ * newer build, which is never repaired, or a merge that overlapped two tables —
+ * still shows somewhere, as its own tab, rather than vanishing from both the
+ * tab strip and every grid.
  */
 export function isTab(doc: DashDoc, s: Sheet): boolean {
-  if (s.kind !== 'table') return true
-  const at = placementOf(s as TableSheet)
-  return !at || !isGrid(doc.sheets.find((h) => h.id === at.on))
+  return s.kind !== 'table' || !judgePlacements(doc).honoured.has(s.id)
 }
 
-/** Why a placement was dropped at parse — reported as a repair, never silent. */
-export type PlacementProblem = 'malformed' | 'no-host' | 'host-not-grid' | 'overlap'
-
 /**
- * Drop every placement that cannot be honoured, IN PLACE, and say which.
- *
- * A dropped placement does not lose the table: without `placed` it is a table
- * filling its own sheet, which is exactly what an older build shows for it
- * anyway. That is why dropping is the repair rather than refusing the file.
- * Overlap keeps the EARLIER table in sheet order — sheet order is document
- * order, so every replica and every reader picks the same survivor.
+ * Drop every placement that cannot be honoured, IN PLACE, and say which — the
+ * parse repair, so a saved file stops carrying a placement nobody can draw.
  */
 export function validatePlacements(doc: DashDoc): Array<{ id: string; problem: PlacementProblem }> {
-  const problems: Array<{ id: string; problem: PlacementProblem }> = []
+  const { problems } = judgePlacements(doc)
   const byId = new Map(doc.sheets.map((s) => [s.id, s] as const))
-  const kept = new Map<string, Rect[]>()
-  for (const s of doc.sheets) {
-    if (s.kind !== 'table' || !('placed' in s) || s.placed === undefined) continue
-    const t = s as TableSheet
-    const at = placementOf(t)
-    const host = at ? byId.get(at.on) : undefined
-    const problem: PlacementProblem | null =
-      !at ? 'malformed'
-      : !host ? 'no-host'
-      : host.kind !== 'canvas' ? 'host-not-grid'
-      : (kept.get(at.on) ?? []).some((k) => overlaps(k, tableRect(t, at))) ? 'overlap'
-      : null
-    if (problem) {
-      delete t.placed
-      problems.push({ id: t.id, problem })
-      continue
-    }
-    const list = kept.get(at!.on) ?? []
-    list.push(tableRect(t, at!))
-    kept.set(at!.on, list)
-  }
+  for (const p of problems) delete (byId.get(p.id) as TableSheet).placed
   return problems
 }
 
