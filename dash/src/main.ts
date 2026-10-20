@@ -31,14 +31,16 @@ import {
 import { startTheme } from '../../kernel/src/theme.ts'
 import { putRecovery, pruneOld, onRecoveryOff, recoveryOff } from '../../kernel/src/autosave.ts'
 import { FileWriteBack } from './writeback.ts'
-import { APP_VERSION } from '../../kernel/src/update.ts'
-import { mountAbout, openAbout, rememberVersion, checkAtLaunch } from './about.ts'
+import { mountAbout, openAbout, openSettings, rememberVersion, checkAtLaunch } from './about.ts'
 import { runSql, sqlRows } from './sql.ts'
 import { mountPanels, type Panels } from './panels.ts'
 import { installStory } from './story.ts'
 import { Dashboard } from './dashboard.ts'
 import { SyncSession } from './sync/session.ts'
-import { mountPeople } from './sync/people.ts'
+import { ShareUi } from './shareui.ts'
+import { readingCopy, inviteCopy, readerCopy, type ShareKind } from './share.ts'
+import { installTopbar, shutMenus } from './topbar.ts'
+import { ICONS as SHARED } from './icons.ts'
 import { ridBase, ridBlockFor, docForExport } from './model.ts'
 import { setRidBlock } from './rowcol.ts'
 import { importXlsx, installNames, exportXlsx, xlsxFileName } from './xlsx.ts'
@@ -47,7 +49,7 @@ import { buildSheetPreview } from './preview.ts'
 import { installPrint, openPrintDialog } from './print.ts'
 import './ask.css'
 import { openColumnMenu } from './filterui.ts'
-import { installSaveMenu, adoptOpenedDoc, toast } from './saveui.ts'
+import { installSaveMenu, adoptOpenedDoc, toast, writeExport } from './saveui.ts'
 import { savingFor, saveRevision, type Acknowledge } from './saving.ts'
 import { dismissSplash, dismissSplashNow } from './splash.ts'
 import { t, i18nApi } from './i18n.ts'
@@ -62,7 +64,7 @@ import {
 // because a rig can import it with no DOM — main.ts boots on evaluation, so it
 // can never be imported at all. See the block above `ACTIONS` for the rest.
 import {
-  ACTIONS, ACTION_IDS, actionReason, mintSheetId, mintSheetName, type ActionId,
+  ACTIONS, ACTION_IDS, actionReason, mintSheetId, mintSheetName, blankSheet, type ActionId,
 } from './tabs.ts'
 // The bridge between the two kinds of sheet — pure, and tested with no DOM in
 // `scripts/test-dash-promote.ts`. Everything below is the gesture; every
@@ -156,6 +158,10 @@ const ICON = {
 /** A top-bar button: icon + collapsible label, the one shape the bar can shrink. */
 const barBtn = (act: string, icon: string, label: string, tip: string, extra = ''): string =>
   `<button class="dx-btn${extra}" data-act="${act}" title="${esc(tip)}">${icon}<span>${esc(label)}</span></button>`
+
+/** An icon-only bar button; the tooltip is its name (and its caption in ⋯). */
+const iconBtn = (act: string, icon: string, tip: string): string =>
+  `<button class="dx-btn" data-act="${act}" title="${esc(tip)}" aria-label="${esc(tip.split('(')[0].trim())}">${icon}</button>`
 
 configureApp({
   appId: 'bento-dash',
@@ -339,28 +345,22 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
 
   const app = document.getElementById('app')!
   app.innerHTML =
-    // THE BAR IS GROUPED, AND IT NEVER SCROLLS. It used to be thirteen flat
-    // buttons: measured at an 802px window its scrollWidth was 1436px, and the
-    // controls hanging off the right edge included Save — the one control the
-    // whole application exists to reach. The layout strategy is slides':
-    // labels give way to icons, then whole groups fold into menus, and a
-    // horizontal scrollbar is never the answer (see styles.css "responsive
-    // top bar" for the widths and what happens at each).
-    //
-    // The grouping is a spreadsheet's, not an alphabet: identity · insert ·
-    // (right) history · data in-out · save · about. Import/export live behind
-    // ONE menu at every width — four buttons for something done twice a
-    // session is what pushed Save off screen in the first place.
     `<header class="dx-bar">` +
+    // THE HOUSE ORDER, which is slides' and spaces': identity · title ·
+    // history · insert tools · … · Share · Save · language · ?. Dash used to
+    // run insert → live → undo → Data → Save → settings → About → ? → a
+    // version string, which read as a different product wearing the suite's
+    // logo. Settings and the version moved into About (the wordmark opens it,
+    // as in slides); language is the 🌐 menu, as in slides.
+    //
+    // THE BAR IS FITTED BY MEASURING IT (topbar.ts), not by width breakpoints:
+    // labels give way first, then the wordmark, then whole groups fold into ＋
+    // and ⋯. Below that floor — a 320px phone — the BAR scrolls, never the page.
+    //
     // THE MARK IS THE SAME GLYPH IN EVERY BENTO APP — a bento box, one tall
-    // compartment and two stacked — because it is the SUITE's mark and the
-    // wordmark beside it is what says which app you are in. Copied from
-    // slides' `ed-logo` rather than re-drawn: two hand-maintained copies of a
-    // logo drift, and the peach is already `--slash` here.
-    // It is also the piece that SURVIVES the responsive collapse (see the
-    // rungs in styles.css): 20px of mark costs less than "bento/dash" in text
-    // and leaves a phone-width bar with an identity instead of a blank corner.
-    `<span class="dx-mark">` +
+    // compartment and two stacked — copied from slides' `ed-logo`. It is a real
+    // button: it opens About, so it takes focus and answers Enter and Space.
+    `<button type="button" class="dx-mark" data-act="about" aria-label="${esc(t('About this workbook'))}">` +
     `<svg class="dx-mark-svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">` +
     `<rect width="32" height="32" rx="7" fill="#16273E"/>` +
     `<rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/>` +
@@ -368,27 +368,35 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
     `</svg>` +
     `<span class="dx-mark-t"><span class="dx-mark-b">bento</span><span class="dx-slash">/</span>dash</span>` +
-    `</span>` +
+    `</button>` +
     `<input class="dx-title" value="">` +
-    // Insert group. `display: contents` at wide widths (the six buttons sit in
-    // the bar); a real dropdown below 1040px, where they do not fit. No JS
-    // reparenting, so every listener below keeps working at every width.
-    `<div class="dx-dd dx-insert-dd">` +
-    `<button class="dx-btn dx-dd-trig" data-dd="insert" title="${esc(t('Insert a formula column, chart, pivot, dashboard or story'))}">` +
-    `${ICON.plus}<span>${t('Insert')}</span>${ICON.down}</button>` +
-    `<div class="dx-menu">` +
+    // Phone tools: ＋ (the insert group, folded) and the history pair. The ＋
+    // menu is EMPTY on a wide screen — topbar.ts moves the real insert buttons
+    // into it when the bar folds, so every listener keeps working.
+    `<div class="dx-phone-tools">` +
+    `<div class="dx-dd dx-insert-dd dx-phone-only">` +
+    `<button class="dx-btn dx-dd-trig" type="button" title="${esc(t('Insert a formula column, chart, pivot, dashboard or story'))}">` +
+    `${ICON.plus}<span>${t('Insert')}</span></button>` +
+    `<div class="dx-menu"></div></div>` +
+    `<div class="dx-group dx-history">` +
+    // Icon-only, as in slides and spaces: the arrows are the convention.
+    iconBtn('undo', ICON.undo, t('Undo (⌘Z)')) +
+    // ⌘⇧Z and ⌘Y both worked and the shortcut card documented them, but the bar
+    // had undo alone — so a mouse user who over-undid had no way back at all.
+    iconBtn('redo', ICON.redo, t('Redo (⇧⌘Z)')) +
+    `</div></div>` +
+    `<div class="dx-group dx-insert">` +
     barBtn('formula', ICON.fx, t('Formula'), t('Add a formula column')) +
     barBtn('chart', ICON.chart, t('Chart'), t('Chart the selected columns')) +
     barBtn('viz3d', ICON.cube, t('3D'), t('Plot three numeric columns in 3D')) +
     barBtn('pivot', ICON.pivot, t('Pivot'), t('Summarise this sheet as a pivot table')) +
     barBtn('dashboard', ICON.dashboard, t('Dashboard'), t('Show or hide the dashboard')) +
     barBtn('story', ICON.story, t('Story'), t('Build a data story from saved views')) +
-    `</div></div>` +
+    // COMMENT IS A TOOL, as in slides and spaces — not a floating pill over the
+    // grid that was the only way in besides a shortcut nobody could guess.
+    barBtn('comment', SHARED.comment, t('Comment'), t('Comment on the selected cell (⌘⌥M)')) +
+    `</div>` +
     `<div class="dx-group dx-bar-end">` +
-    barBtn('undo', ICON.undo, t('Undo'), t('Undo (⌘Z)')) +
-    // ⌘⇧Z and ⌘Y both worked and the shortcut card documented them, but the bar
-    // had undo alone — so a mouse user who over-undid had no way back at all.
-    barBtn('redo', ICON.redo, t('Redo'), t('Redo (⇧⌘Z)')) +
     `<div class="dx-dd dx-data-dd">` +
     `<button class="dx-btn dx-dd-trig" data-dd="data" title="${esc(t('Import and export CSV and Excel files'))}">` +
     `${ICON.data}<span>${t('Data')}</span>${ICON.down}</button>` +
@@ -399,37 +407,32 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     barBtn('import-xlsx', ICON.imp, t('Import Excel…'), t('Add sheets from an .xlsx workbook')) +
     barBtn('export-xlsx', ICON.exp, t('Export Excel'), t('Download this workbook as .xlsx')) +
     `<div class="dx-menu-sep"></div>` +
-    // PAPER IS AN EXPORT, and it belongs with the other three rather than as a
-    // fourteenth flat button — the bar's own rule (see the grouping note
-    // above). It is the only one of them that prints EVERY row of the view
-    // rather than what the windowed grid happens to be showing; print.ts says
+    // PAPER IS AN EXPORT, and it belongs with the other three — print.ts says
     // why that needed a page builder rather than a stylesheet.
     barBtn('print', ICON.print, t('Print…'), t('Print the view, or save it as a PDF (⌘P)')) +
     `</div></div>` +
-    // Save keeps its label all the way down to a phone: it is the control the
-    // user names when it is missing, and an unlabelled floppy is a guess.
-    // The unsaved dot badges its corner rather than floating loose in the bar,
-    // where it explained nothing (slides made the same move).
+    // Share mounts here (shareui.ts) — between the tools and Save, as in slides.
+    `<span class="dx-share-slot"></span>` +
+    // SAVE IS THE PRIMARY: a dark filled split button, as in slides and spaces
+    // (maintainer ruling D1). It keeps its word at every width — it is the
+    // control the user names when it is missing.
+    // The unsaved dot badges its corner rather than floating loose in the bar.
     `<button class="dx-btn dx-btn-save" data-act="save" title="${esc(t('Save this workbook (⌘S)'))}">` +
     `${ICON.save}<span class="dx-save-lab">${t('Save')}</span><span class="dx-dirty" hidden></span>` +
-    // The write-back tag. Visible if you look, ignorable if you don't — the
-    // whole promise of automatic saving is that you stop watching for it, so a
-    // toast every 2.5s would be the wrong shape (a failure gets the toast).
-    // INSIDE the button because `.dx-btn-save` is the only `position: relative`
-    // box here, and the tag must be absolutely positioned: appearing must not
-    // move Save, which is the control that has to survive every width.
+    // The write-back tag. INSIDE the button because `.dx-btn-save` is the
+    // positioned box, and the tag must be absolutely positioned: appearing
+    // must not move Save.
     `<span class="dx-wb" hidden></span></button>` +
-    // SETTINGS GETS ITS OWN DOOR. About used to hold everything — identity,
-    // properties, updates, language, appearance, password, history, JSON —
-    // eight sections and 3.2 screens of scroll, so somebody hunting for the
-    // language picker scrolled past their own password. The split follows the
-    // seam the codebase already had: what travels IN THE FILE is About's, what
-    // follows THE READER and lives in this browser is Settings'.
-    // `mountAbout` wires this on sight and the app is unharmed without it.
-    barBtn('settings', SVG('<circle cx="10" cy="10" r="2.6"/><path d="M10 2.6v2M10 15.4v2M17.4 10h-2M4.6 10h-2M15.2 4.8l-1.4 1.4M6.2 13.8l-1.4 1.4M15.2 15.2l-1.4-1.4M6.2 6.2L4.8 4.8"/>'), t('Settings'), t('Settings — language, appearance and updates')) +
-    barBtn('about', ICON.info, t('About'), t('About this workbook')) +
-    `<span class="dx-ver">v${APP_VERSION}</span>` +
+    // Format: the properties panel, on a phone where its edge tab is not a
+    // thing a thumb finds. Slides' Format button, in the same place.
+    `<button class="dx-btn dx-format-btn dx-phone-only" type="button" title="${esc(t('Show or hide the properties panel'))}">` +
+    `${SHARED.panelRight}<span>${t('Format')}</span></button>` +
     `</div>` +
+    // ⋯ — empty on a wide screen; the fold parks the occasional controls here.
+    `<div class="dx-dd dx-more-dd dx-phone-only">` +
+    `<button class="dx-btn dx-dd-trig dx-more-trig" type="button" title="${esc(t('More actions'))}" aria-label="${esc(t('More actions'))}">` +
+    `<b aria-hidden="true">⋯</b></button>` +
+    `<div class="dx-menu dx-more-menu"></div></div>` +
     `</header>` +
     `<div class="dx-formula"><span class="dx-ref">A1</span>` +
     `<span class="dx-fx-mark">fx</span>` +
@@ -1409,30 +1412,48 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // next connection — a switch that leaves the current one running is not one
     sync,
   }
-  // The People panel: who else is in this workbook.
-  //
-  // It takes OVER its host (`host.innerHTML = …` on every render), so it gets
-  // a container of its own. Handing it `app` erased the entire application on
-  // boot — grid, panels, everything — and left only the panel markup behind,
-  // with nothing in the console because nothing threw.
-  const peopleEl = document.createElement('div')
-  // INSIDE the right-hand group, not after it. The bar's end group is what the
-  // responsive ladder measures and collapses; anything appended after it sits
-  // outside that arithmetic and pushes the whole toolbar — Save included —
-  // straight off the screen again.
-  const barEnd = app.querySelector<HTMLElement>('.dx-bar-end') ?? app.querySelector<HTMLElement>('.dx-bar')!
-  barEnd.insertBefore(peopleEl, barEnd.firstChild)
-  mountPeople(peopleEl, sync, store)
+  // THE SHARE BUTTON AND ITS POPOVER (shareui.ts) — spaces' panel: your name,
+  // People, Share a copy, and an explicit Go live. It replaced a one-click
+  // "Start live session" chip that went live with no popover at all.
+  const share = new ShareUi({
+    store,
+    session: sync,
+    toast,
+    goToSheet: (id: string) => grid.setSheet(id),
+    shareCopy: async (kind: ShareKind) => {
+      if (kind === 'reading') {
+        await writeExport(readingCopy(store.doc), 'viewonly',
+          t('Reading copy saved — it opens read-only, with none of this workbook’s keys'))
+        return
+      }
+      // A live copy is useless to its recipient unless this copy is live too,
+      // so sharing one goes live on the way out — as in spaces and slides.
+      await share.goLive()
+      const out = kind === 'invite' ? await inviteCopy(store.doc) : readerCopy(store.doc)
+      if (!out) {
+        toast(kind === 'invite'
+          ? t('Only the owner of this workbook can invite people')
+          : t('This workbook has no live session to follow'))
+        return
+      }
+      await writeExport(out, kind === 'invite' ? 'invite' : 'viewonly', kind === 'invite'
+        ? t('Editor copy saved — recipients join live with edit access')
+        : t('Read-only copy saved — it follows the live session, view only'))
+    },
+  })
+  app.querySelector('.dx-share-slot')!.replaceWith(share.wrap)
+  // A workbook that ARRIVED shared — a saved file with its session on, an
+  // invite, a view-only copy — rejoins its room. A fresh workbook and a
+  // template do not: `shareEligible` is false until the reader shares.
+  share.tryJoin()
+  store.on('doc', () => share.tryJoin())
   mountAbout(app, aboutHooks)
   // PLATFORM §6: the signed update check, once, at launch. It badges ⓘ rather
   // than interrupting. `shouldCheckAtLaunch` gates it on a SAVED workbook, the
   // check not opted out, and Offline mode off.
   checkAtLaunch({ saved })
-  // …and an EXPLICIT way in. mountAbout only arms the wordmark and the version
-  // chip, and nobody guesses that a logo is a button — the chip, meanwhile, is
-  // the first thing the responsive rules drop. The ⓘ button is the real door;
-  // the other two stay as shortcuts for whoever already found them.
-  app.querySelector('[data-act="about"]')!.addEventListener('click', () => openAbout(aboutHooks))
+  // About's door is the wordmark — a real <button> now, armed by mountAbout —
+  // as in slides; on a phone ⋯ carries an About row too (topbar.ts).
   // The keyboard, made findable: a ? button beside About, and the ? key. The
   // card is GENERATED from select.ts's key map, so a binding added there shows
   // up here with no edit.
@@ -1491,36 +1512,108 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // Note the menus are NOT rebuilt per width: at wide widths CSS gives the
   // group `display: contents` and its buttons sit in the bar, so `.open` is
   // simply inert. Nothing moves, so nothing loses a listener.
-  const shutMenus = (except?: Element) => {
-    for (const dd of app.querySelectorAll('.dx-dd.open')) if (dd !== except) dd.classList.remove('open')
-  }
+  // NESTED: on a phone the Data menu, Share and 🌐 sit INSIDE ⋯, so a trigger
+  // or a press must never shut the menu it is itself inside (`shutMenus`
+  // keeps the ancestors of what it is told to keep).
   for (const trig of app.querySelectorAll<HTMLElement>('.dx-dd-trig')) {
     trig.addEventListener('click', (e) => {
       e.stopPropagation()
       const dd = trig.closest('.dx-dd')!
       const opening = !dd.classList.contains('open')
-      shutMenus()
+      shutMenus(app, dd)
       dd.classList.toggle('open', opening)
     })
   }
   // a menu item is a command: run it and get out of the way
   for (const item of app.querySelectorAll('.dx-menu .dx-btn')) {
-    item.addEventListener('click', () => shutMenus())
+    item.addEventListener('click', () => shutMenus(app))
   }
   document.addEventListener('pointerdown', (e) => {
     const dd = (e.target as HTMLElement | null)?.closest?.('.dx-dd')
-    shutMenus(dd ?? undefined)
+    shutMenus(app, dd)
   })
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') shutMenus() })
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') shutMenus(app) })
 
   // --- actions
   app.querySelector('[data-act="save"]')!.addEventListener('click', () => { void doSave() })
-  installSaveMenu({
+  // "Start from scratch…" — slides' item with dash's nouns: every sheet goes
+  // and ONE blank sheet takes their place. CONTENT ONLY: the docId, the title,
+  // the theme and the live session stay ("Save as new workbook…" is the action
+  // that changes identity). One commit, so ⌘Z brings the whole workbook back.
+  //
+  // THE BLANK SHEET TAKES THE ID OF THE SHEET ON SCREEN. `Grid.sheet` throws
+  // when the id it holds names nothing, and its `doc` listener runs first —
+  // tabs.ts's beforePatch steers the grid off a doomed sheet, but here every
+  // existing sheet is doomed and the new one does not exist yet. Replacing the
+  // showing sheet IN PLACE means the grid never points at nothing, on the way
+  // in or on the ⌘Z back out.
+  const startFromScratch = (): void => {
+    if (store.readOnly) return
+    const doc = store.doc
+    if (!window.confirm(t('Replace all {n} sheets with one blank sheet? ⌘Z undoes this.', { n: String(doc.sheets.length) }))) return
+    const cur = grid.showingId()
+    const keepId = doc.sheets.some((s) => s.id === cur) ? cur : mintSheetId(doc)
+    const patches: Patch[] = [{ op: 'setSheet', id: keepId, sheet: blankSheet(keepId, t('Sheet'), new Date().toISOString()) }]
+    for (const s of doc.sheets) if (s.id !== keepId) patches.push({ op: 'setSheet', id: s.id, sheet: undefined })
+    for (const name of Object.keys(doc.measures ?? {})) patches.push({ op: 'setMeasure', name, measure: undefined })
+    const drop = ['story', 'chart', 'names', 'views'].filter((k) => k in doc)
+    if (drop.length) patches.push({ op: 'setDocProps', props: {}, drop })
+    store.commit(patches)
+    grid.setSheet(keepId)
+  }
+  const saveMenu = installSaveMenu({
     button: app.querySelector<HTMLElement>('[data-act="save"]')!,
     store,
     save: doSave,
     ack,
+    about: aboutHooks,
+    startFromScratch: () => startFromScratch(),
   })
+  // THE BAR'S FIT, its phone fold and the 🌐 menu (topbar.ts). Installed LAST,
+  // once Share, Save's split and ? are all in the bar: the fold captures the
+  // authored order to replay it, and measures the bar as it really is.
+  const topbar = installTopbar({
+    app,
+    fillSaveAs: (into, close) => saveMenu.fill(into, close),
+    openAbout: () => openAbout(aboutHooks),
+    openSettings: () => openSettings(aboutHooks),
+    afterLocale: () => {
+      panels?.refresh()
+      grid.paint()
+      share.sync()
+      comments.refresh()
+      gateActions(true)
+      topbar.fit()
+    },
+  })
+  // COMMENT, the toolbar tool (it was a floating pill over the grid).
+  app.querySelector('[data-act="comment"]')!.addEventListener('click', () => comments.commentOnSelection())
+  // FORMAT, on a phone: the properties panel's own toggle, from the bar.
+  app.querySelector('.dx-format-btn')!.addEventListener('click', () => panels?.toggle('right'))
+  // …AND AN OBVIOUS CLOSE ON THE PANEL ITSELF. On a phone the drawer covers
+  // two thirds of the screen, and the only way out was a 16px chevron on its
+  // edge. A ✕ at its top (shown by the phone media query only), and — as every
+  // sheet on a phone answers to — a tap outside it. The panel rebuilds its
+  // children wholesale, so the ✕ is put back whenever it goes missing.
+  const rightPanel = app.querySelector<HTMLElement>('.dp-panel.dp-right')
+  if (rightPanel) {
+    const closeBtn = document.createElement('button')
+    closeBtn.type = 'button'
+    closeBtn.className = 'dx-btn dx-panel-close'
+    closeBtn.textContent = '✕'
+    closeBtn.title = t('Hide properties (])')
+    closeBtn.setAttribute('aria-label', closeBtn.title)
+    closeBtn.addEventListener('click', () => { if (!rightPanel.classList.contains('dp-shut')) panels?.toggle('right') })
+    const ensureClose = () => { if (rightPanel.firstChild !== closeBtn) rightPanel.prepend(closeBtn) }
+    ensureClose()
+    new MutationObserver(ensureClose).observe(rightPanel, { childList: true })
+    document.addEventListener('pointerdown', (e) => {
+      if (window.innerWidth >= 700 || rightPanel.classList.contains('dp-shut')) return
+      const tgt = e.target as Element | null
+      if (!tgt || rightPanel.contains(tgt) || tgt.closest('.dx-bar, .dp-resizer, .dx-about-back, .dx-pop, .dxc-pop')) return
+      panels?.toggle('right')
+    }, true)
+  }
   const undoBtn = app.querySelector<HTMLButtonElement>('[data-act="undo"]')!
   const redoBtn = app.querySelector<HTMLButtonElement>('[data-act="redo"]')!
   undoBtn.addEventListener('click', () => { store.undo() })

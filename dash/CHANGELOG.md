@@ -233,6 +233,39 @@ The release that came out of watching somebody use 0.2.0.
   two independent measures, it opens as 3D bars over two categories instead,
   which is both true to the data and the view a spreadsheet cannot draw.
 
+- **The top bar is laid out like slides' and spaces'.** Undo and redo sit
+  beside the title, then the tools, then Share, Save, 🌐 and ?. Save is the
+  dark primary button. The version number and the settings button left the
+  bar: click the bento/dash mark for About, and Settings is in About.
+
+- **Sharing has a Share button with a panel, as in spaces.** It shows your
+  name, who is here, and three copies to send: a reading copy, an invite to
+  edit, and a view-only copy that follows along live. Nothing connects until
+  you press Go live, or send a live copy. The button says "Share", or "Live"
+  while you are connected, at every window width. Before, one click on "Start
+  live session" went live with no panel, and on a narrow window the control was
+  an unlabelled dot. A workbook that was saved while shared now reconnects when
+  it is opened, so an invite or view-only copy works for the person you send it
+  to.
+
+- **The Save ▾ menu is one line per item**, with an icon; the explanation is
+  the tooltip. Version history, Copy document JSON and Replace from JSON moved
+  here from About, and **Start from scratch…** replaces every sheet with one
+  blank sheet (⌘Z brings the workbook back). "Save read-only copy…" is now
+  "Save a reading copy…" in the Share panel.
+
+- **🌐 changes the language at once**, without reopening the file.
+  Portuguese is now offered in the list.
+
+- **Comment is a button in the bar**, beside the other tools (⌘⌥M still
+  works). Comments use the app's one accent colour instead of purple.
+
+- **Phones get a bar that fits.** The bar measures itself and folds the tools
+  under ＋ and the rest under ⋯, which holds About, Settings, the language,
+  help, Share and the Save list. On the narrowest phones the bar scrolls, never
+  the page. The properties panel opens from a Format button and has a close
+  button, and a tap outside it closes it too.
+
 ## [0.2.0] — 2026-08-03
 
 First release. A workbook is one self-contained HTML file: the data, the grid,

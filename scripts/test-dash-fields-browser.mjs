@@ -8,7 +8,7 @@
 // docs/DECISIONS.md 2026-10-17, "the suite's one field look"). WHAT THIS PROVES,
 // measured in the packaged document, in light AND dark theme:
 //   1. every visible field on every surface — the formula bar, the properties
-//      panel on a dataset and on a spreadsheet, About with Replace from JSON,
+//      panel on a dataset and on a spreadsheet, About, Replace from JSON,
 //      Settings, find, the column filter, the formula column, chart, pivot, 3D,
 //      a story step, the comment composer, tab rename, conditional formatting,
 //      split into columns, print — has a 1px SOLID border in the computed
@@ -85,6 +85,7 @@ function problems(f, tok) {
 
 const cell = (p, n) => p.locator('.dg-cell').nth(n)
 const byText = (p, txt) => p.getByText(txt, { exact: true }).first().click({ timeout: 4000 })
+const openReplaceJson = async (p) => { await p.locator('.dxs-caret').click(); await p.locator('.dxs-item', { hasText: 'Replace from JSON…' }).click() }
 const ctxItem = async (p, label) => { await cell(p, 12).click({ button: 'right' }); await byText(p, label) }
 
 // each surface gets a fresh page; `open` brings it up, and `min` is the floor
@@ -95,8 +96,11 @@ const ctxItem = async (p, label) => { await cell(p, 12).click({ button: 'right' 
 const SURFACES = [
   { name: 'formula bar', scope: '.dx-formula', min: 1, open: (p) => cell(p, 12).click() },
   { name: 'properties panel (dataset)', scope: '.dp-panel', min: 6, open: (p) => cell(p, 12).click() },
-  { name: 'About, with Replace from JSON', scope: '.dx-about', min: 2, open: async (p) => { await p.locator('[data-act="about"]').click(); await byText(p, 'Replace from JSON…') } },
-  { name: 'Settings', scope: '.dx-about', min: 2, open: (p) => p.locator('[data-act="settings"]').click() },
+  { name: 'About', scope: '.dx-about', min: 2, open: (p) => p.locator('[data-act="about"]').click() },
+  // Replace from JSON lives in the Save ▾ menu now, as in slides
+  { name: 'Replace from JSON', scope: '.dx-about', min: 1, open: (p) => openReplaceJson(p) },
+  // Settings is reached from About's footer (it left the bar, as in slides)
+  { name: 'Settings', scope: '.dx-about', min: 2, open: async (p) => { await p.locator('[data-act="about"]').click(); await p.locator('.dx-about-foot .dx-btn', { hasText: 'Settings' }).click() } },
   { name: 'find', scope: '.dx-find', min: 1, open: async (p) => { await cell(p, 12).click(); await p.keyboard.press('ControlOrMeta+f') } },
   { name: 'column filter', scope: '.dx-pop', min: 1, open: (p) => p.locator('.dg-filter').first().click() },
   { name: 'formula column', scope: '.dx-about, .dx-pop, .dx-ask, .dp-panel', min: 1, open: (p) => p.locator('[data-act="formula"]').click() },
@@ -104,7 +108,7 @@ const SURFACES = [
   { name: 'pivot', scope: '.dp-panel', min: 4, open: (p) => p.locator('[data-act="pivot"]').click() },
   { name: '3D', scope: '.dp-panel', min: 4, open: (p) => p.locator('[data-act="viz3d"]').click() },
   { name: 'story step', scope: '.ds-step', min: 1, open: async (p) => { await p.locator('[data-act="story"]').click(); await p.locator('[data-act="capture"]').first().click() } },
-  { name: 'comment composer', scope: '[class^="dxc"]', min: 1, open: async (p) => { await cell(p, 12).click(); await p.locator('.dxc-pill').click(); await byText(p, '＋ Comment on the selected cell') } },
+  { name: 'comment composer', scope: '[class^="dxc"]', min: 1, open: async (p) => { await cell(p, 12).click(); await p.locator('[data-act="comment"]').click() } },
   { name: 'tab rename', scope: '.dx-tab-rename, .dx-tab', min: 1, open: (p) => p.locator('.dx-tab').first().dblclick() },
   { name: 'conditional formatting', scope: '.dp-panel', min: 4, open: (p) => ctxItem(p, 'More conditional formatting…') },
   { name: 'split into columns', scope: '.dx-ask', min: 1, open: (p) => ctxItem(p, 'Split into columns…') },
@@ -179,7 +183,7 @@ try {
     // a textarea, on the surface that has one
     {
       const tp = await fresh()
-      await tp.locator('[data-act="about"]').click(); await byText(tp, 'Replace from JSON…'); await tp.waitForTimeout(200)
+      await openReplaceJson(tp); await tp.waitForTimeout(200)
       const ring = await tp.evaluate(() => {
         const el = document.querySelector('.dx-about textarea')
         if (!el) return null

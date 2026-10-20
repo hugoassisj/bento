@@ -510,11 +510,11 @@ export function kindMarkSvg(kind: string): string {
 
 /** Every `data-act` in the top bar. */
 export type ActionId =
-  | 'formula' | 'chart' | 'viz3d' | 'pivot' | 'dashboard' | 'story'
+  | 'formula' | 'chart' | 'viz3d' | 'pivot' | 'dashboard' | 'story' | 'comment'
   | 'undo' | 'redo'
   | 'import' | 'export' | 'import-xlsx' | 'export-xlsx'
   | 'print'
-  | 'save' | 'about' | 'settings' | 'help'
+  | 'save' | 'about' | 'help'
 
 /**
  * `on: 'workbook'` means the action is not about the sheet on screen at all —
@@ -567,6 +567,14 @@ export const ACTIONS: Readonly<Record<ActionId, ActionRule>> = {
       ? t('A story step saves a dataset’s view — its filters, sorts and chart. A spreadsheet has none.')
       : t('A story step saves a dataset’s view — its filters, sorts and chart. This sheet has none.'),
   },
+  // A comment anchors to a dataset CELL (a column id and a row id, so it
+  // survives a sort). A spreadsheet's cells have no such identity yet.
+  comment: {
+    on: ['table'],
+    why: (k) => k === 'canvas'
+      ? t('A comment anchors to a dataset’s cell, which keeps it through a sort — this is a spreadsheet.')
+      : t('A comment anchors to a dataset’s cell, and this sheet has none.'),
+  },
   export: {
     on: ['table'],
     why: (k) => k === 'canvas'
@@ -589,10 +597,6 @@ export const ACTIONS: Readonly<Record<ActionId, ActionRule>> = {
   print: { on: 'workbook' },
   save: { on: 'workbook' },
   about: { on: 'workbook' },
-  // Language, appearance and the update check follow the READER and are kept in
-  // this browser — none of them is a fact about a sheet, so no sheet kind can
-  // make them inapplicable.
-  settings: { on: 'workbook' },
   help: { on: 'workbook' },
 }
 

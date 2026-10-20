@@ -1760,19 +1760,22 @@ jobs:
         run: node scripts/test-dash-starter.ts
 
       - name: dash — the off switch for a live session
-        # A polish sweep drove the app at 880px with a session running:
-        # collab.on true, the room live on the relay, and the string "Stop
-        # sharing" NOWHERE in the document — sync.css hid the toggle outright
-        # below 900px to buy width in the top bar, and that toggle is the only
-        # control that stops sharing. The nearest thing left was About's
-        # "Offline mode", which also kills the signed update check: to stop one
-        # workbook being shared you had to switch off the app's networking.
-        # The rule is narrow: a control that REPORTS nothing may stand down at a
-        # narrow width (the 390px measurement behind those rules is real and
-        # still honoured), a control that STOPS something already happening may
-        # not. Checked as CSS text because dash-dom.ts is a parser, not a layout
-        # engine, and cannot say what a viewport width does to a declaration.
+        # Sharing is a labelled Share popover now (spaces'): "Stop sharing" is
+        # inside it whenever a session runs, the button says "Share" or "Live"
+        # at every width, and no stylesheet rule hides it or its word. It
+        # replaced a one-click "Start live session" chip that collapsed to a
+        # bare dot below 900px and vanished on a phone. Widths are measured in
+        # the browser by test-dash-chrome-browser.mjs.
         run: node scripts/test-dash-stopsharing.ts
+
+      - name: dash — what each Share copy may carry
+        # The reading copy has no collab block; the invite carries an
+        # owner-signed invite and never ownerPriv or a legacy writerPriv; the
+        # view-only copy is role reader, read-only, with no private half. A
+        # field this build does not declare is dropped from all three. The
+        # same fixture through the owner's own 'file' tier keeps them all —
+        # the positive control.
+        run: node scripts/test-dash-share.ts
 
       - name: Grid surface rig
         # The sheet as an OBJECT ON A SURFACE. An eight-row dataset used to
@@ -2734,6 +2737,36 @@ jobs:
         # surface must show fields in its own container, and a planted
         # browser-dressed field must be flagged.
         run: node scripts/test-dash-fields-browser.mjs
+
+  dash-chrome-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix dash
+          npm run build:single --prefix dash
+      - name: dash's shell matches slides' and spaces'
+        # The bar's house order (mark · title · undo/redo · tools · Comment ·
+        # Share · Save · 🌐 · ?), no version text or settings button, an
+        # ink-filled Save; one-line Save ▾ rows with Version history, the JSON
+        # round trip and Start from scratch; a Share popover that connects
+        # NOTHING until Go live (every WebSocket is recorded — none at boot or
+        # on an edit, one on Go live, one when a saved shared file reopens);
+        # 🌐 switching language without a reload; and at 320/360/390px the
+        # document never scrolls sideways while ⋯ carries About, Settings,
+        # Language, Help and Share.
+        run: node scripts/test-dash-chrome-browser.mjs
 
   dash-gate-browser:
     runs-on: ubuntu-latest
