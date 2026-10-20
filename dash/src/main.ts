@@ -75,7 +75,7 @@ import {
 import { cellKey, isFormula, recalcWorkbook, workbookSources } from './cellformula.ts'
 import { Store, type Patch, setColumnType } from './store.ts'
 import { starterDoc } from './starter.ts'
-import { inferComputedType } from './computedtype.ts'
+import { inferComputedType, retypePatch } from './computedtype.ts'
 import { validateDoc } from './validate.ts'
 import { mountHelp } from './help.ts'
 // The grid's three context menus, and the popover every menu in this file is
@@ -2363,11 +2363,14 @@ async function addFormula(store: Store, sheet: TableSheet): Promise<void> {
   // to nothing. computedtype.ts runs the expression against this sheet and
   // judges the values; when they cannot be judged it says text, which is the
   // type that makes no claim.
+  // …and a number computed from Money is Money, with its format and unit, so
+  // `Value * 2` prints £8,600 beside £24,800 rather than 8600 beside 24,800.
+  const inferred = inferComputedType(sheet, got.expr)
   store.commit({
     op: 'addColumn', sheet: sheet.id,
     column: {
       id, name: got.name.trim() || t('Computed'),
-      type: inferComputedType(sheet, got.expr).type, formula: got.expr,
+      type: inferred.type, ...inferred.carry, formula: got.expr,
     },
   })
 }
@@ -2394,10 +2397,9 @@ async function editFormula(store: Store, sheet: TableSheet, col: Column): Promis
   // is exactly the case "nobody has touched this".
   const before = inferComputedType(sheet, col.formula ?? '', col.id)
   const after = inferComputedType(sheet, got.expr, col.id)
-  const retype = col.type === before.type && after.type !== col.type
   store.commit({
     op: 'setColumn', sheet: sheet.id, col: col.id,
-    patch: retype ? { formula: got.expr, type: after.type } : { formula: got.expr },
+    patch: retypePatch(col, before, after, got.expr),
   })
 }
 
