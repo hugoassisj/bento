@@ -11319,3 +11319,32 @@ shell it serves (gate 1, A2).
 
 Still for a real phone: TEE and StrongBox residency (the emulator reports
 software keys), and the API 26–29 consent path, which allows biometrics only.
+
+## 2026-10-18 — bento/connect: the plaintext store refuses while sealed (a backstop)
+
+Each app guards its own calls to the recovery and version store, about 11
+sites across four apps. kernel/src/autosave.ts is the one place they all go
+through, so it now fails closed (security): while `isBodySealed()`,
+`putRecovery` and `addVersion` refuse, and `getRecovery` and `listVersions`
+offer nothing. Deleting still works (`clearRecovery`, `clearVersions`): a sealed
+boot purges plaintext copies left from an earlier unsealed session, for that
+document only, and depends on it. The apps KEEP their guards and their purge
+calls. So the backstop can't mask a missing guard, each refusal is counted, and
+the count is readable only through the test-build probe. The sealed-test helper
+fails any sealed page whose rig leaned on it (`close()`/`reload()` throw), so an
+app's guard mutants stay red with no local kernel mutant. `build:sealtest` also
+writes `dist-sealtest/.complete` as its last step, and the helper refuses a shell
+without it: a build that fails after vite wrote the shell can no longer be scored.
+
+## 2026-10-18 — bento/connect: the page tells its host whether it is sealed
+
+A host that declares `'seal'` in `__bentoHost.ops` (Android, through
+home/bridge.js) blanks its app-switcher snapshot while a sealed document is open
+(security §30.6). kernel/src/save.ts posts `{__bento_tray__, dir:'req',
+op:'seal.state', payload:{sealed: isBodySealed()}}` at boot (capturePristine)
+and on every change: a password set or removed, the identity seal on or off. It
+posts the moment the change happens, before any save, because a password set but
+not yet saved is already a secret. The payload is a bare boolean, fire-and-forget,
+and not deduplicated: the host can only ADD blanking, so a missed `true` is the
+only failure and a redundant post costs nothing. Hosts that don't declare
+`'seal'` are sent nothing.

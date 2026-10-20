@@ -114,15 +114,36 @@ function untilOnScreen(tag) {
   return red
 }
 
+/** Wait (up to 30 s) until iOS has written its snapshots and they've stopped
+ *  changing: a cold runner can take a while, and a half-written file would be
+ *  read as something it isn't. */
+function untilSnapshotsWritten(since) {
+  let last = ''
+  for (let i = 0; i < 15; i++) {
+    sleep(2)
+    const files = sceneSnapshots(since)
+    const sig = files.map((f) => `${f}:${statSync(f).size}`).sort().join('|')
+    if (files.length && sig === last) return files
+    last = sig
+  }
+  return sceneSnapshots(since)
+}
+
+/** Open, wait for the document to show, send the app to the background, and
+ *  read the snapshots iOS writes. If iOS wrote none, the whole cycle runs once
+ *  more before anything is judged: no snapshot proves nothing either way. */
 function background(path) {
-  try { run('xcrun', ['simctl', 'terminate', DEV, BUNDLE]) } catch {}
-  rmSync(join(DATA, 'Library/SplashBoard'), { recursive: true, force: true })
-  const since = Date.now()
-  run('xcrun', ['simctl', 'launch', DEV, BUNDLE], { env: { ...process.env, SIMCTL_CHILD_BENTO_RIG_OPEN: path } })
-  const onScreen = untilOnScreen(since)
-  run('xcrun', ['simctl', 'launch', DEV, 'com.apple.Preferences'])
-  sleep(5)
-  return { onScreen, snapshots: redOf(sceneSnapshots(since)) }
+  for (let attempt = 1; ; attempt++) {
+    try { run('xcrun', ['simctl', 'terminate', DEV, BUNDLE]) } catch {}
+    rmSync(join(DATA, 'Library/SplashBoard'), { recursive: true, force: true })
+    const since = Date.now()
+    run('xcrun', ['simctl', 'launch', DEV, BUNDLE], { env: { ...process.env, SIMCTL_CHILD_BENTO_RIG_OPEN: path } })
+    const onScreen = untilOnScreen(since)
+    run('xcrun', ['simctl', 'launch', DEV, 'com.apple.Preferences'])
+    const files = untilSnapshotsWritten(since)
+    if (files.length || attempt === 2) return { onScreen, snapshots: redOf(files), attempt }
+    console.log('  (iOS wrote no snapshot yet: once more)')
+  }
 }
 
 try {
@@ -130,7 +151,7 @@ try {
   console.log('a sealed document:')
   const s = background(sealedPath)
   ok(s.onScreen > 0.5, `it is on screen while open (${(s.onScreen * 100).toFixed(0)}% red), so a clean snapshot can only come from the cover`)
-  ok(s.snapshots.length > 0, `iOS wrote app-switcher snapshots (${s.snapshots.length})`)
+  ok(s.snapshots.length > 0, `iOS wrote app-switcher snapshots (${s.snapshots.length}${s.attempt > 1 ? ', on the second try' : ''})`)
   ok(s.snapshots.length > 0 && s.snapshots.every((r) => r === 0), `none of them shows the document (${s.snapshots.map((r) => (r * 100).toFixed(1) + '%').join(', ')} red)`)
   console.log('the control, an unsealed document:')
   const p = background(plainPath)
