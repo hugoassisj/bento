@@ -37,6 +37,8 @@ import CryptoKit
 final class EditorViewController: UIViewController, WKScriptMessageHandler, WKURLSchemeHandler,
                                   WKNavigationDelegate, WKDownloadDelegate, WKUIDelegate {
     private let document: BentoDocument
+    /// the open document's saved body is sealed (bento/enc): the app switcher must not show it
+    var isSealed: Bool { SnapshotCover.isSealed(document.html) }
     private var webView: WKWebView!
 
     /// Has the open document been handed to the web app yet? Bento only reaches
