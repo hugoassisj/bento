@@ -80,10 +80,11 @@ enum IdentityRecovery {
         return k.withUnsafeBytes { Array($0) }
     }
 
-    /// the recovery blob's wrap key: HKDF(Argon2id(code, salt), empty, "bento/id/rc-wrap/v1")
+    /// the recovery blob's wrap key: HKDF(Argon2id(code, salt), empty, "bento/id/rc-wrap/v1").
+    /// nil for a malformed input, or when Argon2id.hasMemory() says no
     static func recoveryWrapKey(code: [UInt8], salt: [UInt8]) -> [UInt8]? {
         guard code.count == codeBytes, salt.count == saltLength else { return nil }
-        var stretched = Argon2id.hash(password: code, salt: salt)
+        guard var stretched = Argon2id.hash(password: code, salt: salt) else { return nil }   // no memory for it
         defer { Argon2id.wipe(&stretched) }
         return hkdf(stretched, info: "bento/id/rc-wrap/v1")
     }

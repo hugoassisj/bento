@@ -11201,6 +11201,53 @@ Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
 old pepper labels, losing O→0 when reading a code, and skipping the range
 check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
 
+## 2026-10-18 — dash's plaintext guards ask isBodySealed()
+
+Following kernel's K3 (`isBodySealed()` = a password OR the identity seal), dash
+switches every guard that keeps a workbook's plaintext off the disk:
+
+- the recovery snapshot and version timeline written on edit (main.ts), and
+  `rememberVersion` behind it (about.ts);
+- reading a recovery snapshot back (recovery.ts);
+- the file-manager preview (preview.ts), behind kernel's own `previewAllowed`;
+- drop-open (dropopen.ts): the seal's key is per document, so a window holding
+  one refuses to adopt a dropped workbook, exactly as it does for a password.
+
+The Save menu's "Set a password…" / "Remove password…" stays on
+`isEncryptionActive()`: it is about a password being held.
+
+Neutral title while sealed, matching the saved file's title.
+
+Rigs: `scripts/test-dash-sealed-browser.mjs` on the shared sealed TEST document
+(scripts/lib/sealed-boot.mjs), and the gate rows in
+`scripts/test-dash-gate-browser.mjs`.
+
+## 2026-10-18 — slides: a sealed document never offers or keeps an unsealed snapshot
+
+Slides' plaintext-to-disk guards (the autosave's recovery copy and versions, the
+⌘S checkpoint, the recovery-off notice) use kernel's `isBodySealed()`, a password
+OR the identity seal. The password menu items stay on `isEncryptionActive()`,
+because they are about the password.
+
+When a document boots sealed, any recovery copy or versions stored for ITS docId
+by an earlier unsealed session are deleted, and no Restore banner or version
+history is offered. Another document's snapshots are untouched.
+
+Two consequences, both following from the rule:
+
+- **A sealed copy can delete the original's unsaved recovery.** "Save a copy…"
+  keeps the docId. If a password is set on the copy, the copy and the unsealed
+  original share a docId, so opening the sealed copy deletes the original's
+  recovery copy and versions in that browser, including unsaved work it was
+  holding. The original FILE is untouched.
+- **A player file does not purge.** A read-only player never builds the editor,
+  so it never offers or writes a snapshot. A leftover unsealed snapshot for its
+  docId stays until the deck is opened in the editor. Security accepted this as
+  a stated residual.
+
+Guard: `scripts/test-slides-sealed-guards-browser.mjs`.
+
+
 ## 2026-10-18 — bento/connect on Android (Bento ID): the agent's two keys, the routine session, and host-stamped consent
 
 The Android agent core (phase-1 plan A1). It isn't wired to any page yet: the
@@ -11313,3 +11360,102 @@ document's card still shows its content. With the page signal (sent here
 through the same postMessage channel the kernel will use): an unsealed file
 whose page says sealed is blank; a sealed file whose page says unsealed is
 still blank; an unsealed file whose page says unsealed again shows content.
+## 2026-10-18 — bento/connect on Android: the recovery code and key blobs (Recovery.kt)
+
+The Android port of `kernel/src/recovery.ts` (K2b). It reproduces every byte of
+`kernel/fixtures/recovery-v1.json`, which `RecoveryTest` re-reads on every run.
+The directory's pepper layer is server code and is not ported.
+
+- **Argon2id is Bouncy Castle's** (`bcprov-jdk18on` 1.86, security §35),
+  pinned exactly. Gradle dependency verification
+  (`home/android/gradle/verification-metadata.xml`, sha256) now covers every
+  dependency of the Android build. A wrong checksum fails the build (checked:
+  a zeroed sha256 fails on `bcprov-jdk18on-1.86.jar`). The recorded sha256
+  matches the jar fetched independently from Maven Central, whose published
+  sha1 also matches. Changing any dependency now means regenerating the file
+  (`./gradlew --write-verification-metadata sha256 testDebugUnitTest
+  assembleDebug assembleRelease bundleRelease`).
+- **Correctness:**
+  - the RFC 9106 §5.3 row;
+  - every fixture derivation, code, parse, blob and scalar row;
+  - a randomized cross-check against Node's native Argon2id on every run
+    (`crypto.argon2Sync`; CI's Android job now sets up Node, and the check
+    never skips);
+  - the v1.0 mutant (Argon2 without the v1.3 XOR) fails the RFC row.
+
+  The reference-area off-by-one mutant can't be applied to a library we don't
+  patch. The fixture's full-parameter rows exercise that code path instead.
+- **Memory.** Argon2's blocks come from a pool that zeroes each block as it is
+  handed back and keeps none. A probe reads every block back as zero, and a
+  control pool that doesn't wipe is caught by the same probe. This is best
+  effort: the garbage collector may already have copied a block before it was
+  cleared.
+- **Low memory fails CLOSED, decided BEFORE allocating.** Measured on an
+  emulator with a 48 MiB app heap: catching `OutOfMemoryError` alone did NOT
+  hold. Filling the heap made the runtime's own threads throw it and the
+  process died. So `argon2id` first checks the heap left against the
+  blocks' real cost (1040 bytes per 1 KiB block, measured) plus 16 MiB, and
+  refuses ("recovery is unavailable on this device") without allocating. On
+  48 MiB it refuses in milliseconds and the app stays up. On the normal
+  192 MiB heap the full 64 MiB, t = 3 derivation takes 0.7–2.3 s on the
+  emulator, and matches Node byte for byte. The parameters are never weakened.
+## 2026-10-18 — bento/spaces: which checks ask isBodySealed, and the tab title while sealed
+
+Every plaintext-to-disk guard in spaces asks `isBodySealed()` (a password OR the
+identity seal): the recovery snapshot and throttled version on the autosave
+debounce, the version added on save, and the recovery-off notice (main.ts). The
+two places that still ask `isEncryptionActive()` are the password UI in
+doccmds.ts: the Change/Remove password rows act on a password an
+identity-sealed space does not have, and the version-history note names the
+password. A new guard on anything written beside the file asks
+`isBodySealed()`.
+
+Neutral title while sealed, matching the saved file's title. Every write to
+`document.title` goes through `spaces/src/tabtitle.ts` (boot, the password
+gate, rename, setting or removing a password).
+
+Guarded by `scripts/test-spaces-sealed-browser.mjs` on the build:sealtest
+shell, with an unsealed control. Reverting either main.ts guard, or the title
+helper, turns it red.
+
+**Plaintext an unsealed session left behind (security ruling, option a).** A
+sealed boot (the seal is in place before boot(), so this is the proven state)
+never offers a recovery snapshot for its docId and lists no version history;
+it then DELETES that docId's recovery snapshot and versions through the
+kernel's `clearRecovery`/`clearVersions`, the calls the password flow already
+makes. Only that docId's entries; another document's are untouched; an
+unsealed boot deletes nothing. Residual the app cannot scrub: a deleted
+IndexedDB record can linger in the browser's on-disk database files until the
+browser compacts them.
+
+The recovery-off notice's own seal check is redundant with the autosave guard
+(a sealed space never asks for a recovery copy), and is kept on purpose; a
+mutation of it alone stays green for that reason.
+## 2026-10-18 — bento/connect: the plaintext store refuses while sealed (a backstop)
+
+Each app guards its own calls to the recovery and version store, about 11
+sites across four apps. kernel/src/autosave.ts is the one place they all go
+through, so it now fails closed (security): while `isBodySealed()`,
+`putRecovery` and `addVersion` refuse, and `getRecovery` and `listVersions`
+offer nothing. Deleting still works (`clearRecovery`, `clearVersions`): a sealed
+boot purges plaintext copies left from an earlier unsealed session, for that
+document only, and depends on it. The apps KEEP their guards and their purge
+calls. So the backstop can't mask a missing guard, each refusal is counted, and
+the count is readable only through the test-build probe. The sealed-test helper
+fails any sealed page whose rig leaned on it (`close()`/`reload()` throw), so an
+app's guard mutants stay red with no local kernel mutant. `build:sealtest` also
+writes `dist-sealtest/.complete` as its last step, and the helper refuses a shell
+without it: a build that fails after vite wrote the shell can no longer be scored.
+
+## 2026-10-18 — bento/connect: the page tells its host whether it is sealed
+
+A host that declares `'seal'` in `__bentoHost.ops` (Android, through
+home/bridge.js) blanks its app-switcher snapshot while a sealed document is open
+(security §30.6). kernel/src/save.ts posts `{__bento_tray__, dir:'req',
+op:'seal.state', payload:{sealed: isBodySealed()}}` at boot (capturePristine)
+and on every change: a password set or removed, the identity seal on or off. It
+posts the moment the change happens, before any save, because a password set but
+not yet saved is already a secret. The payload is a bare boolean, fire-and-forget,
+and not deduplicated: the host can only ADD blanking, so a missed `true` is the
+only failure and a redundant post costs nothing. Hosts that don't declare
+`'seal'` are sent nothing.

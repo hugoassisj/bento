@@ -428,9 +428,10 @@ for (const [label, input, err] of [
   // as slides keeps them; About no longer holds either
   const about = fs.readFileSync(new URL('../spaces/src/doccmds.ts', import.meta.url), 'utf8')
 
-  // the debounce body must stand down when encryption is on
-  const guarded = /if \(isEncryptionActive\(\)\) return[\s\S]{0,200}?putRecovery/.test(main)
-  ok(guarded, 'main.ts skips the recovery snapshot while a space is encrypted')
+  // the debounce body must stand down while the body is sealed: a password OR
+  // the identity seal (isBodySealed; isEncryptionActive is only the password)
+  const guarded = /if \(isBodySealed\(\)\) return[\s\S]{0,200}?putRecovery/.test(main)
+  ok(guarded, 'main.ts skips the recovery snapshot while a space is sealed (password or identity seal)')
 
   // and turning encryption ON must remove what was written before it
   ok(/clearVersions\(/.test(about) && /clearRecovery\(/.test(about),
@@ -445,8 +446,10 @@ for (const [label, input, err] of [
   ok(/addVersion\(/.test(main), 'main.ts writes a version timeline at all')
   const throttled = /Date\.now\(\) - lastVersionAt > VERSION_EVERY_MS[\s\S]{0,120}?addVersion/.test(main)
   ok(throttled, '…on a throttle while editing, so one session cannot spend the cap')
-  const saveGuarded = /if \(!isEncryptionActive\(\)\) \{ void addVersion/.test(main)
-  ok(saveGuarded, '…and the SAVE path checks encryption itself, having no early return above it')
+  const saveGuarded = /if \(!isBodySealed\(\)\) \{ void addVersion/.test(main)
+  ok(saveGuarded, '…and the SAVE path checks the seal itself, having no early return above it')
+  ok(!/isEncryptionActive/.test(main.replace(/\/\/.*$/gm, '')),
+    'main.ts asks isBodySealed everywhere: no plaintext-to-disk guard reads the password-only flag')
 
   // The restore has to go through replaceDoc: it is the one path that
   // checkpoints undo first, which is what makes the note "Restoring is

@@ -89,6 +89,7 @@ import {
 import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
 } from './assets'
+import { setTabTitle } from './tabtitle.ts'
 
 const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctrlKey'
 
@@ -380,7 +381,7 @@ export class Editor {
     title.setAttribute('aria-label', t('Space name'))
     title.addEventListener('input', () => {
       this.store.runEdit('__title', () => { this.store.doc.title = title.value })
-      document.title = `${title.value} — bento/spaces`
+      setTabTitle(title.value)
     })
     this.statusEl = el('span', 'sp-status')
 

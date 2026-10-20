@@ -1090,6 +1090,19 @@ jobs:
           BENTO_TEST_APP=bento-slides node "$RUNNER_TEMP/test-autosave.mjs"
           BENTO_TEST_APP=bento-spaces node "$RUNNER_TEMP/test-autosave.mjs"
 
+
+      - name: The plaintext store refuses while sealed (bento/connect backstop)
+        # kernel/src/autosave.ts: while the body is sealed (password or identity
+        # seal), putRecovery/addVersion refuse and getRecovery/listVersions offer
+        # nothing, so an app missing one of its own guards still can't write or
+        # offer plaintext. The purge (clearRecovery/clearVersions) still works
+        # while sealed, for that document only.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-store-backstop.ts --bundle --platform=node --format=esm \
+            --alias:fake-indexeddb/auto=./slides/node_modules/fake-indexeddb/auto/index.js \
+            --outfile="$RUNNER_TEMP/test-store-backstop.mjs"
+          node "$RUNNER_TEMP/test-store-backstop.mjs"
+
       - name: Publish deletion-gate rig
         # A publish assembles site/ for ONE app and mirrors it authoritatively.
         # Measured: a spaces-shaped site/ deleted 47 live files — the signed
@@ -2499,6 +2512,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # RecoveryTest cross-checks Bouncy Castle's Argon2id against Node's native
+      # one on random cases every run (security §35), and never skips without it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Android host unit tests
         # The JVM rigs for home/android: which web origin a document may run
         # under (a different file at a path a document used before must never
@@ -2560,6 +2578,11 @@ jobs:
         # neutral <title> and filename, no preview, and no plaintext; the
         # unsealed control shows the same checks can see a leak.
         run: node scripts/test-sealed-boot.mjs
+      - name: A sealed slides deck keeps its content out of IndexedDB in Chromium
+        # The autosave and ⌘S checkpoints write no recovery copy or version for
+        # a deck sealed by identity; the password menu stays keyed to the
+        # password; the unsealed control shows the scan sees a leak.
+        run: node scripts/test-slides-sealed-guards-browser.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
@@ -2730,12 +2753,19 @@ jobs:
         run: |
           npm ci --prefix dash
           npm run build:single --prefix dash
+          npm run build:sealtest --prefix dash
       - name: An encrypted or unopenable dash file opens to its gate
         # window.bento = { format, locked: true } before the password gate and
         # the refusal page, so the shell's loader counts the app as mounted
         # instead of re-running it and failing over the gate; unlocking
         # replaces it with the real workbook.
         run: node scripts/test-dash-gate-browser.mjs
+      - name: A sealed dash workbook writes no plaintext of itself
+        # bento/connect §E on the shared sealed TEST document: recovery snapshots,
+        # the version timeline, the preview, recovery read-back and drop-open
+        # all ask isBodySealed(); neutral title while sealed, matching the saved
+        # file's title. Each row has an unsealed control that shows the leak.
+        run: node scripts/test-dash-sealed-browser.mjs
 
   home-ios-swift:
     # The home/ios Swift rigs need CryptoKit, Security and LocalAuthentication,
@@ -2857,10 +2887,18 @@ jobs:
         run: |
           npm ci --prefix spaces
           npm run build:single --prefix spaces
+          npm run build:sealtest --prefix spaces
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-spaces-save-browser.mjs
+      - name: A sealed space writes nothing readable (spaces, Chromium)
+        # The build:sealtest shell booted identity-sealed through the shared
+        # helper, plus a password space: no recovery snapshot or version in
+        # IndexedDB (also across a reload), no preview and no plaintext in the
+        # saved file, a neutral tab title, no recovery-off notice. The unsealed
+        # control shows each check can see a leak.
+        run: node scripts/test-spaces-sealed-browser.mjs
       - name: One field look in Chromium (spaces)
         # Port of slides' fields rig: every chrome text field, select and
         # textarea (inspector incl. "Also known as", dialogs, view popovers,
