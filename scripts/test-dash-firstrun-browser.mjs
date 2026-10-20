@@ -40,6 +40,12 @@ const ps = (s) => '⟦' + s.replace(/[a-zA-Z]/g, (c) => MAP[c] ?? c) + '⟧'
 /** Wholly inside the audit brackets (sentences may be joined by spaces). */
 const swept = (s) => !!s && s.trim().length > 0 && s.trim().replace(/⟦[^⟧]*⟧/g, '').replace(/[\s·.,:;()0-9£$%-]/g, '') === ''
 
+/** One block of checks. A block that throws (on old code, the page that
+ *  never boots) is a failure, and the rest of the rig still runs. */
+async function section(run) {
+  try { await run() } catch (e) { ok(false, `the block ran to the end (${String(e?.message ?? e).split('\n')[0]})`) }
+}
+
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 
 async function open(lang, { w = 1440, h = 900 } = {}) {
@@ -47,6 +53,7 @@ async function open(lang, { w = 1440, h = 900 } = {}) {
   await ctx.route(/^https?:/, (r) => r.abort())
   if (lang) await ctx.addInitScript((l) => { try { localStorage.setItem('bento-lang', l) } catch {} }, lang)
   const page = await ctx.newPage()
+  page.setDefaultTimeout(5000)
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
   page.on('dialog', (d) => d.dismiss())
@@ -82,7 +89,7 @@ try {
 
   // --------------------------------------------------------- 2. pseudo sweep
   console.log('\n2. the audit locale, and the strings it exposed\n')
-  {
+  await section(async () => {
     const { ctx, page, errors } = await open('x-pseudo')
     const formulaLabel = await page.locator('[data-act="formula"] span').textContent()
     ok(formulaLabel === ps('Formula'), `control: the audit locale is active (top bar reads ${formulaLabel})`)
@@ -131,8 +138,8 @@ try {
 
     ok(errors.length === 0, `no page errors in the audit locale (${errors.join(' | ') || 'none'})`)
     await ctx.close()
-  }
-  {
+  })
+  await section(async () => {
     const { ctx, page } = await open('x-pseudo')
     await page.locator('[data-act="formula"]').click()
     await page.waitForTimeout(200)
@@ -143,11 +150,24 @@ try {
     ok(swept(err), `the formula dialog's syntax error is swept (${err})`)
     ok(heads.length >= 2 && heads.every((h) => h.startsWith('⟦')), `the function list's headings are swept (${heads.join(' / ')})`)
     await ctx.close()
-  }
+  })
+
+  await section(async () => {
+    // In English the Total picker says words, not the model's `avg`
+    const { ctx, page } = await open('en')
+    await page.locator('.dg-cell').nth(12).click()
+    await page.waitForTimeout(200)
+    const total = await page.evaluate(() => {
+      const sel = [...document.querySelectorAll('.dp-panel select')].find((s) => [...s.options].some((o) => o.value === 'sum'))
+      return sel ? [...sel.options].map((o) => o.textContent) : null
+    })
+    ok(total?.join('/') === 'None/Sum/Average/Count/Minimum/Maximum', `the Total picker reads None/Sum/Average/Count/Minimum/Maximum (${total?.join('/')})`)
+    await ctx.close()
+  })
 
   // ---------------------------------------------------- 3. formula dialog (en)
   console.log('\n3. the formula dialog\n')
-  {
+  await section(async () => {
     const { ctx, page } = await open('en')
     await page.locator('[data-act="formula"]').click()
     await page.waitForTimeout(200)
@@ -192,11 +212,11 @@ try {
         'and its id-written formula ("value * prob") is accepted, not refused as an unknown column')
     }
     await ctx.close()
-  }
+  })
 
   // ---------------------------------------------------------- 4. sheet names
   console.log('\n4. new sheet names\n')
-  {
+  await section(async () => {
     const { ctx, page } = await open('en')
     const before = await page.evaluate(() => window.bento.doc.sheets.map((s) => s.name))
     for (const [i, kind] of [[1, 'spreadsheet'], [0, 'dataset']]) {
@@ -210,11 +230,11 @@ try {
     ok(added[0] === `Sheet${n + 1}` && added[1] === `Sheet${n + 2}`,
       `a new spreadsheet then a new dataset on a workbook of ${n} are "Sheet${n + 1}", "Sheet${n + 2}" (got ${added.join(', ')})`)
     await ctx.close()
-  }
+  })
 
   // ------------------------------------------------------------- 5. keyboard
   console.log('\n5. the keyboard reaches everything, with a visible ring\n')
-  {
+  await section(async () => {
     const { ctx, page } = await open('en')
     const where = () => page.evaluate(() => {
       const el = document.activeElement
@@ -272,17 +292,17 @@ try {
     const out = await where()
     ok(out.region !== 'grid' && out.region !== 'body', `Tab at the last column leaves the grid (now on ${out.region} ${out.tag}.${out.cls})`)
     await ctx.close()
-  }
+  })
 
   // ---------------------------------------------------------- 6. tab caption
   console.log('\n6. the sheet tab caption\n')
-  {
+  await section(async () => {
     const { ctx, page } = await open('en')
     const sizes = await page.evaluate(() => [...document.querySelectorAll('.dx-tab-word, .dx-tab-kind')]
       .map((e) => parseFloat(getComputedStyle(e).fontSize)))
     ok(sizes.length > 0 && sizes.every((s) => s >= 11), `the tab's kind caption is at least 11px (${sizes.join(', ')}px)`)
     await ctx.close()
-  }
+  })
 } finally {
   await browser.close()
 }
