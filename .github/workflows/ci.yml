@@ -894,6 +894,12 @@ jobs:
         # both key blobs, and recovered scalars checked through CryptoKit. Apple only.
         run: node scripts/test-home-id-recovery.mjs
 
+      - name: home/ios Spotlight rig
+        # What the system search index holds for a document and keeping it current
+        # after a save: replaced at once, delete-before-add when sealed, and
+        # entries removed for documents a walk no longer finds. Apple only.
+        run: node scripts/test-home-spotlight.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected
@@ -2770,6 +2776,7 @@ jobs:
             test-home-id-statements.mjs
             test-home-id-agent.mjs
             test-home-id-recovery.mjs
+            test-home-spotlight.mjs
           )
           for rig in "${rigs[@]}"; do
             echo "::group::$rig"
