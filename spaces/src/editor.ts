@@ -427,10 +427,15 @@ export class Editor {
     //   · About is reached from the wordmark, as in slides.
     //
     // A command slides has no equivalent for goes where slides would put one
-    // of its kind (DECISIONS 2026-09-26): Graph is a view, so it is a bar
-    // button beside Reading view; "Make this page an issue" acts on one page,
-    // so it is in the page's own menu; Import Markdown… is the document
-    // arriving as data, so it sits under Save beside Replace from JSON.
+    // of its kind (DECISIONS 2026-09-26): "Make this page an issue" acts on
+    // one page, so it is in the page's own menu; Import Markdown… is the
+    // document arriving as data, so it sits under Save beside Replace from JSON.
+    //
+    // THE BAR CARRIES LESS THAN IT DID (maintainer, 2026-10-20): Reading view
+    // is a floating button at the page's bottom-end corner, where slides keeps
+    // its Slideshow pill; Properties is the inspector's own chevron, `]` and,
+    // folded, a row in ⋯; Graph is a view of the TREE, so it sits in the page
+    // list's header. Search stays.
     type BarAction = {
       icon: IconName
       label: string
@@ -439,12 +444,6 @@ export class Editor {
       keep?: (b: HTMLButtonElement) => void
     }
     const barActions: BarAction[] = [
-      { icon: 'eye', label: t('Reading view'),
-        run: () => this.toggleReading(),
-        // named so a sealed copy can take it away: there is no editing to go
-        // back to, so the eye is absent rather than inert (styles.css)
-        keep: (b) => { this.readB = b; b.classList.add('sp-readtoggle') } },
-      { icon: 'graph', label: t('Graph'), run: () => this.openGraph() },
       { icon: 'print', label: t('Export PDF (print)'), kbd: keys('mod', 'P'), run: () => this.openPrint() },
     ]
 
@@ -498,10 +497,7 @@ export class Editor {
           m.separator()
         }
         if (!this.sealed) row(m, { icon: ICONS.panelRight, label: t('Properties'), kbd: ']', run: () => this.toggleInsp() })
-        for (const a of barActions) {
-          if (this.sealed && a.icon === 'eye') continue
-          row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, run: a.run })
-        }
+        for (const a of barActions) row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, run: a.run })
         // The globe's list, one tap further: a menu cannot hold a menu, so
         // the row opens the same list as its own popup (a sheet on a phone).
         const moreB = m.trigger
@@ -551,9 +547,6 @@ export class Editor {
     history.append(this.undoB, this.redoB)
     const saveGroup = el('div', 'sp-split')
     saveGroup.append(saveB, saveMore)
-    const inspB = iconBtn('panelRight', t('Properties — show or hide this block’s settings'),
-      () => this.toggleInsp())
-    inspB.classList.add('sp-insp-toggle')
 
     // Slides' layout, group for group (chrome-unification §2.1): LEFT is the
     // document (mark · title · history), then the insert tools — here the one
@@ -562,7 +555,7 @@ export class Editor {
     // ⋯ closes the row once the bar has folded — only then, as in slides — and
     // last is where slides' folded bar puts it.
     const right = el('div', 'sp-group sp-group-right')
-    right.append(search, ...inlineSecondary, inspB, this.liveSlot, saveGroup, lang, helpB, more)
+    right.append(search, ...inlineSecondary, this.liveSlot, saveGroup, lang, helpB, more)
 
     // The status goes AFTER the history and the insert tools, never before.
     // It is transient text that grows from nothing to a whole sentence, and
@@ -616,7 +609,20 @@ export class Editor {
       widthKey: 'bento-sp-insp', closedKey: 'bento-sp-insp-closed',
       show: t('Show properties (])'), hide: t('Hide properties (])'),
     })
-    body.append(this.pagesPanel.root, this.main, this.inspPanel.root)
+    // READING VIEW FLOATS, as slides' Slideshow pill does: the same pill, in
+    // the same corner — bottom-END of the page (slides' bottom-right; spaces
+    // has no zoombar to share it with). The corner is a zero-width box after
+    // the page, so the pill hangs off the page's own edge and moves with the
+    // properties panel instead of covering it. It is the way back out of
+    // reading view as well as in, so it stays there; a SEALED copy has no
+    // editing to go back to, so there it is absent (styles.css).
+    const corner = el('div', 'sp-corner')
+    this.readB = labelBtn(ICONS.eye, t('Reading view'), t('Reading view'), () => this.toggleReading())
+    this.readB.classList.add('sp-readfab', 'sp-readtoggle')
+    this.readB.setAttribute('aria-pressed', String(this.reading))
+    if (this.reading) this.readB.classList.add('sp-on')
+    corner.append(this.readB)
+    body.append(this.pagesPanel.root, this.main, corner, this.inspPanel.root)
     this.root.append(bar, body)
 
     // WHICH BLOCK THE PANEL MEANS. Capture-phase on the page, because the
@@ -992,7 +998,14 @@ export class Editor {
       fill: (m) => this.pageRows(m),
     })
     split.append(plus, this.newPageMenu.root)
-    head.append(split)
+    // GRAPH IS A VIEW OF THE TREE, so it sits on the tree's header (maintainer,
+    // 2026-10-20) — beside ＋ ▾, and still there in reading view, where ＋ ▾
+    // is not: a reader uses the graph to find their way.
+    const graphB = iconBtn('graph', t('Graph'), () => { this.closeDrawer(); this.openGraph() })
+    graphB.classList.add('sp-graphbtn')
+    const acts = el('div', 'sp-side-acts')
+    acts.append(graphB, split)
+    head.append(acts)
     this.sidebar.append(head)
 
     const list = el('ul', 'sp-tree')

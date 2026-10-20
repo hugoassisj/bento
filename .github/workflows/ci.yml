@@ -2514,6 +2514,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # RecoveryTest cross-checks Bouncy Castle's Argon2id against Node's native
+      # one on random cases every run (security §35), and never skips without it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Android host unit tests
         # The JVM rigs for home/android: which web origin a document may run
         # under (a different file at a path a document used before must never
@@ -2750,12 +2755,19 @@ jobs:
         run: |
           npm ci --prefix dash
           npm run build:single --prefix dash
+          npm run build:sealtest --prefix dash
       - name: An encrypted or unopenable dash file opens to its gate
         # window.bento = { format, locked: true } before the password gate and
         # the refusal page, so the shell's loader counts the app as mounted
         # instead of re-running it and failing over the gate; unlocking
         # replaces it with the real workbook.
         run: node scripts/test-dash-gate-browser.mjs
+      - name: A sealed dash workbook writes no plaintext of itself
+        # bento/connect §E on the shared sealed TEST document: recovery snapshots,
+        # the version timeline, the preview, recovery read-back and drop-open
+        # all ask isBodySealed(); neutral title while sealed, matching the saved
+        # file's title. Each row has an unsealed control that shows the leak.
+        run: node scripts/test-dash-sealed-browser.mjs
 
   home-ios-swift:
     # The home/ios Swift rigs need CryptoKit, Security and LocalAuthentication,

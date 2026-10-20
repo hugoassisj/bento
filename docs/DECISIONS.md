@@ -11201,6 +11201,26 @@ Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
 old pepper labels, losing O→0 when reading a code, and skipping the range
 check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
 
+## 2026-10-18 — dash's plaintext guards ask isBodySealed()
+
+Following kernel's K3 (`isBodySealed()` = a password OR the identity seal), dash
+switches every guard that keeps a workbook's plaintext off the disk:
+
+- the recovery snapshot and version timeline written on edit (main.ts), and
+  `rememberVersion` behind it (about.ts);
+- reading a recovery snapshot back (recovery.ts);
+- the file-manager preview (preview.ts), behind kernel's own `previewAllowed`;
+- drop-open (dropopen.ts): the seal's key is per document, so a window holding
+  one refuses to adopt a dropped workbook, exactly as it does for a password.
+
+The Save menu's "Set a password…" / "Remove password…" stays on
+`isEncryptionActive()`: it is about a password being held.
+
+Neutral title while sealed, matching the saved file's title.
+
+Rigs: `scripts/test-dash-sealed-browser.mjs` on the shared sealed TEST document
+(scripts/lib/sealed-boot.mjs), and the gate rows in
+`scripts/test-dash-gate-browser.mjs`.
 
 ## 2026-10-18 — slides: a sealed document never offers or keeps an unsealed snapshot
 
@@ -11320,6 +11340,71 @@ shell it serves (gate 1, A2).
 Still for a real phone: TEE and StrongBox residency (the emulator reports
 software keys), and the API 26–29 consent path, which allows biometrics only.
 
+## 2026-10-20 — spaces top bar: Reading view → floating button, Properties out (⋯ and ]), Graph → page-list header, Search stays — maintainer, 2026-10-20
+
+The maintainer ruled that bento/spaces' top bar should come closer to slides'
+(slides is the chrome reference). This supersedes the line in the
+2026-09-26 entry that made Graph "a bar button beside Reading view".
+
+- **Reading view is a floating pill**, shaped as slides' Slideshow pill
+  (`.ed-present-pill`: surface fill, hairline, 999px radius, the same soft
+  shadow, 600 weight, `--chrome` on hover) and placed in slides' corner:
+  bottom-END, 14px in, by a logical inset so RTL mirrors it. It hangs off the
+  page's own end edge (a zero-width box between the page and the properties
+  panel), so it moves with the panel instead of covering it. It is the way out
+  of reading view as well as in, so it stays there while reading. A sealed
+  reading copy has no pill, as it had no bar button.
+- **Properties left the bar.** Where the panel is a column, its chevron is
+  docked flush to the window edge when shut (the 5px-strip problem that once
+  justified a bar button no longer exists), and `]` toggles it. Folded, ⋯
+  keeps the Properties row.
+- **Graph is on the page list's header**, beside ＋ ▾. It is a view of the
+  tree, and it stays there in reading view. `bento.graph()` is unchanged.
+- **Search stays in the bar.** ⋯ no longer lists Reading view or Graph.
+
+test-spaces-chrome reads the pill's values from slides' stylesheet and holds
+the computed pill to them at 1440 and 390. It presses each new home with
+trusted input, and its before/after command walk maps each moved command to
+its new home rather than dropping it.
+## 2026-10-18 — bento/connect on Android: the recovery code and key blobs (Recovery.kt)
+
+The Android port of `kernel/src/recovery.ts` (K2b). It reproduces every byte of
+`kernel/fixtures/recovery-v1.json`, which `RecoveryTest` re-reads on every run.
+The directory's pepper layer is server code and is not ported.
+
+- **Argon2id is Bouncy Castle's** (`bcprov-jdk18on` 1.86, security §35),
+  pinned exactly. Gradle dependency verification
+  (`home/android/gradle/verification-metadata.xml`, sha256) now covers every
+  dependency of the Android build. A wrong checksum fails the build (checked:
+  a zeroed sha256 fails on `bcprov-jdk18on-1.86.jar`). The recorded sha256
+  matches the jar fetched independently from Maven Central, whose published
+  sha1 also matches. Changing any dependency now means regenerating the file
+  (`./gradlew --write-verification-metadata sha256 testDebugUnitTest
+  assembleDebug assembleRelease bundleRelease`).
+- **Correctness:**
+  - the RFC 9106 §5.3 row;
+  - every fixture derivation, code, parse, blob and scalar row;
+  - a randomized cross-check against Node's native Argon2id on every run
+    (`crypto.argon2Sync`; CI's Android job now sets up Node, and the check
+    never skips);
+  - the v1.0 mutant (Argon2 without the v1.3 XOR) fails the RFC row.
+
+  The reference-area off-by-one mutant can't be applied to a library we don't
+  patch. The fixture's full-parameter rows exercise that code path instead.
+- **Memory.** Argon2's blocks come from a pool that zeroes each block as it is
+  handed back and keeps none. A probe reads every block back as zero, and a
+  control pool that doesn't wipe is caught by the same probe. This is best
+  effort: the garbage collector may already have copied a block before it was
+  cleared.
+- **Low memory fails CLOSED, decided BEFORE allocating.** Measured on an
+  emulator with a 48 MiB app heap: catching `OutOfMemoryError` alone did NOT
+  hold. Filling the heap made the runtime's own threads throw it and the
+  process died. So `argon2id` first checks the heap left against the
+  blocks' real cost (1040 bytes per 1 KiB block, measured) plus 16 MiB, and
+  refuses ("recovery is unavailable on this device") without allocating. On
+  48 MiB it refuses in milliseconds and the app stays up. On the normal
+  192 MiB heap the full 64 MiB, t = 3 derivation takes 0.7–2.3 s on the
+  emulator, and matches Node byte for byte. The parameters are never weakened.
 ## 2026-10-18 — bento/spaces: which checks ask isBodySealed, and the tab title while sealed
 
 Every plaintext-to-disk guard in spaces asks `isBodySealed()` (a password OR the
