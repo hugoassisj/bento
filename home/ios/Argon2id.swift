@@ -44,15 +44,22 @@ enum Argon2id {
     }
 
     /// How much more this process may allocate before iOS ends it. nil where
-    /// there's no such limit: the simulator and the Mac. Replaceable so the rig
-    /// can stand in a low-memory device.
-    nonisolated(unsafe) static var availableMemory: () -> Int? = {
+    /// there's no such limit: the simulator and the Mac.
+    static func platformAvailableMemory() -> Int? {
         #if os(iOS) && !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
         return Int(os_proc_available_memory())
         #else
         return nil
         #endif
     }
+
+    #if DEBUG || BENTO_WIPE_PROBE
+    /// Replaceable in DEBUG and rig builds only, so the rig can stand in a
+    /// low-memory device. A release build can't swap the reading.
+    nonisolated(unsafe) static var availableMemory: () -> Int? = platformAvailableMemory
+    #else
+    static let availableMemory: () -> Int? = platformAvailableMemory
+    #endif
 
     /// Whether a derivation with these parameters can run now: what the UI asks
     /// so it can say why a recovery can't go ahead.
