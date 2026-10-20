@@ -118,6 +118,9 @@ try {
     console.log(`\n${theme} theme\n`)
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 960 } })
     await ctx.addInitScript((th) => { try { localStorage.setItem('bento-theme', th) } catch {} }, theme)
+    // 3D sits behind a developer flag (off by default); this rig measures its
+    // panel's fields, so it turns the flag on.
+    await ctx.addInitScript(() => { try { localStorage.setItem('bento-dash-dev-3d', 'on') } catch {} })
     await ctx.route(/^https?:/, (r) => r.abort())
     const fresh = async () => {
       const p = await ctx.newPage()
@@ -153,12 +156,15 @@ try {
       ok(own >= s.min && bad.length === 0,
         `${s.name}: ${own} field(s) of its own (floor ${s.min}), all ${res.fields.length} on the page in the field look` +
         bad.map(([f, pr]) => `\n          ${f.id}: ${pr.join('; ')}`).join(''))
-      if (s.name === 'chart') focusPage = p
+      // the dataset panel carries all three kinds (text, number, select). It was
+      // the chart's page while the chart sat beside the cell panel; the chart
+      // now owns the panel with its own editor, which has no number field.
+      if (s.name === 'properties panel (dataset)') focusPage = p
       else await p.close()
     }
     ok(total >= 150, `${total} fields measured across ${SURFACES.length} surfaces`)
 
-    // 2. the focus ring, on each kind of field the chart panel carries
+    // 2. the focus ring, on each kind of field the dataset panel carries
     const p = focusPage
     for (const sel of ['input[type="text"]', 'input[type="number"]', 'select']) {
       const ring = await p.evaluate((sel) => {

@@ -12,6 +12,26 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **Pivot tables have a field editor, and open like any sheet.** Click a
+  pivot's tab and it shows where the grid was, with its fields in the
+  properties panel: drag a column (or pick it) into Rows, Columns, Values or
+  Filters, choose Sum, Average, Count, Min, Max, Median or Distinct for each
+  value, tick which values a filter keeps, and switch subtotals, grand totals
+  and (blank) groups. Values print in their column's format, so money stays
+  £. The pivot tab used to say "open it from ＋ Pivot" and the Grand total
+  column was cut off at the edge of a side panel.
+- **Chart charts what you selected, and has an editor.** Select the columns
+  first: the numbers become the series and the first text column the
+  categories (it used to chart the first three numeric columns whatever was
+  selected). Click the chart, or its Edit button, and the properties panel
+  edits it: type, title, categories, how rows are summed, legend, and a series
+  list with a colour each. The value axis wears the column's format (£, %).
+  A line through categories with no order (Region) is drawn as bars and says
+  why; "Draw a line anyway" draws it.
+- **3D is off the toolbar.** It is a developer tool for now; a story step that
+  already holds a 3D view still plays it.
+- **The column filter lists values the way the column shows them** — £4,300,
+  not 4300 — and a search for "4,300" finds it.
 - **Neutral title while sealed, matching the saved file's title.**
 - **A sealed workbook deletes this browser's earlier plaintext recovery copy and version history of itself** on open; other workbooks' copies are untouched.
 

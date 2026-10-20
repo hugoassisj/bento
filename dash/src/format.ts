@@ -145,6 +145,26 @@ export function formatValue(v: unknown, col: Pick<Column, 'type' | 'format'>): s
   return isPct && !p.pct && !p.suffix ? `${out}%` : out
 }
 
+/**
+ * A value as a LIST shows it — a filter checklist, the pivot's filter list.
+ *
+ * A quantity prints the way its column prints it: a money column's box says
+ * £4,300 because the cell above it says £4,300, and a checklist that said 4300
+ * asked the reader to translate between two spellings of one number on one
+ * screen. Everything else prints as stored. `formatValue` is NOT used for those
+ * on purpose: it prints `false` in a Yes/No column as '' — the empty label the
+ * "(Blanks)" box owns — and a list must never offer two boxes that read alike.
+ */
+export function listLabel(v: unknown, col: Pick<Column, 'type' | 'format'> | undefined): string {
+  if (v == null) return ''
+  const t = col?.type
+  if (col && (t === 'number' || t === 'money' || t === 'percent')) {
+    const n = typeof v === 'number' ? v : Number(v)
+    if (Number.isFinite(n) && String(v).trim() !== '') return formatValue(n, col)
+  }
+  return String(v)
+}
+
 /** Right-align anything that is a quantity; left-align anything that is a word. */
 export const alignFor = (t: ColumnType): 'left' | 'right' =>
   t === 'number' || t === 'money' || t === 'percent' ? 'right' : 'left'

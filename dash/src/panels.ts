@@ -44,7 +44,7 @@ import {
   buildValidationSection, canvasEntryAt, canvasRulePatch, canvasRules, columnRule,
   countViolations, columnRulePatch, boxRef, type DataRule,
 } from './datavalid.ts'
-import { mountTabs, renameSheetPatches } from './tabs.ts'
+import { mountTabs, renameSheetPatches, type SheetViews } from './tabs.ts'
 import { inferComputedType } from './computedtype.ts'
 import { buildCondFmtSection, condFmtPatch, readCondFmt } from './condfmtui.ts'
 import { toast } from './saveui.ts'
@@ -164,6 +164,23 @@ export interface PanelsHost {
   grid: Grid
   /** the `.dx-body` element — panels wrap whatever is already inside it */
   body: HTMLElement
+  /** sheets shown in place of the grid (a pivot) — handed on to the tab strip */
+  views?: SheetViews
+}
+
+/**
+ * Something other than the grid's selection that owns the panel for now — a
+ * pivot's field editor while the pivot is up, a chart's editor while the chart
+ * is being worked on. Slides' panel does the same thing by element type: select
+ * a chart and the panel is the chart's.
+ *
+ * `build` draws into the panel with the same row builders every section uses,
+ * and is called again on every document event, so it reads the document fresh
+ * each time rather than holding onto what it drew.
+ */
+export interface PanelOverride {
+  key: string
+  build(host: HTMLElement, kit: PanelKit): void
 }
 
 export interface Panels {
@@ -181,6 +198,10 @@ export interface Panels {
    * which boots with the panel shut, by design.
    */
   reveal(title: string): void
+  /** Hand the panel to something other than the grid, or give it back (null). */
+  setOverride(o: PanelOverride | null): void
+  /** Who has the panel, or null for the grid. */
+  override(): string | null
 }
 
 export function mountPanels(host: PanelsHost): Panels {
@@ -222,7 +243,7 @@ export function mountPanels(host: PanelsHost): Panels {
   // the other half of that move is wired; the alternative (a second call in
   // main.ts) mounts the strip TWICE if this line is ever forgotten, which is
   // exactly the shape of bug two people editing one screen produce.
-  mountTabs({ store, grid, body })
+  mountTabs({ store, grid, body, views: host.views })
 
   // --- widths and collapse, both remembered ---------------------------------
 
@@ -359,8 +380,15 @@ export function mountPanels(host: PanelsHost): Panels {
 
   // --- the properties panel -------------------------------------------------
 
+  let owner: PanelOverride | null = null
+
   function renderProps(): void {
     right.textContent = ''
+    if (owner) {
+      owner.build(right, KIT)
+      applyAccordion(right)
+      return
+    }
     const sheet = currentSheet()
     if (!sheet) {
       // A SPREADSHEET IS NOT A MISSING TABLE, and it is not an EMPTY panel
@@ -912,7 +940,13 @@ export function mountPanels(host: PanelsHost): Panels {
     }
   }
 
-  return { toggle, refresh: () => render(true), reveal }
+  function setOverride(o: PanelOverride | null): void {
+    if ((owner?.key ?? null) === (o?.key ?? null) && owner === o) return
+    owner = o
+    render(true)
+  }
+
+  return { toggle, refresh: () => render(true), reveal, setOverride, override: () => owner?.key ?? null }
 }
 
 // --- a popover, placed against a rect ---------------------------------------

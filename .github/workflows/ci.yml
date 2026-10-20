@@ -1239,6 +1239,19 @@ jobs:
         # different number, and a distinct count does not add up.
         run: node scripts/test-dash-pivot.ts
 
+      - name: bento/dash pivot field editor
+        # The editor's spec operations (a grouping field in one area, values
+        # never the same column and function twice, inputs never mutated) and
+        # pivots computed over configured fields — sum, average, distinct, min,
+        # max — with the pivot's own filters through a JSON round trip.
+        run: node scripts/test-dash-pivotfields.ts
+
+      - name: bento/dash chart from the selection
+        # The selected columns are the series; a line through categories with
+        # no order is refused unless asked; the axis wears the column's format;
+        # series colours follow the column, not the position.
+        run: node scripts/test-dash-chartbind.ts
+
       - name: bento/dash dashboard
         # Cross-filter selections compose, and the categories of a column
         # PARTITION the sheet — no row dropped, none counted twice.
@@ -2734,6 +2747,13 @@ jobs:
         # surface must show fields in its own container, and a planted
         # browser-dressed field must be flagged.
         run: node scripts/test-dash-fields-browser.mjs
+      - name: The pivot and chart tools finish what they start
+        # The pivot opens from its tab with a field editor (drag and pick),
+        # distinct counts and filters compute and survive a save; the Grand
+        # total is reachable; the chart is of the selection, refuses a line
+        # through Region unless asked, puts £ on its axis and undoes its title;
+        # 3D sits behind a dev flag; the filter checklist shows £4,300.
+        run: node scripts/test-dash-pivotchart-browser.mjs
 
   dash-gate-browser:
     runs-on: ubuntu-latest

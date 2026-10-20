@@ -34,7 +34,7 @@ import { FileWriteBack } from './writeback.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
 import { mountAbout, openAbout, rememberVersion, checkAtLaunch } from './about.ts'
 import { runSql, sqlRows } from './sql.ts'
-import { mountPanels, type Panels } from './panels.ts'
+import { mountPanels, KIT, type Panels } from './panels.ts'
 import { installStory } from './story.ts'
 import { Dashboard } from './dashboard.ts'
 import { SyncSession } from './sync/session.ts'
@@ -42,7 +42,8 @@ import { mountPeople } from './sync/people.ts'
 import { ridBase, ridBlockFor, docForExport } from './model.ts'
 import { setRidBlock } from './rowcol.ts'
 import { importXlsx, installNames, exportXlsx, xlsxFileName } from './xlsx.ts'
-import { runPivot, mountPivot, defaultPivot, newPivotSheet, type PivotSpec } from './pivot.ts'
+import { runPivot, mountPivot, defaultPivot, newPivotSheet, isPivotSheet, readPivotSpec, type PivotSheet, type PivotSpec } from './pivot.ts'
+import { buildPivotFields } from './pivotfields.ts'
 import { buildSheetPreview } from './preview.ts'
 import { installPrint, openPrintDialog } from './print.ts'
 import './ask.css'
@@ -63,6 +64,7 @@ import {
 // can never be imported at all. See the block above `ACTIONS` for the rest.
 import {
   ACTIONS, ACTION_IDS, actionReason, mintSheetId, mintSheetName, type ActionId,
+  type SheetViews,
 } from './tabs.ts'
 // The bridge between the two kinds of sheet — pure, and tested with no DOM in
 // `scripts/test-dash-promote.ts`. Everything below is the gesture; every
@@ -102,7 +104,10 @@ import {
 import { planTableSplit, planCanvasSplit, type SplitSpec } from './tocolumns.ts'
 import { importDelimited } from './import.ts'
 import { TYPE_LABEL } from './format.ts'
-import { defaultBinding, renderChart, chartHeading, missingColumns, type ChartBinding } from './chart.ts'
+import {
+  defaultBinding, bindingFromSelection, renderChart, chartHeading, missingColumns, type ChartBinding,
+} from './chart.ts'
+import { buildChartEditor } from './chartedit.ts'
 import { readCell } from './store.ts'
 import { hiddenSet } from './rowcol.ts'
 import { FUNCTIONS, dependencies, recalc } from './formula.ts'
@@ -154,6 +159,12 @@ const ICON = {
 } as const
 
 /** A top-bar button: icon + collapsible label, the one shape the bar can shrink. */
+/** The developer flag that shows the 3D tool. Read once at boot, never throws. */
+const DEV_3D_KEY = 'bento-dash-dev-3d'
+const dev3d = (): boolean => {
+  try { return localStorage.getItem(DEV_3D_KEY) === 'on' } catch { return false }
+}
+
 const barBtn = (act: string, icon: string, label: string, tip: string, extra = ''): string =>
   `<button class="dx-btn${extra}" data-act="${act}" title="${esc(tip)}">${icon}<span>${esc(label)}</span></button>`
 
@@ -445,6 +456,13 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     `<div class="dx-findings" hidden></div>` +
     `<div class="dx-body"><div class="dx-grid"></div>` +
     `<div class="dx-dash" hidden></div>` +
+    // THE PIVOT SHEET, drawn where the grid was. A pivot is a sheet with a tab,
+    // so opening it has to look like opening a sheet — not like a side panel
+    // beside some other sheet, which is where it used to live and where its
+    // Grand total column ran off the edge of a 400px pane.
+    `<div class="dx-pivotview" hidden><div class="dx-pivotview-head">` +
+    `<span class="dx-pivotview-title"></span><span class="dx-pivotview-src"></span></div>` +
+    `<div class="dx-pivotview-body"></div></div>` +
     `<div class="dx-chart" hidden><div class="dx-chart-head">` +
     `<span class="dx-chart-title"></span>` +
     `<button class="dx-btn dx-chart-kind">${t('Bar')}</button>` +
@@ -452,6 +470,17 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     `</div><div class="dx-chart-body"></div></div></div>` +
     `<footer class="dx-status"><span class="dx-status-view"></span>` +
     `<span class="dx-status-sum"></span></footer>`
+
+  // 3D IS A DEVELOPER TOOL UNTIL IT EARNS A PLACE. Unlabelled blocks with the
+  // camera inside a cube is not something any peer leads with, and a toolbar
+  // button is a promise. Off by default, per viewer, never in the document:
+  // `localStorage['bento-dash-dev-3d'] = 'on'` brings the button back. viz3d.ts
+  // stays, and a story step that already holds a 3D view still plays it.
+  if (!dev3d()) {
+    const b3 = app.querySelector<HTMLElement>('[data-act="viz3d"]')!
+    b3.hidden = true
+    b3.style.display = 'none'
+  }
 
   const titleEl = app.querySelector<HTMLInputElement>('.dx-title')!
   const dirtyEl = app.querySelector<HTMLElement>('.dx-dirty')!
@@ -488,9 +517,17 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // Both read the same string from the same table, so a reader who clicks
   // anyway is told exactly what the tooltip said rather than something new.
 
+  /**
+   * The pivot sheet shown in place of the grid, or null. Declared here, above
+   * `shownSheet`, because while a pivot is up IT is the sheet on screen: every
+   * toolbar gate reads the kind through `shownSheet`, and a Chart button lit
+   * over a pivot would chart the dataset hidden underneath it.
+   */
+  let pivotShown: string | null = null
+
   /** The sheet on screen, whatever its kind — `grid.sheet` narrows and throws. */
   const shownSheet = (): Sheet | undefined =>
-    store.doc.sheets.find((s) => s.id === grid.showingId())
+    store.doc.sheets.find((s) => s.id === (pivotShown ?? grid.showingId()))
 
   /** Its kind, or `''` when the grid points at nothing that is still there. */
   const shownKind = (): string =>
@@ -780,7 +817,11 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // keyboard: the grid owns the key set when nothing else has focus
   document.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement | null
-    if (t && (t.tagName === 'INPUT' || t.isContentEditable)) return
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable)) return
+    // THE GRID IS HIDDEN UNDER A PIVOT, and a key that reached it would type
+    // into a cell nobody can see. Only history passes: ⌘Z after moving a field
+    // is the undo of that move, and the grid's key map is the one route to it.
+    if (pivotShown && !(keyToAction(e)?.kind === 'undo' || keyToAction(e)?.kind === 'redo')) return
     // A bare printable key REPLACES the selected cell — the most-used gesture
     // in a spreadsheet, and the one that makes a grid feel like one. It has to
     // be tried before keyToAction, which returns null for printable keys
@@ -889,8 +930,16 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // to its own sheet and only needs the shown one to say so.
     const shown = shownSheet()
     const shownId = shown?.id ?? ''
-    chartTitle.textContent = chartHeading(sheet, binding, shownId)
-    kindBtn.textContent = binding.kind[0].toUpperCase() + binding.kind.slice(1)
+    // The author's title when there is one — but the sheet is still named when
+    // it is not the one on screen, which is a warning and not a caption.
+    chartTitle.textContent = binding.title
+      ? (shownId && shownId !== sheet.id ? `${sheet.name} · ${binding.title}` : binding.title)
+      : chartHeading(sheet, binding, shownId)
+    // The 2D chart's controls live in the panel now (chartedit.ts), so the
+    // head's button opens them. It used to CYCLE the type, Bar → Line → Pie,
+    // which drew a line through Region on the second click.
+    kindBtn.textContent = t('Edit')
+    kindBtn.title = t('Edit this chart')
     teardown = renderChart(chartBody, sheet, binding,
       // the grid's freshly computed formula columns, so the chart shows the
       // numbers on screen rather than the raw columns underneath them — but
@@ -907,6 +956,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
         // reader cannot see (measured: £97,050 beside a £69,050 footer).
         rows: store.order[sheet.id] ?? null,
         showing: shown && shown.id !== sheet.id ? { id: shown.id, name: shown.name } : null,
+        onAllowLine: store.readOnly ? undefined : () => setBinding({ ...binding!, allowLine: true }),
         onRebind: () => {
           // "Chart this sheet instead" — and the sheet it would rebind to can be
           // a spreadsheet, which has no columns to bind. Same guard, same
@@ -946,7 +996,18 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     else if (!want && binding) {
       teardown?.(); teardown = null
       binding = null; chartSheetId = null; chartEl.hidden = true
-    } else drawChart()
+      unEditChart()
+    } else {
+      // THE DOCUMENT CHANGED THE CHART — an undo of a title, a colour, a series.
+      // The live copy follows it, or ⌘Z moved the file and left the plot and the
+      // editor showing the edit that was just taken back.
+      if (want && binding && typeof want.sheet === 'string' && want.binding &&
+          JSON.stringify(want) !== JSON.stringify({ sheet: chartSheetId, binding })) {
+        binding = structuredClone(want.binding)
+        chartSheetId = want.sheet
+      }
+      drawChart()
+    }
   }
   store.on('doc', syncChartPanel)
   // FILTERING AND SORTING ARE VIEW STATE: `store.view()` emits `view` and never
@@ -960,31 +1021,79 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
       return
     }
     if (!binding) return
-    binding.kind = KINDS[(KINDS.indexOf(binding.kind) + 1) % KINDS.length]
+    editChart(true)
+  })
+
+  // --- the chart editor (chartedit.ts), in the properties panel ---------------
+  //
+  // THE CHART IS AN OBJECT YOU SELECT. Clicking it (or Edit, or making it) hands
+  // the panel to its editor; clicking back into the grid hands the panel back to
+  // the cell. Slides does the same by element type, and it is why the editor
+  // can live in the panel the reader already knows instead of a third pane.
+  /** Replace the binding, keep the file and the plot in step. */
+  const setBinding = (next: ChartBinding): void => {
+    binding = next
     rememberChart()
     drawChart()
-  })
+    // `rememberChart` commits, and the commit rebuilds the panel; a read-only
+    // workbook commits nothing, so the panel is asked directly.
+    if (store.readOnly) panels?.refresh()
+  }
+  const chartEditor = {
+    key: 'chart',
+    build: (host: HTMLElement, kit: typeof KIT): void => {
+      const sheet = chartSheet()
+      if (!binding || !sheet) return
+      buildChartEditor({ host, kit, sheet, binding, readOnly: store.readOnly, set: setBinding })
+    },
+  }
+  /** Give the panel to the chart editor — and, asked from a button, open it. */
+  const editChart = (reveal = false): void => {
+    if (!binding || chartEl.hidden || !panels) return
+    panels.setOverride(chartEditor)
+    if (reveal) panels.reveal(t('Chart'))
+  }
+  const unEditChart = (): void => {
+    if (panels?.override() === 'chart') panels.setOverride(null)
+  }
+  // On the plot, not the head's buttons: ✕ closes, and a close must not first
+  // pull the panel over to an editor for a chart that is about to go.
+  chartBody.addEventListener('pointerdown', () => { if (binding && !viz) editChart() })
+  // Back to the grid, back to the cell. CAPTURE, so it lands before the grid's
+  // own handlers repaint the selection the panel is about to describe.
+  app.querySelector<HTMLElement>('.dx-grid')!.addEventListener('pointerdown', unEditChart, true)
   app.querySelector('.dx-chart-close')!.addEventListener('click', () => {
     chartEl.hidden = true
     // Closing the panel is closing the chart — the document should not keep a
     // chart the reader has just dismissed and would not see on reopening.
     binding = null; chartSheetId = null
     rememberChart()
-    clearPivot()
+    unEditChart()
     teardown?.(); teardown = null
     vizDown?.(); vizDown = null; viz = null; vizSheetId = null
   })
   app.querySelector('[data-act="chart"]')!.addEventListener('click', () => {
     const sheet = dataset('chart')
     if (!sheet) return
-    clearPivot()
     vizDown?.(); vizDown = null; viz = null; vizSheetId = null
-    binding = defaultBinding(sheet)
+    // THE SELECTION, as the tooltip has always said ("Chart the selected
+    // columns"): its measures are the series, its first text column the
+    // categories. A selection with nothing numeric in it falls back to the
+    // sheet's own default rather than an empty axis.
+    const vis = grid.visibleColumns()
+    const at = new Set<number>()
+    for (const r of grid.sel.ranges()) {
+      const box = normalize(r)
+      for (let c = box.left; c <= box.right; c++) at.add(c)
+    }
+    const picked = [...at].sort((a, b) => a - b).map((i) => vis[i]?.id).filter((id): id is string => !!id)
+    binding = bindingFromSelection(sheet, picked)
     chartSheetId = sheet.id
     if (!binding) { showFindings(findingsEl, [{ message: t('This sheet has no numeric column to chart yet.') }]); return }
     chartEl.hidden = false
     rememberChart()
     drawChart()
+    editChart()
   })
   /**
    * REOPEN THE CHART THE FILE WAS SAVED WITH.
@@ -1073,7 +1182,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   app.querySelector('[data-act="viz3d"]')!.addEventListener('click', () => {
     const sheet = dataset('viz3d')
     if (!sheet) return
-    clearPivot()
+    unEditChart()
     viz = defaultViz3d(sheet)
     if (!viz) {
       showFindings(findingsEl, [{ message: t('This sheet needs at least three numeric columns, or a latitude and longitude, to plot in 3D.') }])
@@ -1088,7 +1197,16 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // Sheets on the left, properties on the right — the suite's shared chrome.
   // AFTER grid.onSelectionChange is set: mountPanels CHAINS that callback
   // rather than replacing it, so the formula bar and status bar keep working.
-  panels = mountPanels({ store, grid, body: app.querySelector<HTMLElement>('.dx-body')! })
+  // The pivot's door into the tab strip. LATE-BOUND: the open/close verbs are
+  // declared further down, beside the pivot view they drive, and nothing calls
+  // these until a tab is clicked.
+  const views: SheetViews = {
+    showing: () => pivotShown,
+    canOpen: (s) => isPivotSheet(s),
+    open: (s) => openPivot(s.id),
+    close: () => closePivot(),
+  }
+  panels = mountPanels({ store, grid, body: app.querySelector<HTMLElement>('.dx-body')!, views })
 
 
   // Comments. AFTER mountPanels, which chains grid.onSheetChange.
@@ -1105,33 +1223,107 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // quarter" is an argument about what the data means, somebody built it, and
   // "look at the pivot on sheet 3" has to name something that exists in the
   // file. The sheet stores the SPEC and never the numbers.
-  let pivotSpec: PivotSpec | null = null
+  //
+  // IT OPENS LIKE A SHEET. Its tab shows it where the grid was, and the
+  // properties panel becomes its field editor (pivotfields.ts) — Excel's
+  // PivotTable Fields pane, in the place dash's panel already is. Which pivot is
+  // up is VIEW state, exactly as which tab is up is: nothing about opening one
+  // is written to the file.
+  const pivotEl = app.querySelector<HTMLElement>('.dx-pivotview')!
+  const pivotBody = app.querySelector<HTMLElement>('.dx-pivotview-body')!
+  const gridEl = app.querySelector<HTMLElement>('.dx-grid')!
   let pivotDown: (() => void) | null = null
-  const drawPivot = (): void => {
-    if (!pivotSpec || chartEl.hidden) return
-    pivotDown?.(); teardown?.(); teardown = null
-    const src = store.doc.sheets.find((sh) => sh.id === pivotSpec!.from)
-    if (!src || src.kind !== 'table') return
-    chartTitle.textContent = `${t('Pivot')} · ${src.name}`
-    // A pivot has no chart KIND, so the Bar/Line toggle beside the title is a
-    // control that does nothing to what is on screen. Hidden here and restored
-    // by the chart path below.
-    kindBtn.hidden = true
-    // `grid.computed` IS KEYED BY COLUMN ID AND BELONGS TO THE SHOWN SHEET, so
-    // handing it to a pivot pinned to another one summarises this sheet's
-    // formulas under that sheet's column names — the mistake `drawChart` names
-    // in its own comment. Off the source sheet (a spreadsheet tab included),
-    // recompute the source's own values instead.
-    const computed = src.id === grid.showingId()
+  const pivotSheet = (): PivotSheet | null => {
+    const s = store.doc.sheets.find((x) => x.id === pivotShown)
+    return s && isPivotSheet(s) ? s : null
+  }
+  const pivotSource = (spec: PivotSpec): TableSheet | null => {
+    const s = store.doc.sheets.find((x) => x.id === spec.from)
+    return s && s.kind === 'table' ? s : null
+  }
+  // `grid.computed` IS KEYED BY COLUMN ID AND BELONGS TO THE SHOWN SHEET — and
+  // under a pivot the grid is hidden on whatever sheet it was last on, which is
+  // only sometimes the source. Off the source, recompute the source's own.
+  const sourceComputed = (src: TableSheet): Map<string, unknown[]> =>
+    src.id === grid.showingId()
       ? (grid.computed as Map<string, unknown[]>)
       : (recalc(src, store.doc.modified).values as Map<string, unknown[]>)
-    pivotDown = mountPivot(chartBody, runPivot(src, pivotSpec, { computed }), { sheet: src, computed })
+  const drawPivot = (): void => {
+    const ps = pivotSheet()
+    if (!ps) return
+    const spec = readPivotSpec(ps)!
+    const src = pivotSource(spec)
+    pivotDown?.(); pivotDown = null
+    app.querySelector<HTMLElement>('.dx-pivotview-title')!.textContent = ps.name
+    const srcEl = app.querySelector<HTMLElement>('.dx-pivotview-src')!
+    if (!src) {
+      srcEl.textContent = ''
+      pivotBody.textContent = ''
+      const p = document.createElement('p')
+      p.className = 'dxp-empty'
+      p.textContent = t('The sheet this pivot summarised is not in the workbook any more.')
+      pivotBody.append(p)
+      return
+    }
+    srcEl.textContent = t('from {sheet}', { sheet: src.name })
+    const computed = sourceComputed(src)
+    pivotDown = mountPivot(pivotBody, runPivot(src, spec, { computed }), { sheet: src, computed })
   }
-  const clearPivot = (): void => {
-    pivotDown?.(); pivotDown = null; pivotSpec = null
-    kindBtn.hidden = false
+  const pivotFields = {
+    key: 'pivot',
+    build: (host: HTMLElement, kit: typeof KIT): void => {
+      const ps = pivotSheet()
+      if (!ps) return
+      const src = pivotSource(readPivotSpec(ps)!)
+      buildPivotFields({
+        host, kit, sheet: ps, source: src,
+        computed: src ? sourceComputed(src) : undefined,
+        readOnly: store.readOnly,
+        // ONE PATCH PER EDIT, so a press of undo takes back exactly the field
+        // that moved. `setSheet` replaces the sheet whole; its inverse is the
+        // sheet as it was.
+        commit: (spec) => {
+          const cur = pivotSheet()
+          if (!cur || store.readOnly) return
+          store.commit({ op: 'setSheet', id: cur.id, sheet: { ...cur, pivot: spec } as never })
+        },
+      })
+    },
   }
-  store.on('doc', () => { if (pivotSpec) drawPivot() })
+  const openPivot = (id: string): boolean => {
+    const s = store.doc.sheets.find((x) => x.id === id)
+    if (!s || !isPivotSheet(s)) return false
+    pivotShown = id
+    gridEl.hidden = true
+    dashEl.hidden = true
+    pivotEl.hidden = false
+    drawPivot()
+    panels?.setOverride(pivotFields)
+    gateActions(true)
+    syncBridge()
+    views.onChange?.()
+    return true
+  }
+  const closePivot = (): void => {
+    if (!pivotShown) return
+    pivotShown = null
+    pivotDown?.(); pivotDown = null
+    pivotEl.hidden = true
+    gridEl.hidden = false
+    if (panels?.override() === 'pivot') panels.setOverride(null)
+    gateActions(true)
+    syncBridge()
+    views.onChange?.()
+  }
+  // THE DOCUMENT CAN TAKE THE PIVOT AWAY: a delete, an undo of the Pivot button
+  // that made it, a collaborator, About's restore. The view closes rather than
+  // keeping the last numbers it drew on screen.
+  store.on('doc', () => {
+    if (!pivotShown) return
+    if (!pivotSheet()) closePivot()
+    else drawPivot()
+  })
+  store.on('view', () => { if (pivotShown) drawPivot() })
 
   // REGISTERED AFTER ALL THREE PANELS EXIST, and that is not tidiness: this
   // closure calls `drawPivot`, a `const` declared above, and a sheet switch
@@ -1147,7 +1339,9 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // hook they corrected themselves only at the next keystroke.
   grid.onSheetChange = (id) => {
     chartAfterSheetChange?.(id)
-    drawChart(); draw3d(); drawPivot()
+    // The grid moved to a sheet, so the grid is what is on screen now.
+    closePivot()
+    drawChart(); draw3d()
     gateActions()
   }
   // AND ON `doc`, because a sheet switch is not the only way the kind under the
@@ -1192,15 +1386,15 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // A PATCH, not replaceDoc: creating a pivot used to clear the undo stack,
     // so every edit you could previously take back vanished the moment you
     // asked for a summary of them.
+    // Placed RIGHT AFTER its source, where a reader looks for it, rather than
+    // at the far end of the strip.
     const id = `pivot-${Math.floor(Date.now() % 1e8).toString(36)}`
+    const at = store.doc.sheets.findIndex((s) => s.id === from.id) + 1
     store.commit({
-      op: 'setSheet', id,
-      sheet: newPivotSheet(id, `${from.name} — ${t('pivot')}`, spec),
+      op: 'setSheet', id, at,
+      sheet: newPivotSheet(id, mintSheetName(store.doc, `${from.name} — ${t('pivot')}`), spec),
     } as never)
-    binding = null; viz = null; vizDown?.(); vizDown = null; vizSheetId = null
-    pivotSpec = spec
-    chartEl.hidden = false
-    drawPivot()
+    openPivot(id)
   })
 
   // --- the dashboard. The LAYOUT is document data (doc.views); the SELECTION
@@ -1212,6 +1406,8 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   dash.computed = () => grid.computed as Map<string, unknown[]>
   app.querySelector('[data-act="dashboard"]')!.addEventListener('click', () => {
     const show = dashEl.hidden
+    // The dashboard takes the centre, so a pivot that had it gives it back.
+    if (show) closePivot()
     dashEl.hidden = !show
     app.querySelector<HTMLElement>('.dx-grid')!.hidden = show
     if (show) dash.render()
