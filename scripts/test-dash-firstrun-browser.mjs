@@ -288,6 +288,8 @@ try {
     const settle = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))))
     await page.locator('.dg-row[data-row="1"] .dg-cell[data-ci]').first().click()
     await settle()
+    const afterClick = await where()
+    ok(afterClick.region === 'grid' && afterClick.cursor, `a clicked cell takes focus (focus on ${afterClick.region} ${afterClick.tag}.${afterClick.cls} "${afterClick.text}")`)
     const ciBefore = await page.evaluate(() => document.querySelector('.dg-cursor')?.getAttribute('data-ci'))
     await page.keyboard.press('Tab')
     await settle()
