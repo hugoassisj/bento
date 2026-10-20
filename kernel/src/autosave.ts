@@ -297,6 +297,7 @@ export async function clearRecovery(docId: string): Promise<void> {
     } catch { /* host unavailable: nothing to clear there */ }
   }
   await tx(RECOVERY, 'readwrite', (s) => s.delete(docId))
+  if (isBodySealed()) await purgeLegacy(docId, RECOVERY)
 }
 
 /** Delete every version-history snapshot for a docId. Used when a deck is
@@ -305,6 +306,41 @@ export async function clearRecovery(docId: string): Promise<void> {
 export async function clearVersions(docId: string): Promise<void> {
   const all = await versionsOf(docId) // NOT listVersions: it reads nothing while sealed, and this must still delete
   await Promise.all(all.map((v) => tx(VERSIONS, 'readwrite', (s) => s.delete(v.id!))))
+  if (isBodySealed()) await purgeLegacy(docId, VERSIONS)
+}
+
+/**
+ * The sealed purge reaches the LEGACY shared database too (security). Shells
+ * shipped before the per-app scoping go on writing to 'bento-autosave' forever,
+ * so a document's plaintext from before it was sealed can sit there long after
+ * this app's own copy is gone, until pruneOld ages it out. While the body is
+ * sealed, purging a document deletes its rows there as well: that document
+ * only, by docId. Outside a seal, clearRecovery/clearVersions leave the legacy
+ * database alone, as before.
+ */
+async function purgeLegacy(docId: string, store: typeof RECOVERY | typeof VERSIONS): Promise<void> {
+  let name: string
+  try { name = dbName() } catch { return }
+  if (name === LEGACY_DB_NAME) return // already purged above
+  const legacy = await open(LEGACY_DB_NAME)
+  if (!legacy) return
+  try {
+    await new Promise<void>((resolve) => {
+      let t: IDBTransaction
+      try { t = legacy.transaction(store, 'readwrite') } catch { resolve(); return }
+      const os = t.objectStore(store)
+      if (store === RECOVERY) os.delete(docId)
+      else {
+        const cur = os.index('docId').openCursor(IDBKeyRange.only(docId))
+        cur.onsuccess = () => { const c = cur.result; if (c) { c.delete(); c.continue() } }
+      }
+      t.oncomplete = () => resolve()
+      t.onerror = () => resolve()
+      t.onabort = () => resolve()
+    })
+  } finally {
+    legacy.close()
+  }
 }
 
 export async function addVersion(doc: KernelDoc): Promise<void> {
