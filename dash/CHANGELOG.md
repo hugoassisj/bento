@@ -12,6 +12,7 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **CSV export no longer lets a cell run as a formula.** Text starting with `=`, `+`, `-`, `@`, a tab or a return is written with a leading `'`, so opening the CSV in Excel or Sheets shows it as text.
 - **Neutral title while sealed, matching the saved file's title.**
 - **A sealed workbook deletes this browser's earlier plaintext recovery copy and version history of itself** on open; other workbooks' copies are untouched.
 

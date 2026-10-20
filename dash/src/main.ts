@@ -20,6 +20,7 @@
 // apart HERE, where the DOM is still visible, or an oversized workbook opens
 // as the starter and saves over itself.
 
+import { csvField } from './csvout.ts'
 import './styles.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import {
@@ -2273,14 +2274,15 @@ function retype(store: Store, col: Column, x: number, y: number): void {
  * calls this defect out by name.
  */
 function exportCsv(store: Store, sheet: TableSheet): void {
-  const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s)
+  // csvout.ts: RFC 4180 quoting AND the formula-injection escape - a text cell
+  // starting = + - @ tab or CR must not run as a formula in whoever opens this.
   const n = sheet.rids.reduce((a, [, c]) => a + c, 0)
-  const lines = [sheet.columns.map((c) => q(c.name)).join(',')]
+  const lines = [sheet.columns.map((c) => csvField(c.name)).join(',')]
   for (let i = 0; i < n; i++) {
     lines.push(sheet.columns.map((c) => {
       const d = sheet.data[c.id]
       const v = d?.enc === 'raw' ? d.v[i] : d?.enc === 'dict' ? (d.idx[i] == null ? null : d.dict[d.idx[i]!]) : null
-      return q(v == null ? '' : String(v))
+      return csvField(v)
     }).join(','))
   }
   const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' })
