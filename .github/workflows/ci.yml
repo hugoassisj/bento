@@ -1277,6 +1277,13 @@ jobs:
         # never called it. This one drives typeInto + the cell's own onkeydown.
         run: node scripts/test-dash-entry.ts
 
+      - name: bento/dash typed entry and text in arithmetic
+        # 10, $5, 15% typed into a spreadsheet then =SUM said 30 and =G13*G15
+        # said 150: typing stored the text, and the engine read "15%" as 15.
+        # Entry values + formats, Excel's text-in-arithmetic rule, the formula
+        # bar's entered form, and malformed formulas refused at entry.
+        run: node scripts/test-dash-entryparse.ts
+
       - name: bento/dash cross-sheet structure
         # Insert a row on Pipeline and =SUM(Pipeline!D1:D8) on Scratch has to
         # widen. a1.ts had the scope rule; Grid.shiftFormulas walked one sheet.
@@ -2734,6 +2741,12 @@ jobs:
         # surface must show fields in its own container, and a planted
         # browser-dressed field must be flagged.
         run: node scripts/test-dash-fields-browser.mjs
+      - name: Typing into a spreadsheet cell reads what was meant
+        # The review's keystrokes: 10, $5, 15% then =SUM and =G13*G15 must say
+        # 15.15 and 1.5 (they said 30 and 150). ISO and named-month dates are
+        # dates, 3/4/2026 stays text, the formula bar shows 100% not 1, and
+        # =A11+ is refused in the cell and the bar with the reason shown.
+        run: node scripts/test-dash-entryparse-browser.mjs
 
   dash-gate-browser:
     runs-on: ubuntu-latest

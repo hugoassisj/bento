@@ -756,4 +756,8 @@ export const zhHant: Catalog = {
   "Copy saved — you are still editing the original": "副本已儲存 — 你仍在編輯原始檔案",
   "Crash recovery is off for this workbook — it’s too large to keep a backup copy. Save often.": "此活頁簿的當機復原已關閉 — 檔案太大，無法保留備份。請經常儲存。",
   "A backup of this workbook for yourself — same workbook, same live session.": "自己留存的備份 — 同一個活頁簿、同一個即時會話。",
+  "Press Esc to cancel.": "按 Esc 取消。",
+  "There’s a problem with this formula: a bracket is opened and never closed.": "此公式有問題：有一個括號開啟後沒有關閉。",
+  "There’s a problem with this formula: it ends after “{near}”, where a value is missing.": "此公式有問題：它在「{near}」之後就結束了，缺少一個值。",
+  "There’s a problem with this formula: “{near}” cannot go there.": "此公式有問題：「{near}」不能放在那裡。",
 }

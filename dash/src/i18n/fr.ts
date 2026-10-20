@@ -756,4 +756,8 @@ export const fr: Catalog = {
   "Copy saved — you are still editing the original": "Copie enregistrée — vous modifiez toujours l'original",
   "Crash recovery is off for this workbook — it’s too large to keep a backup copy. Save often.": "La récupération après plantage est désactivée pour ce classeur : il est trop volumineux pour en garder une copie de secours. Enregistrez souvent.",
   "A backup of this workbook for yourself — same workbook, same live session.": "Une sauvegarde pour vous — même classeur, même session live.",
+  "Press Esc to cancel.": "Appuyez sur Échap pour annuler.",
+  "There’s a problem with this formula: a bracket is opened and never closed.": "Cette formule pose problème : une parenthèse est ouverte et jamais fermée.",
+  "There’s a problem with this formula: it ends after “{near}”, where a value is missing.": "Cette formule pose problème : elle s’arrête après « {near} », là où il manque une valeur.",
+  "There’s a problem with this formula: “{near}” cannot go there.": "Cette formule pose problème : « {near} » ne peut pas se trouver là.",
 }

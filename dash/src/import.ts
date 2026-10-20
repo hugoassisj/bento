@@ -184,11 +184,6 @@ const BOOLS = new Set(['true', 'false', 'yes', 'no', 'y', 'n', '1', '0', 't', 'f
 const blank = (s: string) => s.trim() === ''
 
 /**
- * Read a number under ONE convention. `point` is the decimal separator; the
- * other of . and , is then the grouping separator and must appear only in
- * groups of three.
- */
-/**
  * The digit shape each convention allows, checked in full rather than by
  * stripping characters until something parses.
  *
@@ -197,28 +192,141 @@ const blank = (s: string) => s.trim() === ''
  * `2026-01-15`, which then read as the NUMBER 20260115. A date column silently
  * became a number column, and every value in it was eight digits of nonsense.
  */
-const NUM_DOT = /^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/
-const NUM_COMMA = /^(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?$/
+const NUM_DOT = /^(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)$/
+const NUM_COMMA = /^(?:(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?|,\d+)$/
+/** Exponent notation, which only the dot convention spells (`1e3`, `2.5E-4`). */
+const NUM_EXP = /^\d+(?:\.\d+)?[eE][-+]?\d+$/
 
-function readNumber(raw: string, point: '.' | ','): number | null {
+/**
+ * The currency marks worth peeling — a symbol a person would type, not every
+ * glyph in Unicode — plus the `US$` / `A$` / `C$` spellings. Either end of the
+ * field: `$5` and `5 €` are both how somebody writes money.
+ */
+const SYM_LEAD = /^(?:[$£€¥₹₽₩₪₺]|[A-Z]{1,3}\$)\s?/
+const SYM_TRAIL = /\s?(?:[$£€¥₹₽₩₪₺])$/
+
+/** A number field with its NOTATION taken off: sign, currency mark, percent. */
+interface Peeled { neg: boolean; symbol: string; pct: boolean; body: string }
+
+function peel(raw: string): Peeled | null {
   let s = raw.trim()
   if (s === '') return null
-  // accounting negatives
   let neg = false
+  // accounting negatives — `(1,200)` is -1200, and the only bracket form worth it
   if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1).trim() }
-  // currency and spacing, either end
-  s = s.replace(/^[\s$£€¥]+/, '').replace(/[\s$£€¥]+$/, '')
+  let symbol = ''
+  const lead = s.match(SYM_LEAD)
+  if (lead) { symbol = lead[0].trim(); s = s.slice(lead[0].length).trim() }
+  if (s.startsWith('-')) { neg = !neg; s = s.slice(1).trim() }
+  else if (s.startsWith('+')) s = s.slice(1).trim()
+  // the symbol may sit after the sign — `-$5` as well as `$-5`
+  if (!symbol) {
+    const again = s.match(SYM_LEAD)
+    if (again) { symbol = again[0].trim(); s = s.slice(again[0].length).trim() }
+  }
   // a trailing percent is part of the NOTATION, not the number
-  if (s.endsWith('%')) s = s.slice(0, -1).trim()
-  if (s.startsWith('-')) { neg = true; s = s.slice(1) }
-  else if (s.startsWith('+')) s = s.slice(1)
-  if (!(point === '.' ? NUM_DOT : NUM_COMMA).test(s)) return null
+  let pct = false
+  if (s.endsWith('%')) { pct = true; s = s.slice(0, -1).trim() }
+  if (!symbol) {
+    const trail = s.match(SYM_TRAIL)
+    if (trail) { symbol = trail[0].trim(); s = s.slice(0, -trail[0].length).trim() }
+  }
+  if (!pct && s.endsWith('%')) { pct = true; s = s.slice(0, -1).trim() }
+  if (!/\d/.test(s)) return null
+  return { neg, symbol, pct, body: s }
+}
+
+/** The digits of a peeled body under ONE convention, or null. */
+function digitsUnder(body: string, point: '.' | ','): number | null {
+  if (!(point === '.' ? NUM_DOT : NUM_COMMA).test(body)) return null
   const group = point === '.' ? ',' : '.'
-  s = s.split(group).join('')
+  let s = body.split(group).join('')
   if (point === ',') s = s.replace(',', '.')
   const n = Number(s)
-  if (!Number.isFinite(n)) return null
-  return neg ? -n : n
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Read a number under ONE convention. `point` is the decimal separator; the
+ * other of . and , is then the grouping separator and must appear only in
+ * groups of three. This is what `inferColumn` votes with, column by column.
+ *
+ * The percent is NOT applied here: a column decides that once, in `coerce`.
+ */
+function readNumber(raw: string, point: '.' | ','): number | null {
+  const p = peel(raw)
+  if (!p) return null
+  const n = digitsUnder(p.body, point)
+  if (n === null) return null
+  return p.neg ? -n : n
+}
+
+/** One typed field, read as a number, with the notation it was written in. */
+export interface EntryNumber {
+  /** the value — a `%` has ALREADY been applied, so `15%` is 0.15 */
+  n: number
+  /** the field carried a `%` */
+  pct: boolean
+  /** the currency mark it carried, verbatim (`$`, `£`, `US$`), or '' */
+  symbol: string
+  /** decimals actually written, so a stamped format can match what was typed */
+  dp: number
+  /** the field carried a thousands separator */
+  group: boolean
+}
+
+/**
+ * ONE field, read as a number — the reading every single-value caller shares:
+ * typing into a spreadsheet cell (cellprops.ts `coerceInput`), a TSV paste, the
+ * formula engine coercing text in arithmetic (formula.ts `num`), and `VALUE()`.
+ *
+ * The SAME digit shapes `inferColumn` votes with, so a value means the same
+ * thing typed, pasted, imported and computed. What a single value cannot do is
+ * vote, so the decimal convention is settled the only other way there is:
+ *
+ *   • when the field reads under exactly ONE convention, that one — `3,50` is
+ *     3.5 to everybody, because `,50` cannot be a thousands group;
+ *   • when it reads under BOTH (`1,234`, `1.234`), `prefer` decides. A typist's
+ *     entry passes the VIEWER's decimal separator, which is what that person
+ *     meant by what they typed; the formula engine passes '.', import's own
+ *     tie-break, because a formula result is DOCUMENT data and must come out
+ *     the same for every reader of the file.
+ *
+ * `strict` is cellprops.ts rule 3: a leading zero (`007`) disqualifies the
+ * field, because in an unformatted cell the zeros are the information.
+ */
+export function readEntryNumber(
+  raw: string, opts: { prefer?: '.' | ','; strict?: boolean } = {},
+): EntryNumber | null {
+  const p = peel(raw)
+  if (!p) return null
+  const prefer = opts.prefer ?? '.'
+  let n: number | null = null
+  let point: '.' | ',' = '.'
+  if (NUM_EXP.test(p.body)) {
+    n = Number(p.body)
+  } else {
+    const dot = digitsUnder(p.body, '.')
+    const comma = digitsUnder(p.body, ',')
+    if (dot !== null && comma !== null) { point = prefer; n = prefer === '.' ? dot : comma }
+    else if (dot !== null) { point = '.'; n = dot }
+    else if (comma !== null) { point = ','; n = comma }
+  }
+  if (n === null || !Number.isFinite(n)) return null
+  if (opts.strict && /^0\d/.test(p.body)) return null
+  const group = point === '.' ? ',' : '.'
+  const eAt = p.body.search(/[eE]/)
+  const mant = eAt < 0 ? p.body : p.body.slice(0, eAt)
+  const at = mant.indexOf(point)
+  let v = p.neg ? -n : n
+  if (p.pct) v /= 100
+  return {
+    n: v,
+    pct: p.pct,
+    symbol: p.symbol,
+    dp: at < 0 ? 0 : mant.length - at - 1,
+    group: mant.includes(group),
+  }
 }
 
 const DATE_ISO = /^(\d{4})-(\d{2})-(\d{2})([T ].*)?$/

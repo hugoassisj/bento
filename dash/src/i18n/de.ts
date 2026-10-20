@@ -756,4 +756,8 @@ export const de: Catalog = {
   "Copy saved — you are still editing the original": "Kopie gespeichert — Sie bearbeiten weiterhin das Original",
   "Crash recovery is off for this workbook — it’s too large to keep a backup copy. Save often.": "Die Absturzwiederherstellung ist für diese Arbeitsmappe deaktiviert – sie ist zu groß für eine Sicherungskopie. Speichern Sie häufig.",
   "A backup of this workbook for yourself — same workbook, same live session.": "Eine Sicherungskopie für Sie — gleiche Arbeitsmappe, gleiche Live-Sitzung.",
+  "Press Esc to cancel.": "Mit Esc abbrechen.",
+  "There’s a problem with this formula: a bracket is opened and never closed.": "Mit dieser Formel stimmt etwas nicht: Eine Klammer wird geöffnet und nie geschlossen.",
+  "There’s a problem with this formula: it ends after “{near}”, where a value is missing.": "Mit dieser Formel stimmt etwas nicht: Sie endet nach „{near}“, wo ein Wert fehlt.",
+  "There’s a problem with this formula: “{near}” cannot go there.": "Mit dieser Formel stimmt etwas nicht: „{near}“ kann dort nicht stehen.",
 }

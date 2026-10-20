@@ -756,4 +756,8 @@ export const ja: Catalog = {
   "Copy saved — you are still editing the original": "コピーを保存しました — 編集中なのは引き続き元のファイルです",
   "Crash recovery is off for this workbook — it’s too large to keep a backup copy. Save often.": "このブックのクラッシュ復旧はオフです — 大きすぎてバックアップを保存できません。こまめに保存してください。",
   "A backup of this workbook for yourself — same workbook, same live session.": "自分用のバックアップ — 同じブック・同じライブセッションです。",
+  "Press Esc to cancel.": "Esc キーで取り消します。",
+  "There’s a problem with this formula: a bracket is opened and never closed.": "この数式には問題があります: 括弧が開いたまま閉じられていません。",
+  "There’s a problem with this formula: it ends after “{near}”, where a value is missing.": "この数式には問題があります: 「{near}」の後で終わっていて、値が足りません。",
+  "There’s a problem with this formula: “{near}” cannot go there.": "この数式には問題があります: 「{near}」はそこに置けません。",
 }

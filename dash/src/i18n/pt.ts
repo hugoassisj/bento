@@ -769,4 +769,8 @@ export const pt: Catalog = {
   "Copy saved — you are still editing the original": "Cópia salva — você continua editando o original",
   "Crash recovery is off for this workbook — it’s too large to keep a backup copy. Save often.": "A recuperação de falhas está desativada para esta pasta de trabalho: ela é grande demais para manter uma cópia de segurança. Salve com frequência.",
   "A backup of this workbook for yourself — same workbook, same live session.": "Um backup desta pasta de trabalho para você — mesma pasta de trabalho, mesma sessão ao vivo.",
+  "Press Esc to cancel.": "Pressione Esc para cancelar.",
+  "There’s a problem with this formula: a bracket is opened and never closed.": "Há um problema com esta fórmula: um parêntese é aberto e nunca fechado.",
+  "There’s a problem with this formula: it ends after “{near}”, where a value is missing.": "Há um problema com esta fórmula: termina depois de «{near}», onde falta um valor.",
+  "There’s a problem with this formula: “{near}” cannot go there.": "Há um problema com esta fórmula: «{near}» não pode ficar aí.",
 }
