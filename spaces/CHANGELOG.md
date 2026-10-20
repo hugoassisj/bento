@@ -1382,6 +1382,13 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   deletes that space's copies. Neutral title while sealed,
   matching the saved file's title: the tab reads "bento/spaces", from the
   password prompt on.
+- **Using spaces at phone width no longer shuts the panels on the desktop.**
+  Widening the window past the phone breakpoint used to save the phone
+  drawers' state as your desktop choice, so the page list and the properties
+  panel stayed shut on every later wide load. A phone drawer opening or
+  closing now never changes the desktop layout, and widening the window
+  brings back the layout you last chose there. `[`, `]` and the panel
+  chevrons at desktop width are remembered as before.
 
 ## [0.1.0] — 2026-08-03
 
