@@ -2971,6 +2971,7 @@ export class Grid {
       const ci = Number(el.dataset.ci)
       el.onmousedown = (e) => {
         if (e.button !== 0) return
+        e.preventDefault?.()   // keep focusGrid's focus — see the dataset cell's mousedown
         if (e.shiftKey) this.sel.extendTo(row, ci)
         else this.sel.moveTo(row, ci)
         this.paint(); this.announce(); this.focusGrid()
@@ -3400,6 +3401,7 @@ export class Grid {
       const ci = Number(el.dataset.ci)
       el.onmousedown = (e) => {
         if (e.button !== 0) return
+        e.preventDefault?.()   // keep focusGrid's focus — see the dataset cell's mousedown
         this.sel.moveTo(row, ci)
         this.paint(); this.announce(); this.focusGrid()
       }
@@ -3410,6 +3412,13 @@ export class Grid {
       const ci = Number(el.dataset.ci)
       el.onmousedown = (e) => {
         if (e.button !== 0) return
+        // OURS, NOT THE BROWSER'S: focusGrid() below puts focus on the cursor
+        // cell, and the browser's own mousedown focus step runs AFTER this
+        // handler — on a node paint() may just have replaced. On CI's Linux
+        // Chromium that left activeElement at BODY after every click, so the
+        // next Tab walked to the top bar instead of the next cell. Cancelling
+        // the default keeps the focus we set (and stops a drag selecting text).
+        e.preventDefault?.()   // (rigs drive this with a plain object)
         if (e.shiftKey) this.sel.extendTo(row, ci)
         else this.sel.moveTo(row, ci)
         this.paint(); this.announce()
