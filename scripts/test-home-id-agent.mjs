@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 /**
- * bento/id on iOS and the Mac — the agent's sign() and host-stamped consent
+ * bento/connect on iOS and the Mac — the agent's sign() and host-stamped consent
  * (home/ios/IdentityAgent.swift).
  *
  *   node scripts/test-home-id-agent.mjs
@@ -122,7 +122,7 @@ const dir = mkdtempSync(join(tmpdir(), 'bento-idagent-'))
 let out
 try {
   writeFileSync(join(dir, 'main.swift'), main)
-  execFileSync('swiftc', ['-O', '-D', 'BENTO_SOFTWARE_DEVICE_KEYS', '-o', join(dir, 'a'), ...SRC, join(dir, 'main.swift')], { stdio: 'pipe' })
+  execFileSync('swiftc', ['-O', '-D', 'DEBUG', '-D', 'BENTO_SOFTWARE_DEVICE_KEYS', '-o', join(dir, 'a'), ...SRC, join(dir, 'main.swift')], { stdio: 'pipe' })
   out = Object.fromEntries(execFileSync(join(dir, 'a')).toString().trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)))
 } catch (err) { console.error('swiftc or run failed:\n' + (err.stderr?.toString() ?? err.message)); process.exit(2) }
 finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }

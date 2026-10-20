@@ -23,6 +23,13 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
 - **Argon2id first.** Check your Argon2id against the `rfc9106` row (RFC 9106
   §5.3, with its own parameters) before trusting it. Then use OUR parameters:
   version 0x13, p = 1, m = 64 MiB, t = 3, a 32-byte tag, 16-byte salts.
+- **Check the memory BEFORE allocating; don't count on catching the failure.**
+  On Android, catching `OutOfMemoryError` around Argon2id does NOT fail closed.
+  On a 48 MiB heap, the runtime's own threads hit the OOM and the process
+  died. Measure the remaining heap first and refuse unless it covers the
+  65,536 blocks plus headroom (each 1 KiB block costs 1,040 bytes on ART).
+  iOS and desktop have their own memory behaviour, but the rule is the same:
+  decide first, then allocate. (home-android, measured)
 - **The code is 17 symbols: 16 data symbols and a check symbol**, printed
   `XXXX-XXXX-XXXX-XXXX-C`. Data symbols are Crockford base32 (no I, L, O, U).
   The check is the 80-bit value mod 37, with `* ~ $ = U` for 32 to 36. Every one
@@ -36,6 +43,24 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
   scalar alone while kx is unruled, or with kx appended under modes A and C. On
   import, each scalar must be in 1..n−1 AND its public point d·G must equal the
   public key in the directory-signed binding. A swapped blob fails closed.
+- **The PRF input is the UTF-8 bytes of `bento/id/prf/v1`.** A host that
+  speaks CTAP `hmac-secret` directly, with no WebAuthn PRF API (libfido2 on
+  desktop), must send `prf.hmacSecretSalt`: SHA-256("WebAuthn PRF" ‖ 0x00 ‖
+  input), per WebAuthn L3 §10.1.4. Then the same security key returns the same
+  32 bytes in a browser and on the desktop, and a blob sealed on one opens on
+  the other. The `prf.wrong` values are the easy mistakes. (home-desktop)
+
+  Apply that hash EXACTLY ONCE, and only where nothing else does (security §34):
+
+  | Path | Who hashes | What you pass |
+  |---|---|---|
+  | CTAP `hmac-secret` directly (libfido2: Linux, any host driving the key itself) | **you** | `prf.hmacSecretSalt` |
+  | a browser's WebAuthn PRF extension | the browser | the input (`prf.inputHex`), never the salt |
+  | Windows `webauthn.dll` with the PRF extension | Windows | the input, never the salt |
+  | a platform's own WebAuthn PRF API (Apple AuthenticationServices, Android Credential Manager) | the platform | the input, never the salt |
+
+  Passing the salt to an API that hashes again gives the `SHA-256` of the salt:
+  a third value, and a blob nothing else can open.
 - **The pepper layer** is the directory's (share implements it). Its rows exist
   so the server code can be checked against the same bytes.
 

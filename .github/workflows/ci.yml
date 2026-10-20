@@ -869,24 +869,36 @@ jobs:
         # the document's origin. Compiles the real HostDocStore; skips off Apple.
         run: node scripts/test-home-docstore-ios.mjs
 
-      - name: home/ios bento/id keys rig
+      - name: home/ios bento/connect keys rig
         # The agent's keys: the account key, the Secure Enclave routine and consent
         # keys, raw low-S signatures (verified in WebCrypto), never minting over a
         # store it could not read, and the §29 biometric-enrolment notice outbox.
         # Apple toolchains only; skips elsewhere.
         run: node scripts/test-home-id-keys.mjs
 
-      - name: home/ios bento/id statements rig
+      - name: home/ios bento/connect statements rig
         # The Swift statements against kernel/fixtures/identity-v1.json: verdict
         # and reason on every row, round trips, tampering, transcripts, low-S,
         # purposes, addresses, spendCalled and the frozen display table.
         run: node scripts/test-home-id-statements.mjs
 
-      - name: home/ios bento/id agent rig
+      - name: home/ios bento/connect agent rig
         # sign() routing and the host-stamped consent statement (§2e (A)): what
         # the page can name, what only the host stamps, and the verifier refusing
         # a relay, replay, payload swap or docId swap.
         run: node scripts/test-home-id-agent.mjs
+
+      - name: home/ios bento/connect recovery rig
+        # Argon2id (ours: RFC 9106, Node's native one on random inputs) and every
+        # byte of kernel/fixtures/recovery-v1.json: the recovery code, derivations,
+        # both key blobs, and recovered scalars checked through CryptoKit. Apple only.
+        run: node scripts/test-home-id-recovery.mjs
+
+      - name: home/ios Spotlight rig
+        # What the system search index holds for a document and keeping it current
+        # after a save: replaced at once, delete-before-add when sealed, and
+        # entries removed for documents a walk no longer finds. Apple only.
+        run: node scripts/test-home-spotlight.mjs
 
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
@@ -1077,6 +1089,19 @@ jobs:
             --outfile="$RUNNER_TEMP/test-autosave.mjs"
           BENTO_TEST_APP=bento-slides node "$RUNNER_TEMP/test-autosave.mjs"
           BENTO_TEST_APP=bento-spaces node "$RUNNER_TEMP/test-autosave.mjs"
+
+
+      - name: The plaintext store refuses while sealed (bento/connect backstop)
+        # kernel/src/autosave.ts: while the body is sealed (password or identity
+        # seal), putRecovery/addVersion refuse and getRecovery/listVersions offer
+        # nothing, so an app missing one of its own guards still can't write or
+        # offer plaintext. The purge (clearRecovery/clearVersions) still works
+        # while sealed, for that document only.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-store-backstop.ts --bundle --platform=node --format=esm \
+            --alias:fake-indexeddb/auto=./slides/node_modules/fake-indexeddb/auto/index.js \
+            --outfile="$RUNNER_TEMP/test-store-backstop.mjs"
+          node "$RUNNER_TEMP/test-store-backstop.mjs"
 
       - name: Publish deletion-gate rig
         # A publish assembles site/ for ONE app and mirrors it authoritatively.
@@ -2553,6 +2578,11 @@ jobs:
         # neutral <title> and filename, no preview, and no plaintext; the
         # unsealed control shows the same checks can see a leak.
         run: node scripts/test-sealed-boot.mjs
+      - name: A sealed slides deck keeps its content out of IndexedDB in Chromium
+        # The autosave and ⌘S checkpoints write no recovery copy or version for
+        # a deck sealed by identity; the password menu stays keyed to the
+        # password; the unsealed control shows the scan sees a leak.
+        run: node scripts/test-slides-sealed-guards-browser.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
@@ -2723,12 +2753,19 @@ jobs:
         run: |
           npm ci --prefix dash
           npm run build:single --prefix dash
+          npm run build:sealtest --prefix dash
       - name: An encrypted or unopenable dash file opens to its gate
         # window.bento = { format, locked: true } before the password gate and
         # the refusal page, so the shell's loader counts the app as mounted
         # instead of re-running it and failing over the gate; unlocking
         # replaces it with the real workbook.
         run: node scripts/test-dash-gate-browser.mjs
+      - name: A sealed dash workbook writes no plaintext of itself
+        # bento/connect §E on the shared sealed TEST document: recovery snapshots,
+        # the version timeline, the preview, recovery read-back and drop-open
+        # all ask isBodySealed(); neutral title while sealed, matching the saved
+        # file's title. Each row has an unsealed control that shows the leak.
+        run: node scripts/test-dash-sealed-browser.mjs
 
   home-ios-swift:
     # The home/ios Swift rigs need CryptoKit, Security and LocalAuthentication,
@@ -2748,12 +2785,44 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          for rig in test-tray-releases.mjs test-home-origin.mjs test-home-docstore-ios.mjs; do
+          rigs=(
+            test-tray-releases.mjs
+            test-home-origin.mjs
+            test-home-docstore-ios.mjs
+            test-home-id-keys.mjs
+            test-home-id-statements.mjs
+            test-home-id-agent.mjs
+            test-home-id-recovery.mjs
+            test-home-spotlight.mjs
+          )
+          for rig in "${rigs[@]}"; do
             echo "::group::$rig"
             node "scripts/$rig" | tee "$RUNNER_TEMP/rig.out"
             echo "::endgroup::"
             if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::$rig skipped on macOS"; exit 1; fi
           done
+
+  home-ios-simulator:
+    # Builds the iOS app and drives it on a simulator: the app-switcher snapshot
+    # iOS writes to disk shows nothing of a sealed document. The rig reads back
+    # the snapshots iOS itself wrote; a skip fails here too.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Toolchain
+        run: |
+          brew install xcodegen
+          sw_vers && xcodebuild -version && xcrun simctl list runtimes
+      - name: Snapshot cover (a skip fails)
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/test-home-snapshot-cover.mjs | tee "$RUNNER_TEMP/rig.out"
+          if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::snapshot cover skipped on macOS"; exit 1; fi
 
   home-origin-probe-browser:
     # The probe that decides whether a file opened for the first time may keep
@@ -2818,10 +2887,18 @@ jobs:
         run: |
           npm ci --prefix spaces
           npm run build:single --prefix spaces
+          npm run build:sealtest --prefix spaces
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-spaces-save-browser.mjs
+      - name: A sealed space writes nothing readable (spaces, Chromium)
+        # The build:sealtest shell booted identity-sealed through the shared
+        # helper, plus a password space: no recovery snapshot or version in
+        # IndexedDB (also across a reload), no preview and no plaintext in the
+        # saved file, a neutral tab title, no recovery-off notice. The unsealed
+        # control shows each check can see a leak.
+        run: node scripts/test-spaces-sealed-browser.mjs
       - name: One field look in Chromium (spaces)
         # Port of slides' fields rig: every chrome text field, select and
         # textarea (inspector incl. "Also known as", dialogs, view popovers,
@@ -2914,3 +2991,24 @@ jobs:
         run: |
           sudo apt-get install -y -qq gnome-keyring dbus >/dev/null
           ./keyring-rig.sh
+
+  type-sealed-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the sealed TEST shell
+        run: |
+          npm ci --prefix type
+          npm run build:sealtest --prefix type
+      - name: A sealed document leaves no plaintext and shows a neutral title
+        run: node scripts/test-type-sealed-browser.mjs

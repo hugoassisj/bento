@@ -24,7 +24,7 @@ import './styles.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, saveFile,
-  parseEnvelope, decryptEnvelope, setEncryptionPassword, isEncryptionActive,
+  parseEnvelope, decryptEnvelope, setEncryptionPassword, isBodySealed,
   canWriteInPlace, downloadFile, suggestedFileName, openedFileName, registerPreview,
   currentFileName,
 } from '../../kernel/src/save.ts'
@@ -214,6 +214,7 @@ function markMountedWithoutDoc(extra: Record<string, unknown> = {}): void {
 
 /** An encrypted workbook: ask, then take the same boot path. */
 async function passwordGate(raw: string): Promise<void> {
+  document.title = appConfig().appName // neutral title while sealed, matching the saved file's title
   markMountedWithoutDoc()
   dismissSplashNow()
   document.body.innerHTML =
@@ -321,8 +322,13 @@ function refuse(res: Extract<ParseResult, { ok: false }>): void {
  * through that path. Defaulting to false means a new call site that forgets
  * this argument stays silent rather than phoning home.
  */
+/** The tab title: neutral title while sealed, matching the saved file's title. */
+function tabTitle(title: string): string {
+  return isBodySealed() ? appConfig().appName : `${title} — ${appConfig().appName}`
+}
+
 function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', saved = false): void {
-  document.title = `${doc.title} — ${appConfig().appName}`
+  document.title = tabTitle(doc.title)
   dismissSplash()
 
   const store = new Store(doc)
@@ -1266,7 +1272,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
       // NEVER write an encrypted workbook's plaintext to IndexedDB. The kernel
       // states the rule in its own header and enforces it in neither place, so
       // every app has to remember — and the second one did not.
-      if (!isEncryptionActive()) {
+      if (!isBodySealed()) {
         // THE RETURN VALUE IS THE POINT, and it was being thrown away.
         //
         // `putRecovery` resolves FALSE rather than throwing when there is no
@@ -1293,7 +1299,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
         // it refuses an encrypted workbook for the same reason putRecovery does
         void rememberVersion(store.doc)
       }
-      // …AND THE FILE ITSELF. Deliberately outside the `isEncryptionActive`
+      // …AND THE FILE ITSELF. Deliberately outside the `isBodySealed`
       // guard above: that guard is about writing PLAINTEXT into IndexedDB,
       // and this writes the workbook's own file through the encryption-aware
       // `serializeAuto`. See writeback.ts's header — two channels, two rules.
@@ -1458,7 +1464,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
       // the chrome nothing else refreshes: the title field is written once at
       // boot and thereafter only by its own input handler
       titleEl.value = next.title
-      document.title = `${next.title} — ${appConfig().appName}`
+      document.title = tabTitle(next.title)
     },
   }
   void mountRecovery(openHost)
@@ -1472,7 +1478,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
 
   titleEl.addEventListener('input', () => {
     store.commit({ op: 'setTitle', title: titleEl.value })
-    document.title = `${titleEl.value} — ${appConfig().appName}`
+    document.title = tabTitle(titleEl.value)
   })
 
   // --- the top-bar dropdowns.
