@@ -2519,6 +2519,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # RecoveryTest cross-checks Bouncy Castle's Argon2id against Node's native
+      # one on random cases every run (security §35), and never skips without it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Android host unit tests
         # The JVM rigs for home/android: which web origin a document may run
         # under (a different file at a path a document used before must never
