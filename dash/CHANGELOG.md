@@ -13,6 +13,7 @@ There is no server, so a break here would be permanent.
 The release that came out of watching somebody use 0.2.0.
 
 - **Neutral title while sealed, matching the saved file's title.**
+- **A sealed workbook deletes this browser's earlier plaintext recovery copy and version history of itself** on open; other workbooks' copies are untouched.
 
 - **Password-protected workbooks open again.** The file showed its password
   prompt and then failed with "This file could not start" over it, because the

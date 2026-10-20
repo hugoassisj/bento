@@ -101,23 +101,36 @@ try {
     await context.close()
   }
 
-  // ---- row 4: reading a plaintext snapshot back. Both seal states on ONE
-  // storage, through the shared helper: an unsealed session leaves a genuine
-  // plaintext snapshot of a fixed document; reopening it unsealed offers it
-  // (the control); opening the SAME document sealed, in the same context, must not.
+  // ---- row 4: reading a plaintext snapshot back, and purging it. Both seal
+  // states on ONE storage, through the shared helper: an unsealed session
+  // leaves a genuine plaintext snapshot of a fixed document; reopening it
+  // unsealed offers it (the control); opening the SAME document sealed, in the
+  // same context, must neither offer it nor keep it, while a SECOND workbook's
+  // snapshot on that storage survives. The scans run from an unsealed page.
   {
-    const doc = { format: 'bento/dash', version: 1, policy: 'bento-dash-1', docId: 'seal-rig-fixed', title: 'Fixed',
-      sheets: [{ id: 's', kind: 'table', name: 'D', rids: [[1, 1]], nextRid: 2, columns: [{ id: 'v', name: 'V', type: 'number' }], data: { v: { enc: 'raw', v: [1] } }, steps: [] }] }
-    const a = await openSealed(browser, 'dash', { sealed: false, doc })
+    const sheet = { id: 's', kind: 'table', name: 'D', rids: [[1, 1]], nextRid: 2, columns: [{ id: 'v', name: 'V', type: 'number' }], data: { v: { enc: 'raw', v: [1] } }, steps: [] }
+    const fixed = (docId, title) => ({ format: 'bento/dash', version: 1, policy: 'bento-dash-1', docId, title, sheets: [sheet] })
+    const OTHER = 'OTHERWB-2c8d40' // must not contain MARKER: the scans match by substring
+    const stores = (hits) => ['recovery', 'versions'].filter((s) => hits.some((h) => h.endsWith('/' + s)))
+    const a = await openSealed(browser, 'dash', { sealed: false, doc: fixed('seal-rig-fixed', 'Fixed') })
     await retitle(a.page, MARKER)
     await settle(a.page)
-    ok((await scanIndexedDB(a.page, MARKER)).length >= 1, 'a plaintext recovery snapshot for this workbook is on disk (from an unsealed session)')
+    ok(stores(await scanIndexedDB(a.page, MARKER)).length === 2, 'CONTROL: an unsealed session leaves this workbook\'s plaintext in /recovery AND /versions')
     await a.reload()
     await a.page.waitForTimeout(600)
     ok(await a.page.locator('.dxr-bar').count() === 1, 'CONTROL: unsealed, reopening OFFERS it — the read-back path runs')
+    await a.page.close()
+    const c = await openSealed(browser, 'dash', { sealed: false, context: a.context, doc: fixed('seal-rig-other', 'Other') })
+    await retitle(c.page, OTHER)
+    await settle(c.page)
+    ok(stores(await scanIndexedDB(c.page, OTHER)).length === 2, 'CONTROL: a second workbook\'s plaintext is in /recovery AND /versions on the same storage')
     const b = await openSealed(browser, 'dash', { context: a.context, url: a.url })
     await b.page.waitForTimeout(600)
     ok(await b.page.locator('.dxr-bar').count() === 0, 'SEALED: the same workbook on the same storage does NOT offer the plaintext snapshot')
+    await b.page.close()
+    const left = stores(await scanIndexedDB(c.page, MARKER))
+    ok(left.length === 0, `SEALED: after the sealed boot, none of this workbook's plaintext is kept (found in: ${left.join(', ') || 'nothing'})`)
+    ok(stores(await scanIndexedDB(c.page, OTHER)).length === 2, 'the second workbook\'s snapshot and versions survive the purge')
     await a.context.close()
   }
 } finally {
