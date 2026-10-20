@@ -1375,6 +1375,13 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   recovery is off for this space — it’s too large to keep a backup copy. Save
   often." It says so once per space, and never for an encrypted space, which
   never keeps a recovery copy.
+- **A slimmer top bar, closer to bento/slides'.** Reading view is now a
+  floating button at the page's bottom-right corner (bottom-left in
+  right-to-left languages), where slides keeps its Slideshow button. It stays
+  there in reading view, so it is also the way back; Esc still works. Graph
+  moved to the page list's header, beside ＋. Properties left the bar: open it
+  with `]`, with the panel's own arrow at the window's edge, or, on a phone,
+  from ⋯. Search stays in the bar.
 
 ## [0.1.0] — 2026-08-03
 

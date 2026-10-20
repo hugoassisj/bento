@@ -391,7 +391,6 @@ export const ja: Catalog = {
   "Print or save as PDF (⌘P)": "印刷または PDF として保存 (⌘P)",
   "Print…": "印刷…",
   "Properties": "プロパティ",
-  "Properties — show or hide this block’s settings": "プロパティ — このブロックの設定を表示または非表示にする",
   "Purple": "紫",
   "Put the caret in a block to see what it can be.": "ブロックにカーソルを置くと、そのブロックで変えられるものが出ます。",
   "Quote": "引用",

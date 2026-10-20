@@ -11292,3 +11292,30 @@ shell it serves (gate 1, A2).
 
 Still for a real phone: TEE and StrongBox residency (the emulator reports
 software keys), and the API 26–29 consent path, which allows biometrics only.
+
+## 2026-10-20 — spaces top bar: Reading view → floating button, Properties out (⋯ and ]), Graph → page-list header, Search stays — maintainer, 2026-10-20
+
+The maintainer ruled that bento/spaces' top bar should come closer to slides'
+(slides is the chrome reference). This supersedes the line in the
+2026-09-26 entry that made Graph "a bar button beside Reading view".
+
+- **Reading view is a floating pill**, shaped as slides' Slideshow pill
+  (`.ed-present-pill`: surface fill, hairline, 999px radius, the same soft
+  shadow, 600 weight, `--chrome` on hover) and placed in slides' corner:
+  bottom-END, 14px in, by a logical inset so RTL mirrors it. It hangs off the
+  page's own end edge (a zero-width box between the page and the properties
+  panel), so it moves with the panel instead of covering it. It is the way out
+  of reading view as well as in, so it stays there while reading. A sealed
+  reading copy has no pill, as it had no bar button.
+- **Properties left the bar.** Where the panel is a column, its chevron is
+  docked flush to the window edge when shut (the 5px-strip problem that once
+  justified a bar button no longer exists), and `]` toggles it. Folded, ⋯
+  keeps the Properties row.
+- **Graph is on the page list's header**, beside ＋ ▾. It is a view of the
+  tree, and it stays there in reading view. `bento.graph()` is unchanged.
+- **Search stays in the bar.** ⋯ no longer lists Reading view or Graph.
+
+test-spaces-chrome reads the pill's values from slides' stylesheet and holds
+the computed pill to them at 1440 and 390. It presses each new home with
+trusted input, and its before/after command walk maps each moved command to
+its new home rather than dropping it.
