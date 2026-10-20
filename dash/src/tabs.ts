@@ -827,6 +827,19 @@ export function mountTabs(host: TabsHost): Tabs {
 
   // --- switching ---------------------------------------------------------------
 
+  // POINT MODE: a tab clicked while a formula is waiting for a reference puts
+  // `Sheet!A1` into the formula instead of switching sheets (grid.ts
+  // `pointToSheet`). CAPTURE, and the mousedown's default prevented, because
+  // the focus leaving the cell editor is a blur and a blur commits the edit.
+  strip.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return
+    const el = tabAt(e)
+    if (!el?.dataset.sheet || !grid.isPointing()) return
+    e.preventDefault()
+    e.stopPropagation()
+    if (grid.pointToSheet(el.dataset.sheet)) suppressClick = true
+  }, true)
+
   strip.addEventListener('click', (e) => {
     if (suppressClick) { suppressClick = false; return }
     const el = tabAt(e)

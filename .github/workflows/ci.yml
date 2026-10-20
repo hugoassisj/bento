@@ -2729,6 +2729,13 @@ jobs:
         # surface must show fields in its own container, and a planted
         # browser-dressed field must be flagged.
         run: node scripts/test-dash-fields-browser.mjs
+      - name: The grid's core gestures, with a real mouse and keyboard
+        # A header click selects the column and never sorts (sort lives in ▾,
+        # and the selection follows its row); double-click renames in place;
+        # Add a column picks the type; the type chip reads at 11px; ⌘C draws
+        # marching ants; point mode inserts references (dataset and
+        # spreadsheet, other sheets by tab); Escape closes Story and Pivot.
+        run: node scripts/test-dash-gestures-browser.mjs
 
   dash-gate-browser:
     runs-on: ubuntu-latest
