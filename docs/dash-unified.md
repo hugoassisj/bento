@@ -81,33 +81,39 @@ interface TableSheet {
   column names (`Value * Probability`) are kept. Xlsx export writes them as
   `calculatedColumnFormula` with `[@…]` refs, so they round-trip natively.
 
-### The Airtable layer: new column types
+### The Airtable layer: field kinds beside a base type
 
-`ColumnType` gains, additively:
+A column gains an optional `kind` and keeps a base `type` that every build
+knows. An older build reads the column as that base type. Only a build that
+knows `kind` gives it the new meaning.
 
-| type | cell value | notes |
-|---|---|---|
-| `link` | array of rids in `to` | `to: tableId`. ONE side is stored; the inverse is a derived, read-only-in-storage column on the target (`inverseOf: colId`) whose edits write the owning side. Two stored sides could diverge under collab, one cannot. |
-| `multi` | array of option strings | options as `enum` declares them |
-| `attachment` | array of asset keys | bytes live in `assets`/`blobs` as images do today |
-| `url`, `email`, `phone` | string | validated, rendered as links |
-| `rating` | number 0..max | `max` on the column |
-| `duration` | number (seconds) | formatted h:mm:ss |
+This was measured. A draft that added these as new `type`s stopped a build
+from the day before from opening the file at all: its header looked the type
+up in a label table, got `undefined`, and boot failed. With `kind` beside a
+base type, the same old build opens the workbook, shows a link as text and a
+rollup as a number, and saves everything back unchanged.
 
-- **List-valued cells use the existing `raw` encoding** with an array as the
-  cell value. An unknown encoding would break old builds' length and read
-  paths; a `raw` array is JSON, and an old build renders it as comma-joined
-  text and round-trips it unchanged. The first link PR proves that against
-  the last released shell.
-- **Lookup and rollup are column formulas**, not new storage:
-  `LOOKUP(Client, Clients[Email])` and
-  `ROLLUP(Orders, SUM(Orders[Amount]))`. They fit the existing one-expression
-  -per-column graph.
+| kind | base type | cell value | notes |
+|---|---|---|---|
+| `link` | text | array of rids in `to` | `to: tableId`. ONE side is stored. The mirror on the target (`inverseOf: {table, col}`) stores nothing and is derived on every read; editing it writes the owner. Two stored sides could diverge under collab, one cannot. |
+| `lookup` | text | derived | `via` (a link column here) + `field` (a column there) |
+| `rollup` | number | derived | `via` + `field` + `agg`: sum, avg, min, max, count, counta, concat, and, or |
+| `multi` | text | array of option strings | `options` lists the choices |
+| `attachment` | text | array of asset keys | the bytes live in `assets`/`blobs`, as images do today |
+| `url`, `email`, `phone` | text | string | validated, rendered as links |
+| `rating` | number | 0..max | `max` on the column |
+| `duration` | number | seconds | formatted h:mm:ss |
+
+- **List-valued cells use the existing `raw` encoding**, with an array as the
+  cell value. An unknown *encoding* would break old builds' length and read
+  paths. A raw array is JSON, and an old build renders it as comma-joined
+  text and round-trips it unchanged.
+- **Lookups and rollups are field kinds with settings**, as in Airtable, not
+  formula functions. `LOOKUP` is already an Excel function, and overloading
+  it would break Excel parity.
 - **Collab:** a list cell is one last-writer-wins value, so two people adding
   different links to the same cell at the same moment keep one. That's
-  documented, and it's the same compromise as slides' table rows. A per-item
-  set is a later engine change, which goes through the serialized kernel zone
-  only if the sync engine needs it.
+  documented, and it's the same compromise as slides' table rows.
 
 ### Views per table
 

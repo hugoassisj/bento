@@ -11421,11 +11421,14 @@ Settled with it, so later work does not contradict them:
   never change what `A1` means.
 - Structured references use Excel's syntax (`T[Col]`, `T[@Col]`, `T[#Totals]`),
   so tables round-trip through .xlsx as ListObjects with calculated columns.
-- Airtable's layer is new column TYPES plus per-table `tableViews`. List-valued
-  cells (link, multi, attachment) use the EXISTING `raw` encoding with array
-  values, never a new encoding, because an unknown encoding breaks old builds'
-  read paths while a raw array degrades to text. A link stores ONE side; its
-  inverse is derived, so the two sides cannot diverge under collab.
-- Lookups and rollups are column formulas, not new storage.
+- Airtable's layer is a field `kind` BESIDE a base `type` every build knows
+  (never a new `type`: measured, a new type stopped the previous build from
+  booting at all), plus per-table `tableViews`. List-valued cells (link,
+  multi, attachment) use the EXISTING `raw` encoding with array values, never a
+  new encoding, because an unknown encoding breaks old builds' read paths while
+  a raw array degrades to text. A link stores ONE side; its mirror is derived,
+  so the two sides cannot diverge under collab.
+- Lookups and rollups are field kinds with settings, as in Airtable — not
+  formula functions, since `LOOKUP` is already Excel's.
 
 Full design: `docs/dash-unified.md`.
