@@ -788,6 +788,13 @@ async function browser(chrome: string, html: string): Promise<void> {
         await js('document.activeElement?.blur?.(); 1')
         await sleep(400)
       }
+      // EVERYTHING THIS SECTION CHANGES IS PUT BACK at its end: the reader's
+      // storage and the viewport. Left behind, the '0' it writes for the
+      // properties panel opened the inspector on the next open() (which clears
+      // storage only AFTER the load), and the 1440 reachability walk lost the
+      // "Show properties" chevron it requires.
+      const SNAP = `JSON.stringify(Object.fromEntries(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)])))`
+      const before = await js<string>(SNAP)
       const PANES = `(() => { const open = (s) => !document.querySelector(s).closest('.bkp').classList.contains('bkp-collapsed'); return { pages: open('.sp-side'), insp: open('.sp-insp'), pane: localStorage.getItem('bento-sp-pane-closed'), ins: localStorage.getItem('bento-sp-insp-closed') } })()`
       const BAR = (label: string) => `[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith(${JSON.stringify(label)}) && b.getBoundingClientRect().width > 0)`
       const toggle = async (panel: 'pages' | 'insp') => {
@@ -864,6 +871,13 @@ async function browser(chrome: string, html: string): Promise<void> {
       const back = await js<any>(PANES)
       ok(back.pages && back.insp && back.pane === '0' && back.ins === '0',
         `…and reopening them is remembered the same way (${JSON.stringify(back)})`)
+
+      await js(`localStorage.clear(); for (const [k, v] of Object.entries(${before})) localStorage.setItem(k, v); 1`)
+      await metrics(true); await load()
+      const after = await js<string>(SNAP)
+      const restored = await js<any>(`({ w: innerWidth, insp: document.querySelector('.sp-insp').closest('.bkp').classList.contains('bkp-collapsed'), pages: document.querySelector('.sp-side').closest('.bkp').classList.contains('bkp-collapsed') })`)
+      ok(after === before && restored.w === 390 && restored.insp && restored.pages,
+        `the drawer-preference rows leave storage and the 390 viewport as they found them, both drawers shut (${after === before ? 'storage identical' : `${before} → ${after}`}; ${JSON.stringify(restored)})`)
     }
 
     // ——— the top bar is slides' bar ———
