@@ -283,12 +283,22 @@ try {
     ok((await where()).region === 'tabs', 'Shift+F6 walks back')
 
     // Tab inside the grid is the next cell — and at the last column it leaves
+    // Frames between steps: the grid repaints the row and re-focuses the cursor
+    // cell after a move, and a slower runner reads focus mid-repaint otherwise.
+    const settle = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))))
     await page.locator('.dg-row[data-row="1"] .dg-cell[data-ci]').first().click()
+    await settle()
+    const ciBefore = await page.evaluate(() => document.querySelector('.dg-cursor')?.getAttribute('data-ci'))
     await page.keyboard.press('Tab')
+    await settle()
     const inGrid = await where()
-    ok(inGrid.region === 'grid' && inGrid.cursor, 'inside the grid, Tab moves to the next cell (the data-entry run)')
+    const ciAfter = await page.evaluate(() => document.querySelector('.dg-cursor')?.getAttribute('data-ci'))
+    ok(inGrid.region === 'grid' && inGrid.cursor && Number(ciAfter) === Number(ciBefore) + 1,
+      `inside the grid, Tab moves to the next cell (the data-entry run) (column ${ciBefore} → ${ciAfter}, focus on ${inGrid.region} ${inGrid.tag}.${inGrid.cls})`)
     await page.keyboard.press('End')
+    await settle()
     await page.keyboard.press('Tab')
+    await settle()
     const out = await where()
     ok(out.region !== 'grid' && out.region !== 'body', `Tab at the last column leaves the grid (now on ${out.region} ${out.tag}.${out.cls})`)
     await ctx.close()
