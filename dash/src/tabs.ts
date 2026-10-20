@@ -182,6 +182,27 @@ export function mintSheetName(doc: DashDoc, base: string): string {
 }
 
 /**
+ * The name a NEW sheet gets: "Sheet3" on a workbook of two, as Excel and
+ * Sheets name it — the number counts sheets, and skips any name already taken
+ * (compared without case, because a formula's `Sheet3!A1` does not see case).
+ *
+ * The same for both kinds. A new spreadsheet used to be called "Spreadsheet",
+ * which put the kind's word on the tab twice ("Spreadsheet SPREADSHEET") and
+ * said nothing about which sheet it was. `pattern` is the translated
+ * "Sheet{n}" ("Hoja{n}", "Tabelle{n}"), so it reads as the reader's own Excel.
+ */
+export function newSheetName(doc: DashDoc, pattern: string): string {
+  const taken = new Set(doc.sheets.map((s) => s.name.toLowerCase()))
+  for (let i = doc.sheets.length + 1; ; i++) {
+    // A pattern that lost its {n} (a translation that dropped it, or the
+    // x-pseudo audit locale, which accents the placeholder too) must still
+    // count — or every candidate is the same string and this never returns.
+    const n = pattern.includes('{n}') ? pattern.replace('{n}', String(i)) : `${pattern} ${i}`
+    if (!taken.has(n.toLowerCase())) return n
+  }
+}
+
+/**
  * An empty table sheet.
  *
  * `steps[0]` is the provenance record, and it is present even here: a dash file
@@ -1093,8 +1114,8 @@ export function mountTabs(host: TabsHost): Tabs {
     const doc = store.doc
     const id = mintSheetId(doc)
     const sheet = kind === 'canvas'
-      ? blankSpreadsheet(id, mintSheetName(doc, t('Spreadsheet')))
-      : blankSheet(id, mintSheetName(doc, t('Sheet')), new Date().toISOString())
+      ? blankSpreadsheet(id, newSheetName(doc, t('Sheet{n}')))
+      : blankSheet(id, newSheetName(doc, t('Sheet{n}')), new Date().toISOString())
     commit({ op: 'setSheet', id, sheet })
     grid.setSheet(id)
     refresh(true)

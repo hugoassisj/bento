@@ -26,6 +26,8 @@
 // Nothing here touches the DOM: it is pure data, so it is provable in CI.
 
 import type { Column, ColumnData, ColumnType, TableSheet } from './model.ts'
+import { t } from './i18n.ts'
+import { TYPE_LABEL } from './format.ts'
 
 // --- Delimited parsing -----------------------------------------------------
 
@@ -177,7 +179,9 @@ export interface Inference {
    * Set when the data cannot decide and a guess would be a silent wrong answer.
    * The column imports as TEXT and the caller must ask. The only honest state.
    */
-  ambiguous?: { kind: 'date-order'; detail: string }
+  /** `fits`: 'none' — both positions pass 12 somewhere; 'both' — every value
+   *  reads either way. `detail` is the developer's sentence, for the rig. */
+  ambiguous?: { kind: 'date-order'; detail: string; fits?: 'none' | 'both' }
 }
 
 const BOOLS = new Set(['true', 'false', 'yes', 'no', 'y', 'n', '1', '0', 't', 'f'])
@@ -270,7 +274,7 @@ export function inferColumn(values: string[]): Inference {
     if (bIsDay && !aIsDay) return { type: 'date', parsed: 'mdy', failed: present.length - slash.length }
     if (aIsDay && bIsDay) {
       // both positions exceed 12 somewhere — the column is not one convention
-      return { type: 'text', failed: 0, ambiguous: { kind: 'date-order', detail: 'both positions exceed 12, so no single day/month order fits the whole column' } }
+      return { type: 'text', failed: 0, ambiguous: { kind: 'date-order', fits: 'none', detail: 'both positions exceed 12, so no single day/month order fits the whole column' } }
     }
     // NEITHER exceeds 12: undecidable from the data. This is the one that
     // matters, and the honest answer is to refuse.
@@ -279,6 +283,7 @@ export function inferColumn(values: string[]): Inference {
       failed: 0,
       ambiguous: {
         kind: 'date-order',
+        fits: 'both',
         detail: 'every value fits both DD/MM and MM/DD — the file does not say which, and guessing moves dates by up to eleven months',
       },
     }
@@ -380,7 +385,9 @@ export function importDelimited(
   if (ragged) {
     findings.push({
       code: 'ragged-rows',
-      message: `${ragged} row${ragged === 1 ? '' : 's'} had a different number of fields than the header; short rows are padded with blanks and nothing is dropped`,
+      message: ragged === 1
+        ? t('1 row had a different number of fields than the header; short rows were padded with blanks and nothing was dropped.')
+        : t('{n} rows had a different number of fields than the header; short rows were padded with blanks and nothing was dropped.', { n: ragged }),
     })
   }
 
@@ -393,12 +400,12 @@ export function importDelimited(
     if (ids.has(id)) {
       let n = 2
       while (ids.has(`${id}-${n}`)) n++
-      findings.push({ code: 'duplicate-header', column: rawName, message: `two columns are called "${rawName}"; the second is kept separately` })
+      findings.push({ code: 'duplicate-header', column: rawName, message: t('Two columns are called “{column}”; the second is kept as a separate column.', { column: rawName }) })
       id = `${id}-${n}`
     }
     ids.add(id)
     if (header && blank(rawName)) {
-      findings.push({ code: 'empty-header', column: id, message: `column ${i + 1} has no name in the header row` })
+      findings.push({ code: 'empty-header', column: id, message: t('Column {n} has no name in the header row.', { n: i + 1 }) })
     }
 
     const raw = body.map((r) => r[i] ?? '')
@@ -407,14 +414,18 @@ export function importDelimited(
       findings.push({
         code: 'date-ambiguous',
         column: rawName || id,
-        message: `"${rawName || id}" looks like dates, but ${inf.ambiguous.detail}. Imported as text — set the column type to choose.`,
+        message: inf.ambiguous.fits === 'both'
+          ? t('“{column}” looks like dates, but every value reads as either DD/MM or MM/DD and the file doesn’t say which. It came in as text — set the column type to choose.', { column: rawName || id })
+          : t('“{column}” looks like dates, but no single day/month order fits every value. It came in as text — set the column type to choose.', { column: rawName || id }),
       })
     }
     if (inf.failed) {
       findings.push({
         code: 'coerce-failed',
         column: rawName || id,
-        message: `${inf.failed} value${inf.failed === 1 ? '' : 's'} in "${rawName || id}" could not be read as ${inf.type} and are blank; the originals are in the import step`,
+        message: inf.failed === 1
+          ? t('1 value in “{column}” couldn’t be read as {type} and was left blank; the original is kept in the import step.', { column: rawName || id, type: t(TYPE_LABEL[inf.type]) })
+          : t('{n} values in “{column}” couldn’t be read as {type} and were left blank; the originals are kept in the import step.', { n: inf.failed, column: rawName || id, type: t(TYPE_LABEL[inf.type]) }),
       })
     }
 

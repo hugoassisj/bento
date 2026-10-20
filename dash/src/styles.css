@@ -488,6 +488,9 @@ html, body {
 }
 .dx-title:hover { border-color: var(--line); }
 .dx-title:focus { outline: none; border-color: var(--blue); background: var(--surface); }
+/* From the keyboard the ghost title gets the ring every other control has;
+   a 1px border change is too quiet to find by Tab. */
+.dx-title:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
 
 .dx-group { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 /* everything after the insert group is pushed to the far end */
@@ -530,15 +533,22 @@ html, body {
    .sv-btn[disabled]). dash had 0.45 here, 0.45 in the save menu and 0.6 in the
    tab menu — three answers to one question. */
 .dx-btn[disabled] { opacity: 0.35; cursor: default; }
-/* FOCUS IS BLUE, NOT AMBER, and this is the one measurement in the file that
-   was a straightforward failure. The brand amber is 2.02:1 on white and 1.88:1
-   on the top bar's own band — WCAG 2.2 SC 1.4.11 asks 3:1 of a focus
-   indicator, so the ring a keyboard user navigates by was the least visible
-   mark in the app. --blue (= --sel-ring) is 4.82:1 light and 4.66:1 dark, and
-   it is already what tabs.css and find.css focus with, so this also settles an
-   argument dash was having with itself. slides focuses with --blue too
-   (.ed-title:focus). */
-.dx-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+/* FOCUS IS --accent-ink, NOT THE BRAND AMBER. The bright amber is 2.02:1 on
+   white and 1.88:1 on the top bar's band — WCAG 2.2 SC 1.4.11 asks 3:1 of a
+   focus indicator. dash answered that with --blue for a while; slides then
+   moved its buttons to the DARK amber, --accent-ink (#7a5200 light, #f0b357
+   dark, both well over 3:1), which the fields here already ring with — so
+   dash follows (docs/DECISIONS.md 2026-10-20), and one ring reads the same in
+   every app. */
+.dx-btn:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+/* A FLOOR under everything else a keyboard can reach: any button, link or
+   tab stop with no ring of its own gets this one, at zero specificity so a
+   control's own rule always wins. Without it, Tab reached controls (panel
+   buttons, menu rows) that showed no sign of having focus at all. */
+:where(button, a[href], [role="button"], [role="tab"], [role="option"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 1px;
+}
 
 /* A button that is NOT in a row of its own kind — a dialog's actions, the
    gate's way out, the chart head — keeps a rest-state box, because there is

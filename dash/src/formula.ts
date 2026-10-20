@@ -1415,3 +1415,152 @@ export const FUNCTIONS: string[] = [
   ...Object.keys(AGG), ...CONDITIONAL, ...MULTI, ...LOOKUPS,
   ...Object.keys(RAW), ...Object.keys(SCALAR), ...Object.keys(SHAPED), ...VOLATILE,
 ].sort()
+
+// --- strict syntax check (the formula dialog) --------------------------------
+
+/**
+ * What is wrong with an expression as WRITTEN, for the dialog to say while the
+ * reader types.
+ *
+ * `parse` above is deliberately forgiving — a stray character is skipped, a
+ * missing operand becomes a #VALUE! leaf, an unclosed bracket closes itself —
+ * because a column must evaluate to SOMETHING on every row and never throw.
+ * That leniency is right for evaluation and wrong for authoring: `Value * 2 +`
+ * parsed happily, the dialog said nothing, and the column filled with #VALUE!.
+ * The changelog had promised the dialog "checks the expression as you type";
+ * it checked only column NAMES. This is the check it promised, over the same
+ * token rules, and it never changes what `parse` accepts.
+ */
+export type SyntaxProblem =
+  | { kind: 'leading-equals' }
+  | { kind: 'char'; ch: string }
+  | { kind: 'string' }
+  | { kind: 'bracket' }
+  | { kind: 'operand'; after: string }
+  | { kind: 'operand-before'; op: string }
+  | { kind: 'open' }
+  | { kind: 'close' }
+  | { kind: 'unexpected'; text: string }
+  | { kind: 'arg'; fn: string }
+  | { kind: 'empty-parens' }
+  | { kind: 'function'; name: string }
+  | { kind: 'sheet'; sheet: string }
+
+class SyntaxStop {
+  readonly why: SyntaxProblem
+  constructor(why: SyntaxProblem) { this.why = why }
+}
+
+export function formulaSyntax(src: string): SyntaxProblem | null {
+  if (!src.trim()) return null
+  const named = sheetQualifiers(src)
+  if (named.length) return { kind: 'sheet', sheet: named[0].sheet }
+
+  // The same token rules as `lex`, except that a character `lex` would skip,
+  // and a string or [name] it would close by itself, is reported instead.
+  const toks: Tok[] = []
+  for (let i = 0; i < src.length;) {
+    const c = src[i]
+    if (/\s/.test(c)) { i++; continue }
+    if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(src[i + 1] ?? ''))) {
+      let j = i
+      while (j < src.length && /[0-9.]/.test(src[j])) j++
+      toks.push({ t: 'num', v: Number(src.slice(i, j)) }); i = j; continue
+    }
+    if (c === '"') {
+      let j = i + 1, s = '', closed = false
+      while (j < src.length) {
+        if (src[j] === '"') {
+          if (src[j + 1] === '"') { s += '"'; j += 2; continue }
+          closed = true; break
+        }
+        s += src[j++]
+      }
+      if (!closed) return { kind: 'string' }
+      toks.push({ t: 'str', v: s }); i = j + 1; continue
+    }
+    if (c === '[') {
+      const j = src.indexOf(']', i)
+      if (j < 0) return { kind: 'bracket' }
+      toks.push({ t: 'id', v: src.slice(i + 1, j) }); i = j + 1; continue
+    }
+    if (/[A-Za-z_]/.test(c)) {
+      let j = i
+      while (j < src.length && /[A-Za-z0-9_.]/.test(src[j])) j++
+      toks.push({ t: 'id', v: src.slice(i, j) }); i = j; continue
+    }
+    const two = src.slice(i, i + 2)
+    if (two === '<=' || two === '>=' || two === '<>') { toks.push({ t: 'op', v: two }); i += 2; continue }
+    if ('+-*/^&=<>'.includes(c)) { toks.push({ t: 'op', v: c }); i++; continue }
+    if ('(),'.includes(c)) { toks.push({ t: 'punc', v: c }); i++; continue }
+    return { kind: 'char', ch: c }
+  }
+  if (!toks.length) return null
+
+  const known = new Set(FUNCTIONS)
+  let p = 0
+  const peek = (): Tok | undefined => toks[p]
+  const isP = (tk: Tok | undefined, v: string): boolean => tk?.t === 'punc' && tk.v === v
+  const show = (tk: Tok): string => tk.t === 'str' ? `"${tk.v}"` : String(tk.v)
+  const stop = (why: SyntaxProblem): never => { throw new SyntaxStop(why) }
+
+  // `after` is the operator that demanded this operand, when one did.
+  function primary(after: string | undefined): void {
+    const tk = toks[p]
+    if (!tk) return stop(after ? { kind: 'operand', after } : { kind: 'open' })
+    if (tk.t === 'num' || tk.t === 'str') { p++; return }
+    if (tk.t === 'op') {
+      if (tk.v === '-' || tk.v === '+') { p++; return primary(tk.v) }
+      if (p === 0 && tk.v === '=') return stop({ kind: 'leading-equals' })
+      return stop(after ? { kind: 'operand', after } : { kind: 'operand-before', op: tk.v })
+    }
+    if (tk.t === 'punc' && tk.v === '(') {
+      p++
+      if (isP(peek(), ')')) return stop({ kind: 'empty-parens' })
+      expr(0, undefined)
+      if (isP(peek(), ')')) { p++; return }
+      const nx = peek()
+      return stop(nx ? { kind: 'unexpected', text: show(nx) } : { kind: 'open' })
+    }
+    if (tk.t === 'punc') {
+      return stop(after ? { kind: 'operand', after } : tk.v === ')' ? { kind: 'close' } : { kind: 'unexpected', text: tk.v })
+    }
+    // an identifier: a column, TRUE/FALSE, or a function call
+    p++
+    if (!isP(peek(), '(')) return
+    const fn = tk.v.toUpperCase()
+    if (!known.has(fn)) return stop({ kind: 'function', name: tk.v })
+    p++
+    if (isP(peek(), ')')) { p++; return }
+    for (;;) {
+      if (isP(peek(), ',') || isP(peek(), ')')) return stop({ kind: 'arg', fn })
+      expr(0, undefined)
+      if (isP(peek(), ',')) { p++; continue }
+      if (isP(peek(), ')')) { p++; return }
+      const nx = peek()
+      return stop(nx ? { kind: 'unexpected', text: show(nx) } : { kind: 'open' })
+    }
+  }
+
+  function expr(min: number, after: string | undefined): void {
+    primary(after)
+    for (;;) {
+      const tk = peek()
+      if (!tk || tk.t !== 'op') return
+      const prec = PREC[tk.v]
+      if (prec === undefined || prec < min) return
+      p++
+      expr(tk.v === '^' ? prec : prec + 1, tk.v)
+    }
+  }
+
+  try {
+    expr(0, undefined)
+    const rest = peek()
+    if (rest) return isP(rest, ')') ? { kind: 'close' } : { kind: 'unexpected', text: show(rest) }
+    return null
+  } catch (e) {
+    if (e instanceof SyntaxStop) return e.why
+    throw e
+  }
+}

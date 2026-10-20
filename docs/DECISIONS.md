@@ -11400,3 +11400,24 @@ not yet saved is already a secret. The payload is a bare boolean, fire-and-forge
 and not deduplicated: the host can only ADD blanking, so a missed `true` is the
 only failure and a redundant post costs nothing. Hosts that don't declare
 `'seal'` are sent nothing.
+
+## 2026-10-20 — dash: the grid owns Tab only inside itself; F6 walks regions; slides' focus ring
+
+dash's document key handler took every key from every target that was not a
+text field, so Tab moved the grid's cursor from anywhere — the top bar, panel
+and sheet tabs could not be reached by keyboard — and Enter on a focused button
+moved the cursor instead of pressing it. Now: off the grid, Tab is always the
+browser's, and on a focused control Enter, Space and the navigation keys are
+the control's; other keys (a letter typed after clicking a toolbar button, ⌘Z)
+still reach the grid. Inside the grid Tab stays "next cell" (the data-entry
+run every spreadsheet keeps), and at the sheet's first or last column it hands
+the key back to the browser so the grid is not a keyboard trap. F6 / ⇧F6 move
+between top bar, formula bar, grid, panel and sheet tabs, Excel's key for it.
+Focus rings move from --blue to --accent-ink, the token slides' buttons and
+every field already use, with a zero-specificity floor for any reachable
+control that has no ring of its own. This supersedes the --blue choice recorded
+in dash's styles.css comment.
+
+Also settled the same day: a stored `bento-lang` is validated before `Intl`
+sees it (dash/src/i18n.ts `intlLocale`), because the key is shared across every
+file on the origin and a bad value used to stop boot.

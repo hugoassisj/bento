@@ -105,8 +105,14 @@ import { TYPE_LABEL } from './format.ts'
 import { defaultBinding, renderChart, chartHeading, missingColumns, type ChartBinding } from './chart.ts'
 import { readCell } from './store.ts'
 import { hiddenSet } from './rowcol.ts'
-import { FUNCTIONS, dependencies, recalc } from './formula.ts'
-import { buildScene, defaultViz3d, mountViz3d, type Viz3dBinding, type Viz3dKind } from './viz3d.ts'
+import { FUNCTIONS, dependencies, recalc, formulaSyntax, type SyntaxProblem } from './formula.ts'
+import { functionPicker } from './fnpicker.ts'
+import { buildScene, defaultViz3d, mountViz3d, VIZ_TITLE, VIZ_KIND_LABEL, type Viz3dBinding, type Viz3dKind } from './viz3d.ts'
+
+/** The 2D chart kind button's words — English, translated at render time. */
+const CHART_KIND_LABEL: Record<ChartBinding['kind'], string> = {
+  bar: 'Bar', line: 'Line', pie: 'Pie', scatter: 'Scatter',
+}
 
 // --- topbar icons -----------------------------------------------------------
 //
@@ -777,10 +783,39 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // gone before the reader looked up from the row they just typed.
   grid.onNotice = (msgs) => showFindings(findingsEl, msgs.map((message) => ({ message })))
 
+  // F6 / ⇧F6 walk the REGIONS — top bar, formula bar, grid, panel, sheet tabs —
+  // Excel's own key for it. Inside the grid Tab means "next cell" (the data-
+  // entry run every spreadsheet user's hands know), so the grid needs a way
+  // out that is not Tab; F6 is that way, and Tab still walks everything else.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'F6' || e.metaKey || e.ctrlKey || e.altKey) return
+    if (document.querySelector('.dx-ask-back, .dx-about-back, [aria-modal="true"]')) return
+    e.preventDefault()
+    e.stopPropagation()
+    focusRegion(app, grid, e.shiftKey ? -1 : 1)
+  }, true)   // CAPTURE: the panel's fields stop their keys from bubbling
+
   // keyboard: the grid owns the key set when nothing else has focus
   document.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement | null
-    if (t && (t.tagName === 'INPUT' || t.isContentEditable)) return
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+    // THE KEYS A FOCUSED CONTROL NEEDS ARE ITS OWN. This listener used to take
+    // every key from every target that was not a text field, so Tab from the
+    // page moved the grid's cursor instead of focus — the top bar, the panel
+    // and the sheet tabs could not be reached from the keyboard at all
+    // (activeElement stayed BODY however many times Tab was pressed), and
+    // Enter on a focused button moved the cursor down instead of pressing it.
+    // Now: Tab from anywhere outside the grid is the browser's, and on a
+    // focused control outside the grid so are Enter, Space and the navigation
+    // keys. Everything else still reaches the grid — a letter typed after
+    // clicking a toolbar button still lands in the selected cell, and ⌘Z
+    // still undoes.
+    // A control INSIDE the grid (a column's type chip, its filter button) is a
+    // control first: its keys are its own, like any other button's.
+    const inGrid = !!t && !!t.closest('.dg-scroll') && !t.closest('button, a[href]')
+    const onBody = !t || t === document.body || t === document.documentElement
+    if (!inGrid && e.key === 'Tab') return
+    if (!inGrid && !onBody && !e.metaKey && !e.ctrlKey && CONTROL_KEYS.has(e.key)) return
     // A bare printable key REPLACES the selected cell — the most-used gesture
     // in a spreadsheet, and the one that makes a grid feel like one. It has to
     // be tried before keyToAction, which returns null for printable keys
@@ -890,7 +925,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     const shown = shownSheet()
     const shownId = shown?.id ?? ''
     chartTitle.textContent = chartHeading(sheet, binding, shownId)
-    kindBtn.textContent = binding.kind[0].toUpperCase() + binding.kind.slice(1)
+    kindBtn.textContent = t(CHART_KIND_LABEL[binding.kind])
     teardown = renderChart(chartBody, sheet, binding,
       // the grid's freshly computed formula columns, so the chart shows the
       // numbers on screen rather than the raw columns underneath them — but
@@ -1048,12 +1083,12 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // build — the rule `drawChart` already follows.
     if (!sheet) { vizDown = null; viz = null; vizSheetId = null; chartEl.hidden = true; return }
     const shownId = grid.showingId()
-    chartTitle.textContent = `3D ${viz.kind} · ` +
+    chartTitle.textContent = `${t(VIZ_TITLE[viz.kind])} · ` +
       [viz.x, viz.y, viz.z, viz.lat, viz.lon].filter(Boolean)
         .map((id) => sheet.columns.find((c) => c.id === id)?.name ?? id).join(' / ') +
       // WHOSE numbers these are, whenever they are not the sheet on screen.
       (sheet.id === shownId ? '' : ` · ${sheet.name}`)
-    kindBtn.textContent = viz.kind[0].toUpperCase() + viz.kind.slice(1)
+    kindBtn.textContent = t(VIZ_KIND_LABEL[viz.kind])
     const scene = buildScene(sheet, viz, sheet.id === shownId
       ? (grid.computed as Map<string, unknown[]>)
       : (recalc(sheet, store.doc.modified).values as Map<string, unknown[]>),
@@ -2307,6 +2342,52 @@ function esc(s: string): string {
 void DOC_BUDGET_FSA
 void DOC_BUDGET_DOWNLOAD
 
+// --- keyboard regions -------------------------------------------------------
+
+/** The keys a focused button, link or tab answers itself (see the grid's
+ *  document listener, which leaves these alone off the grid). */
+const CONTROL_KEYS = new Set([
+  'Enter', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown',
+])
+
+const TABBABLE = 'button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), ' +
+  'textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Move focus to the next (or previous) region: top bar, formula bar, grid,
+ * properties panel, sheet tabs. A region that is hidden or empty is skipped;
+ * the grid is entered through `focusGrid`, which lands on the cursor cell.
+ */
+function focusRegion(app: HTMLElement, grid: Grid, dir: 1 | -1): void {
+  const visible = (el: Element): boolean => {
+    const r = (el as HTMLElement).getBoundingClientRect()
+    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'
+  }
+  const first = (sel: string) => (): boolean => {
+    // document-wide: the sheet tabs and the panel mount beside the app root
+    const host = (app.querySelector<HTMLElement>(sel) ?? document.querySelector<HTMLElement>(sel))
+    if (!host) return false
+    const el = [host, ...host.querySelectorAll<HTMLElement>(TABBABLE)].find((x) => x.matches(TABBABLE) && visible(x))
+    if (!el) return false
+    el.focus()
+    return true
+  }
+  const regions: Array<{ sel: string; go: () => boolean }> = [
+    { sel: '.dx-bar', go: first('.dx-bar') },
+    { sel: '.dx-formula', go: first('.dx-formula') },
+    { sel: '.dg-scroll', go: () => { grid.focusGrid(); return true } },
+    { sel: '.dp-panel', go: first('.dp-panel') },
+    { sel: '.dx-tabs', go: () => first('.dx-tabs .dx-tab.active')() || first('.dx-tabs')() },
+  ]
+  const at = document.activeElement
+  let i = regions.findIndex((r) => !!at?.closest(r.sel))
+  if (i < 0) i = dir > 0 ? -1 : 0
+  for (let step = 1; step <= regions.length; step++) {
+    const r = regions[(i + dir * step + regions.length * 2) % regions.length]
+    if (r.go()) return
+  }
+}
+
 // --- formulas ---------------------------------------------------------------
 
 /**
@@ -2316,25 +2397,52 @@ void DOC_BUDGET_DOWNLOAD
 /**
  * Check a formula against the sheet it will live on, as it is typed.
  *
- * `dependencies` returns the names the expression refers to, so a typo in a
- * column name is caught here rather than becoming a column of #NAME? that the
- * author discovers later. It cannot catch everything — a syntax error still
- * surfaces as an error VALUE in the column — but a misspelt column is the
- * mistake people actually make, and it is the one a native prompt could never
- * have reported.
+ * TWO questions, in this order. Is it a formula at all — `formulaSyntax` reads
+ * it strictly, where evaluation is lenient on purpose (a column must produce a
+ * value on every row), so `Value * 2 +` is refused here instead of filling the
+ * column with #VALUE!. Then does every name it uses exist — `dependencies`
+ * catches a misspelt column, which is the mistake people actually make and the
+ * one a native prompt could never have reported.
  */
 function formulaProblem(sheet: TableSheet, expr: string): string | null {
   if (!expr.trim()) return null                       // empty clears the formula
-  const known = new Set(sheet.columns.map((c) => c.name))
+  const bad = formulaSyntax(expr)
+  if (bad) return syntaxMessage(bad)
+  // Names AND ids: the evaluator resolves both, and the starter's own Weighted
+  // column is written against ids (`value * prob`) — checking names alone
+  // refused the product's example the moment anyone opened it to edit.
+  const known = new Set(sheet.columns.flatMap((c) => [c.name, c.id]))
   const fns = new Set(FUNCTIONS)
   const unknown = dependencies(expr).filter((d) => !known.has(d) && !fns.has(d.toUpperCase()))
   if (!unknown.length) return null
   return t('No column called {name} on this sheet.').replace('{name}', `“${unknown[0]}”`)
 }
 
-/** The columns you may name, for the hint line under the field. */
-const columnHint = (sheet: TableSheet): string =>
-  `${t('Columns')}: ${sheet.columns.map((c) => (/\s/.test(c.name) ? `[${c.name}]` : c.name)).join(', ')}`
+/** What a syntax problem says to the person typing — their words, not the parser's. */
+function syntaxMessage(p: SyntaxProblem): string {
+  switch (p.kind) {
+    case 'leading-equals': return t('Leave out the “=” at the start — this box holds a formula already.')
+    case 'char': return p.ch === '%'
+      ? t('Write a percentage as a number here: 15% is 0.15.')
+      : t('“{ch}” can’t be used in a formula.', { ch: p.ch })
+    case 'string': return t('A piece of quoted text is missing its closing quote (").')
+    case 'bracket': return t('A [column name] is missing its closing ].')
+    case 'operand': return t('Something has to follow “{op}”.', { op: p.after })
+    case 'operand-before': return t('Something has to come before “{op}”.', { op: p.op })
+    case 'open': return t('A “(” is never closed — add a “)”.')
+    case 'close': return t('There is a “)” with no “(” before it.')
+    case 'unexpected': return t('“{text}” can’t follow what comes before it — is an operator or a comma missing?', { text: p.text })
+    case 'arg': return t('One of the values given to {fn} is empty.', { fn: p.fn })
+    case 'empty-parens': return t('There is nothing inside “( )”.')
+    case 'function': return t('There is no function called {name} — the list below shows the ones you can use.', { name: p.name })
+    case 'sheet': return t('“{sheet}” is another sheet. A formula column can only use the columns of its own sheet.', { sheet: p.sheet })
+  }
+}
+
+/** The formula dialog's reference list, on the first (formula) field. */
+const formulaExtra = (sheet: TableSheet) =>
+  (inputs: Record<string, HTMLInputElement>, revalidate: () => void) =>
+    functionPicker(inputs.expr, sheet.columns.map((c) => c.name), FUNCTIONS, revalidate)
 
 async function addFormula(store: Store, sheet: TableSheet): Promise<void> {
   // The old default was literally `Value * Probability` — the starter
@@ -2349,8 +2457,8 @@ async function addFormula(store: Store, sheet: TableSheet): Promise<void> {
       { key: 'expr', label: t('Formula'), value: example, mono: true, placeholder: t('e.g. Price * Quantity') },
       { key: 'name', label: t('Column name'), value: t('Computed') },
     ],
-    hint: `${columnHint(sheet)}\n${t('Functions')}: ${FUNCTIONS.slice(0, 24).join(' ')}…`,
     submit: t('Add column'),
+    extra: formulaExtra(sheet),
     check: (v) => (v.expr.trim() ? formulaProblem(sheet, v.expr) : t('A formula column needs a formula.')),
   })
   if (!got) return
@@ -2375,8 +2483,9 @@ async function editFormula(store: Store, sheet: TableSheet, col: Column): Promis
   const got = await askForm({
     title: t('Formula for “{col}”').replace('{col}', col.name),
     fields: [{ key: 'expr', label: t('Formula'), value: col.formula ?? '', mono: true }],
-    hint: `${columnHint(sheet)}\n${t('Leave it empty to turn this back into an ordinary column.')}`,
+    hint: t('Leave it empty to turn this back into an ordinary column.'),
     submit: t('Save formula'),
+    extra: formulaExtra(sheet),
     check: (v) => formulaProblem(sheet, v.expr),
   })
   if (!got) return
@@ -2442,6 +2551,11 @@ function askForm(opts: {
   hint?: string
   submit?: string
   check?: (values: Record<string, string>) => string | null
+  /** More of the form, below the hint — given the inputs and a way to re-run
+   *  `check`; its `onKey` sees each key first and returns true to keep it. */
+  extra?: (inputs: Record<string, HTMLInputElement>, revalidate: () => void) => {
+    el: HTMLElement; onKey?: (e: KeyboardEvent) => boolean
+  }
 }): Promise<Record<string, string> | null> {
   return new Promise((resolve) => {
     document.querySelector('.dx-ask-back')?.remove()
@@ -2480,8 +2594,13 @@ function askForm(opts: {
       card.append(hint)
     }
 
+    // The error sits UNDER THE FIELDS and above any reference list, so it is
+    // next to what it is about while the reader types. Announced politely: a
+    // screen reader hears "Something has to follow “+”" as it happens.
     const err = document.createElement('p')
     err.className = 'dx-ask-err'
+    err.setAttribute('role', 'status')
+    err.setAttribute('aria-live', 'polite')
     err.hidden = true
     card.append(err)
 
@@ -2497,6 +2616,13 @@ function askForm(opts: {
     ok.textContent = opts.submit ?? t('OK')
     foot.append(cancel, ok)
     card.append(foot)
+
+    let extraKey: ((e: KeyboardEvent) => boolean) | undefined
+    if (opts.extra) {
+      const x = opts.extra(inputs, () => { validate() })
+      extraKey = x.onKey
+      card.insertBefore(x.el, foot)
+    }
 
     const values = (): Record<string, string> => {
       const out: Record<string, string> = {}
@@ -2522,8 +2648,13 @@ function askForm(opts: {
     const onKey = (e: KeyboardEvent): void => {
       if (!back.contains(e.target as Node)) return
       e.stopPropagation()
-      if (e.key === 'Escape') { e.preventDefault(); done(null) }
-      else if (e.key === 'Enter' && validate()) { e.preventDefault(); done(values()) }
+      if (e.key === 'Escape') { e.preventDefault(); done(null); return }
+      if (extraKey?.(e)) return
+      // Enter SUBMITS from a field. On a focused button it is that button's own
+      // click (Cancel, a function in the list) — it used to submit from there
+      // too, so Enter on a focused Cancel added the column.
+      const inField = Object.values(inputs).includes(e.target as HTMLInputElement)
+      if (e.key === 'Enter' && inField && validate()) { e.preventDefault(); done(values()) }
     }
     document.addEventListener('keydown', onKey, true)
 

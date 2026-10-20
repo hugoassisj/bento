@@ -8,9 +8,13 @@ The format (`bento/dash`, version `1`) is additive and stable — every version
 below opens files from every earlier version, and unknown fields are preserved.
 There is no server, so a break here would be permanent.
 
+**dash has not been released.** No version below has been published on
+bento.page; the versions are tagged development milestones, and the README's
+status is the authority. The first published version will say so here.
+
 ## [0.3.0] — unreleased
 
-The release that came out of watching somebody use 0.2.0.
+The version that came out of watching somebody use 0.2.0.
 
 - **Neutral title while sealed, matching the saved file's title.**
 - **A sealed workbook deletes this browser's earlier plaintext recovery copy and version history of itself** on open; other workbooks' copies are untouched.
@@ -233,9 +237,36 @@ The release that came out of watching somebody use 0.2.0.
   two independent measures, it opens as 3D bars over two categories instead,
   which is both true to the data and the view a spreadsheet cannot draw.
 
-## [0.2.0] — 2026-08-03
+- **A stored language setting can no longer stop a workbook opening.** The
+  language choice is shared by every Bento file in the browser, and an odd value
+  in it — including the `x-pseudo` translation-check language — made dash fail
+  with "This file could not start". Numbers now fall back to the browser's own
+  language, then English.
 
-First release. A workbook is one self-contained HTML file: the data, the grid,
+- **The formula dialog says what is wrong as you type.** `Value * 2 +` now says
+  "Something has to follow “+”" and keeps Add off, as do a missing bracket, a
+  stray `%`, an unknown function or a leading `=`. Below the field: the sheet's
+  columns to click in, and every function with its arguments, narrowing to the
+  name you are typing (↓ and Enter insert one). Editing the starter's Weighted
+  formula no longer reports its columns as unknown.
+
+- **New sheets are called Sheet3, Sheet4…** (Hoja3, Tabelle3…), whichever kind
+  you add, instead of "Spreadsheet".
+
+- **The keyboard reaches the whole window.** Tab goes through the top bar, the
+  grid, the panel and the sheet tabs, each with the same focus ring slides uses;
+  Enter presses a focused button. Inside the grid Tab still moves cell to cell,
+  and leaves the grid at the last column; F6 jumps between the areas. The kind
+  word on a sheet tab is 11px, up from 9.5.
+
+- **More of dash speaks your language:** the Total choices (Sum, Average…) and
+  the footer's SUM/AVG, the chart and 3D kind button, the 3D messages, and every
+  note from importing or exporting an Excel or CSV file — rewritten to say what
+  happened and what to do, in all eight languages.
+
+## [0.2.0] — 2026-08-03 (tagged, not published)
+
+The first tagged version — a development milestone, never published. A workbook is one self-contained HTML file: the data, the grid,
 the formulas and the charts, opening from `file://` with no backend.
 
 - **One formula for a whole column.** A spreadsheet stores an expression per

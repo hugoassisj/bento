@@ -32,9 +32,9 @@
 // so a panel that assigned to a column would be an edit with no inverse.
 
 import './panels.css'
-import { t, locale } from './i18n.ts'
+import { t, intlLocale } from './i18n.ts'
 import { lsJson, lsSet } from '../../kernel/src/storage.ts'
-import { TYPE_LABEL } from './format.ts'
+import { TYPE_LABEL, AGG_WORD } from './format.ts'
 import { buildCellProps, type CellRange, type PanelKit } from './cellprops.ts'
 import {
   appearancePatch, buildAppearanceSection, describeOverrideSelection, effectiveFormat,
@@ -378,7 +378,7 @@ export function mountPanels(host: PanelsHost): Panels {
           ranges: grid.sel.ranges() as CellRange[],
           cursor: grid.sel.cursor,
           readOnly: ro(),
-          locale: locale(),
+          locale: intlLocale(),
           commit,
           message: cellMessage,
           say: (m) => {
@@ -557,7 +557,7 @@ export function mountPanels(host: PanelsHost): Panels {
     const agg = sheet.totals?.[col.id]
     const aggValue = totalsChoice(agg)
     const aggSel = select(
-      [['none', t('none')] as const, ...AGGS.map((a) => [a, t(a)] as const),
+      [['none', t('None')] as const, ...AGGS.map((a) => [a, t(AGG_WORD[a])] as const),
         ...(aggValue === 'custom' ? [['custom', t('custom formula')] as const] : [])],
       aggValue,
       (v) => {
@@ -754,7 +754,7 @@ export function mountPanels(host: PanelsHost): Panels {
       `${escHtml(label)}${v === cur ? ' ✓' : ''}</button>`
     const el = popAt(rect,
       `<div class="dx-pop-row">${escHtml(col.name)}</div>` +
-      AGGS.map((a) => item(a, t(a))).join('') +
+      AGGS.map((a) => item(a, t(AGG_WORD[a]))).join('') +
       (cur === 'custom' ? item('custom', t('custom formula')) : '') +
       `<div class="dx-pop-sep"></div>` +
       item('none', t('No total')))

@@ -18,7 +18,7 @@
 // into everyone else's file, or lets the author's chosen precision drift.
 
 import type { Column, ColumnType } from './model.ts'
-import { locale } from './i18n.ts'
+import { intlLocale } from './i18n.ts'
 
 /**
  * Viewer-scoped, never in the document.
@@ -38,7 +38,7 @@ let viewerLocale: string | undefined
 
 export const setViewerLocale = (l: string | undefined): void => { viewerLocale = l }
 
-const forNumbers = (): string | undefined => viewerLocale ?? locale()
+const forNumbers = (): string | undefined => viewerLocale ?? intlLocale()
 
 /**
  * What an Excel-style pattern means, and the ONE place that decides it.
@@ -152,4 +152,17 @@ export const alignFor = (t: ColumnType): 'left' | 'right' =>
 export const TYPE_LABEL: Record<ColumnType, string> = {
   text: 'Text', number: 'Number', money: 'Money',
   percent: 'Percent', date: 'Date', bool: 'Yes/No', enum: 'Category',
+}
+
+/** A column total, as the Total picker and the totals menu name it. English
+ *  here, translated at render time — the model words (`avg`) are not words a
+ *  reader should have to decode. */
+export const AGG_WORD: Record<'sum' | 'avg' | 'count' | 'min' | 'max', string> = {
+  sum: 'Sum', avg: 'Average', count: 'Count', min: 'Minimum', max: 'Maximum',
+}
+
+/** …and as the footer cell labels its own number, where there is room for a
+ *  short word only. Same keys, the catalogs' short forms ("Mittelw."). */
+export const AGG_SHORT: Record<'sum' | 'avg' | 'count' | 'min' | 'max', string> = {
+  sum: 'sum', avg: 'avg', count: 'count', min: 'min', max: 'max',
 }
