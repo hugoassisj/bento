@@ -198,6 +198,14 @@ androidComponents {
     }
 }
 
+// The JVM rigs read conformance corpora outside this project (home/fixtures,
+// kernel/fixtures). Declared as inputs, so a corpus change re-runs the tests
+// instead of Gradle calling them up to date and replaying the old result.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.file("../fixtures")).withPropertyName("homeFixtures").optional()
+    inputs.dir(rootProject.file("../../kernel/fixtures")).withPropertyName("kernelFixtures").optional()
+}
+
 // The history check runs before any APK or bundle is assembled: strict for
 // release, a visible warning for debug.
 tasks.matching { it.name.startsWith("assembleRelease") || it.name.startsWith("bundleRelease") }
