@@ -44,7 +44,7 @@ try {
   const shell = readFileSync(shellPath, 'utf8')
   const saved = await savedBy(browser, shellPath)
   const pins = derivePins(shell, saved, { historic })
-  const self = checkAgainstPins(saved, pins)
+  const self = await checkAgainstPins(saved, pins)
   if (self.length) throw new Error(`derive-pins: the saved file does not match its own pins: ${self.join('; ')}`)
   console.log(`pins  loader ${pins.blocks.loader.slice(0, 12)}…  remover ${pins.blocks.remover?.slice(0, 12) ?? '(none: before previews)'}  rt ${pins.blocks['bento-rt'].slice(0, 12)}…`)
 

@@ -68,21 +68,21 @@ ok(!acceptHistory(null, h3, 'bento-other').ok, "another app's history is refused
 ok(!acceptHistory(null, { ...h3, releases: [h3.releases[1], h3.releases[0]] }, 'bento-test').ok, 'a history not newest-first is refused')
 
 console.log('\na file matches ONE release on EVERY block, or is UNKNOWN (matchRelease)')
-ok(matchRelease(h3, r1.saved)?.version === '1.0.0', 'a 1.0.0 file matches 1.0.0')
-ok(matchRelease(h3, r2.saved)?.version === '1.1.0', '1.0.0 and 1.1.0 share a runtime; the loader tells them apart')
-ok(matchRelease(h3, html({ loader: 'loadX()' })) === null, 'a known runtime with an unknown loader is UNKNOWN (a partial match)')
-ok(matchRelease(h3, html({ remover: 'rmX()' })) === null, 'an unknown remover is UNKNOWN')
-ok(matchRelease(h3, html({ css: 'CSSX' })) === null, 'an unknown stylesheet block is UNKNOWN')
-ok(matchRelease(h3, html({ extra: `<${S}>evil()</${S}>` })) === null, 'an extra executable script is UNKNOWN')
-ok(matchRelease(h3, html({ extra: `<${S} type="bento/deflate-b86" id="bento-rt">RT1</${S}>` })) === null, 'two bento-rt blocks are UNKNOWN (exactly one per id)')
-ok(matchRelease(h3, html({ rt: 'RTX' })) === null, 'an unknown runtime is UNKNOWN')
+ok((await matchRelease(h3, r1.saved))?.version === '1.0.0', 'a 1.0.0 file matches 1.0.0')
+ok((await matchRelease(h3, r2.saved))?.version === '1.1.0', '1.0.0 and 1.1.0 share a runtime; the loader tells them apart')
+ok((await matchRelease(h3, html({ loader: 'loadX()' }))) === null, 'a known runtime with an unknown loader is UNKNOWN (a partial match)')
+ok((await matchRelease(h3, html({ remover: 'rmX()' }))) === null, 'an unknown remover is UNKNOWN')
+ok((await matchRelease(h3, html({ css: 'CSSX' }))) === null, 'an unknown stylesheet block is UNKNOWN')
+ok((await matchRelease(h3, html({ extra: `<${S}>evil()</${S}>` }))) === null, 'an extra executable script is UNKNOWN')
+ok((await matchRelease(h3, html({ extra: `<${S} type="bento/deflate-b86" id="bento-rt">RT1</${S}>` }))) === null, 'two bento-rt blocks are UNKNOWN (exactly one per id)')
+ok((await matchRelease(h3, html({ rt: 'RTX' }))) === null, 'an unknown runtime is UNKNOWN')
 const twin = { ...h3, releases: [{ ...r1.entry, version: '1.3.0' }, ...h3.releases] }
-ok(matchRelease(twin, r1.saved) === null, 'two entries with identical blocks are ambiguous: UNKNOWN')
+ok((await matchRelease(twin, r1.saved)) === null, 'two entries with identical blocks are ambiguous: UNKNOWN')
 
 console.log('\nthe grammar (security, 2026-10-21): only Bento data types are inert; foreign markup is UNKNOWN')
 {
   const genuine = r1.saved
-  ok(matchRelease(h3, genuine)?.version === '1.0.0', 'control: the genuine file matches')
+  ok((await matchRelease(h3, genuine))?.version === '1.0.0', 'control: the genuine file matches')
   const head = (extra: string) => genuine.replace('</head>', extra + '</head>')
   const body = (extra: string) => genuine.replace('</body>', extra + '</body>')
   const rows: Array<[string, string]> = [
@@ -110,10 +110,10 @@ console.log('\nthe grammar (security, 2026-10-21): only Bento data types are ine
     ['the document block holding a raw "<"', genuine.replace('id="bento-doc">{}<', 'id="bento-doc">{"x":"<b>"}<')],
     ['"<!--<script" inside the document block', genuine.replace('id="bento-doc">{}<', `id="bento-doc">{"x":"<!--<${S}>"}<`)],
   ]
-  for (const [name, html] of rows) ok(matchRelease(h3, html) === null, `UNKNOWN: ${name}`)
-  ok(matchRelease(h3, genuine.replace(/type="bento\/deflate-b86"/g, "type='bento/deflate-b86'"))?.version === '1.0.0', 'single-quoted attributes parse the same (still matches)')
-  ok(matchRelease(h3, genuine.replace(/type="bento\/deflate-b86"/g, 'type=bento/deflate-b86'))?.version === '1.0.0', 'unquoted attributes parse the same (still matches)')
-  ok(matchRelease(h3, genuine.replace(`id="bento-rt">RT1</${S}>`, `id="bento-rt">RT1</${S} >`))?.version === '1.0.0', '"</script >" closes a block like "</script>"')
+  for (const [name, html] of rows) ok((await matchRelease(h3, html)) === null, `UNKNOWN: ${name}`)
+  ok((await matchRelease(h3, genuine.replace(/type="bento\/deflate-b86"/g, "type='bento/deflate-b86'")))?.version === '1.0.0', 'single-quoted attributes parse the same (still matches)')
+  ok((await matchRelease(h3, genuine.replace(/type="bento\/deflate-b86"/g, 'type=bento/deflate-b86')))?.version === '1.0.0', 'unquoted attributes parse the same (still matches)')
+  ok((await matchRelease(h3, genuine.replace(`id="bento-rt">RT1</${S}>`, `id="bento-rt">RT1</${S} >`)))?.version === '1.0.0', '"</script >" closes a block like "</script>"')
 }
 
 console.log('\nsign-history.mjs, end to end with a TEST key')

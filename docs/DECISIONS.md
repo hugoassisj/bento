@@ -11791,6 +11791,30 @@ resolves to a `data:` font in the document's own assets, and drops anything
 else to the base design's font. It is recorded so that a later change does not
 add a web-font fetch.
 
+## 2026-10-21 — bento/connect K5: one gate-1 verifier, and the corpus every host runs
+
+`kernel/src/gate1.ts` is the ONE gate-1 implementation for every JavaScript
+host (the extension, the hosted runtime) and for the release tooling. The K4
+scripts import its scanner, grammar and host rules rather than carrying copies.
+It hashes with WebCrypto, so it runs in a page, a worker, an extension and node.
+- **`verifyServed(html, history)`** is the PRIMARY path, for a host that serves
+  the bytes it verified (security §17). ONE release must match EVERY block
+  under the grammar (§36 and the 2026-10-21 ruling). The answer carries the CSP
+  to serve under (`hostPolicy`). Unknown never borrows a release's CSP.
+- **`verifyStrict(html, expected)`** is the file:// fallback: vault's strict
+  verifier, signed off in security §15. The final whole-string compare, bound
+  at both ends, is the load-bearing part. Its expectation comes from a genuine
+  saved file of the release (`strictExpectedFrom`). A signed skeleton waits for
+  canonical save, and a file:// result is never grounds for identity (§16).
+- **`home/fixtures/gate1/`** is the conformance corpus: a synthetic app's signed
+  history (with a test key), served rows, the 16 strict tamper rows plus two
+  genuine saves, anti-rollback rows, and an ambiguous-history row. Every row
+  DECLARES its verdict, and the generator refuses to write the corpus if the
+  reference disagrees, so the answers are the rules, not what the JS happens to
+  do. Native hosts (Swift, Kotlin, Rust) port gate 1 and must pass every row.
+  Encodings are stated per field: block pins are sha256 HEX of the block text,
+  `scriptSrc` is `'sha256-'` + BASE64, and the entry `sha256` is HEX of the
+  shell file.
 ## 2026-10-21 — bento/connect in the extension: Argon2id is @noble/hashes, and the recovery code is generated from kernel
 
 **Argon2id is `@noble/hashes` 2.4.0, vendored, not hash-wasm.** The recovery
