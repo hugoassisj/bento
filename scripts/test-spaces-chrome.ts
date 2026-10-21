@@ -764,6 +764,122 @@ async function browser(chrome: string, html: string): Promise<void> {
     ok(afterNav.w === 0 && !afterNav.scrim && afterNav.stored === null,
       `following a page shuts the drawer and its scrim, and writes nothing to the desktop preference (${JSON.stringify(afterNav)})`)
 
+    // ——— a phone drawer is not the desktop preference ———
+    // The row above could never see this bug: it reads the key while still at
+    // 390. The write happened on the way OUT — crossing back to column width,
+    // the panel primitive fires onChange with the drawer's state still in
+    // force, and the editor used to persist whatever that was as the reader's
+    // desktop choice (measured: every close path, and no drawer at all, left
+    // both -closed keys at '1' and both columns shut on the next 1440 load).
+    // So each case: desktop prefs set at 1440 → a 390 load → open the drawer →
+    // close it one way → resize the LIVE page to 1440 → reload at 1440.
+    {
+      const metrics = async (phone: boolean) => {
+        await send('Emulation.setDeviceMetricsOverride', phone
+          ? { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }
+          : { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+        await send('Emulation.setTouchEmulationEnabled', { enabled: phone, maxTouchPoints: phone ? 5 : 1 })
+      }
+      // a reload that KEEPS localStorage (open() clears it — the point here is
+      // what survives)
+      const load = async () => {
+        await send('Page.navigate', { url: `http://127.0.0.1:${port}/s.html` })
+        for (let i = 0; i < 100; i++) { await sleep(100); if (await js('!!(window.bento && window.bento.doc && document.querySelector(".sp-bar"))').catch(() => false)) break }
+        await js('document.activeElement?.blur?.(); 1')
+        await sleep(400)
+      }
+      // EVERYTHING THIS SECTION CHANGES IS PUT BACK at its end: the reader's
+      // storage and the viewport. Left behind, the '0' it writes for the
+      // properties panel opened the inspector on the next open() (which clears
+      // storage only AFTER the load), and the 1440 reachability walk lost the
+      // "Show properties" chevron it requires.
+      const SNAP = `JSON.stringify(Object.fromEntries(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)])))`
+      const before = await js<string>(SNAP)
+      const PANES = `(() => { const open = (s) => !document.querySelector(s).closest('.bkp').classList.contains('bkp-collapsed'); return { pages: open('.sp-side'), insp: open('.sp-insp'), pane: localStorage.getItem('bento-sp-pane-closed'), ins: localStorage.getItem('bento-sp-insp-closed') } })()`
+      const BAR = (label: string) => `[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith(${JSON.stringify(label)}) && b.getBoundingClientRect().width > 0)`
+      const toggle = async (panel: 'pages' | 'insp') => {
+        const label = panel === 'pages' ? 'Pages' : 'Properties'
+        if (await at(BAR(label))) return tap(BAR(label))
+        await js('document.activeElement?.blur?.(); 1')
+        await key(panel === 'pages' ? '[' : ']', 0, panel === 'pages' ? 'BracketLeft' : 'BracketRight', panel === 'pages' ? 219 : 221)
+      }
+      const closers: Record<string, (panel: 'pages' | 'insp') => Promise<unknown>> = {
+        'the dimmed backdrop': async (panel) => {
+          const x = panel === 'pages' ? 385 : 5
+          const hit = await js<string>(`document.elementFromPoint(${x}, 600)?.className ?? ''`)
+          if (!/sp-scrim/.test(hit)) throw new Error(`the tap at x=${x} would land on "${hit}", not the scrim`)
+          await click(x, 600)
+        },
+        'following a page': async () => tap(`[...document.querySelectorAll('.sp-side a.sp-treelink:not(.sp-here)')].find(a => a.getBoundingClientRect().width > 0)`),
+        'its key': async (panel) => { await js('document.activeElement?.blur?.(); 1'); await key(panel === 'pages' ? '[' : ']', 0, panel === 'pages' ? 'BracketLeft' : 'BracketRight', panel === 'pages' ? 219 : 221) },
+        'nothing (left open)': async () => {},
+      }
+      // No "its bar button" case: with a drawer open the scrim covers the bar
+      // (measured: elementFromPoint at the Pages button is .sp-scrim, and the
+      // Properties button is folded into ⋯ at 390), so a tap there IS the
+      // backdrop case. Escape does not shut a drawer at all.
+      const cases: [panel: 'pages' | 'insp', how: string, pane: '0' | '1', ins: '0' | '1'][] = [
+        ['pages', 'the dimmed backdrop', '0', '0'],
+        ['pages', 'following a page', '0', '0'],
+        ['pages', 'its key', '0', '0'],
+        // the drawer left OPEN over a desktop preference of SHUT: the resize
+        // must restore shut, not write the drawer's open
+        ['pages', 'nothing (left open)', '1', '1'],
+        ['insp', 'the dimmed backdrop', '0', '0'],
+        ['insp', 'its key', '0', '0'],
+        ['insp', 'nothing (left open)', '1', '1'],
+      ]
+      for (const [panel, how, pane, ins] of cases) {
+        await metrics(false); await load()
+        await js(`localStorage.setItem('bento-sp-pane-closed', '${pane}'); localStorage.setItem('bento-sp-insp-closed', '${ins}'); 1`)
+        await metrics(true); await load()
+        await toggle(panel)
+        const opened = await js<any>(PANES)
+        await closers[how](panel)
+        const shut = await js<any>(PANES)
+        const leftOpen = how.startsWith('nothing')
+        // positive control: the drawer really opened, and really shut (or stayed open)
+        ok(opened[panel] && shut[panel] === leftOpen && shut.pane === pane && shut.ins === ins,
+          `390, ${panel === 'pages' ? 'page list' : 'properties'} drawer opened and ${leftOpen ? 'left open' : `shut by ${how}`}; the desktop keys are untouched at phone width (${JSON.stringify({ opened: opened[panel], shut })})`)
+        await metrics(false); await sleep(400)
+        const live = await js<any>(PANES)
+        await load()
+        const reload = await js<any>(PANES)
+        const want = { pages: pane === '0', insp: ins === '0', pane, ins }
+        const same = (s: any) => s.pages === want.pages && s.insp === want.insp && s.pane === pane && s.ins === ins
+        ok(same(live) && same(reload),
+          `…then 1440: the desktop keys still read ${pane}/${ins} and both columns are as the reader left them on the desktop, live after the resize and after a reload (${JSON.stringify({ live, reload })})`)
+      }
+
+      // …and the DESKTOP controls still persist: a column change is the
+      // reader's choice and must survive a reload
+      await metrics(false); await load()
+      await js(`localStorage.setItem('bento-sp-pane-closed', '0'); localStorage.setItem('bento-sp-insp-closed', '0'); 1`)
+      await load()
+      await js('document.activeElement?.blur?.(); 1')
+      await key('[', 0, 'BracketLeft', 219)
+      await tap(`document.querySelector('.sp-insp').closest('.bkp').querySelector('.bkp-toggle')`)
+      const desk = await js<any>(PANES)
+      await load()
+      const deskReload = await js<any>(PANES)
+      ok(!desk.pages && !desk.insp && desk.pane === '1' && desk.ins === '1' && !deskReload.pages && !deskReload.insp,
+        `at 1440, \`[\` and the properties chevron shut their columns, write '1', and the reload keeps both shut (${JSON.stringify({ desk, deskReload })})`)
+      await js('document.activeElement?.blur?.(); 1')
+      await key('[', 0, 'BracketLeft', 219)
+      await tap(`document.querySelector('.sp-insp').closest('.bkp').querySelector('.bkp-toggle')`)
+      await load()
+      const back = await js<any>(PANES)
+      ok(back.pages && back.insp && back.pane === '0' && back.ins === '0',
+        `…and reopening them is remembered the same way (${JSON.stringify(back)})`)
+
+      await js(`localStorage.clear(); for (const [k, v] of Object.entries(${before})) localStorage.setItem(k, v); 1`)
+      await metrics(true); await load()
+      const after = await js<string>(SNAP)
+      const restored = await js<any>(`({ w: innerWidth, insp: document.querySelector('.sp-insp').closest('.bkp').classList.contains('bkp-collapsed'), pages: document.querySelector('.sp-side').closest('.bkp').classList.contains('bkp-collapsed') })`)
+      ok(after === before && restored.w === 390 && restored.insp && restored.pages,
+        `the drawer-preference rows leave storage and the 390 viewport as they found them, both drawers shut (${after === before ? 'storage identical' : `${before} → ${after}`}; ${JSON.stringify(restored)})`)
+    }
+
     // ——— the top bar is slides' bar ———
     await open(false)
     const BAR = `document.querySelector('.sp-bar')`

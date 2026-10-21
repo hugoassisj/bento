@@ -743,7 +743,8 @@ export class Editor {
    *     page list shut on the desktop, for good — the bug `closeDrawer` exists
    *     to prevent. So no `storageKey`: the editor writes the reader's own keys
    *     (`bento-sp-pane`, `bento-sp-insp` and their `-closed`) and only when the
-   *     panel is a column. The keys are the ones every reader already has, so
+   *     change was made to a column (not merely when the viewport now is one —
+   *     see `wasDrawer` below). The keys are the ones every reader already has, so
    *     nothing is migrated and nobody's layout resets.
    *   · The SCRIM behind a drawer (the primitive has none): a drawer you can
    *     only shut from the button that opened it is one people leave open over
@@ -763,10 +764,34 @@ export class Editor {
     p.setWidth(o.width)
     p.resizer.title = t('Drag to resize · double-click to reset')
     const chev = p.resizer.querySelector<HTMLElement>('.bkp-toggle')
+    // GATED ON THE MODE THE CHANGE CAME FROM, not on the viewport now. Asking
+    // only "is this a column?" let a phone drawer's state leak into the desktop
+    // keys: crossing out of drawer width, the primitive fires onChange with the
+    // drawer's collapsed state still in force (it boots shut, and the scrim or
+    // a followed page shuts it again), the media query already says column, and
+    // that state was written as the reader's desktop choice — measured: a 390
+    // session, any drawer close or none at all, then a resize to 1440, left
+    // `bento-sp-pane-closed` and `bento-sp-insp-closed` at '1' and both columns
+    // shut on every later load. So the panel remembers which mode it was last
+    // in and the desktop preference (`desk`), writes only a change made AS a
+    // column, and on the way back out of drawer width restores `desk` rather
+    // than keeping the drawer's state.
+    let wasDrawer = this.isDrawer()
+    let desk = o.collapsed
     const sync = () => {
       const label = p.collapsed ? o.show : o.hide
       if (chev) { chev.title = label; chev.setAttribute('aria-label', label) }
-      if (!this.isDrawer()) {
+      const drawer = this.isDrawer()
+      const crossed = drawer !== wasDrawer
+      wasDrawer = drawer
+      if (crossed && !drawer && p.collapsed !== desk) {
+        // back to a column: put the desktop preference back. collapse/expand
+        // fires onChange again, and that pass (no crossing now) writes it.
+        if (desk) p.collapse(); else p.expand()
+        return
+      }
+      if (!drawer && !crossed) {
+        desk = p.collapsed
         try {
           localStorage.setItem(o.widthKey, String(p.width))
           // '0' is OPEN and '1' is shut, for both panels: the page list reads

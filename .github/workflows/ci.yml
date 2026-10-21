@@ -461,7 +461,9 @@ jobs:
         # listener left on the document by a menu closed with Escape (one used
         # to close the NEXT overlay on its first click), no global shortcut
         # under a modal, and phone menus that end inside the screen with 44px
-        # rows. Needs the shell built above; a skip in CI is a failure.
+        # rows; and that a phone drawer, however it is shut, never becomes the
+        # desktop panel preference once the window widens again. Needs the
+        # shell built above; a skip in CI is a failure.
         run: node scripts/test-spaces-chrome.ts
 
       - name: spaces aliases and unlinked mentions
