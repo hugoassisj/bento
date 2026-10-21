@@ -76,8 +76,14 @@ jobs:
         # input hash) must each fail that comparison.
         working-directory: home/desktop/agent
         run: |
-          sudo apt-get install -y -qq libfido2-dev python3-cryptography python3-pip >/dev/null
-          printf 'fido2==1.2.0 --hash=sha256:f7c8ee62e359aa980a45773f9493965bb29ede1b237a9218169dbfe60c80e130\n' > /tmp/fido2-req.txt
-          python3 -m pip install -q --break-system-packages --no-deps --require-hashes -r /tmp/fido2-req.txt
+          sudo apt-get install -y -qq libfido2-dev python3-cryptography python3-venv >/dev/null
+          # python-fido2 1.2.0, hash-pinned, in a venv: the rig runs Python
+          # isolated (-I), which ignores a user-site install. The venv sees
+          # apt's cryptography (system site) but always installs its own pinned
+          # fido2 (--ignore-installed), whatever else is on the machine.
+          printf 'fido2==1.2.0 --hash=sha256:f7c8ee62e359aa980a45773f9493965bb29ede1b237a9218169dbfe60c80e130\n' > "$RUNNER_TEMP/fido2-req.txt"
+          python3 -m venv --system-site-packages "$RUNNER_TEMP/rigvenv"
+          "$RUNNER_TEMP/rigvenv/bin/python" -m pip install --ignore-installed --no-deps --require-hashes -r "$RUNNER_TEMP/fido2-req.txt"
+          export BENTO_RIG_PYTHON="$RUNNER_TEMP/rigvenv/bin/python"
           rustup toolchain install nightly-2026-06-03 --profile minimal
           ./fido-rig.sh

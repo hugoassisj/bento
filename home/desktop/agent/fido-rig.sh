@@ -29,7 +29,11 @@ done
 [ -n "$dev" ] && [ -e "$dev" ] || { cat /tmp/kit.log; echo "FAIL: the virtual key never appeared"; exit 1; }
 [ -n "$SUDO" ] && sudo chmod a+rw "$dev"
 command -v udevadm >/dev/null && udevadm trigger 2>/dev/null || true; sleep 1
-python3 -I ../agent-testkit/prf_client.py /tmp/rig.json
+# Isolated (-I): no user site-packages, no PYTHONPATH. On CI the pinned
+# python-fido2 lives in a venv (BENTO_RIG_PYTHON), whose own site-packages -I
+# keeps; a plain user-site install is invisible to -I (the first CI run failed
+# exactly so).
+"${BENTO_RIG_PYTHON:-python3}" -I ../agent-testkit/prf_client.py /tmp/rig.json
 export BENTO_FIDO_RIG=/tmp/rig.json
 out=$(cargo test --features fido --test fido_interop 2>&1) || { echo "$out"; exit 1; }
 echo "$out" | grep -qE "test result: ok\. 1 passed" || { echo "$out"; echo "FAIL: the interop test did not run"; exit 1; }
