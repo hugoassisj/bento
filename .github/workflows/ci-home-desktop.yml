@@ -35,6 +35,15 @@ jobs:
         # fails; it never skips.
         working-directory: home/desktop/agent
         run: cargo test
+      - name: Desktop gate 1 against the conformance corpus
+        # home/desktop/gate1 is the desktop host's Rust port of kernel/src/gate1.ts
+        # (bento/connect K5): is this file's runtime a genuine Bento release? It
+        # must reach every declared verdict in home/fixtures/gate1/ (served,
+        # ambiguous, strict file:// and anti-rollback rows), read from the
+        # corpus each run. The signed history must verify and a one-byte change
+        # to it must not. A corpus file without a row fails.
+        working-directory: home/desktop/gate1
+        run: cargo test
       - name: Desktop agent TPM rigs (two software TPMs)
         # The Linux key store against a real TPM 2.0 (swtpm): the routine key
         # signs inside the TPM; the consent key and the sealed account key need
