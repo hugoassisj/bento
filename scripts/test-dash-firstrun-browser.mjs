@@ -94,7 +94,8 @@ try {
     const formulaLabel = await page.locator('[data-act="formula"] span').textContent()
     ok(formulaLabel === ps('Formula'), `control: the audit locale is active (top bar reads ${formulaLabel})`)
 
-    await page.locator('.dg-cell').nth(12).click()
+    // A Money cell: the panel offers a Total only on the number types
+    await page.locator('.dg-cell[role="gridcell"][data-col="value"]').first().click()
     await page.waitForTimeout(200)
     const total = await page.evaluate(() => {
       const sel = [...document.querySelectorAll('.dp-panel select')].find((s) => [...s.options].some((o) => o.value === 'sum'))
@@ -155,7 +156,8 @@ try {
   await section(async () => {
     // In English the Total picker says words, not the model's `avg`
     const { ctx, page } = await open('en')
-    await page.locator('.dg-cell').nth(12).click()
+    // A Money cell: the panel offers a Total only on the number types
+    await page.locator('.dg-cell[role="gridcell"][data-col="value"]').first().click()
     await page.waitForTimeout(200)
     const total = await page.evaluate(() => {
       const sel = [...document.querySelectorAll('.dp-panel select')].find((s) => [...s.options].some((o) => o.value === 'sum'))

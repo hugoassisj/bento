@@ -11340,6 +11340,53 @@ shell it serves (gate 1, A2).
 Still for a real phone: TEE and StrongBox residency (the emulator reports
 software keys), and the API 26–29 consent path, which allows biometrics only.
 
+## 2026-10-20 — spaces top bar: Reading view → floating button, Properties out (⋯ and ]), Graph → page-list header, Search stays — maintainer, 2026-10-20
+
+The maintainer ruled that bento/spaces' top bar should come closer to slides'
+(slides is the chrome reference). This supersedes the line in the
+2026-09-26 entry that made Graph "a bar button beside Reading view".
+
+- **Reading view is a floating pill**, shaped as slides' Slideshow pill
+  (`.ed-present-pill`: surface fill, hairline, 999px radius, the same soft
+  shadow, 600 weight, `--chrome` on hover) and placed in slides' corner:
+  bottom-END, 14px in, by a logical inset so RTL mirrors it. It hangs off the
+  page's own end edge (a zero-width box between the page and the properties
+  panel), so it moves with the panel instead of covering it. It is the way out
+  of reading view as well as in, so it stays there while reading. A sealed
+  reading copy has no pill, as it had no bar button.
+- **Properties left the bar.** Where the panel is a column, its chevron is
+  docked flush to the window edge when shut (the 5px-strip problem that once
+  justified a bar button no longer exists), and `]` toggles it. Folded, ⋯
+  keeps the Properties row.
+- **Graph is on the page list's header**, beside ＋ ▾. It is a view of the
+  tree, and it stays there in reading view. `bento.graph()` is unchanged.
+- **Search stays in the bar.** ⋯ no longer lists Reading view or Graph.
+
+test-spaces-chrome reads the pill's values from slides' stylesheet and holds
+the computed pill to them at 1440 and 390. It presses each new home with
+trusted input, and its before/after command walk maps each moved command to
+its new home rather than dropping it.
+
+## 2026-10-18 — Android: no recents snapshot while a sealed document is open
+
+While the open document is password-protected or identity-sealed, the Android
+editor turns off its app-switcher snapshot (`setRecentsScreenshotEnabled(false)`,
+API 33+), so the recents card is blank. The decision comes from the bytes the
+host opened or last wrote (`DocumentIndex.isEncrypted`), so it switches on at
+the save that encrypts the file and back off at the save that removes the
+password. The page can also say so first, over the bridge (`seal` capability,
+`seal.state {sealed}`, fire-and-forget), the moment a password is set and
+before any save lands. It can only ADD blanking: recents stays blank while
+the file OR the page says sealed. It comes back only when the file was
+written unsealed AND the page says unsealed (security). Below API 33 the only tool is `FLAG_SECURE`, which also blocks
+screenshots, so it is not set by default there; it can come later as an
+opt-in setting. Measured on the emulator (API 36), with recents opened from
+Home so the stored snapshot is what shows: a sealed document's card is blank;
+the same file on a build without this change shows its screen; an unsealed
+document's card still shows its content. With the page signal (sent here
+through the same postMessage channel the kernel will use): an unsealed file
+whose page says sealed is blank; a sealed file whose page says unsealed is
+still blank; an unsealed file whose page says unsealed again shows content.
 ## 2026-10-18 — bento/connect on Android: the recovery code and key blobs (Recovery.kt)
 
 The Android port of `kernel/src/recovery.ts` (K2b). It reproduces every byte of
@@ -11439,6 +11486,64 @@ not yet saved is already a secret. The payload is a bare boolean, fire-and-forge
 and not deduplicated: the host can only ADD blanking, so a missed `true` is the
 only failure and a redundant post costs nothing. Hosts that don't declare
 `'seal'` are sent nothing.
+
+## 2026-10-18 — CI is split by zone; `validate` stays one required job
+
+`.github/workflows/ci.yml` held every CI step, and every zone added its rig at
+the same few places: the end of its section of `validate`, or after the last
+job. So nearly every open PR conflicted with whichever PR merged before it. The
+file is now split by zone, and nothing about merging changes:
+
+- **The required check is still `validate`, and it is still ONE job.** Its
+  steps live in composite actions, one per zone
+  (`.github/actions/validate-<zone>/action.yml`). `ci.yml` runs them in order
+  on the same runner. Each app's slice builds its own shell, and the convert,
+  kernel, home and shared slices run after all four apps, so every step has at
+  least what was installed and built before it ran in the old order. Composite
+  actions were chosen over reusable workflows because reusable workflows would
+  make each zone a separate job. That would rename checks, rebuild every shell
+  once per job, and turn `validate` into an aggregator, where a skipped
+  dependency reads as success.
+- **Jobs outside `validate` live in `.github/workflows/ci-<zone>.yml`**, with
+  their job ids unchanged (the job id is the check name). Like before, they
+  are not required checks.
+- **Where a new rig goes:** at the end of your own zone's slice, or as a job in
+  your zone's `ci-<zone>.yml`. Never in `ci.yml`, which changes only when a
+  slice is added. Composite steps must say `shell:` on every `run:`.
+- `scripts/test-ci-registered.ts` and `test-spaces.mjs --manifest` read all of
+  it through `scripts/lib/ci-files.mjs`. An action counts only if a workflow
+  runs it, and the rig fails on an action nobody uses or a rig-running workflow
+  with no `pull_request` trigger. Those are the two silent holes a split opens.
+
+What this costs: in the Actions UI, a failing `validate` names the zone slice.
+To find the failing step inside it, open that slice's log.
+
+
+## 2026-10-18 — Under CI, a rig that skips fails its step
+
+A rig that can't run what it needs prints a skip line and exits 0, so its step
+went green. Three rigs had skipped in every CI run since they were written:
+encrypted-title (the #742 guard for shipped slides), type preview and type
+font. All three print "skipped: jsdom is not installed", and CI never
+installed jsdom.
+
+- `validate` installs a pinned jsdom at the repo root, as test tooling (it
+  never ships in a document). All three rigs now run.
+- Every rig step runs under `scripts/ci/bento-step`: the `shell:` of every
+  validate slice step, and the default shell of the `ci-<zone>.yml` jobs.
+  It runs the script as `shell: bash` would, then fails the step on any
+  output line that reads as a skip. The one exception is
+  `ci-home-android.yml`, where Gradle prints SKIPPED as a task outcome.
+- **The allowlist** (`ALLOWED_SKIPS` in `scripts/lib/ci-skips.mjs`) names the
+  rig, the exact line and the reason. It holds the dash xlsx/zip interop
+  checks, which need LibreOffice or a real Excel-made workbook, and, on Linux
+  only, the three home/ios Swift rigs, which need Apple frameworks and run for
+  real on a macOS job. An allowed line counts only in its own rig's step.
+- `scripts/test-ci-skips.mjs` is the positive control. It checks the detector
+  against the exact lines from a real main run, and runs the wrapper end to
+  end, including the encrypted-title rig with jsdom hidden, which must turn the
+  step red. It also checks that every allowlist entry's rig still prints its
+  line, and that every rig step in every CI file runs through the wrapper.
 
 ## 2026-10-20 — dash: the grid owns Tab only inside itself; F6 walks regions; slides' focus ring
 

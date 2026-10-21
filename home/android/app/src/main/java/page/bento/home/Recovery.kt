@@ -87,6 +87,9 @@ object Recovery {
         pool: Argon2BytesGenerator.BlockPool = WipingPool(),
         available: () -> Long = ::heapAvailable,
     ): ByteArray {
+        // RFC 9106 §3.1: a salt is at least 8 bytes. Bouncy Castle would accept a
+        // shorter one and Node refuses it, so refuse here as the format does.
+        require(salt.size >= 8) { "an Argon2 salt is at least 8 bytes" }
         if (available() < heapNeeded(memoryKiB))
             throw Unavailable("recovery is unavailable on this device: not enough memory")
         val p = Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
