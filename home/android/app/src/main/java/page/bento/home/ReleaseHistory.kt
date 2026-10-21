@@ -49,7 +49,11 @@ object ReleaseHistory {
         return null
     }
 
-    /** Fetch and offer the newest published history. Network: call off the main thread. */
+    /**
+     * Fetch and offer the newest published history. Network: call off the main
+     * thread. Called ONLY where the app already contacts bento.page for [app]
+     * (a New document); opening a document never phones home for it.
+     */
     fun refresh(c: Context, app: Releases.App) {
         try {
             val why = offer(c, app, String(Releases.get(url(app)), Charsets.UTF_8))

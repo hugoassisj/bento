@@ -11798,8 +11798,11 @@ asks gate 1 (`Gate1.kt`, a port of `kernel/src/gate1.ts`, served path only)
 whether those bytes are one genuine release's.
 
 - **The history.** Each app's signed release history
-  (`releases/<app>/history.json`) is fetched once per process
-  (`ReleaseHistory`). It is accepted only if it verifies under the release key
+  (`releases/<app>/history.json`) is fetched ONLY alongside the app's existing
+  contact with bento.page, a New document (`ReleaseHistory`). Opening a
+  document never fetches it; the editor uses the held copy (vault: no phone-home
+  per open). So a person who only ever opens existing files holds no history,
+  and their documents are UNKNOWN until their first New document. It is accepted only if it verifies under the release key
   AND passes anti-rollback against the one held. It's kept in no-backup storage
   as the signed envelope and re-verified on every read. Until a history is
   held, every document is UNKNOWN. Release builds trust the release key alone
@@ -11814,10 +11817,13 @@ whether those bytes are one genuine release's.
   before, with no CSP, and never borrows one. The bytes and their verdict are
   published together, so a response can't pair one file's bytes with another's
   CSP. A save in place re-decides for the new bytes.
-- **The scanner treats "/" as an attribute separator**, as the HTML tokenizer
-  does, so `<script /type="text/javascript" type="application/bento+json">`
-  counts as executable. That is stricter than the reference at #825's head,
-  until kernel's fix lands.
+- **The scanner reads start tags as the HTML tokenizer does** (`parseStartTag`,
+  mirroring the reference at #825's head). Whitespace or "/" separates
+  attributes, a quoted value ends one, a leading "=" belongs to a name, and the
+  first duplicate wins. A `<script>` tag with a "/" or a duplicate is refused
+  outright. Case is folded ASCII-only and length-preserving, never with
+  `lowercase()`, which turns 'İ' into two units and shifts every offset after
+  it. Planted faults confirm the corpus catches both.
 - **Measured on the emulator.** A history signed with the debug key, pinning a
   slides build and a file that build saved through ⌘S:
   - the genuine file boots normally under the pinned CSP, and an injected

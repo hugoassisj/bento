@@ -69,8 +69,6 @@ import java.util.concurrent.Executors
 class EditorActivity : Activity() {
 
     companion object {
-        /** Release histories are fetched once per process (ReleaseHistory.refresh). */
-        @Volatile private var historiesRefreshed = false
 
         const val EXTRA_URI = "page.bento.home.URI"
         private const val TAG = "BentoTray"
@@ -181,12 +179,6 @@ class EditorActivity : Activity() {
     private var originHost = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (!historiesRefreshed) {
-            historiesRefreshed = true
-            // Network, off the UI thread; a refreshed history counts from the
-            // next open. Until a history is held, every document is UNKNOWN.
-            Thread { Releases.APPS.forEach { ReleaseHistory.refresh(applicationContext, it) } }.start()
-        }
         super.onCreate(savedInstanceState)
 
         val uri = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)

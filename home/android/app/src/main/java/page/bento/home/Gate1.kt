@@ -37,39 +37,93 @@ object Gate1 {
     // ---- the scanner ----------------------------------------------------------------------
 
     class Block(val tag: String, val attrs: String, val text: String,
-                val type: String?, val id: String?, val src: String?, val preview: Boolean)
+                val type: String?, val id: String?, val src: String?, val preview: Boolean,
+                val duplicate: Boolean, val slash: Boolean)
 
-    private val attrCache = HashMap<String, Regex>()
-    private fun attr(attrs: String, name: String): String? {
-        val re = attrCache.getOrPut(name) {
-            // "/" separates attributes as whitespace does (the HTML tokenizer's
-            // before-attribute-name state): `<script /type="text/javascript"
-            // type="application/bento+json">` RUNS, because the first type wins.
-            Regex("(?:^|[$WS/])${Regex.escape(name)}(?:[$WS]*=[$WS]*(?:\"([^\"]*)\"|'([^']*)'|([^$WS\"'>]+)))?(?=[$WS/]|\\z)",
-                RegexOption.IGNORE_CASE)
-        }
-        val m = re.find(attrs) ?: return null
-        return m.groups[1]?.value ?: m.groups[2]?.value ?: m.groups[3]?.value ?: ""
+    /**
+     * ASCII-only case fold, as the HTML spec folds, and LENGTH-PRESERVING. Never
+     * lowercase() a file and index the original with its offsets: 'İ' becomes two
+     * UTF-16 units, every one before a block shifts the offsets, and a <style>
+     * close can land late enough to skip an injected <script> (home-desktop).
+     */
+    fun asciiLower(s: String): String {
+        val c = s.toCharArray()
+        for (i in c.indices) if (c[i] in 'A'..'Z') c[i] = c[i] + 32
+        return String(c)
     }
 
-    private val OPEN = Regex("<(script|style)(?![A-Za-z0-9_])([^>]*)>", RegexOption.IGNORE_CASE)
+    /** The HTML tokenizer's whitespace: tab, LF, FF, CR, space. */
+    private fun ws(c: Char?) = c == '\t' || c == '\n' || c == '\u000c' || c == '\r' || c == ' '
+
+    class StartTag(val name: String, val attrs: Map<String, String>, val duplicate: Boolean, val slash: Boolean, val end: Int)
+
+    private val TAG_OPEN = Regex("^<([a-zA-Z][^\t\n\u000c\r />]*)")
+
+    /**
+     * A start tag's attributes, read as the HTML tokenizer reads them: names are
+     * separated by whitespace OR "/", a quoted value ends the attribute even with
+     * no separator after it, a leading "=" is part of a name, names fold ASCII-only,
+     * and the FIRST of duplicate names wins. Null if the tag is unterminated.
+     */
+    fun parseStartTag(html: String, i: Int): StartTag? {
+        val m = TAG_OPEN.find(html.substring(i, minOf(html.length, i + 256))) ?: return null
+        val attrs = LinkedHashMap<String, String>()
+        var duplicate = false; var slash = false
+        var j = i + m.value.length
+        val at = { k: Int -> if (k < html.length) html[k] else null }
+        while (j < html.length) {
+            val c = html[j]
+            if (ws(c)) { j++; continue }
+            if (c == '/') { slash = true; j++; continue }
+            if (c == '>') return StartTag(asciiLower(m.groupValues[1]), attrs, duplicate, slash, j + 1)
+            var k = j
+            val name = StringBuilder()
+            if (html[k] == '=') { name.append('='); k++ }
+            while (k < html.length && !ws(html[k]) && html[k] != '/' && html[k] != '>' && html[k] != '=') name.append(html[k++])
+            val key = asciiLower(name.toString()).replace('\u0000', '\ufffd')
+            var value = ""
+            var p = k
+            while (ws(at(p))) p++
+            if (at(p) == '=') {
+                p++
+                while (ws(at(p))) p++
+                val q = at(p)
+                if (q == '"' || q == '\'') {
+                    val close = html.indexOf(q, p + 1)
+                    if (close < 0) return null
+                    value = html.substring(p + 1, close)
+                    k = close + 1
+                } else {
+                    var e = p
+                    while (e < html.length && !ws(html[e]) && html[e] != '>') e++
+                    value = html.substring(p, e)
+                    k = e
+                }
+            }
+            if (attrs.containsKey(key)) duplicate = true else attrs[key] = value
+            j = k
+        }
+        return null
+    }
+
+    private val OPEN = Regex("<(script|style)(?=[\t\n\u000c\r />])", RegexOption.IGNORE_CASE)
 
     class Malformed(message: String) : Exception(message)
 
     /** Every <script> and <style> element, with its raw text: to the first `</script` / `</style`, any case. */
     fun scanBlocks(html: String): List<Block> {
         val out = ArrayList<Block>()
-        val lower = html.lowercase()
+        val lower = asciiLower(html)
         var from = 0
         while (true) {
             val m = OPEN.find(html, from) ?: break
-            val tag = m.groupValues[1].lowercase()
-            val start = m.range.last + 1
-            val close = lower.indexOf("</$tag", start)
-            if (close < 0) throw Malformed("gate1: unterminated <$tag> at ${m.range.first}")
-            val attrs = m.groupValues[2]
-            out += Block(tag, attrs, html.substring(start, close),
-                attr(attrs, "type"), attr(attrs, "id"), attr(attrs, "src"), attr(attrs, "data-bento-preview") != null)
+            val tag = parseStartTag(html, m.range.first) ?: throw Malformed("gate1: unterminated <${m.groupValues[1]}> start tag at ${m.range.first}")
+            val name = asciiLower(m.groupValues[1])
+            val close = lower.indexOf("</$name", tag.end)
+            if (close < 0) throw Malformed("gate1: unterminated <$name> at ${m.range.first}")
+            out += Block(name, html.substring(m.range.first, tag.end), html.substring(tag.end, close),
+                tag.attrs["type"], tag.attrs["id"], tag.attrs["src"], tag.attrs.containsKey("data-bento-preview"),
+                tag.duplicate, tag.slash)
             from = close
         }
         return out
@@ -83,14 +137,13 @@ object Gate1 {
     fun isDataScript(b: Block) = b.tag == "script" && b.src == null && b.type != null && b.type in DATA_TYPES
     private fun executable(blocks: List<Block>) = blocks.filter { it.tag == "script" && !isDataScript(it) }
 
-    private val TAG_NAME = Regex("^<([a-zA-Z][a-zA-Z0-9-]*)")
-    private val META_BAD = Regex("http-equiv[$WS]*=[$WS]*[\"']?[$WS]*(refresh|content-security-policy)", RegexOption.IGNORE_CASE)
-    private val ON_ATTR = Regex("(^|[$WS\"'/])on[a-z0-9_-]*[$WS]*=", RegexOption.IGNORE_CASE)
+    private val META_BAD = Regex("^[$WS]*(refresh|content-security-policy)[$WS]*\\z", RegexOption.IGNORE_CASE)
+    private val LETTER_TAG = Regex("^<[a-zA-Z]")
 
     /** Markup a genuine Bento file never carries, outside a script or style element's own text. [] = none. */
     fun markupProblems(html: String): List<String> {
         val problems = ArrayList<String>()
-        val lower = html.lowercase()
+        val lower = asciiLower(html)
         var i = 0
         while (true) {
             i = html.indexOf('<', i)
@@ -102,22 +155,18 @@ object Gate1 {
                 if (end < 0) { problems += "an unterminated comment"; break }
                 i = end + 3; continue
             }
-            val m = TAG_NAME.find(html.substring(i, minOf(html.length, i + 64)))
-            if (m == null) { i++; continue }
-            val name = m.groupValues[1].lowercase()
-            var j = i + m.value.length
-            var q: Char? = null
-            while (j < html.length) {
-                val c = html[j]
-                if (q != null) { if (c == q) q = null }
-                else if (c == '"' || c == '\'') q = c
-                else if (c == '>') break
-                j++
+            val tag = parseStartTag(html, i)
+            if (tag == null) {
+                if (LETTER_TAG.containsMatchIn(html.substring(i, minOf(html.length, i + 2)))) { problems += "an unterminated start tag"; break }
+                i++; continue
             }
-            val attrs = html.substring(i + m.value.length, j)
+            val name = tag.name
+            val j = tag.end - 1
             if (name in setOf("iframe", "object", "embed", "base")) problems += "a <$name>"
-            if (name == "meta" && META_BAD.containsMatchIn(attrs)) problems += "a <meta> refresh or CSP"
-            if (ON_ATTR.containsMatchIn(attrs)) problems += "an on*= attribute on <$name>"
+            if (name == "meta" && META_BAD.containsMatchIn(tag.attrs["http-equiv"] ?: "")) problems += "a <meta> refresh or CSP"
+            if (tag.attrs.keys.any { it.startsWith("on") }) problems += "an on*= attribute on <$name>"
+            if (name == "script" && (tag.duplicate || tag.slash))
+                problems += "a <script> start tag with a ${if (tag.duplicate) "duplicate attribute" else "\"/\" between attributes"} (Bento writes neither)"
             if (name == "script" || name == "style") {
                 val close = lower.indexOf("</$name", j)
                 if (close < 0) { problems += "an unterminated <$name>"; break }

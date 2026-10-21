@@ -42,7 +42,7 @@ class Gate1Test {
 
     @Test fun `every served row reaches its verdict, genuine ones under their own pins`() {
         val served = rows("served")
-        assertTrue(served.size >= 30)
+        assertEquals("the corpus (51 served rows at #825's head)", 51, served.size)
         var genuine = 0
         for (row in served) {
             val v = Gate1.verifyServed(read(row["case"] as String), history)
@@ -99,24 +99,5 @@ class Gate1Test {
         val s = """{"b":1,"a":[true,null,"x\"y"],"c":{"z":2.5,"y":-3}}"""
         assertEquals(s, Json.write(Json.read(s)))
         assertTrue(Json.write(Json.read("""{"a":1,"b":2}""")) != Json.write(Json.read("""{"b":2,"a":1}""")))
-    }
-
-    // Rows the corpus doesn't carry yet, built from a genuine file at run time.
-    private fun genuine() = read("served/genuine-1.0.0.html")
-
-    @Test fun `a src= script whose body is the loader is UNKNOWN - the browser runs the src, not the body`() {
-        val g = genuine()
-        val f = g.replaceFirst("<script>", "<script src=\"https://example.invalid/x.js\">")
-        assertTrue("the edit applied", f != g)
-        assertTrue(Gate1.verifyServed(f, history) is Gate1.Verdict.Unknown)
-    }
-
-    @Test fun `a slash before a JavaScript type makes a data block executable - UNKNOWN`() {
-        val g = genuine()
-        val open = "<script type=\"application/bento+json\""
-        val f = g.replaceFirst(open, "<script /type=\"text/javascript\" type=\"application/bento+json\"")
-        assertTrue("the edit applied", f != g)
-        assertTrue(Gate1.verifyServed(f, history) is Gate1.Verdict.Unknown)
-        assertTrue("and the untouched file is still genuine", Gate1.verifyServed(g, history) is Gate1.Verdict.Genuine)
     }
 }

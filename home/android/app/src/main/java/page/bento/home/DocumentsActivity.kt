@@ -332,6 +332,10 @@ class DocumentsActivity : AppCompatActivity() {
         pendingApp = null
         Thread {
             var error: String? = null
+            // The release history rides on this contact (vault): the app already
+            // reaches bento.page for this app here, and nowhere else. Opening a
+            // document never fetches it; the editor uses the held copy.
+            ReleaseHistory.refresh(applicationContext, app)
             val bytes = try {
                 Releases.seedFor(this, app)
             } catch (e: Exception) {
