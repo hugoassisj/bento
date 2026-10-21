@@ -106,7 +106,7 @@ import { TYPE_LABEL } from './format.ts'
 import { defaultBinding, renderChart, chartHeading, missingColumns, type ChartBinding } from './chart.ts'
 import { readCell } from './store.ts'
 import { hiddenSet } from './rowcol.ts'
-import { FUNCTIONS, dependencies, recalc, formulaSyntax, type SyntaxProblem } from './formula.ts'
+import { FUNCTIONS, dependencies, recalc, formulaSyntax, type FormulaSyntaxProblem } from './formula.ts'
 import { functionPicker } from './fnpicker.ts'
 import { buildScene, defaultViz3d, mountViz3d, VIZ_TITLE, VIZ_KIND_LABEL, type Viz3dBinding, type Viz3dKind } from './viz3d.ts'
 
@@ -736,9 +736,43 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // The label names the RANGE, so it is wrong the moment the selection moves.
     syncBridge()
   }
+  // A formula the grid will not take keeps the bar OPEN with the reason under
+  // it (finding 3.4) — the same refusal the in-cell editor makes. Escape
+  // abandons the edit and puts the cell's own contents back.
+  let fxValueAtFocus = ''
+  const fxTipClear = () => {
+    fxEl.classList.remove('dv-refused')
+    fxEl.removeAttribute('aria-invalid')
+    document.querySelector('.dx-fx-tip')?.remove()
+  }
+  fxEl.addEventListener('focus', () => { fxValueAtFocus = fxEl.value })
+  fxEl.addEventListener('input', fxTipClear)
+  fxEl.addEventListener('blur', fxTipClear)
   fxEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      fxEl.value = fxValueAtFocus
+      fxTipClear()
+      fxEl.blur()
+      return
+    }
     if (e.key !== 'Enter') return
-    grid.setActiveCell(fxEl.value)
+    const why = grid.setActiveCell(fxEl.value)
+    if (why !== null) {
+      e.preventDefault()
+      fxTipClear()
+      fxEl.classList.add('dv-refused')
+      fxEl.setAttribute('aria-invalid', 'true')
+      const tip = document.createElement('div')
+      tip.className = 'dg-refuse-tip dx-fx-tip'
+      tip.setAttribute('role', 'alert')
+      tip.textContent = `${why} ${t('Press Esc to cancel.')}`
+      const r = fxEl.getBoundingClientRect()
+      tip.style.left = `${Math.round(r.left)}px`
+      tip.style.top = `${Math.round(r.bottom + 4)}px`
+      document.body.appendChild(tip)
+      return
+    }
     fxEl.blur()
   })
 
@@ -2442,7 +2476,7 @@ function formulaProblem(sheet: TableSheet, expr: string): string | null {
 }
 
 /** What a syntax problem says to the person typing — their words, not the parser's. */
-function syntaxMessage(p: SyntaxProblem): string {
+function syntaxMessage(p: FormulaSyntaxProblem): string {
   switch (p.kind) {
     case 'leading-equals': return t('Leave out the “=” at the start — this box holds a formula already.')
     case 'char': return p.ch === '%'

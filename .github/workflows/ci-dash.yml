@@ -76,6 +76,12 @@ jobs:
         # marching ants; point mode inserts references (dataset and
         # spreadsheet, other sheets by tab); Escape closes Story and Pivot.
         run: node scripts/test-dash-gestures-browser.mjs
+      - name: Typing into a spreadsheet cell reads what was meant
+        # The review's keystrokes: 10, $5, 15% then =SUM and =G13*G15 must say
+        # 15.15 and 1.5 (they said 30 and 150). ISO and named-month dates are
+        # dates, 3/4/2026 stays text, the formula bar shows 100% not 1, and
+        # =A11+ is refused in the cell and the bar with the reason shown.
+        run: node scripts/test-dash-entryparse-browser.mjs
 
   dash-gate-browser:
     runs-on: ubuntu-latest

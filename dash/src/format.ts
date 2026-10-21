@@ -41,6 +41,45 @@ export const setViewerLocale = (l: string | undefined): void => { viewerLocale =
 const forNumbers = (): string | undefined => viewerLocale ?? intlLocale()
 
 /**
+ * The VIEWER's decimal separator — '.' or ','. What a typist means by `1,234`
+ * (import.ts `readEntryNumber` asks this to break a tie only a single value
+ * can have), and the separator the formula bar writes a number back with, so
+ * that what it shows is what the same person would type to get it again.
+ */
+export function viewerDecimal(): '.' | ',' {
+  try {
+    const part = new Intl.NumberFormat(forNumbers()).formatToParts(1.5).find((p) => p.type === 'decimal')
+    return part?.value === ',' ? ',' : '.'
+  } catch {
+    return '.'
+  }
+}
+
+/**
+ * A number written the way a person would TYPE it, in the viewer's own
+ * separators: no grouping, as many digits as the value needs (15 significant,
+ * or 17 when 15 would not read back as the same double), and at least `minDp`
+ * decimals. The formula bar's half of "show what was entered".
+ */
+export function typedNumber(n: number, minDp = 0): string {
+  let digits = 15
+  if (Number(n.toPrecision(15)) !== n) digits = 17
+  const fmt = (sig: number) => new Intl.NumberFormat(forNumbers(), {
+    useGrouping: false,
+    maximumSignificantDigits: sig,
+  }).format(n)
+  let out = fmt(digits)
+  if (minDp > 0) {
+    // pad to the format's decimals: `$300.5` under `$#,##0.00` reads `$300.50`
+    const dec = viewerDecimal()
+    const at = out.indexOf(dec)
+    const have = at < 0 ? 0 : out.length - at - 1
+    if (have < minDp) out = (at < 0 ? out + dec : out) + '0'.repeat(minDp - have)
+  }
+  return out
+}
+
+/**
  * What an Excel-style pattern means, and the ONE place that decides it.
  *
  * Exported because `TEXT(value, "#,##0.00")` is the same question a column's
