@@ -35,7 +35,7 @@ import { FileWriteBack } from './writeback.ts'
 import { mountAbout, openAbout, openSettings, rememberVersion, checkAtLaunch } from './about.ts'
 import { runSql, sqlRows } from './sql.ts'
 import { mountPanels, type Panels } from './panels.ts'
-import { installStory } from './story.ts'
+import { installStory, closeStoryEditor } from './story.ts'
 import { Dashboard } from './dashboard.ts'
 import { SyncSession } from './sync/session.ts'
 import { ShareUi } from './shareui.ts'
@@ -1250,6 +1250,27 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     chart: () => (chartSheetId === grid.showingId() ? binding : null),
     viz: () => viz,
     computed: (id) => (id === grid.showingId() ? (grid.computed as Map<string, unknown[]>) : undefined),
+  })
+
+  // ESCAPE CLOSES THE STORY AND PIVOT PANELS (review 4.8), as it closes every
+  // other dismissable surface in dash. One Escape closes ONE thing: anything
+  // that already claimed this key (a menu, a dialog, Find, a cell editor, the
+  // grid's copy marks) prevented or stopped it, and a dropdown still open is
+  // shutMenus' to close. Registered before shutMenus' listener for that check.
+  // The story first, then the pivot: the story editor floats above the panel.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+    if (document.querySelector('.dx-dd.open, .dx-pop, .dx-ask-back, .dx-tab-menu, .ds-overlay')) return
+    const tgt = e.target as HTMLElement | null
+    const inStory = !!tgt?.closest?.('.ds-editor')
+    const inPivot = !!pivotSpec && !!tgt && chartEl.contains(tgt)
+    // a field elsewhere (the formula bar, a panel input) keeps its own Escape
+    if (!inStory && !inPivot && tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)) return
+    if (closeStoryEditor()) { e.preventDefault(); if (inStory) grid.focusGrid(); return }
+    if (pivotSpec && !chartEl.hidden) {
+      e.preventDefault()
+      app.querySelector<HTMLElement>('.dx-chart-close')?.click()
+    }
   })
 
   const notes: Notice[] = []
@@ -2531,6 +2552,8 @@ interface AskField {
   placeholder?: string
   /** formulas and ids are read character by character; prose is not */
   mono?: boolean
+  /** a CHOICE rather than text: [value, label] pairs, drawn as a select */
+  options?: Array<readonly [string, string]>
 }
 
 function askForm(opts: {
@@ -2554,17 +2577,32 @@ function askForm(opts: {
     h.textContent = opts.title
     card.append(h)
 
-    const inputs: Record<string, HTMLInputElement> = {}
+    const inputs: Record<string, HTMLInputElement | HTMLSelectElement> = {}
     for (const f of opts.fields) {
       const row = document.createElement('label')
       row.className = 'dx-ask-row'
       const lab = document.createElement('span')
       lab.textContent = f.label
-      const inp = document.createElement('input')
-      inp.className = `dx-ask-in${f.mono ? ' dx-ask-mono' : ''}`
-      inp.value = f.value ?? ''
-      if (f.placeholder) inp.placeholder = f.placeholder
-      inp.spellcheck = false
+      let inp: HTMLInputElement | HTMLSelectElement
+      if (f.options) {
+        const sel = document.createElement('select')
+        sel.className = 'dx-ask-in'
+        for (const [v, l] of f.options) {
+          const o = document.createElement('option')
+          o.value = v
+          o.textContent = l
+          sel.append(o)
+        }
+        if (f.value !== undefined) sel.value = f.value
+        inp = sel
+      } else {
+        const text = document.createElement('input')
+        text.className = `dx-ask-in${f.mono ? ' dx-ask-mono' : ''}`
+        text.value = f.value ?? ''
+        if (f.placeholder) text.placeholder = f.placeholder
+        text.spellcheck = false
+        inp = text
+      }
       row.append(lab, inp)
       card.append(row)
       inputs[f.key] = inp
@@ -2625,6 +2663,7 @@ function askForm(opts: {
     document.addEventListener('keydown', onKey, true)
 
     for (const k of Object.keys(inputs)) inputs[k].addEventListener('input', validate)
+    for (const k of Object.keys(inputs)) inputs[k].addEventListener('change', validate)
     cancel.addEventListener('click', () => done(null))
     ok.addEventListener('click', () => { if (validate()) done(values()) })
     // A click on the backdrop cancels; a click inside must not.
@@ -2633,8 +2672,9 @@ function askForm(opts: {
     back.append(card)
     document.body.append(back)
     validate()
-    inputs[opts.fields[0].key]?.focus()
-    inputs[opts.fields[0].key]?.select()
+    const first = inputs[opts.fields[0].key]
+    first?.focus()
+    if (first instanceof HTMLInputElement) first.select()
   })
 }
 
