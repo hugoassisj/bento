@@ -284,6 +284,19 @@ runs:
         BENTO_TEST_APP=bento-slides node "$RUNNER_TEMP/test-autosave.mjs"
         BENTO_TEST_APP=bento-spaces node "$RUNNER_TEMP/test-autosave.mjs"
 
+    - name: The plaintext store refuses while sealed (bento/connect backstop)
+      # kernel/src/autosave.ts: while the body is sealed (password or identity
+      # seal), putRecovery/addVersion refuse and getRecovery/listVersions offer
+      # nothing, so an app missing one of its own guards still can't write or
+      # offer plaintext. The purge (clearRecovery/clearVersions) still works
+      # while sealed, for that document only.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-store-backstop.ts --bundle --platform=node --format=esm \
+          --alias:fake-indexeddb/auto=./slides/node_modules/fake-indexeddb/auto/index.js \
+          --outfile="$RUNNER_TEMP/test-store-backstop.mjs"
+        node "$RUNNER_TEMP/test-store-backstop.mjs"
+
     - name: zip decompression-bomb cap
       # readZip caps each entry's inflated output at min(declared size, a hard
       # ceiling), aborting the stream the instant it overflows — a crafted

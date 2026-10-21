@@ -11201,6 +11201,271 @@ Rigs: `tests/recovery.rs`, where each of these mutations turns a test red: the
 old pepper labels, losing O→0 when reading a code, and skipping the range
 check. Also `tests/secret_linux.rs` via `keyring-rig.sh`.
 
+## 2026-10-18 — dash's plaintext guards ask isBodySealed()
+
+Following kernel's K3 (`isBodySealed()` = a password OR the identity seal), dash
+switches every guard that keeps a workbook's plaintext off the disk:
+
+- the recovery snapshot and version timeline written on edit (main.ts), and
+  `rememberVersion` behind it (about.ts);
+- reading a recovery snapshot back (recovery.ts);
+- the file-manager preview (preview.ts), behind kernel's own `previewAllowed`;
+- drop-open (dropopen.ts): the seal's key is per document, so a window holding
+  one refuses to adopt a dropped workbook, exactly as it does for a password.
+
+The Save menu's "Set a password…" / "Remove password…" stays on
+`isEncryptionActive()`: it is about a password being held.
+
+Neutral title while sealed, matching the saved file's title.
+
+Rigs: `scripts/test-dash-sealed-browser.mjs` on the shared sealed TEST document
+(scripts/lib/sealed-boot.mjs), and the gate rows in
+`scripts/test-dash-gate-browser.mjs`.
+
+## 2026-10-18 — slides: a sealed document never offers or keeps an unsealed snapshot
+
+Slides' plaintext-to-disk guards (the autosave's recovery copy and versions, the
+⌘S checkpoint, the recovery-off notice) use kernel's `isBodySealed()`, a password
+OR the identity seal. The password menu items stay on `isEncryptionActive()`,
+because they are about the password.
+
+When a document boots sealed, any recovery copy or versions stored for ITS docId
+by an earlier unsealed session are deleted, and no Restore banner or version
+history is offered. Another document's snapshots are untouched.
+
+Two consequences, both following from the rule:
+
+- **A sealed copy can delete the original's unsaved recovery.** "Save a copy…"
+  keeps the docId. If a password is set on the copy, the copy and the unsealed
+  original share a docId, so opening the sealed copy deletes the original's
+  recovery copy and versions in that browser, including unsaved work it was
+  holding. The original FILE is untouched.
+- **A player file does not purge.** A read-only player never builds the editor,
+  so it never offers or writes a snapshot. A leftover unsealed snapshot for its
+  docId stays until the deck is opened in the editor. Security accepted this as
+  a stated residual.
+
+Guard: `scripts/test-slides-sealed-guards-browser.mjs`.
+
+
+## 2026-10-18 — bento/connect on Android (Bento ID): the agent's two keys, the routine session, and host-stamped consent
+
+The Android agent core (phase-1 plan A1). It isn't wired to any page yet: the
+`__bentoIdentity` global goes in only after the Android host verifies the
+shell it serves (gate 1, A2).
+
+- **Two Keystore keys.** The ROUTINE key signs collaboration traffic without a
+  prompt. The CONSENT key needs an authentication for every use: a
+  BiometricPrompt authorises exactly one signature (a CryptoObject), and the
+  Keystore, not the UI, refuses a second (measured on the emulator). The
+  consent key lives in StrongBox where the device has one. A `dev.`
+  certificate names it as `consentPub`, and it is a different key from the
+  routine one.
+- **The consent key accepts the device credential as well as a strong
+  biometric (API 30+), as security ruled (threat model §29).** People without
+  biometrics aren't excluded, matching iOS's `.userPresence`. An organisation
+  setting, "biometric-only consent", is OFF by default and not built yet. The
+  residual risk, stated plainly: a thief holding the phone AND its passcode
+  passes user verification. Notification to every device, the contest/freeze
+  and the recovery code catch that, not the key. On API 26–29, a per-use key
+  accepts biometrics only, so a phone without one gets no consent key: it can
+  do routine work but not consent (security §29, option a). A time-windowed
+  PIN key was rejected: it breaks "one prompt, one signature". Requiring API
+  30 was rejected too: it excludes people for no gain. In phase 1 that device
+  can't authorise link, rotate or unbind. Invite and revoke are unaffected,
+  since they are still owner-key statements the kernel signs (§24b). It can
+  still BE linked, because the consenting device or the passkey authorises
+  that. Its message reads: "Approving new devices or account changes needs a
+  fingerprint on this Android version. Do it from another device."
+- **§2e (B) is enforced in two layers, each with its own bound.** The routine
+  key carries a Keystore validity window of the OVERALL timeout (24 h). That is
+  the hardware floor, and it means "since the device was last unlocked": a
+  lock-screen unlock reopens it with no app prompt (measured, with a control).
+  `RoutineGate` enforces "since Bento was last used": idle 1 h, overall 24 h,
+  tightenable by an organisation (15 min / 12 h) but never loosened. A clock
+  that goes backwards locks the session.
+- **Enrolling a fingerprint doesn't destroy the routine key**
+  (`setInvalidatedByBiometricEnrollment(false)`). It carries no consent, and
+  losing it would drop the device from every room it is in.
+- **Nor does it invalidate the consent key, so a CANARY is the tripwire
+  (threat model §29b).** Measured on the emulator with a positive control:
+  a per-use key that also accepts the device credential survives new
+  fingerprints. Only a biometric-ONLY key is invalidated, and a control key
+  read `KeyPermanentlyInvalidatedException` after a new finger. Removing a
+  fingerprint invalidates neither (measured). So a biometric-only canary key
+  stands beside the consent key. It never signs: before every consent it is
+  read with `initSign`, which needs no prompt. A missing or invalidated canary,
+  biometrics gone under a "bio" record, biometrics present under a "none"
+  record, or no record at all reads CHANGED. A Keystore error reads UNKNOWN
+  and refuses. On CHANGED the gate is home/ios's: the notice "biometrics
+  changed on <device>" goes to the durable outbox FIRST, then the person
+  re-confirms, then the canary is re-minted under the new enrolment. There is
+  no forced re-link; that rested on an invalidation that doesn't happen. The
+  canary and the baseline are made WITH the consent key, so a brand-new
+  identity's first consent reads unchanged and sends no false notice. A busy
+  sensor (`HW_UNAVAILABLE`, often transient) doesn't block a consent the PIN
+  could complete: under a "bio" record the canary, a Keystore check, decides
+  alone. Under a "none" record it can't tell whether biometrics were added,
+  so it refuses, as does any answer the platform can't name. No baseline is
+  ever recorded under a state the platform can't name.
+- **Notices follow §29a, ported from home/ios** (`Notices.kt`). Recipients are
+  snapshotted when a notice is queued: the devices then, plus the address.
+  Removed devices still receive it and still hold it back. It never clears
+  without the address. A silent device stops holding it back after 7 days,
+  and only once the address has confirmed. A device-list change sends its own
+  notice to the list as it was BEFORE the change, and may not be published
+  until that notice is queued. Every device also checks each fetched list
+  itself and raises a local alert if it, or a device it didn't remove, is
+  gone. The alert is written before the new list becomes the baseline.
+- **Signatures leave as raw r‖s, low-S.** The Keystore emits DER and doesn't
+  normalise, so the host converts and folds s.
+- **The host stamps every field of a `cns.`.** The relying party is the app's
+  own (`bento`). The audience is phase 1's only one (`dir`). The docId is the
+  one the host read from the file it opened (#755's rule), never one the page
+  names. The expiry is 2 minutes. A page supplies only the statement and the
+  verifier's challenge. The host refuses to stamp a request a verifier would
+  refuse: wrong family, a document-scoped purpose without a docId, or a
+  malformed challenge.
+- **Conformance is kernel's fixture, re-read on every run.** `ConsentTest`
+  reaches the stated verdict on every `cns` row, rebuilds every accepted row's
+  text byte for byte, and passes the transcript, purpose and low-S rows. It
+  never pins a signature.
+- **Measured end to end on the emulator.** A consent signed inside a
+  BiometricPrompt by the real Keystore key is accepted by kernel's reference
+  `verifyConsent`. Re-presenting it is rejected as `replay`; presenting it to
+  a room verifier, or applying it to another statement, as `transcript`;
+  checking it against another relying party as `rp`; checking it against the
+  routine key as `signature`; and presenting it after expiry as `expired`.
+
+Still for a real phone: TEE and StrongBox residency (the emulator reports
+software keys), and the API 26–29 consent path, which allows biometrics only.
+
+## 2026-10-20 — spaces top bar: Reading view → floating button, Properties out (⋯ and ]), Graph → page-list header, Search stays — maintainer, 2026-10-20
+
+The maintainer ruled that bento/spaces' top bar should come closer to slides'
+(slides is the chrome reference). This supersedes the line in the
+2026-09-26 entry that made Graph "a bar button beside Reading view".
+
+- **Reading view is a floating pill**, shaped as slides' Slideshow pill
+  (`.ed-present-pill`: surface fill, hairline, 999px radius, the same soft
+  shadow, 600 weight, `--chrome` on hover) and placed in slides' corner:
+  bottom-END, 14px in, by a logical inset so RTL mirrors it. It hangs off the
+  page's own end edge (a zero-width box between the page and the properties
+  panel), so it moves with the panel instead of covering it. It is the way out
+  of reading view as well as in, so it stays there while reading. A sealed
+  reading copy has no pill, as it had no bar button.
+- **Properties left the bar.** Where the panel is a column, its chevron is
+  docked flush to the window edge when shut (the 5px-strip problem that once
+  justified a bar button no longer exists), and `]` toggles it. Folded, ⋯
+  keeps the Properties row.
+- **Graph is on the page list's header**, beside ＋ ▾. It is a view of the
+  tree, and it stays there in reading view. `bento.graph()` is unchanged.
+- **Search stays in the bar.** ⋯ no longer lists Reading view or Graph.
+
+test-spaces-chrome reads the pill's values from slides' stylesheet and holds
+the computed pill to them at 1440 and 390. It presses each new home with
+trusted input, and its before/after command walk maps each moved command to
+its new home rather than dropping it.
+## 2026-10-18 — bento/connect on Android: the recovery code and key blobs (Recovery.kt)
+
+The Android port of `kernel/src/recovery.ts` (K2b). It reproduces every byte of
+`kernel/fixtures/recovery-v1.json`, which `RecoveryTest` re-reads on every run.
+The directory's pepper layer is server code and is not ported.
+
+- **Argon2id is Bouncy Castle's** (`bcprov-jdk18on` 1.86, security §35),
+  pinned exactly. Gradle dependency verification
+  (`home/android/gradle/verification-metadata.xml`, sha256) now covers every
+  dependency of the Android build. A wrong checksum fails the build (checked:
+  a zeroed sha256 fails on `bcprov-jdk18on-1.86.jar`). The recorded sha256
+  matches the jar fetched independently from Maven Central, whose published
+  sha1 also matches. Changing any dependency now means regenerating the file
+  (`./gradlew --write-verification-metadata sha256 testDebugUnitTest
+  assembleDebug assembleRelease bundleRelease`).
+- **Correctness:**
+  - the RFC 9106 §5.3 row;
+  - every fixture derivation, code, parse, blob and scalar row;
+  - a randomized cross-check against Node's native Argon2id on every run
+    (`crypto.argon2Sync`; CI's Android job now sets up Node, and the check
+    never skips);
+  - the v1.0 mutant (Argon2 without the v1.3 XOR) fails the RFC row.
+
+  The reference-area off-by-one mutant can't be applied to a library we don't
+  patch. The fixture's full-parameter rows exercise that code path instead.
+- **Memory.** Argon2's blocks come from a pool that zeroes each block as it is
+  handed back and keeps none. A probe reads every block back as zero, and a
+  control pool that doesn't wipe is caught by the same probe. This is best
+  effort: the garbage collector may already have copied a block before it was
+  cleared.
+- **Low memory fails CLOSED, decided BEFORE allocating.** Measured on an
+  emulator with a 48 MiB app heap: catching `OutOfMemoryError` alone did NOT
+  hold. Filling the heap made the runtime's own threads throw it and the
+  process died. So `argon2id` first checks the heap left against the
+  blocks' real cost (1040 bytes per 1 KiB block, measured) plus 16 MiB, and
+  refuses ("recovery is unavailable on this device") without allocating. On
+  48 MiB it refuses in milliseconds and the app stays up. On the normal
+  192 MiB heap the full 64 MiB, t = 3 derivation takes 0.7–2.3 s on the
+  emulator, and matches Node byte for byte. The parameters are never weakened.
+## 2026-10-18 — bento/spaces: which checks ask isBodySealed, and the tab title while sealed
+
+Every plaintext-to-disk guard in spaces asks `isBodySealed()` (a password OR the
+identity seal): the recovery snapshot and throttled version on the autosave
+debounce, the version added on save, and the recovery-off notice (main.ts). The
+two places that still ask `isEncryptionActive()` are the password UI in
+doccmds.ts: the Change/Remove password rows act on a password an
+identity-sealed space does not have, and the version-history note names the
+password. A new guard on anything written beside the file asks
+`isBodySealed()`.
+
+Neutral title while sealed, matching the saved file's title. Every write to
+`document.title` goes through `spaces/src/tabtitle.ts` (boot, the password
+gate, rename, setting or removing a password).
+
+Guarded by `scripts/test-spaces-sealed-browser.mjs` on the build:sealtest
+shell, with an unsealed control. Reverting either main.ts guard, or the title
+helper, turns it red.
+
+**Plaintext an unsealed session left behind (security ruling, option a).** A
+sealed boot (the seal is in place before boot(), so this is the proven state)
+never offers a recovery snapshot for its docId and lists no version history;
+it then DELETES that docId's recovery snapshot and versions through the
+kernel's `clearRecovery`/`clearVersions`, the calls the password flow already
+makes. Only that docId's entries; another document's are untouched; an
+unsealed boot deletes nothing. Residual the app cannot scrub: a deleted
+IndexedDB record can linger in the browser's on-disk database files until the
+browser compacts them.
+
+The recovery-off notice's own seal check is redundant with the autosave guard
+(a sealed space never asks for a recovery copy), and is kept on purpose; a
+mutation of it alone stays green for that reason.
+## 2026-10-18 — bento/connect: the plaintext store refuses while sealed (a backstop)
+
+Each app guards its own calls to the recovery and version store, about 11
+sites across four apps. kernel/src/autosave.ts is the one place they all go
+through, so it now fails closed (security): while `isBodySealed()`,
+`putRecovery` and `addVersion` refuse, and `getRecovery` and `listVersions`
+offer nothing. Deleting still works (`clearRecovery`, `clearVersions`): a sealed
+boot purges plaintext copies left from an earlier unsealed session, for that
+document only, and depends on it. The apps KEEP their guards and their purge
+calls. So the backstop can't mask a missing guard, each refusal is counted, and
+the count is readable only through the test-build probe. The sealed-test helper
+fails any sealed page whose rig leaned on it (`close()`/`reload()` throw), so an
+app's guard mutants stay red with no local kernel mutant. `build:sealtest` also
+writes `dist-sealtest/.complete` as its last step, and the helper refuses a shell
+without it: a build that fails after vite wrote the shell can no longer be scored.
+
+## 2026-10-18 — bento/connect: the page tells its host whether it is sealed
+
+A host that declares `'seal'` in `__bentoHost.ops` (Android, through
+home/bridge.js) blanks its app-switcher snapshot while a sealed document is open
+(security §30.6). kernel/src/save.ts posts `{__bento_tray__, dir:'req',
+op:'seal.state', payload:{sealed: isBodySealed()}}` at boot (capturePristine)
+and on every change: a password set or removed, the identity seal on or off. It
+posts the moment the change happens, before any save, because a password set but
+not yet saved is already a secret. The payload is a bare boolean, fire-and-forget,
+and not deduplicated: the host can only ADD blanking, so a missed `true` is the
+only failure and a redundant post costs nothing. Hosts that don't declare
+`'seal'` are sent nothing.
+
 ## 2026-10-18 — CI is split by zone; `validate` stays one required job
 
 `.github/workflows/ci.yml` held every CI step, and every zone added its rig at

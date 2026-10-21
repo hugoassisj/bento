@@ -88,6 +88,9 @@ const RIGS = [
   { name: 'encrypted-browser', file: 'scripts/test-spaces-encrypted-browser.mjs' },
   // the older-copy warning and the recovery-off notice, in the built shell
   { name: 'recovery-browser', file: 'scripts/test-spaces-recovery-browser.mjs' },
+  // a sealed space (identity seal or password) on the build:sealtest shell:
+  // nothing readable in IndexedDB, no preview, neutral tab title, no notice
+  { name: 'sealed-browser', file: 'scripts/test-spaces-sealed-browser.mjs' },
   // drives the BUILT shell in Chrome; self-skips outside CI without one
   { name: 'chrome',  file: 'scripts/test-spaces-chrome.ts' },
 ]

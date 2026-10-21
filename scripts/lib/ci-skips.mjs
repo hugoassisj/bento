@@ -80,12 +80,18 @@ export const ALLOWED_SKIPS = [
     when: notMac,
     why: 'the Security framework exists only on Apple platforms (see test-tray-releases)',
   },
-  ...['keys', 'statements', 'agent'].map((n) => ({
+  ...['keys', 'statements', 'agent', 'recovery'].map((n) => ({
     rig: `scripts/test-home-id-${n}.mjs`,
     line: new RegExp(`home id ${n}: SKIPPED — needs an Apple toolchain`),
     when: notMac,
     why: 'the bento/id Swift core needs CryptoKit and Security, Apple platforms only (see test-tray-releases)',
   })),
+  {
+    rig: 'scripts/test-home-spotlight.mjs',
+    line: /home spotlight: SKIPPED — needs an Apple toolchain/,
+    when: notMac,
+    why: 'the Spotlight index code is Swift against Apple frameworks, Apple platforms only (see test-tray-releases)',
+  },
 ]
 
 /** The rigs allowed to skip off macOS must run, unskipped, on the macOS job. */

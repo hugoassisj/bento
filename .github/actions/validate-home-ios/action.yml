@@ -67,7 +67,7 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-home-docstore-ios.mjs
 
-    - name: home/ios bento/id keys rig
+    - name: home/ios bento/connect keys rig
       # The agent's keys: the account key, the Secure Enclave routine and consent
       # keys, raw low-S signatures (verified in WebCrypto), never minting over a
       # store it could not read, and the §29 biometric-enrolment notice outbox.
@@ -75,16 +75,30 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-home-id-keys.mjs
 
-    - name: home/ios bento/id statements rig
+    - name: home/ios bento/connect statements rig
       # The Swift statements against kernel/fixtures/identity-v1.json: verdict
       # and reason on every row, round trips, tampering, transcripts, low-S,
       # purposes, addresses, spendCalled and the frozen display table.
       shell: bento-step {0}
       run: node scripts/test-home-id-statements.mjs
 
-    - name: home/ios bento/id agent rig
+    - name: home/ios bento/connect agent rig
       # sign() routing and the host-stamped consent statement (§2e (A)): what
       # the page can name, what only the host stamps, and the verifier refusing
       # a relay, replay, payload swap or docId swap.
       shell: bento-step {0}
       run: node scripts/test-home-id-agent.mjs
+
+    - name: home/ios bento/connect recovery rig
+      # Argon2id (ours: RFC 9106, Node's native one on random inputs) and every
+      # byte of kernel/fixtures/recovery-v1.json: the recovery code, derivations,
+      # both key blobs, and recovered scalars checked through CryptoKit. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-id-recovery.mjs
+
+    - name: home/ios Spotlight rig
+      # What the system search index holds for a document and keeping it current
+      # after a save: replaced at once, delete-before-add when sealed, and
+      # entries removed for documents a walk no longer finds. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-spotlight.mjs

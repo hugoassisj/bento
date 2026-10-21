@@ -389,6 +389,12 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-dash-recovery.ts
 
+    - name: dash CSV export rig
+      # Text starting = + - @ tab or CR is exported with a leading quote, so
+      # opening the CSV in a spreadsheet never runs it as a formula.
+      shell: bento-step {0}
+      run: node scripts/test-dash-csv-export.ts
+
     - name: dash i18n rig
       # A core catalog ships inside every saved workbook and cannot be patched
       # without a release, so drift has to fail here rather than in the field:

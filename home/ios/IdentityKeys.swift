@@ -6,7 +6,7 @@ import Foundation
 import LocalAuthentication
 import Security
 
-/// bento/id's keys on this device (I1). The document side of the contract is
+/// bento/connect's keys on this device (I1). The document side of the contract is
 /// kernel/src/identity.ts; this is what answers it.
 ///
 /// - **The account key** is the person. It's a software P-256 key in the Keychain,
@@ -31,6 +31,13 @@ import Security
 /// The simulator has no Secure Enclave. It gets software keys behind the same
 /// interface, and its consent key checks presence with an explicit device-owner
 /// authentication. That stand-in exists ONLY in the simulator.
+
+// Software device keys stand in for the Secure Enclave on the simulator and in
+// the rigs. A release or archive build must never have them: a real device
+// would silently get keys that aren't hardware-bound.
+#if BENTO_SOFTWARE_DEVICE_KEYS && !DEBUG
+#error("BENTO_SOFTWARE_DEVICE_KEYS is for DEBUG builds only; a release build uses the Secure Enclave")
+#endif
 enum IdentityKeys {
     enum Role: String { case routine, consent }
 

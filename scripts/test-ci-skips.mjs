@@ -71,7 +71,7 @@ console.log('\nthe allowlist: who may skip, and only with their own rig')
 const mac = process.platform === 'darwin'
 for (const [rig, line] of REAL) {
   const [f] = check(`node ${rig}`, line)
-  const allowed = /dash-(xlsx|zip)/.test(rig) || (!mac && /tray-releases|home-origin|home-docstore-ios|home-id-/.test(rig))
+  const allowed = /dash-(xlsx|zip)/.test(rig) || (!mac && /tray-releases|home-origin|home-docstore-ios|home-id-|home-spotlight/.test(rig))
   ok(!!f && !!f.entry === allowed, `${allowed ? 'allowed' : 'REFUSED'}: ${rig} — ${line.trim().slice(0, 50)}`)
 }
 const [borrowed] = check('node scripts/test-enc-title.ts', '  SKIP  LibreOffice is not installed — the "does it open" check needs it')
@@ -142,6 +142,7 @@ ok(!!ci && /jsdom@\d+\.\d+\.\d+/.test(ci.text), 'ci.yml installs a pinned jsdom 
 for (const w of files.workflows) {
   if (!/^name: CI \(/m.test(w.text) || !/node scripts\//.test(w.text)) continue
   if (w.path.endsWith('ci-home-android.yml')) continue // Gradle prints SKIPPED as a task outcome; see that file
+  if (w.path.endsWith('ci-home-ios.yml')) continue // macOS jobs with their own skip check (#777), where nothing may skip
   ok(/^defaults:\n  run:\n(?:    #.*\n)*    shell: bash scripts\/ci\/bento-step \{0\}$/m.test(w.text) && !/^\s+shell: bash\s*$/m.test(w.text),
     `${w.path}: its jobs run through bento-step`)
 }

@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 import {
   ARGON2, formatRecoveryCode, parseRecoveryCode, recoveryWrapKey, recoveryVerifier, prfKek,
   sealPrfBlob, openPrfBlob, sealRecoveryInner, openRecoveryInner, unpackScalars,
-  pepperKeys, pepperVerifierTag, pepperSeal, pepperOpen, publicKeyOf, type Argon2id,
+  pepperKeys, pepperVerifierTag, pepperSeal, pepperOpen, publicKeyOf, PRF_INPUT, prfHmacSecretSalt, type Argon2id,
 } from '../kernel/src/recovery.ts'
 
 let failures = 0
@@ -72,6 +72,21 @@ console.log('\nderivations')
   ok(hex(await recoveryVerifier(code, saltV, argon2)) === d.verifier, 'verifier = Argon2id(code bytes, salt_v)')
   ok(d.verifier !== d.argon2_A, 'the verifier is not the wrap input (independent salts)')
   ok(hex(await prfKek(unhex(d.prf.output), unhex(d.prf.salt))) === d.prfKek, 'PRF KEK = HKDF(PRF output, salt, "bento/id/acct-wrap/v1")')
+}
+
+console.log('\nthe PRF input, and the CTAP hmac-secret salt (WebAuthn L3 §10.1.4)')
+{
+  const v = F.prf
+  ok(v.prfInput === PRF_INPUT && v.prfInput === 'bento/id/prf/v1', 'the fixed PRF input is "bento/id/prf/v1" (identity-design §2f)')
+  ok(v.inputHex === Buffer.from('bento/id/prf/v1', 'utf8').toString('hex'), 'the input is its UTF-8 bytes')
+  const salt = hex(await prfHmacSecretSalt())
+  ok(salt === v.hmacSecretSalt, 'hmac-secret salt = SHA-256("WebAuthn PRF" ‖ 0x00 ‖ input)')
+  // independent of the reference: the spec's formula, written out with node's own hash
+  const { createHash } = await import('node:crypto')
+  const byHand = createHash('sha256').update(Buffer.concat([Buffer.from('WebAuthn PRF'), Buffer.from([0]), Buffer.from('bento/id/prf/v1')])).digest('hex')
+  ok(byHand === v.hmacSecretSalt, "and node's own SHA-256 of the spec's bytes agrees")
+  ok(new Set([v.hmacSecretSalt, v.wrong.noSeparator, v.wrong.rawInputHash, v.wrong.rawInput]).size === 4,
+    'each easy mistake (no 0x00, hashing the raw input, the raw input) gives a different salt')
 }
 
 console.log('\nwhole blobs, end to end')

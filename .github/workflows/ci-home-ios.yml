@@ -39,10 +39,41 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          for rig in test-tray-releases.mjs test-home-origin.mjs test-home-docstore-ios.mjs \
-            test-home-id-keys.mjs test-home-id-statements.mjs test-home-id-agent.mjs; do
+          rigs=(
+            test-tray-releases.mjs
+            test-home-origin.mjs
+            test-home-docstore-ios.mjs
+            test-home-id-keys.mjs
+            test-home-id-statements.mjs
+            test-home-id-agent.mjs
+            test-home-id-recovery.mjs
+            test-home-spotlight.mjs
+          )
+          for rig in "${rigs[@]}"; do
             echo "::group::$rig"
             node "scripts/$rig" | tee "$RUNNER_TEMP/rig.out"
             echo "::endgroup::"
             if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::$rig skipped on macOS"; exit 1; fi
           done
+
+  home-ios-simulator:
+    # Builds the iOS app and drives it on a simulator: the app-switcher snapshot
+    # iOS writes to disk shows nothing of a sealed document. The rig reads back
+    # the snapshots iOS itself wrote; a skip fails here too.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Toolchain
+        run: |
+          brew install xcodegen
+          sw_vers && xcodebuild -version && xcrun simctl list runtimes
+      - name: Snapshot cover (a skip fails)
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/test-home-snapshot-cover.mjs | tee "$RUNNER_TEMP/rig.out"
+          if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::snapshot cover skipped on macOS"; exit 1; fi
