@@ -88,7 +88,9 @@ console.log('\nthe grammar (security, 2026-10-21): only Bento data types are ine
   const rows: Array<[string, string]> = [
     ['an external <script src=…>', head(`<${S} src="https://evil.example/x.js"></${S}>`)],
     ['a script of an unknown type', head(`<${S} type="text/x-template">x</${S}>`)],
-    ['type="Module" (any case)', head(`<${S} type="Module">x</${S}>`)],
+    ['an inline type="module" script', head(`<${S} type="module">x</${S}>`)],
+    ['type="Module" (another case)', head(`<${S} type="Module">x</${S}>`)],
+    ['type="text/JavaScript" (a JS type, mixed case)', head(`<${S} type="text/JavaScript">x</${S}>`)],
     ['a data type in different case', genuine.replace('type="application/bento+json"', 'type="Application/Bento+JSON"')],
     ['an uppercase <SCRIPT>', head(`<SCRIPT>x</SCRIPT>`)],
     ['a NUL inside the type attribute name', genuine.replace('type="bento/deflate-b86" id="bento-rt"', 'ty\u0000pe="bento/deflate-b86" id="bento-rt"')],
