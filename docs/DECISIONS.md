@@ -11790,3 +11790,44 @@ fonts: `validFont` accepts a `FONT_STACKS` name, or an `asset:` key that
 resolves to a `data:` font in the document's own assets, and drops anything
 else to the base design's font. It is recorded so that a later change does not
 add a web-font fetch.
+
+## 2026-10-21 — bento/connect on Android: gate 1 when serving a document (A2)
+
+The Android editor serves the document's bytes itself, so before serving it
+asks gate 1 (`Gate1.kt`, a port of `kernel/src/gate1.ts`, served path only)
+whether those bytes are one genuine release's.
+
+- **The history.** Each app's signed release history
+  (`releases/<app>/history.json`) is fetched once per process
+  (`ReleaseHistory`). It is accepted only if it verifies under the release key
+  AND passes anti-rollback against the one held. It's kept in no-backup storage
+  as the signed envelope and re-verified on every read. Until a history is
+  held, every document is UNKNOWN. Release builds trust the release key alone
+  (`src/release/HistoryKeys.kt`). Debug builds also trust one throwaway test
+  key, so the path can be exercised on an emulator before any real history is
+  published. Checked: that key's string is absent from the release APK's dex.
+- **The decision.** The bytes are tried against EVERY held app's history, never
+  chosen from the document's `format`. A sealed document says `bento/enc` and
+  a never-saved shell says nothing, but gate 1 is about the runtime. GENUINE
+  serves every response for the document with the release's hash-pinned CSP
+  (`hostPolicy`, byte-identical to the reference). UNKNOWN is served exactly as
+  before, with no CSP, and never borrows one. The bytes and their verdict are
+  published together, so a response can't pair one file's bytes with another's
+  CSP. A save in place re-decides for the new bytes.
+- **The scanner treats "/" as an attribute separator**, as the HTML tokenizer
+  does, so `<script /type="text/javascript" type="application/bento+json">`
+  counts as executable. That is stricter than the reference at #825's head,
+  until kernel's fix lands.
+- **Measured on the emulator.** A history signed with the debug key, pinning a
+  slides build and a file that build saved through ⌘S:
+  - the genuine file boots normally under the pinned CSP, and an injected
+    inline script is blocked (a CSP violation fires);
+  - the same file with one byte changed in the loader is served without a CSP,
+    and the injected script runs;
+  - the genuine file with no history held is served without a CSP.
+
+  The one refusal during the genuine boot is the loader's designed inline
+  attempt; it then boots through `blob:`.
+
+Identity is not exposed yet: the verdict is held for the agent bridge, which
+comes next.
