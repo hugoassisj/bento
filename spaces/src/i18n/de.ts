@@ -391,7 +391,6 @@ export const de: Catalog = {
   "Print or save as PDF (⌘P)": "Drucken oder als PDF speichern (⌘P)",
   "Print…": "Drucken…",
   "Properties": "Eigenschaften",
-  "Properties — show or hide this block’s settings": "Eigenschaften — Einstellungen dieses Blocks ein- oder ausblenden",
   "Purple": "Lila",
   "Put the caret in a block to see what it can be.": "Setz den Cursor in einen Block, um zu sehen, was sich daran ändern lässt.",
   "Quote": "Zitat",

@@ -391,7 +391,6 @@ export const zh_Hant: Catalog = {
   "Print or save as PDF (⌘P)": "列印或另存為 PDF (⌘P)",
   "Print…": "列印…",
   "Properties": "屬性",
-  "Properties — show or hide this block’s settings": "屬性 — 顯示或隱藏這個區塊的設定",
   "Purple": "紫色",
   "Put the caret in a block to see what it can be.": "把游標放進一個區塊，就能看到它能改什麼。",
   "Quote": "引言",

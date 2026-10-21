@@ -391,7 +391,6 @@ export const zh_Hans: Catalog = {
   "Print or save as PDF (⌘P)": "打印或存为 PDF (⌘P)",
   "Print…": "打印…",
   "Properties": "属性",
-  "Properties — show or hide this block’s settings": "属性 — 显示或隐藏这个块的设置",
   "Purple": "紫色",
   "Put the caret in a block to see what it can be.": "把光标放进一个块，就能看到它能改什么。",
   "Quote": "引用",
