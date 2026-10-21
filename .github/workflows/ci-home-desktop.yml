@@ -77,6 +77,9 @@ jobs:
         working-directory: home/desktop/agent
         run: |
           sudo apt-get install -y -qq libfido2-dev python3-cryptography python3-venv >/dev/null
+          # The runner's Azure kernel keeps uhid (the virtual key's transport) in
+          # linux-modules-extra; without it `modprobe uhid` fails before the rig runs.
+          sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)" >/dev/null
           # python-fido2 1.2.0, hash-pinned, in a venv: the rig runs Python
           # isolated (-I), which ignores a user-site install. The venv sees
           # apt's cryptography (system site) but always installs its own pinned
