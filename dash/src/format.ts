@@ -137,7 +137,12 @@ export function formatValue(v: unknown, col: Pick<Column, 'type' | 'format'>): s
   const rawDp = p.dp ?? (t === 'money' ? 2 : isPct ? 0 : shown % 1 === 0 ? 0 : 2)
   const dp = Math.max(0, Math.min(100, rawDp))
 
-  const group = p.group || (!col.format && (t === 'money' || Math.abs(shown) >= 10_000))
+  // GROUPING IS A PROPERTY OF THE COLUMN, never of one value. A plain number
+  // used to group from 10,000 up, so one column printed `8600` beside `24,800`.
+  // With no pattern, Money groups (as currency always does) and a plain number
+  // does not — Excel's, Sheets' and Numbers' General, and the only rule that
+  // cannot print a year as 2,026. A pattern with `#,##0` groups everything.
+  const group = p.group || (!col.format && t === 'money')
   // A percent COLUMN prints a `%` even with no pattern saying so, which
   // `assemble` cannot know from the pattern alone — so the sign is appended
   // here when the type, rather than the pattern, is what asked for it.
