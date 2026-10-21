@@ -11709,3 +11709,13 @@ Two rulings on the bento/spaces calendar layout, made by the maintainer.
   NOT reordered: the property strip still shows Start before Due. The order
   lives in one function, `dateOrderOf`, which both `dateOf` and the hint above
   the grid read, so the sentence cannot drift from the behaviour.
+
+## 2026-10-20 — Designs: system font stacks or embedded fonts, never web fonts — maintainer, 2026-10-20
+
+Fonts in a bento/spaces design are system font stacks (`FONT_STACKS`) or fonts
+an author embeds in the file (`asset:`). No bundled or downloaded web fonts —
+maintainer, 2026-10-20. This is already how `spaces/src/designs.ts` validates
+fonts: `validFont` accepts a `FONT_STACKS` name, or an `asset:` key that
+resolves to a `data:` font in the document's own assets, and drops anything
+else to the base design's font. It is recorded so that a later change does not
+add a web-font fetch.
