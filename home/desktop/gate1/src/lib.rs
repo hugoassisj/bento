@@ -72,7 +72,12 @@ pub struct Block<'a> {
     pub attrs: &'a str,
     /// the raw text, ending at the first `</script` / `</style` in any case
     pub text: &'a str,
+    /// offset of the start tag's "<"
+    pub tag_start: usize,
+    /// offset of the text's first character
     pub start: usize,
+    /// offset just past the end tag's ">", as the tokenizer ends it
+    pub end: usize,
     pub type_: Option<String>,
     pub id: Option<String>,
     pub src: Option<String>,
@@ -115,23 +120,39 @@ impl StartTag {
 /// of a name; names fold ASCII case and NUL becomes U+FFFD; the first duplicate
 /// wins. None: not a start tag, or unterminated.
 ///
-/// The tag name is `^<([a-zA-Z][^\t\n\f\r />]*)` over a 256-UTF-16-unit window.
+/// The tag name is `^([a-zA-Z][^\t\n\f\r />]*)` over 256 UTF-16 units from its first character (read_tag).
 /// The port stops the name at the last WHOLE character inside the window; the
 /// reference can split a surrogate pair there. Either way the remainder is read
 /// as an attribute name starting with a non-ASCII character, which no rule
 /// matches, so the verdict is the same.
 pub fn parse_start_tag(html: &str, i: usize) -> Option<StartTag> {
+    if html.as_bytes().get(i) != Some(&b'<') { return None }
+    read_tag(html, i + 1)
+}
+
+/// An END tag, read exactly like a start tag: the tokenizer parses attributes
+/// in end tags too, quoted values included, so `</p a="><b c='">` ends at its
+/// SECOND ">". None if `i` isn't "</" and a letter, or it's unterminated.
+pub fn parse_end_tag(html: &str, i: usize) -> Option<StartTag> {
     let b = html.as_bytes();
-    if b.get(i) != Some(&b'<') || !b.get(i + 1).is_some_and(|c| c.is_ascii_alphabetic()) { return None }
-    let mut units = 1usize; // the '<'
-    let mut j = i + 1;
-    for c in html[i + 1..].chars() {
+    if b.get(i) != Some(&b'<') || b.get(i + 1) != Some(&b'/') { return None }
+    read_tag(html, i + 2)
+}
+
+/// A tag's name and attributes, from its name's first character (the
+/// reference's readTag; the name window is 256 UTF-16 units from `at`).
+fn read_tag(html: &str, at: usize) -> Option<StartTag> {
+    let b = html.as_bytes();
+    if !b.get(at).is_some_and(|c| c.is_ascii_alphabetic()) { return None }
+    let mut units = 0usize;
+    let mut j = at;
+    for c in html[at..].chars() {
         if matches!(c, '\t' | '\n' | '\u{0C}' | '\r' | ' ' | '/' | '>') { break }
         if units + c.len_utf16() > 256 { break }
         units += c.len_utf16();
         j += c.len_utf8();
     }
-    let name = ascii_lower(&html[i + 1..j]);
+    let name = ascii_lower(&html[at..j]);
     let (mut attrs, mut duplicate, mut slash): (Vec<(String, String)>, bool, bool) = (vec![], false, false);
     while j < b.len() {
         let c = b[j];
@@ -214,8 +235,18 @@ fn walk(html: &str) -> (Vec<Block<'_>>, Vec<String>) {
             i = end + 3;
             continue;
         }
+        if b.get(i + 1) == Some(&b'/') && b.get(i + 2).is_some_and(|c| c.is_ascii_alphabetic()) {
+            // an end tag: tokenized with the start tag's attribute rules (see parse_end_tag)
+            let Some(et) = parse_end_tag(html, i) else { problems.push("an unterminated end tag".into()); break };
+            if !plain_tag_name(&et.name) { problems.push(format!("an end tag named {}", serde_json::to_string(&et.name).unwrap_or_default())) }
+            // a browser drops them, but they move where the tag ends: Bento writes none
+            if !et.attrs.is_empty() { problems.push(format!("an end tag </{}> carrying attributes", et.name)) }
+            i = et.end;
+            continue;
+        }
+        if html[i..].starts_with("</>") { i += 3; continue } // ignored entirely
         if matches!(b.get(i + 1), Some(b'/' | b'!' | b'?')) {
-            // an end tag, a doctype or a bogus comment: no attributes a browser acts on
+            // a doctype or a bogus comment: it ends at the first ">", quotes or not
             let Some(end) = find_from(html, ">", i + 2) else { problems.push("an unterminated tag".into()); break };
             i = end + 1;
             continue;
@@ -234,12 +265,15 @@ fn walk(html: &str) -> (Vec<Block<'_>>, Vec<String>) {
             let Some(close) = raw_text_end(&lower, raw, tag.end) else { problems.push(format!("an unterminated <{name}>")); break };
             if *raw != "script" && lower[tag.end..close].contains("<script") { problems.push(format!("a <{name}> holds a <script>")) }
             if *raw == "script" || *raw == "style" {
+                let Some(et) = parse_end_tag(html, close) else { problems.push(format!("an unterminated </{name}>")); break };
                 let tagname: &'static str = if *raw == "script" { "script" } else { "style" };
                 blocks.push(Block {
                     tag: tagname,
                     attrs: &html[i..tag.end],
                     text: &html[tag.end..close],
+                    tag_start: i,
                     start: tag.end,
+                    end: et.end,
                     type_: tag.get("type").map(str::to_string),
                     id: tag.get("id").map(str::to_string),
                     src: tag.get("src").map(str::to_string),
@@ -248,7 +282,7 @@ fn walk(html: &str) -> (Vec<Block<'_>>, Vec<String>) {
                     slash: tag.slash,
                 });
             }
-            i = close; // its end tag is skipped as an end tag
+            i = close; // its end tag is judged next, as an end tag
             continue;
         }
         i = tag.end;

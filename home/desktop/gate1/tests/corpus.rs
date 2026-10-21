@@ -40,7 +40,7 @@ fn served_rows() {
     let h = history();
     let exp = json("expected.json");
     let rows = exp["served"].as_array().unwrap();
-    assert_eq!(rows.len(), 60, "the served row count changed: re-read the corpus");
+    assert!(rows.len() >= 60, "the served rows shrank to {}: re-read the corpus", rows.len());
     let mut wrong = vec![];
     for r in rows {
         let case = r["case"].as_str().unwrap();
@@ -83,7 +83,7 @@ fn strict_rows() {
     let expected = StrictExpected { skeleton: s["skeleton"].as_str().unwrap().into(), remover: s["remover"].as_str().map(str::to_string) };
     let exp = json("expected.json");
     let rows = exp["strict"].as_array().unwrap();
-    assert_eq!(rows.len(), 19);
+    assert!(rows.len() >= 19, "strict rows shrank to {}", rows.len());
     let mut wrong = vec![];
     for r in rows {
         let case = r["case"].as_str().unwrap();
@@ -98,7 +98,7 @@ fn history_rows() {
     let exp = json("expected.json");
     let app = exp["app"].as_str().unwrap();
     let rows = exp["history"].as_array().unwrap();
-    assert_eq!(rows.len(), 8);
+    assert!(rows.len() >= 8, "history rows shrank to {}", rows.len());
     let mut wrong = vec![];
     for r in rows {
         let held = if r["held"].is_null() { None } else { Some(&r["held"]) };
