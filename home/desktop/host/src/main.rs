@@ -258,7 +258,7 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
                 }
                 let Some(l) = h.reg.loads.get_mut(&label) else { return };
                 if let Some(a) = l.load_finished(url == own) {
-                    eprintln!("PENDING {label} generation {}", a.generation);
+                    eprintln!("PENDING {label} generation {} url={url}", a.generation);
                     let _ = w.eval(&format!("window.__bentoArm && window.__bentoArm({:?}, {:?})", a.cap, a.nonce));
                 }
             }
@@ -270,8 +270,7 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
 /// WebKitGTK sometimes passes the navigation policy for a reload of a page
 /// served without a script-restricting CSP and then never requests the
 /// document (measured: about 1 in 4 such reloads). If no load starts within
-/// 4 s, RECREATE the webview: a fresh load, re-verified at serve and armed
-/// under the generation rules like any other.
+/// 4 s, the webview is RECREATED (see `recreate`).
 fn watchdog(app: tauri::AppHandle, label: String) {
     let seen = {
         let s = app.state::<Shared>();
@@ -281,22 +280,52 @@ fn watchdog(app: tauri::AppHandle, label: String) {
     let Some(seen) = seen else { return };
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(4));
-        let s = app.state::<Shared>();
-        let i = {
-            let mut h = s.lock().unwrap();
-            let Some(i) = h.docs.iter().position(|d| d.label == label) else { return };
-            if h.docs[i].starts != seen || h.docs[i].rebuilds >= 3 { return }
-            h.docs[i].rebuilds += 1;
-            let base = label.split('~').next().unwrap_or(&label).to_string();
-            h.docs[i].label = format!("{base}~{}", h.docs[i].rebuilds);
-            h.reg.loads.remove(&label);
-            i
-        };
-        eprintln!("WATCHDOG {label}: the load never started; recreating the webview");
-        if let Some(w) = app.get_webview_window(&label) { let _ = w.destroy(); }
-        let app2 = app.clone();
-        let _ = app.run_on_main_thread(move || { let _ = open_window(&app2, i); });
+        if recreate(&app, &label, Some(seen), 0) { eprintln!("WATCHDOG {label}: the load never started; recreated the webview") }
     });
+}
+
+/// Replace a document's webview with a fresh one (security, watchdog ruling):
+/// - a NEW label (doc0 -> doc0_r1), so late IPC from the dying webview can never be attributed
+///   to its replacement;
+/// - the old label's Load is removed in the SAME locked step that switches the
+///   document to the new label, so from that instant the old webview's calls
+///   are refused ("unknown webview") and only one label is live;
+/// - the new window is built and the old one destroyed in ONE main-thread step;
+/// - the new webview starts from zero: a fresh Load (generation 0, nothing
+///   armed), gate 1 re-run at its serve, arming from PENDING like any load.
+/// `expect_starts`: recreate only if no load has started since (the watchdog).
+/// `delay_ms`: rigs only, to let the old page try its dead secret first.
+pub(crate) fn recreate(app: &tauri::AppHandle, label: &str, expect_starts: Option<u64>, delay_ms: u64) -> bool {
+    let (i, new_label) = {
+        let s = app.state::<Shared>();
+        let mut h = s.lock().unwrap();
+        let Some(i) = h.docs.iter().position(|d| d.label == label) else { return false };
+        if expect_starts.is_some_and(|n| h.docs[i].starts != n) || h.docs[i].rebuilds >= 3 { return false }
+        h.docs[i].rebuilds += 1;
+        // Tauri labels allow only [A-Za-z0-9-/:_]
+        let base = label.split("_r").next().unwrap_or(label).to_string();
+        let new_label = format!("{base}_r{}", h.docs[i].rebuilds);
+        h.docs[i].label = new_label.clone();
+        h.reg.loads.remove(label);
+        (i, new_label)
+    };
+    eprintln!("RECREATE {label} -> {new_label}");
+    let (app2, old) = (app.clone(), label.to_string());
+    std::thread::spawn(move || {
+        if delay_ms > 0 { std::thread::sleep(std::time::Duration::from_millis(delay_ms)) }
+        let app3 = app2.clone();
+        // Build the replacement first, then destroy the old window, in this one
+        // step: destroying first closes the app's last window, and Tauri exits.
+        // The old label's Load is already gone, so only the new label can act.
+        let _ = app2.run_on_main_thread(move || match open_window(&app3, i) {
+            Ok(()) => {
+                if let Some(w) = app3.get_webview_window(&old) { let _ = w.destroy(); }
+            }
+            // never leave the user with no window; the old one is already dead to IPC
+            Err(e) => eprintln!("RECREATE FAILED {old}: {e}"),
+        });
+    });
+    true
 }
 
 #[cfg(not(feature = "rig"))]
@@ -305,7 +334,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
 }
 #[cfg(feature = "rig")]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
-    tauri::generate_handler![bento_arm, bento_file, rig::rig_stash, rig::rig_done]
+    tauri::generate_handler![bento_arm, bento_file, rig::rig_stash, rig::rig_done, rig::rig_recreate]
 }
 
 fn data_dir() -> PathBuf {

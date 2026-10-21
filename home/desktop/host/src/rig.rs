@@ -18,7 +18,7 @@ const PROBE: &str = include_str!("../rig/probe.js");
 static STASH: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 fn base(label: &str) -> &str {
-    label.split('~').next().unwrap_or(label)
+    label.split("_r").next().unwrap_or(label)
 }
 
 /// The main-frame init script for a rig webview: the shim exposes the armed
@@ -33,8 +33,9 @@ pub fn init_script(app: &tauri::AppHandle, label: &str, init: String) -> String 
     let init = init.replacen("armed = true\n", "armed = true; window.__rigCap = cap\n", 1);
     assert!(init.contains("window.__rigCap = cap"), "rig: the shim's arming line moved");
     format!(
-        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};\n{PROBE};\n",
+        "{init}window.__RIG_INVOKE_KEY={:?};window.__RIG_LABEL={b:?};window.__RIG_FULL_LABEL={label:?};window.__RIG_WATCHDOG={};window.__RIG_PEER={peer:?};window.__RIG_ALL={:?};\n{PROBE};\n",
         app.invoke_key(),
+        std::env::var_os("BENTO_RIG_WATCHDOG").is_some(),
         labels.join(","),
     )
 }
@@ -89,4 +90,11 @@ pub fn rig_done(app: tauri::AppHandle, webview: tauri::Webview, report: serde_js
             app.exit(0)
         });
     }
+}
+
+/// The watchdog's recreate path, on demand (rig 9). The 1.5 s delay lets the
+/// old page present its now-dead secret before its window is destroyed.
+#[tauri::command]
+pub fn rig_recreate(app: tauri::AppHandle, webview: tauri::Webview) -> bool {
+    crate::recreate(&app, webview.label(), None, 1500)
 }

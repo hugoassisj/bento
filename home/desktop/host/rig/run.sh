@@ -39,4 +39,6 @@ cp "$OUT/fix/A.bento.html" "$OUT/fix/U.bento.html" "$OUT/"; cp "$OUT/fix/B.bento
 cp "$OUT/fix/U.bento.html" "$OUT/U2.bento.html"
 scenario pair 120 "$OUT/A.bento.html" "$OUT/U.bento.html"
 scenario tri 150 "$OUT/B.bento.html" "$OUT/U2.bento.html" "$OUT/B.bento.html"
+cp "$OUT/fix/A.bento.html" "$OUT/W.bento.html"
+BENTO_RIG_WATCHDOG=1 scenario watchdog 90 "$OUT/W.bento.html"
 python3 rig/check.py "$OUT"

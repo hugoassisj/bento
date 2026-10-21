@@ -23,6 +23,26 @@
   const seen = new Set(), js = JSON.stringify
   JSON.stringify = function (v) { try { if (v && typeof v === 'object' && typeof v.cap === 'string') seen.add(v.cap) } catch (_) {} return js.apply(this, arguments) }
   addEventListener('load', async () => {
+    // rig 9 (security's watchdog ruling): the recreated webview starts from
+    // zero, the dead webview's secret is refused, and a stale secret cannot
+    // ride the new label
+    if (window.__RIG_WATCHDOG) {
+      const full = window.__RIG_FULL_LABEL
+      const raw = (id, cap) => inv('bento_file', { msg: JSON.stringify({ id, op: 'read', name: '-' }), cap }).then((t) => JSON.parse(t).value, (e) => 'THREW ' + e)
+      await until(() => window.__rigCap, 15000)
+      if (!full.includes('_r')) {
+        await inv('rig_stash', { key: 'wd.oldcap', value: window.__rigCap })
+        await inv('rig_recreate', {})
+        raw('wd-dead-old', window.__rigCap) // its Load is gone: the host logs the refusal
+        return
+      }
+      const old = await inv('rig_stash', { key: 'wd.oldcap' })
+      const W = { label: full, armed: !!window.__rigCap, fresh_cap: !!old && window.__rigCap !== old }
+      W.old_on_new = await raw('wd-old-on-new', old)
+      W.own_on_new = await raw('wd-own-on-new', window.__rigCap)
+      await inv('rig_done', { report: { watchdog: W, violations: [] } })
+      return
+    }
     // rig 5's bounce brings the main frame back: record it, never run twice
     if (sessionStorage.getItem('rig-done')) {
       const back = await until(() => window.__rigCap, 15000)

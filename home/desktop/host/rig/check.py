@@ -59,7 +59,7 @@ def window(name, genuine, expect_heard, peer_cap_expected=True):
     scn, lbl = name.split("-")
     L = log(scn)
     def outcome(tag):
-        m = re.search(r'IPC bento_file op="read" id="%s:%s" webview=%s(?:~\d+)? (OK|REFUSED: [^\n]*)' % (lbl, tag, lbl), L)
+        m = re.search(r'IPC bento_file op="read" id="%s:%s" webview=%s(?:_r\d+)? (OK|REFUSED: [^\n]*)' % (lbl, tag, lbl), L)
         return m.group(1) if m else "not seen"
     ok(outcome("rig1-key-only") == "REFUSED: no capability", f"{name}: rig 1 an embed with Tauri's key only is refused ({outcome('rig1-key-only')})")
     if peer_cap_expected:
@@ -101,7 +101,8 @@ for scn, wins in [
     ok(refused_wrong >= len(wins), f"{scn}: rig 2 peer-capability embeds (and rig 6's old capability) refused ({refused_wrong})")
     # rig 5: the main frame sent away was bounced back, and only the document was ever armed
     ok("BOUNCE" in L, f"{scn}: rig 5 a main frame sent to a foreign page was bounced back")
-    ok(not re.search(r"PENDING .*\n.*example\.com", L), f"{scn}: rig 5 the foreign page was never armed")
+    pend = re.findall(r"^PENDING \S+ generation \d+ url=(\S+)$", L, re.M)
+    ok(len(pend) >= 2 * len(wins) and all(re.fullmatch(r"bento://[0-9a-f]{24}\.localhost/", u) for u in pend), f"{scn}: rig 5 only the document itself was ever armed ({len(pend)} armings, {sorted(set(u for u in pend if not u.startswith('bento://')))} foreign)")
     # §19h: one web process per document
     procs = int((out / f"{scn}.procs").read_text().strip() or 0) if (out / f"{scn}.procs").exists() else 0
     distinct = 2
@@ -119,6 +120,21 @@ for scn, wins in [
             ok(any(o.endswith("(claimed)") for o in owners) and any(not o.endswith("(claimed)") for o in owners), f"tri: rig 8 control: the same document opened twice shares IndexedDB ({owners})")
             ok(u["page"]["rig8_idb_owner"].endswith("(claimed)"), "tri: the unknown document has its own IndexedDB")
             ok(b0["origin_host"] == b2["origin_host"] != u["origin_host"], "tri: same file, same origin; other file, other origin")
+
+# rig 9: the watchdog's recreate path (security's ruling: a NEW label)
+wd = report("watchdog-doc0")
+L = log("watchdog")
+ex = (out / "watchdog.exit").read_text().strip() if (out / "watchdog.exit").exists() else "missing"
+ok(ex == "0", f"watchdog: the host exited cleanly (exit {ex})")
+ok(re.search(r"RECREATE doc0 -> doc0_r1", L) is not None, "watchdog: recreated under a NEW label (doc0 -> doc0_r1)")
+ok(re.search(r'IPC bento_file op="read" id="wd-dead-old" webview=doc0 REFUSED: unknown webview', L) is not None, "watchdog: the dead webview's own secret is refused (unknown webview)")
+ok(re.search(r"SERVED doc0_r1 \d+ bytes, genuine", L) is not None, "watchdog: gate 1 re-ran on the bytes served to the new webview")
+ok(re.search(r"PENDING doc0_r1 generation 1 url=\S+\n(?:.*\n)*?ARM doc0_r1 generation 1: ARMED", L) is not None, "watchdog: the new webview armed from PENDING at a fresh generation")
+if wd:
+    W = wd["page"].get("watchdog") or {}
+    ok(W.get("armed") is True and W.get("fresh_cap") is True, f"watchdog: a freshly minted secret, never the old one ({W.get('fresh_cap')})")
+    ok(W.get("old_on_new") == "capability refused", f"watchdog: the OLD secret presented through the NEW label is refused ({W.get('old_on_new')})")
+    ok(W.get("own_on_new") == "only the open document is readable", f"watchdog: the new webview's own secret works ({W.get('own_on_new')})")
 
 for o in oks:
     print("ok  ", o)
