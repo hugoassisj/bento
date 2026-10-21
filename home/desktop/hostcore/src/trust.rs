@@ -75,11 +75,11 @@ pub struct Trust {
 impl Trust {
     /// The shipped constructor: the pinned keys, the bundled envelopes, and the
     /// floor kept in `floor_dir`. Returns what it refused, for the log.
-    pub fn load(bundled: &[String], floor_dir: &Path) -> (Trust, Vec<String>) {
+    pub fn load<S: AsRef<str>>(bundled: &[S], floor_dir: &Path) -> (Trust, Vec<String>) {
         Self::load_with_keys(pinned_keys(), bundled, Some(floor_dir))
     }
 
-    pub fn load_with_keys(keys: Vec<(&'static str, &'static str)>, bundled: &[String], floor_dir: Option<&Path>) -> (Trust, Vec<String>) {
+    pub fn load_with_keys<S: AsRef<str>>(keys: Vec<(&'static str, &'static str)>, bundled: &[S], floor_dir: Option<&Path>) -> (Trust, Vec<String>) {
         let mut t = Trust { keys, held: vec![], floor_dir: floor_dir.map(Path::to_path_buf) };
         let mut notes = vec![];
         // the floor first: what this install has already verified
@@ -95,7 +95,7 @@ impl Trust {
             }
         }
         for env in bundled {
-            if let Err(e) = t.offer_inner(env, false) { notes.push(format!("bundled history: {e}")) }
+            if let Err(e) = t.offer_inner(env.as_ref(), false) { notes.push(format!("bundled history: {e}")) }
         }
         (t, notes)
     }
@@ -221,7 +221,7 @@ mod tests {
         assert_eq!(t.apps(), vec!["bento-test".to_string()]);
         assert!(dir.join("bento-test.json").exists(), "the floor is written");
         // a fresh launch with NOTHING bundled still holds the floor
-        let (t2, notes) = Trust::load_with_keys(vec![test_key()], &[], Some(&dir));
+        let (t2, notes) = Trust::load_with_keys(vec![test_key()], &[] as &[&str], Some(&dir));
         assert_eq!(t2.apps(), vec!["bento-test".to_string()], "{notes:?}");
         assert!(matches!(t2.verdict(corpus("served/genuine-1.0.0.html").as_bytes()), Verdict::Genuine { .. }));
         // the same history again: accepted, no change
