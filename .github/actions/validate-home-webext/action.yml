@@ -130,12 +130,13 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-webext-store.ts
 
-    - name: WebExtension bento/id rig
-      # The extension's statement code must be the kernel reference, unaltered
-      # (a generated type-strip, checked current), and must pass the whole
-      # conformance contract in kernel/fixtures/identity-v1.json. The
-      # passkey-wrapped account key must fail closed for the wrong passkey,
-      # credential or binding; the recovery code is 80 random bits.
+    - name: WebExtension bento/connect rig
+      # The extension's identity code must be the kernel reference, unaltered
+      # (a generated type-strip, checked current), and pass kernel's own rigs
+      # for identity-v1.json and recovery-v1.json with the same row counts.
+      # The vendored Argon2id (@noble/hashes) must match its pinned file
+      # hashes, RFC 9106 and every recovery vector, agree with Node's native
+      # Argon2id, zero its block array, and fail closed on allocation failure.
       shell: bento-step {0}
       run: node scripts/test-webext-id.ts
 
