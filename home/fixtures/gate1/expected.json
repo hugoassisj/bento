@@ -266,6 +266,24 @@
       "why": "\"<!-->\" and \"<!--->\" end at once: nothing after them is swallowed"
     },
     {
+      "case": "served/empty-comment-in-paragraph.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "\"<!-->\" ends at once: the paragraph after it is markup, not comment"
+    },
+    {
+      "case": "served/style-false-close.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "\"</stylex>\" doesn't end the style: the <b onclick> is style TEXT, not an element"
+    },
+    {
+      "case": "served/title-false-close.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "\"</titlex>\" doesn't end the title: the <b onclick> is title TEXT"
+    },
+    {
       "case": "served/case-fold-breakout.html",
       "verdict": "unknown",
       "why": "a length-changing case fold would skip this script entirely"

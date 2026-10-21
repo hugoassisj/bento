@@ -122,6 +122,12 @@ const served: Served[] = [
   { name: 'a-glued-comment', html: body('<a<!-- x -->'), verdict: 'unknown', why: 'a start tag named "a<!--"' },
   { name: 'empty-comment-then-script', html: body(`<!--><${S}>window.pwned=4</${S}>`), verdict: 'unknown', why: '"<!-->" is a whole comment: the script after it is real' },
   { name: 'empty-comment-alone', html: body('<!--><!---><p>after</p>'), verdict: 'genuine', release: '1.0.0', why: '"<!-->" and "<!--->" end at once: nothing after them is swallowed' },
+  // the browser's reading must WIN in the genuine direction too (home-desktop):
+  // a walk that ends raw text at any "</name", or doesn't know "<!-->", would
+  // wrongly refuse these, and no unknown row could tell
+  { name: 'empty-comment-in-paragraph', html: body('<p><!--></p><p>after</p>'), verdict: 'genuine', release: '1.0.0', why: '"<!-->" ends at once: the paragraph after it is markup, not comment' },
+  { name: 'style-false-close', html: body('<style>a{}</stylex><b onclick=x></style>'), verdict: 'genuine', release: '1.0.0', why: '"</stylex>" doesn\'t end the style: the <b onclick> is style TEXT, not an element' },
+  { name: 'title-false-close', html: body('<title>t</titlex><b onclick=x></title>'), verdict: 'genuine', release: '1.0.0', why: '"</titlex>" doesn\'t end the title: the <b onclick> is title TEXT' },
   // the case fold must not change length (home-desktop): toLowerCase() makes 'İ' two units
   { name: 'case-fold-breakout', html: body('<p>' + 'İ'.repeat(20) + `</p><style>a{}</style><${S}>window.pwned=1</${S}>`), verdict: 'unknown', why: 'a length-changing case fold would skip this script entirely' },
   { name: 'genuine-length-changing-text', html: file(r1, { title: 'İstanbul ı ß ﬃ Σ', doc: '{"format":"bento/test","title":"İstanbul ı ß ﬃ ΣΑΣ İİİİ"}', preview: '<p>İİİİ ß ﬃ Σ</p>' }), verdict: 'genuine', release: '1.0.0', why: "a genuine document in Turkish (and ß, ﬃ, Σ) is still genuine" },
