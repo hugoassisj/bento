@@ -1832,8 +1832,11 @@ function fsTable(f: string): string {
     'the width is the READER\'s — localStorage under the key readers already have, never the document')
   ok(!/storageKey:/.test(ed.slice(ed.indexOf('private makePanel('), ed.indexOf('private syncScrim('))),
     '…written by the editor, not the primitive, so a phone drawer never persists a desktop preference')
-  ok(/if \(!this\.isDrawer\(\)\) \{\s*\n\s*try \{\s*\n\s*localStorage\.setItem\(o\.widthKey/.test(ed),
-    '…and only while the panel is a column')
+  // gated on the mode the CHANGE came from: the onChange that fires as the
+  // viewport crosses out of drawer width carries the drawer's state, and must
+  // not be written (test-spaces-chrome drives the behaviour)
+  ok(/if \(!drawer && !crossed\) \{\s*\n\s*desk = p\.collapsed\s*\n\s*try \{\s*\n\s*localStorage\.setItem\(o\.widthKey/.test(ed),
+    '…and only for a change made while the panel was already a column')
 
   const tabRule = kcss.slice(kcss.indexOf('.bkp-toggle {'), kcss.indexOf('}', kcss.indexOf('.bkp-toggle {')))
   ok(tabRule.length > 20 && !/opacity:\s*0\b/.test(tabRule), 'the collapse chevron is visible without hovering')

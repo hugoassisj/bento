@@ -12,6 +12,7 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **CSV export no longer lets a cell run as a formula.** Text starting with `=`, `+`, `-`, `@`, a tab or a return is written with a leading `'`, so opening the CSV in Excel or Sheets shows it as text.
 - **Neutral title while sealed, matching the saved file's title.**
 - **A sealed workbook deletes this browser's earlier plaintext recovery copy and version history of itself** on open; other workbooks' copies are untouched.
 
@@ -265,6 +266,26 @@ The release that came out of watching somebody use 0.2.0.
   help, Share and the Save list. On the narrowest phones the bar scrolls, never
   the page. The properties panel opens from a Format button and has a close
   button, and a tap outside it closes it too.
+
+- **The properties panel shows only what applies to what you selected.** A Text,
+  Date, Yes/No or Category column no longer shows a number format, a Total, or
+  an empty Formula field with another column's expression as its placeholder;
+  Formula appears on a formula column, Total on the number types.
+- **One Number format control.** A cell used to show a format dropdown, a
+  Pattern field and a "Shows as" box, and a dataset showed a cell Pattern and a
+  column Format as well. Now there is one dropdown (General, Number, Currency,
+  Percent, Date, Time, Text, Custom…) with a live sample under it. The pattern
+  field appears only for Custom…. On a dataset, "Apply to" chooses this column
+  or just these cells. Time is new: `2:30 pm` becomes `14:30`.
+- **An unset colour shows as an empty well.** Text colour and Background used
+  to show a grey or cream swatch when nothing was set, so an unformatted cell
+  looked formatted. They are struck-through empty wells now.
+- **Checkboxes in the panel are plain checkboxes**, not full-width boxes that
+  looked like empty text fields.
+- **A formula over money is money.** `Value * 2` on a £ column makes a Money
+  column with the same £ format. A plain number column no longer prints `8600`
+  beside `24,800`: without a pattern it does not group thousands (as Excel's
+  General does not), and a `#,##0` pattern groups every value.
 
 ## [0.2.0] — 2026-08-03
 
