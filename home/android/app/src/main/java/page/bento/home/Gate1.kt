@@ -106,28 +106,84 @@ object Gate1 {
         return null
     }
 
-    private val OPEN = Regex("<(script|style)(?=[\t\n\u000c\r />])", RegexOption.IGNORE_CASE)
-
     class Malformed(message: String) : Exception(message)
 
-    /** Every <script> and <style> element, with its raw text: to the first `</script` / `</style`, any case. */
-    fun scanBlocks(html: String): List<Block> {
-        val out = ArrayList<Block>()
-        val lower = asciiLower(html)
-        var from = 0
+    private class Walk(val blocks: List<Block>, val problems: List<String>)
+    private val TAG_NAME_OK = Regex("^[a-z][a-z0-9-]*\\z")
+    /** Elements whose content is TEXT to a browser, never tags, up to their real end tag. */
+    private val RAW_TEXT = setOf("script", "style", "textarea", "title")
+    private val LETTER_TAG = Regex("^<[a-zA-Z]")
+
+    /** Where a raw-text element really ends: "</name" then whitespace, "/" or ">". -1 if never. */
+    private fun rawTextEnd(lower: String, name: String, from: Int): Int {
+        var at = from
         while (true) {
-            val m = OPEN.find(html, from) ?: break
-            val tag = parseStartTag(html, m.range.first) ?: throw Malformed("gate1: unterminated <${m.groupValues[1]}> start tag at ${m.range.first}")
-            val name = asciiLower(m.groupValues[1])
-            val close = lower.indexOf("</$name", tag.end)
-            if (close < 0) throw Malformed("gate1: unterminated <$name> at ${m.range.first}")
-            out += Block(name, html.substring(m.range.first, tag.end), html.substring(tag.end, close),
-                tag.attrs["type"], tag.attrs["id"], tag.attrs["src"], tag.attrs.containsKey("data-bento-preview"),
-                tag.duplicate, tag.slash)
-            from = close
+            at = lower.indexOf("</$name", at)
+            if (at == -1) return -1
+            val k = at + 2 + name.length
+            val c = if (k < lower.length) lower[k] else null
+            if (c == null || ws(c) || c == '/' || c == '>') return at
+            at += 2
         }
-        return out
     }
+
+    /**
+     * ONE walk over the file, in document order, tag by tag, as a browser's
+     * tokenizer meets them. scanBlocks and markupProblems both read it, so the
+     * blocks gate 1 hashes and the markup it judges come from the SAME reading.
+     * Searching for "<script" instead finds one where a browser never would:
+     * inside another tag's name (`<meta<style><script>…`, found by home-ios's
+     * WebKit oracle).
+     */
+    private fun walk(html: String): Walk {
+        val blocks = ArrayList<Block>()
+        val problems = ArrayList<String>()
+        val lower = asciiLower(html)
+        var i = 0
+        while (true) {
+            i = html.indexOf('<', i)
+            if (i == -1) break
+            if (html.startsWith("<!--", i)) {
+                if (html.startsWith("<!-->", i)) { i += 5; continue }
+                if (html.startsWith("<!--->", i)) { i += 6; continue }
+                val end = html.indexOf("-->", i + 4)
+                if (lower.substring(i + 4, if (end < 0) html.length else end).contains("<script")) problems += "a comment holds a <script>"
+                if (end < 0) { problems += "an unterminated comment"; break }
+                i = end + 3; continue
+            }
+            val next = if (i + 1 < html.length) html[i + 1] else null
+            if (next == '/' || next == '!' || next == '?') {
+                val end = html.indexOf('>', i + 2)
+                if (end < 0) { problems += "an unterminated tag"; break }
+                i = end + 1; continue
+            }
+            if (!LETTER_TAG.containsMatchIn(html.substring(i, minOf(html.length, i + 2)))) { i++; continue }
+            val tag = parseStartTag(html, i)
+            if (tag == null) { problems += "an unterminated start tag"; break }
+            val name = tag.name
+            if (!TAG_NAME_OK.matches(name)) problems += "a start tag named ${Json.write(name)}"
+            if (name in setOf("iframe", "object", "embed", "base")) problems += "a <$name>"
+            if (name == "meta" && META_BAD.containsMatchIn(tag.attrs["http-equiv"] ?: "")) problems += "a <meta> refresh or CSP"
+            if (tag.attrs.keys.any { it.startsWith("on") }) problems += "an on*= attribute on <$name>"
+            if (name == "script" && (tag.duplicate || tag.slash))
+                problems += "a <script> start tag with a ${if (tag.duplicate) "duplicate attribute" else "\"/\" between attributes"} (Bento writes neither)"
+            if (name in RAW_TEXT) {
+                val close = rawTextEnd(lower, name, tag.end)
+                if (close < 0) { problems += "an unterminated <$name>"; break }
+                if (name != "script" && lower.substring(tag.end, close).contains("<script")) problems += "a <$name> holds a <script>"
+                if (name == "textarea" || name == "title") { i = close; continue }
+                blocks += Block(name, html.substring(i, tag.end), html.substring(tag.end, close),
+                    tag.attrs["type"], tag.attrs["id"], tag.attrs["src"], tag.attrs.containsKey("data-bento-preview"),
+                    tag.duplicate, tag.slash)
+                i = close; continue
+            }
+            i = tag.end
+        }
+        return Walk(blocks, problems)
+    }
+
+    /** Every <script> and <style> element, with its raw text, in document order. */
+    fun scanBlocks(html: String): List<Block> = walk(html).blocks
 
     // ---- the grammar (security, 2026-10-21) ---------------------------------------------
 
@@ -138,44 +194,12 @@ object Gate1 {
     private fun executable(blocks: List<Block>) = blocks.filter { it.tag == "script" && !isDataScript(it) }
 
     private val META_BAD = Regex("^[$WS]*(refresh|content-security-policy)[$WS]*\\z", RegexOption.IGNORE_CASE)
-    private val LETTER_TAG = Regex("^<[a-zA-Z]")
 
     /** Markup a genuine Bento file never carries, outside a script or style element's own text. [] = none. */
     fun markupProblems(html: String): List<String> {
-        val problems = ArrayList<String>()
-        val lower = asciiLower(html)
-        var i = 0
-        while (true) {
-            i = html.indexOf('<', i)
-            if (i == -1) break
-            if (html.startsWith("<!--", i)) {
-                val end = html.indexOf("-->", i + 4)
-                val body = lower.substring(i + 4, if (end < 0) html.length else end)
-                if (body.contains("<script")) problems += "a comment holds a <script>"
-                if (end < 0) { problems += "an unterminated comment"; break }
-                i = end + 3; continue
-            }
-            val tag = parseStartTag(html, i)
-            if (tag == null) {
-                if (LETTER_TAG.containsMatchIn(html.substring(i, minOf(html.length, i + 2)))) { problems += "an unterminated start tag"; break }
-                i++; continue
-            }
-            val name = tag.name
-            val j = tag.end - 1
-            if (name in setOf("iframe", "object", "embed", "base")) problems += "a <$name>"
-            if (name == "meta" && META_BAD.containsMatchIn(tag.attrs["http-equiv"] ?: "")) problems += "a <meta> refresh or CSP"
-            if (tag.attrs.keys.any { it.startsWith("on") }) problems += "an on*= attribute on <$name>"
-            if (name == "script" && (tag.duplicate || tag.slash))
-                problems += "a <script> start tag with a ${if (tag.duplicate) "duplicate attribute" else "\"/\" between attributes"} (Bento writes neither)"
-            if (name == "script" || name == "style") {
-                val close = lower.indexOf("</$name", j)
-                if (close < 0) { problems += "an unterminated <$name>"; break }
-                if (name == "style" && lower.substring(j, close).contains("<script")) problems += "a <style> holds a <script>"
-                i = close + 2; continue
-            }
-            i = j + 1
-        }
-        for (b in scanBlocks(html)) if (isDataScript(b) && b.text.contains('<')) problems += "the ${b.type} block contains \"<\""
+        val w = walk(html)
+        val problems = ArrayList(w.problems)
+        for (b in w.blocks) if (isDataScript(b) && b.text.contains('<')) problems += "the ${b.type} block contains \"<\""
         return problems
     }
 

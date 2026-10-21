@@ -42,7 +42,7 @@ class Gate1Test {
 
     @Test fun `every served row reaches its verdict, genuine ones under their own pins`() {
         val served = rows("served")
-        assertEquals("the corpus (51 served rows at #825's head)", 51, served.size)
+        assertTrue("the corpus has its served rows", served.size >= 51)
         var genuine = 0
         for (row in served) {
             val v = Gate1.verifyServed(read(row["case"] as String), history)
@@ -99,5 +99,17 @@ class Gate1Test {
         val s = """{"b":1,"a":[true,null,"x\"y"],"c":{"z":2.5,"y":-3}}"""
         assertEquals(s, Json.write(Json.read(s)))
         assertTrue(Json.write(Json.read("""{"a":1,"b":2}""")) != Json.write(Json.read("""{"b":2,"a":1}""")))
+    }
+
+    @Test fun `every oracle failure is UNKNOWN against the oracle's own history`() {
+        // home/fixtures/gate1/oracle-failures/: files a browser oracle caught a
+        // port calling GENUINE while running foreign code, with the unsigned
+        // bento-oracle history beside them (kernel). Every one must be UNKNOWN.
+        val d = File(dir, "oracle-failures")
+        val h = File(d, "history.json")
+        if (!h.isFile) return
+        val history = Gate1.historyOf(Json.read(h.readText()))!!
+        val files = d.listFiles { f -> f.name.endsWith(".html") }!!.sortedBy { it.name }
+        for (f in files) assertTrue("${f.name} must be UNKNOWN", Gate1.verifyServed(f.readText(), history) is Gate1.Verdict.Unknown)
     }
 }

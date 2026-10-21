@@ -11827,7 +11827,12 @@ whether those bytes are one genuine release's.
   first duplicate wins. A `<script>` tag with a "/" or a duplicate is refused
   outright. Case is folded ASCII-only and length-preserving, never with
   `lowercase()`, which turns 'İ' into two units and shifts every offset after
-  it. Planted faults confirm the corpus catches both.
+  it. Blocks and markup come from ONE walk in document order, never a search
+  for "<script": in `<meta<style><script>…` a browser sees one tag named
+  `meta<style` and then a real script (home-ios's WebKit oracle). Raw-text
+  elements are skipped to their real end tag, and a start tag named outside
+  `[a-z][a-z0-9-]*` is UNKNOWN. Planted faults confirm the corpus catches the
+  fold, the separator and the name rule.
 - **Measured on the emulator.** A history signed with the debug key, pinning a
   slides build and a file that build saved through ⌘S:
   - the genuine file boots normally under the pinned CSP, and an injected
@@ -11843,9 +11848,10 @@ whether those bytes are one genuine release's.
   security). It lifts kernel's mutant generator verbatim from
   `test-gate1-oracle.mjs`, so the two can't drift, and runs the same fixed seed
   plus a printed random one. A debug-only Activity gives Gate1.kt's verdict for
-  every mutant, and loads every GENUINE one in a WebView with no CSP. First
-  run: 500 mutants, Gate1.kt agreeing with the reference on all of them, and
-  all 88 GENUINE files running only the loader and remover. The controls
+  every mutant, and loads every GENUINE one in a WebView with no CSP. With the
+  glued-tag operator (19 glued mutants in the fixed seed alone): 500 mutants,
+  Gate1.kt agreeing with the reference on all of them, and all 58 GENUINE
+  files running only the loader and remover. The controls
   confirm the oracle sees an extra script and an executing data block. It
   needs an emulator, so CI skips it, with the reason recorded in
   `scripts/lib/ci-skips.mjs`.
