@@ -47,10 +47,12 @@ try {
   ]) {
     const r = await bootUnderPins(browser, doctored(name.replace(/\W+/g, '-'), text), pins)
     // Not just "something was unexpected": the EXCUSED refusals must be the
-    // loader's own (inside its text) and the injected one must not be among
-    // them. A count alone passes when a defence excuses the WRONG refusal and
-    // the loader's own fallback is reported in its place (measured: the column
-    // rule and the once-each cap each hid the other's removal that way).
+    // loader's own (inside its text) and the injected one must be among the
+    // UNEXPECTED. A count alone passes when a defence excuses the WRONG refusal
+    // and the loader's own fallback is reported in its place (measured: the
+    // column rule and the once-each cap each hid the other's removal that way).
+    // On Chrome 149 the injected refusal's column is 0, inside the loader's
+    // span, so there the ONCE-EACH CAP is the guard that catches it.
     // Positions are worked out HERE, independently of csp-boot.mjs, which is
     // the code under test (a rig reusing its helper would mutate with it).
     const at = text.indexOf(loader.text), stop = at + loader.text.length
@@ -60,8 +62,18 @@ try {
       return o + column - 1
     }
     const inLoaderText = (v) => { const o = offsetOf(v.line, v.column); return o >= at && o <= stop }
-    const excusedAreLoaders = r.expected.every(inLoaderText)
-    const injectedReported = r.unexpected.some((v) => v.directive === 'script-src-elem' && !inLoaderText(v))
+    // Where the injected script is. Refusal COLUMNS aren't reliable across
+    // Chrome versions: Chrome Headless Shell 149 (CI's) reports this one at
+    // column 0, inside the loader's span, while 155 reports its real column
+    // (security, measured). So it's identified by its LINE, with its column
+    // either matching or 0, never by an exact column.
+    const injAt = text.indexOf(evil, name.includes('<head>') ? 0 : Math.max(0, openAt - 1))
+    const injLine = text.slice(0, injAt).split('\n').length
+    const injCol = injAt - text.lastIndexOf('\n', injAt - 1) // 1-based
+    const isInjected = (v) => v.directive === 'script-src-elem' && v.line === injLine &&
+      (v.column === 0 || (v.column >= injCol && v.column <= injCol + evil.length))
+    const excusedAreLoaders = r.expected.every((v) => inLoaderText(v) && !isInjected(v))
+    const injectedReported = r.unexpected.some(isInjected)
     ok(excusedAreLoaders && injectedReported, `refused and reported: ${name} (excused only the loader's own: ${excusedAreLoaders}; the injected one reported: ${injectedReported})`)
   }
 

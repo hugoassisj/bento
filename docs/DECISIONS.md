@@ -11723,6 +11723,15 @@ release, signed with the release key:
   There's no unchecked path. CI runs the same check on every PR's build of all
   four apps, and the required `validate` job's release rehearsal runs the whole
   pipeline.
+- **Refusal COLUMNS aren't reliable across Chrome versions.** Chrome Headless
+  Shell 149, Playwright's bundled browser and the one CI runs, reports a script
+  injected right after the loader's `</script>` at column 0, a position INSIDE
+  the loader's span. Chrome 155 reports its real column. So on CI's browser the
+  line-and-column rule alone would excuse that script, and the ONCE-EACH CAP
+  (at most one inline and one eval refusal excused) is what catches it. The cap
+  is the real guard and the column a refinement (security, measured). Rigs
+  identify an injected refusal by its line, with its column matching or 0, and
+  run under the bundled browser as well as system Chrome.
 - **The verdict is a GRAMMAR, not a list of cases (security, 2026-10-21).** A
   `<script>` is inert only if its type is exactly one of the data types Bento
   writes (`application/bento+json`, `application/bento+lang`,
