@@ -9,6 +9,9 @@ publish = false
 [features]
 # Rigs only: trust the conformance corpus's test key (see hostcore).
 rig-test-key = ["bento-hostcore/rig-test-key"]
+# Rigs only: the §19d–§19h probe, a dead drop standing in for an attacker's
+# network, and a report sink. Never in a shipped build.
+rig = ["rig-test-key"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

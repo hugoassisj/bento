@@ -34,6 +34,9 @@ use tauri::{http, webview::PageLoadEvent, Manager, WebviewUrl, WebviewWindowBuil
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
+#[cfg(feature = "rig")]
+mod rig;
+
 mod histories {
     include!(concat!(env!("OUT_DIR"), "/histories.rs"));
 }
@@ -43,7 +46,7 @@ const SHIM: &str = include_str!("../shim.js");
 /// The neutral title for every title sink while a document is sealed (§30).
 const APP_NAME: &str = "Bento";
 
-struct Doc {
+pub(crate) struct Doc {
     /// The webview label; changes when the watchdog recreates the webview.
     label: String,
     /// "<24 hex>.localhost"
@@ -58,7 +61,7 @@ struct Doc {
     rebuilds: u32,
 }
 
-struct Host {
+pub(crate) struct Host {
     docs: Vec<Doc>,
     reg: Registry,
     trust: Trust,
@@ -67,7 +70,7 @@ struct Host {
     data_dir: PathBuf,
 }
 
-type Shared = Mutex<Host>;
+pub(crate) type Shared = Mutex<Host>;
 
 fn doc_url(host: &str) -> String {
     // Windows: wry serves custom schemes at http://<scheme>.<host>/, and
@@ -118,9 +121,10 @@ async fn bento_file(app: tauri::AppHandle, webview: tauri::Webview, msg: String,
     let i = {
         let h = state.lock().unwrap();
         if let Err(e) = h.reg.check(&label, cap.as_deref()) {
-            eprintln!("IPC bento_file op={} webview={label} REFUSED: {e}", m["op"]);
+            eprintln!("IPC bento_file op={} id={id} webview={label} REFUSED: {e}", m["op"]);
             return reply(&id, Err(e.into()));
         }
+        eprintln!("IPC bento_file op={} id={id} webview={label} OK", m["op"]);
         match h.docs.iter().position(|d| d.label == label) { Some(i) => i, None => return reply(&id, Err("unknown webview".into())) }
     };
     // File-scoped: whatever the verdict, it reaches THIS document's own file
@@ -207,7 +211,10 @@ fn open_window(app: &tauri::AppHandle, i: usize) -> tauri::Result<()> {
     let own = doc_url(&host);
     // `;` between the parts: each is an IIFE, and `})()\n(function…` parses as
     // ONE call expression (measured: bridge.js never ran).
-    let init = format!("{SHIM};\n{BRIDGE};\n");
+    #[allow(unused_mut)]
+    let mut init = format!("{SHIM};\n{BRIDGE};\n");
+    #[cfg(feature = "rig")]
+    { init = rig::init_script(app, &label, init); }
     WebviewWindowBuilder::new(app, &label, WebviewUrl::CustomProtocol(own.parse().unwrap()))
         .data_directory(data)
         .title(title)
@@ -292,6 +299,15 @@ fn watchdog(app: tauri::AppHandle, label: String) {
     });
 }
 
+#[cfg(not(feature = "rig"))]
+fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
+    tauri::generate_handler![bento_arm, bento_file]
+}
+#[cfg(feature = "rig")]
+fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
+    tauri::generate_handler![bento_arm, bento_file, rig::rig_stash, rig::rig_done]
+}
+
 fn data_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("BENTO_DATA_DIR") { return PathBuf::from(d) }
     let base = if cfg!(windows) { std::env::var_os("LOCALAPPDATA") } else { std::env::var_os("XDG_DATA_HOME") }
@@ -339,9 +355,10 @@ fn main() {
             let h = &mut *guard;
             let (host, rest) = (req.uri().host().unwrap_or("").to_string(), req.uri().path().to_string());
             let label = ctx.webview_label().to_string();
-            // A document's origin serves only its root, and only to its own webview.
-            let Some(d) = h.docs.iter().find(|d| d.host == host) else { return not_found() };
-            if rest != "/" || d.label != label { return not_found() }
+            // A document's origin serves only its root, and only to a webview that
+            // document was opened in (the same file opened twice shares its origin).
+            if rest != "/" { return not_found() }
+            let Some(d) = h.docs.iter().find(|d| d.host == host && d.label == label) else { return not_found() };
             let mut res = http::Response::builder()
                 .header("Content-Type", "text/html; charset=utf-8")
                 .header("Cache-Control", "no-store")
@@ -356,7 +373,7 @@ fn main() {
             eprintln!("SERVED {label} {} bytes, {}", body.len(), if genuine { "genuine (pinned CSP)" } else { "unknown (no CSP)" });
             res.body(body).unwrap()
         })
-        .invoke_handler(tauri::generate_handler![bento_arm, bento_file])
+        .invoke_handler(handlers())
         .setup(move |app| {
             for i in 0..count { open_window(app.handle(), i)? }
             Ok(())
