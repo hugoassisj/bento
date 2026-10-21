@@ -912,7 +912,7 @@
     "message": "Din adgangsnøgle kan ikke låse dit Bento ID op på andre enheder, så denne gendannelseskode er din eneste vej tilbage."
   },
   "idNoCode": {
-    "message": "Denne enhed kan ikke lave en gendannelseskode, så din adgangsnøgle er din eneste vej tilbage. Tilføj en ekstra adgangsnøgle, når du kan."
+    "message": "Denne enhed kan ikke lave en gendannelseskode, så din adgangsnøgle er din eneste vej tilbage: mister du den, mister du dette Bento ID. Du kan lave en gendannelseskode senere på en anden enhed."
   },
   "idDoneTitle": {
     "message": "Dit Bento ID er sat op"

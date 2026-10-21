@@ -912,7 +912,7 @@
     "message": "Twój klucz dostępu nie może odblokować Bento ID na innych urządzeniach, więc ten kod odzyskiwania jest Twoją jedyną drogą powrotu."
   },
   "idNoCode": {
-    "message": "To urządzenie nie może utworzyć kodu odzyskiwania, więc klucz dostępu jest Twoją jedyną drogą powrotu. Gdy możesz, dodaj drugi klucz dostępu."
+    "message": "To urządzenie nie może utworzyć kodu odzyskiwania, więc klucz dostępu jest Twoją jedyną drogą powrotu: jeśli go stracisz, stracisz ten Bento ID. Kod odzyskiwania możesz utworzyć później na innym urządzeniu."
   },
   "idDoneTitle": {
     "message": "Twój Bento ID jest skonfigurowany"

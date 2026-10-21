@@ -912,7 +912,7 @@
     "message": "Pääsyavaimesi ei voi avata Bento ID:täsi muilla laitteilla, joten tämä palautuskoodi on ainoa tiesi takaisin."
   },
   "idNoCode": {
-    "message": "Tämä laite ei voi luoda palautuskoodia, joten pääsyavaimesi on ainoa tiesi takaisin. Lisää toinen pääsyavain, kun voit."
+    "message": "Tämä laite ei voi luoda palautuskoodia, joten pääsyavain on ainoa tiesi takaisin: jos menetät sen, menetät tämän Bento ID:n. Voit luoda palautuskoodin myöhemmin toisella laitteella."
   },
   "idDoneTitle": {
     "message": "Bento ID on otettu käyttöön"

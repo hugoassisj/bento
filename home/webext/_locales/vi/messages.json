@@ -912,7 +912,7 @@
     "message": "Khóa truy cập của bạn không mở được Bento ID trên thiết bị khác, nên mã khôi phục này là cách duy nhất để quay lại."
   },
   "idNoCode": {
-    "message": "Thiết bị này không tạo được mã khôi phục, nên khóa truy cập là cách duy nhất để quay lại. Hãy thêm một khóa truy cập thứ hai khi có thể."
+    "message": "Thiết bị này không tạo được mã khôi phục, nên khóa truy cập là cách duy nhất để quay lại: nếu mất nó, bạn sẽ mất Bento ID này. Bạn có thể tạo mã khôi phục sau trên một thiết bị khác."
   },
   "idDoneTitle": {
     "message": "Bento ID đã được thiết lập"

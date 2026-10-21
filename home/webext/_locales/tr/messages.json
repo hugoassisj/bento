@@ -912,7 +912,7 @@
     "message": "Geçiş anahtarınız Bento ID'nizin kilidini başka cihazlarda açamaz; bu kurtarma kodu tek geri dönüş yolunuz."
   },
   "idNoCode": {
-    "message": "Bu cihaz kurtarma kodu oluşturamıyor; geçiş anahtarınız tek geri dönüş yolunuz. Fırsat bulunca ikinci bir geçiş anahtarı ekleyin."
+    "message": "Bu cihaz kurtarma kodu oluşturamıyor; geçiş anahtarınız tek geri dönüş yolunuz. Onu kaybederseniz bu Bento ID'yi de kaybedersiniz. Daha sonra başka bir cihazda kurtarma kodu oluşturabilirsiniz."
   },
   "idDoneTitle": {
     "message": "Bento ID'niz kuruldu"

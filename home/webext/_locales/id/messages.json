@@ -912,7 +912,7 @@
     "message": "Kunci sandi Anda tidak dapat membuka Bento ID di perangkat lain, jadi kode pemulihan ini satu-satunya jalan kembali."
   },
   "idNoCode": {
-    "message": "Perangkat ini tidak dapat membuat kode pemulihan, jadi kunci sandi Anda satu-satunya jalan kembali. Tambahkan kunci sandi kedua jika sempat."
+    "message": "Perangkat ini tidak dapat membuat kode pemulihan, jadi kunci sandi Anda satu-satunya jalan kembali: jika hilang, Bento ID ini juga hilang. Anda bisa membuat kode pemulihan nanti di perangkat lain."
   },
   "idDoneTitle": {
     "message": "Bento ID Anda sudah siap"

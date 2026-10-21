@@ -945,7 +945,7 @@
     "message": "La tua passkey non può sbloccare il tuo Bento ID su altri dispositivi, quindi questo codice di recupero è il tuo unico modo per tornare."
   },
   "idNoCode": {
-    "message": "Questo dispositivo non può creare un codice di recupero, quindi la tua passkey è il tuo unico modo per tornare. Aggiungi una seconda passkey appena puoi."
+    "message": "Questo dispositivo non può creare un codice di recupero, quindi la tua passkey è il tuo unico modo per tornare: se la perdi, perdi questo Bento ID. Potrai creare un codice di recupero più tardi su un altro dispositivo."
   },
   "idDoneTitle": {
     "message": "Il tuo Bento ID è configurato"

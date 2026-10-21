@@ -945,7 +945,7 @@
     "message": "Sua chave de acesso não consegue desbloquear seu Bento ID em outros dispositivos, então este código de recuperação é seu único caminho de volta."
   },
   "idNoCode": {
-    "message": "Este dispositivo não consegue criar um código de recuperação, então sua chave de acesso é seu único caminho de volta. Adicione uma segunda chave de acesso quando puder."
+    "message": "Este dispositivo não consegue criar um código de recuperação, então sua chave de acesso é seu único caminho de volta: se você a perder, perde este Bento ID. Você pode criar um código de recuperação depois, em outro dispositivo."
   },
   "idDoneTitle": {
     "message": "Seu Bento ID está configurado"

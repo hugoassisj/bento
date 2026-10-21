@@ -945,7 +945,7 @@
     "message": "Ihr Passkey kann Ihre Bento ID auf anderen Geräten nicht entsperren, daher ist dieser Wiederherstellungscode Ihr einziger Weg zurück."
   },
   "idNoCode": {
-    "message": "Dieses Gerät kann keinen Wiederherstellungscode erstellen, daher ist Ihr Passkey Ihr einziger Weg zurück. Fügen Sie bei Gelegenheit einen zweiten Passkey hinzu."
+    "message": "Dieses Gerät kann keinen Wiederherstellungscode erstellen. Ihr Passkey ist daher Ihr einziger Weg zurück: Verlieren Sie ihn, verlieren Sie diese Bento ID. Einen Wiederherstellungscode können Sie später auf einem anderen Gerät erstellen."
   },
   "idDoneTitle": {
     "message": "Ihre Bento ID ist eingerichtet"

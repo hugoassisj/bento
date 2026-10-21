@@ -945,7 +945,7 @@
     "message": "Tu llave de acceso no puede desbloquear tu Bento ID en otros dispositivos, así que este código de recuperación es tu única forma de volver."
   },
   "idNoCode": {
-    "message": "Este dispositivo no puede crear un código de recuperación, así que tu llave de acceso es tu única forma de volver. Añade una segunda llave de acceso cuando puedas."
+    "message": "Este dispositivo no puede crear un código de recuperación, así que tu llave de acceso es tu única forma de volver: si la pierdes, pierdes este Bento ID. Podrás crear un código de recuperación más adelante en otro dispositivo."
   },
   "idDoneTitle": {
     "message": "Tu Bento ID está configurado"

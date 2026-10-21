@@ -1112,8 +1112,8 @@
     "description": "Recovery code step: the passkey has no PRF support."
   },
   "idNoCode": {
-    "message": "This device can't make a recovery code, so your passkey is your only way back. Add a second passkey when you can.",
-    "description": "Done step: no recovery code could be made (not enough memory)."
+    "message": "This device can't make a recovery code, so your passkey is your only way back: if you lose it, you lose this Bento ID. You can make a recovery code later on another device.",
+    "description": "Done step: no recovery code could be made (not enough memory). Must say plainly that losing the passkey loses the Bento ID (security, #829)."
   },
   "idDoneTitle": {
     "message": "Your Bento ID is set up",

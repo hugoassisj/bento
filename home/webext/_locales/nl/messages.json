@@ -912,7 +912,7 @@
     "message": "Je toegangssleutel kan je Bento ID op andere apparaten niet ontgrendelen, dus deze herstelcode is je enige weg terug."
   },
   "idNoCode": {
-    "message": "Dit apparaat kan geen herstelcode maken, dus je toegangssleutel is je enige weg terug. Voeg zodra het kan een tweede toegangssleutel toe."
+    "message": "Dit apparaat kan geen herstelcode maken, dus je toegangssleutel is je enige weg terug: raak je hem kwijt, dan ben je deze Bento ID kwijt. Je kunt later op een ander apparaat een herstelcode maken."
   },
   "idDoneTitle": {
     "message": "Je Bento ID is ingesteld"

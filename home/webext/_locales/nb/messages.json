@@ -912,7 +912,7 @@
     "message": "Tilgangsnøkkelen din kan ikke låse opp Bento ID-en din på andre enheter, så denne gjenopprettingskoden er den eneste veien tilbake."
   },
   "idNoCode": {
-    "message": "Denne enheten kan ikke lage en gjenopprettingskode, så tilgangsnøkkelen din er den eneste veien tilbake. Legg til en ekstra tilgangsnøkkel når du kan."
+    "message": "Denne enheten kan ikke lage en gjenopprettingskode, så tilgangsnøkkelen er den eneste veien tilbake: mister du den, mister du denne Bento ID-en. Du kan lage en gjenopprettingskode senere på en annen enhet."
   },
   "idDoneTitle": {
     "message": "Bento ID-en din er satt opp"

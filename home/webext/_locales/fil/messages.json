@@ -912,7 +912,7 @@
     "message": "Hindi kayang i-unlock ng iyong passkey ang Bento ID sa ibang device, kaya ang recovery code na ito ang tanging daan pabalik."
   },
   "idNoCode": {
-    "message": "Hindi makagawa ng recovery code ang device na ito, kaya ang iyong passkey ang tanging daan pabalik. Magdagdag ng pangalawang passkey kapag kaya mo."
+    "message": "Hindi makagawa ng recovery code ang device na ito, kaya ang iyong passkey ang tanging daan pabalik: kapag nawala ito, mawawala rin ang Bento ID na ito. Puwede kang gumawa ng recovery code mamaya sa ibang device."
   },
   "idDoneTitle": {
     "message": "Naka-set up na ang iyong Bento ID"

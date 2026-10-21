@@ -149,5 +149,15 @@ console.log('\n— the passkey ceremony (Chrome stand-ins)')
   ok((await fails(pk.runPasskeyCeremony({ prfEval: agent.PRF_EVAL }, { permissions, credentials: { ...credentials, create: err('SecurityError') } })))?.code === 'permission', 'SecurityError → "permission", told apart from a lost focus')
 }
 
+console.log('\n— the setup page derives off its main thread')
+{
+  const { readFileSync } = await import('node:fs')
+  const src = (f: string) => readFileSync(new URL(`../home/webext/src/${f}`, import.meta.url), 'utf8')
+  const setup = src('setup.js')
+  ok(/argon2idInWorker\(pw, salt\)/.test(setup) && !/from '\.\/id\/argon2\.js'/.test(setup), 'setup.js runs Argon2id through the worker, never on the page thread (measured: an in-page derivation froze the page for its whole length)')
+  ok(/new Worker\(new URL\('\.\/argon2-worker\.js', import\.meta\.url\), \{ type: 'module' \}\)/.test(src('id/argon2-page.js')) && /name === 'RecoveryUnavailable'\) reject\(new RecoveryUnavailable\(\)\)/.test(src('id/argon2-page.js')), 'the worker\'s RecoveryUnavailable comes back as RecoveryUnavailable')
+  ok(/password\.fill\(0\)/.test(src('id/argon2-worker.js')) && /postMessage\(\{ ok: true, key \}, \[key\.buffer\]\)/.test(src('id/argon2-worker.js')), 'the worker zeroes its copy of the code and transfers the key back')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

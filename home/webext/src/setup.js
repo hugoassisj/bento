@@ -12,7 +12,7 @@
 import { t, localize, initI18n } from './i18n.js'
 import { createBentoId } from './id/agent.js'
 import { runPasskeyCeremony } from './id/passkey.js'
-import { argon2id } from './id/argon2.js'
+import { argon2idInWorker } from './id/argon2-page.js'
 import { saveNewSelf, loadSelf } from './id/keystore.js'
 import { parseRecoveryCode } from './id/gen/recovery.js'
 
@@ -41,7 +41,7 @@ $('go').onclick = async () => {
       argon2id: async (pw, salt) => {
         derivations++
         $('status').textContent = t('idDeriving', String(derivations))
-        return argon2id(pw, salt)
+        return argon2idInWorker(pw, salt)
       },
       passkey: ({ prfEval }) => runPasskeyCeremony({ prfEval, label: label ?? 'Bento ID' }),
     })

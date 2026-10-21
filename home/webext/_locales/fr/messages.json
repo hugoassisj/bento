@@ -945,7 +945,7 @@
     "message": "Votre clé d’accès ne peut pas déverrouiller votre Bento ID sur d’autres appareils : ce code de récupération est votre seul moyen de revenir."
   },
   "idNoCode": {
-    "message": "Cet appareil ne peut pas créer de code de récupération : votre clé d’accès est votre seul moyen de revenir. Ajoutez une deuxième clé d’accès dès que possible."
+    "message": "Cet appareil ne peut pas créer de code de récupération : votre clé d’accès est donc votre seul moyen de revenir. Si vous la perdez, vous perdez ce Bento ID. Vous pourrez créer un code de récupération plus tard sur un autre appareil."
   },
   "idDoneTitle": {
     "message": "Votre Bento ID est configuré"

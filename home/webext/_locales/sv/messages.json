@@ -912,7 +912,7 @@
     "message": "Din nyckel kan inte låsa upp ditt Bento ID på andra enheter, så den här återställningskoden är din enda väg tillbaka."
   },
   "idNoCode": {
-    "message": "Den här enheten kan inte skapa en återställningskod, så din nyckel är din enda väg tillbaka. Lägg till en andra nyckel när du kan."
+    "message": "Den här enheten kan inte skapa en återställningskod, så din nyckel är din enda väg tillbaka: tappar du bort den förlorar du det här Bento ID:t. Du kan skapa en återställningskod senare på en annan enhet."
   },
   "idDoneTitle": {
     "message": "Ditt Bento ID är konfigurerat"
