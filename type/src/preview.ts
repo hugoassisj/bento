@@ -46,7 +46,7 @@
 
 import { registerPreview, isBodySealed } from '../../kernel/src/save.ts';
 import type { Block, TypeDoc } from './model.ts';
-import { safeFontFamily } from './model.ts';
+import { safeFontFamily, readPage } from './model.ts';
 import { registerReady } from './features.ts';
 import { groupBlocks, blockHtml, renderBody, TAG } from './render.ts';
 import { paginate } from './paginate.ts';
@@ -89,11 +89,12 @@ function firstPageBlocks(doc: TypeDoc): Block[] {
   // this node can never reach a save, but the convention costs nothing to
   // honour and guards against a future caller that clones the live document.
   host.setAttribute('data-bento-transient', '');
-  const m = margins(doc.page);
+  const pg = readPage(doc.page as never);         // numbers only (see frame())
+  const m = margins(pg);
   host.style.cssText =
     `position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none;` +
-    `--page-w:${doc.page.width}px;--page-h:${doc.page.height}px;` +
-    `--mar-x:${doc.page.marginX}px;--mar-t:${m.top}px;--mar-b:${m.bottom}px;` +
+    `--page-w:${pg.width}px;--page-h:${pg.height}px;` +
+    `--mar-x:${pg.marginX}px;--mar-t:${m.top}px;--mar-b:${m.bottom}px;` +
     // a font stack by grammar (model.ts safeFontFamily), never a stripped string
     (safeFontFamily(doc.type?.family) ? `--doc-family:${safeFontFamily(doc.type?.family)};` : '') +
     (doc.type?.size ? `--doc-size:${doc.type.size}px;` : '');
@@ -277,7 +278,9 @@ function frame(inner: HTMLElement, doc: TypeDoc): HTMLElement {
   const style = document.createElement('style');
   style.textContent = sheet(doc);
   box.appendChild(style);
-  const p = doc.page;
+  // numbers only: these style attributes are SERIALIZED into the saved file,
+  // and a synced page never passed parseDoc (a `;…url(…)` needs no `<`)
+  const p = readPage(doc.page as never);
   const wrap = document.createElement('div');
   wrap.setAttribute('style',
     `width:${p.width}px;transform-origin:0 0;transform:none;` +

