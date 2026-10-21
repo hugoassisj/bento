@@ -691,6 +691,37 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-dash-datavalid.ts
 
+    - name: bento/dash typed entry and text in arithmetic
+      # 10, $5, 15% typed into a spreadsheet then =SUM said 30 and =G13*G15
+      # said 150: typing stored the text, and the engine read "15%" as 15.
+      # Entry values + formats, Excel's text-in-arithmetic rule, the formula
+      # bar's entered form, and malformed formulas refused at entry.
+      shell: bento-step {0}
+      run: node scripts/test-dash-entryparse.ts
+
+    - name: bento/dash pivot field editor
+      # The editor's spec operations (a grouping field in one area, values
+      # never the same column and function twice, inputs never mutated) and
+      # pivots computed over configured fields — sum, average, distinct, min,
+      # max — with the pivot's own filters through a JSON round trip.
+      shell: bento-step {0}
+      run: node scripts/test-dash-pivotfields.ts
+
+    - name: bento/dash chart from the selection
+      # The selected columns are the series; a line through categories with
+      # no order is refused unless asked; the axis wears the column's format;
+      # series colours follow the column, not the position.
+      shell: bento-step {0}
+      run: node scripts/test-dash-chartbind.ts
+
+    - name: bento/dash formula dialog, sheet names, Intl locale
+      # The dialog refuses `Value * 2 +` and every other broken shape while
+      # accepting every formula the starter and the function pack use; every
+      # function has a signature; new sheets are "Sheet3"; a stored
+      # x-pseudo or malformed language tag never reaches Intl.
+      shell: bento-step {0}
+      run: node scripts/test-dash-formula-dialog.ts
+
     - name: dash — what each Share copy may carry
       # The reading copy has no collab block; the invite carries an
       # owner-signed invite and never ownerPriv or a legacy writerPriv; the

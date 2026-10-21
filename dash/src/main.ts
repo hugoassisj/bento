@@ -34,7 +34,7 @@ import { putRecovery, pruneOld, onRecoveryOff, recoveryOff } from '../../kernel/
 import { FileWriteBack } from './writeback.ts'
 import { mountAbout, openAbout, openSettings, rememberVersion, checkAtLaunch } from './about.ts'
 import { runSql, sqlRows } from './sql.ts'
-import { mountPanels, type Panels } from './panels.ts'
+import { mountPanels, KIT, type Panels } from './panels.ts'
 import { installStory, closeStoryEditor } from './story.ts'
 import { Dashboard } from './dashboard.ts'
 import { SyncSession } from './sync/session.ts'
@@ -45,7 +45,8 @@ import { ICONS as SHARED } from './icons.ts'
 import { ridBase, ridBlockFor, docForExport } from './model.ts'
 import { setRidBlock } from './rowcol.ts'
 import { importXlsx, installNames, exportXlsx, xlsxFileName } from './xlsx.ts'
-import { runPivot, mountPivot, defaultPivot, newPivotSheet, type PivotSpec } from './pivot.ts'
+import { runPivot, mountPivot, defaultPivot, newPivotSheet, isPivotSheet, readPivotSpec, type PivotSheet, type PivotSpec } from './pivot.ts'
+import { buildPivotFields } from './pivotfields.ts'
 import { buildSheetPreview } from './preview.ts'
 import { installPrint, openPrintDialog } from './print.ts'
 import './ask.css'
@@ -66,6 +67,7 @@ import {
 // can never be imported at all. See the block above `ACTIONS` for the rest.
 import {
   ACTIONS, ACTION_IDS, actionReason, mintSheetId, mintSheetName, blankSheet, type ActionId,
+  type SheetViews,
 } from './tabs.ts'
 // The bridge between the two kinds of sheet — pure, and tested with no DOM in
 // `scripts/test-dash-promote.ts`. Everything below is the gesture; every
@@ -105,11 +107,15 @@ import {
 import { planTableSplit, planCanvasSplit, type SplitSpec } from './tocolumns.ts'
 import { importDelimited } from './import.ts'
 import { TYPE_LABEL } from './format.ts'
-import { defaultBinding, renderChart, chartHeading, missingColumns, type ChartBinding } from './chart.ts'
+import {
+  defaultBinding, bindingFromSelection, renderChart, chartHeading, missingColumns, type ChartBinding,
+} from './chart.ts'
+import { buildChartEditor } from './chartedit.ts'
 import { readCell } from './store.ts'
 import { hiddenSet } from './rowcol.ts'
-import { FUNCTIONS, dependencies, recalc } from './formula.ts'
-import { buildScene, defaultViz3d, mountViz3d, type Viz3dBinding, type Viz3dKind } from './viz3d.ts'
+import { FUNCTIONS, dependencies, recalc, formulaSyntax, type FormulaSyntaxProblem } from './formula.ts'
+import { functionPicker } from './fnpicker.ts'
+import { buildScene, defaultViz3d, mountViz3d, VIZ_TITLE, VIZ_KIND_LABEL, type Viz3dBinding, type Viz3dKind } from './viz3d.ts'
 
 // --- topbar icons -----------------------------------------------------------
 //
@@ -157,6 +163,12 @@ const ICON = {
 } as const
 
 /** A top-bar button: icon + collapsible label, the one shape the bar can shrink. */
+/** The developer flag that shows the 3D tool. Read once at boot, never throws. */
+const DEV_3D_KEY = 'bento-dash-dev-3d'
+const dev3d = (): boolean => {
+  try { return localStorage.getItem(DEV_3D_KEY) === 'on' } catch { return false }
+}
+
 const barBtn = (act: string, icon: string, label: string, tip: string, extra = ''): string =>
   `<button class="dx-btn${extra}" data-act="${act}" title="${esc(tip)}">${icon}<span>${esc(label)}</span></button>`
 
@@ -449,6 +461,13 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     `<div class="dx-findings" hidden></div>` +
     `<div class="dx-body"><div class="dx-grid"></div>` +
     `<div class="dx-dash" hidden></div>` +
+    // THE PIVOT SHEET, drawn where the grid was. A pivot is a sheet with a tab,
+    // so opening it has to look like opening a sheet — not like a side panel
+    // beside some other sheet, which is where it used to live and where its
+    // Grand total column ran off the edge of a 400px pane.
+    `<div class="dx-pivotview" hidden><div class="dx-pivotview-head">` +
+    `<span class="dx-pivotview-title"></span><span class="dx-pivotview-src"></span></div>` +
+    `<div class="dx-pivotview-body"></div></div>` +
     `<div class="dx-chart" hidden><div class="dx-chart-head">` +
     `<span class="dx-chart-title"></span>` +
     `<button class="dx-btn dx-chart-kind">${t('Bar')}</button>` +
@@ -456,6 +475,17 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     `</div><div class="dx-chart-body"></div></div></div>` +
     `<footer class="dx-status"><span class="dx-status-view"></span>` +
     `<span class="dx-status-sum"></span></footer>`
+
+  // 3D IS A DEVELOPER TOOL UNTIL IT EARNS A PLACE. Unlabelled blocks with the
+  // camera inside a cube is not something any peer leads with, and a toolbar
+  // button is a promise. Off by default, per viewer, never in the document:
+  // `localStorage['bento-dash-dev-3d'] = 'on'` brings the button back. viz3d.ts
+  // stays, and a story step that already holds a 3D view still plays it.
+  if (!dev3d()) {
+    const b3 = app.querySelector<HTMLElement>('[data-act="viz3d"]')!
+    b3.hidden = true
+    b3.style.display = 'none'
+  }
 
   const titleEl = app.querySelector<HTMLInputElement>('.dx-title')!
   const dirtyEl = app.querySelector<HTMLElement>('.dx-dirty')!
@@ -492,9 +522,17 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // Both read the same string from the same table, so a reader who clicks
   // anyway is told exactly what the tooltip said rather than something new.
 
+  /**
+   * The pivot sheet shown in place of the grid, or null. Declared here, above
+   * `shownSheet`, because while a pivot is up IT is the sheet on screen: every
+   * toolbar gate reads the kind through `shownSheet`, and a Chart button lit
+   * over a pivot would chart the dataset hidden underneath it.
+   */
+  let pivotShown: string | null = null
+
   /** The sheet on screen, whatever its kind — `grid.sheet` narrows and throws. */
   const shownSheet = (): Sheet | undefined =>
-    store.doc.sheets.find((s) => s.id === grid.showingId())
+    store.doc.sheets.find((s) => s.id === (pivotShown ?? grid.showingId()))
 
   /** Its kind, or `''` when the grid points at nothing that is still there. */
   const shownKind = (): string =>
@@ -733,9 +771,43 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // The label names the RANGE, so it is wrong the moment the selection moves.
     syncBridge()
   }
+  // A formula the grid will not take keeps the bar OPEN with the reason under
+  // it (finding 3.4) — the same refusal the in-cell editor makes. Escape
+  // abandons the edit and puts the cell's own contents back.
+  let fxValueAtFocus = ''
+  const fxTipClear = () => {
+    fxEl.classList.remove('dv-refused')
+    fxEl.removeAttribute('aria-invalid')
+    document.querySelector('.dx-fx-tip')?.remove()
+  }
+  fxEl.addEventListener('focus', () => { fxValueAtFocus = fxEl.value })
+  fxEl.addEventListener('input', fxTipClear)
+  fxEl.addEventListener('blur', fxTipClear)
   fxEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      fxEl.value = fxValueAtFocus
+      fxTipClear()
+      fxEl.blur()
+      return
+    }
     if (e.key !== 'Enter') return
-    grid.setActiveCell(fxEl.value)
+    const why = grid.setActiveCell(fxEl.value)
+    if (why !== null) {
+      e.preventDefault()
+      fxTipClear()
+      fxEl.classList.add('dv-refused')
+      fxEl.setAttribute('aria-invalid', 'true')
+      const tip = document.createElement('div')
+      tip.className = 'dg-refuse-tip dx-fx-tip'
+      tip.setAttribute('role', 'alert')
+      tip.textContent = `${why} ${t('Press Esc to cancel.')}`
+      const r = fxEl.getBoundingClientRect()
+      tip.style.left = `${Math.round(r.left)}px`
+      tip.style.top = `${Math.round(r.bottom + 4)}px`
+      document.body.appendChild(tip)
+      return
+    }
     fxEl.blur()
   })
 
@@ -781,10 +853,43 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // gone before the reader looked up from the row they just typed.
   grid.onNotice = (msgs) => showFindings(findingsEl, msgs.map((message) => ({ message })))
 
+  // F6 / ⇧F6 walk the REGIONS — top bar, formula bar, grid, panel, sheet tabs —
+  // Excel's own key for it. Inside the grid Tab means "next cell" (the data-
+  // entry run every spreadsheet user's hands know), so the grid needs a way
+  // out that is not Tab; F6 is that way, and Tab still walks everything else.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'F6' || e.metaKey || e.ctrlKey || e.altKey) return
+    if (document.querySelector('.dx-ask-back, .dx-about-back, [aria-modal="true"]')) return
+    e.preventDefault()
+    e.stopPropagation()
+    focusRegion(app, grid, e.shiftKey ? -1 : 1)
+  }, true)   // CAPTURE: the panel's fields stop their keys from bubbling
+
   // keyboard: the grid owns the key set when nothing else has focus
   document.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement | null
-    if (t && (t.tagName === 'INPUT' || t.isContentEditable)) return
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+    // THE KEYS A FOCUSED CONTROL NEEDS ARE ITS OWN. This listener used to take
+    // every key from every target that was not a text field, so Tab from the
+    // page moved the grid's cursor instead of focus — the top bar, the panel
+    // and the sheet tabs could not be reached from the keyboard at all
+    // (activeElement stayed BODY however many times Tab was pressed), and
+    // Enter on a focused button moved the cursor down instead of pressing it.
+    // Now: Tab from anywhere outside the grid is the browser's, and on a
+    // focused control outside the grid so are Enter, Space and the navigation
+    // keys. Everything else still reaches the grid — a letter typed after
+    // clicking a toolbar button still lands in the selected cell, and ⌘Z
+    // still undoes.
+    // A control INSIDE the grid (a column's type chip, its filter button) is a
+    // control first: its keys are its own, like any other button's.
+    const inGrid = !!t && !!t.closest('.dg-scroll') && !t.closest('button, a[href]')
+    const onBody = !t || t === document.body || t === document.documentElement
+    if (!inGrid && e.key === 'Tab') return
+    if (!inGrid && !onBody && !e.metaKey && !e.ctrlKey && CONTROL_KEYS.has(e.key)) return
+    // THE GRID IS HIDDEN UNDER A PIVOT, and a key that reached it would type
+    // into a cell nobody can see. Only history passes: ⌘Z after moving a field
+    // is the undo of that move, and the grid's key map is the one route to it.
+    if (pivotShown && !(keyToAction(e)?.kind === 'undo' || keyToAction(e)?.kind === 'redo')) return
     // A bare printable key REPLACES the selected cell — the most-used gesture
     // in a spreadsheet, and the one that makes a grid feel like one. It has to
     // be tried before keyToAction, which returns null for printable keys
@@ -893,8 +998,16 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // to its own sheet and only needs the shown one to say so.
     const shown = shownSheet()
     const shownId = shown?.id ?? ''
-    chartTitle.textContent = chartHeading(sheet, binding, shownId)
-    kindBtn.textContent = binding.kind[0].toUpperCase() + binding.kind.slice(1)
+    // The author's title when there is one — but the sheet is still named when
+    // it is not the one on screen, which is a warning and not a caption.
+    chartTitle.textContent = binding.title
+      ? (shownId && shownId !== sheet.id ? `${sheet.name} · ${binding.title}` : binding.title)
+      : chartHeading(sheet, binding, shownId)
+    // The 2D chart's controls live in the panel now (chartedit.ts), so the
+    // head's button opens them. It used to CYCLE the type, Bar → Line → Pie,
+    // which drew a line through Region on the second click.
+    kindBtn.textContent = t('Edit')
+    kindBtn.title = t('Edit this chart')
     teardown = renderChart(chartBody, sheet, binding,
       // the grid's freshly computed formula columns, so the chart shows the
       // numbers on screen rather than the raw columns underneath them — but
@@ -911,6 +1024,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
         // reader cannot see (measured: £97,050 beside a £69,050 footer).
         rows: store.order[sheet.id] ?? null,
         showing: shown && shown.id !== sheet.id ? { id: shown.id, name: shown.name } : null,
+        onAllowLine: store.readOnly ? undefined : () => setBinding({ ...binding!, allowLine: true }),
         onRebind: () => {
           // "Chart this sheet instead" — and the sheet it would rebind to can be
           // a spreadsheet, which has no columns to bind. Same guard, same
@@ -950,7 +1064,18 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     else if (!want && binding) {
       teardown?.(); teardown = null
       binding = null; chartSheetId = null; chartEl.hidden = true
-    } else drawChart()
+      unEditChart()
+    } else {
+      // THE DOCUMENT CHANGED THE CHART — an undo of a title, a colour, a series.
+      // The live copy follows it, or ⌘Z moved the file and left the plot and the
+      // editor showing the edit that was just taken back.
+      if (want && binding && typeof want.sheet === 'string' && want.binding &&
+          JSON.stringify(want) !== JSON.stringify({ sheet: chartSheetId, binding })) {
+        binding = structuredClone(want.binding)
+        chartSheetId = want.sheet
+      }
+      drawChart()
+    }
   }
   store.on('doc', syncChartPanel)
   // FILTERING AND SORTING ARE VIEW STATE: `store.view()` emits `view` and never
@@ -964,31 +1089,79 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
       return
     }
     if (!binding) return
-    binding.kind = KINDS[(KINDS.indexOf(binding.kind) + 1) % KINDS.length]
+    editChart(true)
+  })
+
+  // --- the chart editor (chartedit.ts), in the properties panel ---------------
+  //
+  // THE CHART IS AN OBJECT YOU SELECT. Clicking it (or Edit, or making it) hands
+  // the panel to its editor; clicking back into the grid hands the panel back to
+  // the cell. Slides does the same by element type, and it is why the editor
+  // can live in the panel the reader already knows instead of a third pane.
+  /** Replace the binding, keep the file and the plot in step. */
+  const setBinding = (next: ChartBinding): void => {
+    binding = next
     rememberChart()
     drawChart()
-  })
+    // `rememberChart` commits, and the commit rebuilds the panel; a read-only
+    // workbook commits nothing, so the panel is asked directly.
+    if (store.readOnly) panels?.refresh()
+  }
+  const chartEditor = {
+    key: 'chart',
+    build: (host: HTMLElement, kit: typeof KIT): void => {
+      const sheet = chartSheet()
+      if (!binding || !sheet) return
+      buildChartEditor({ host, kit, sheet, binding, readOnly: store.readOnly, set: setBinding })
+    },
+  }
+  /** Give the panel to the chart editor — and, asked from a button, open it. */
+  const editChart = (reveal = false): void => {
+    if (!binding || chartEl.hidden || !panels) return
+    panels.setOverride(chartEditor)
+    if (reveal) panels.reveal(t('Chart'))
+  }
+  const unEditChart = (): void => {
+    if (panels?.override() === 'chart') panels.setOverride(null)
+  }
+  // On the plot, not the head's buttons: ✕ closes, and a close must not first
+  // pull the panel over to an editor for a chart that is about to go.
+  chartBody.addEventListener('pointerdown', () => { if (binding && !viz) editChart() })
+  // Back to the grid, back to the cell. CAPTURE, so it lands before the grid's
+  // own handlers repaint the selection the panel is about to describe.
+  app.querySelector<HTMLElement>('.dx-grid')!.addEventListener('pointerdown', unEditChart, true)
   app.querySelector('.dx-chart-close')!.addEventListener('click', () => {
     chartEl.hidden = true
     // Closing the panel is closing the chart — the document should not keep a
     // chart the reader has just dismissed and would not see on reopening.
     binding = null; chartSheetId = null
     rememberChart()
-    clearPivot()
+    unEditChart()
     teardown?.(); teardown = null
     vizDown?.(); vizDown = null; viz = null; vizSheetId = null
   })
   app.querySelector('[data-act="chart"]')!.addEventListener('click', () => {
     const sheet = dataset('chart')
     if (!sheet) return
-    clearPivot()
     vizDown?.(); vizDown = null; viz = null; vizSheetId = null
-    binding = defaultBinding(sheet)
+    // THE SELECTION, as the tooltip has always said ("Chart the selected
+    // columns"): its measures are the series, its first text column the
+    // categories. A selection with nothing numeric in it falls back to the
+    // sheet's own default rather than an empty axis.
+    const vis = grid.visibleColumns()
+    const at = new Set<number>()
+    for (const r of grid.sel.ranges()) {
+      const box = normalize(r)
+      for (let c = box.left; c <= box.right; c++) at.add(c)
+    }
+    const picked = [...at].sort((a, b) => a - b).map((i) => vis[i]?.id).filter((id): id is string => !!id)
+    binding = bindingFromSelection(sheet, picked)
     chartSheetId = sheet.id
     if (!binding) { showFindings(findingsEl, [{ message: t('This sheet has no numeric column to chart yet.') }]); return }
     chartEl.hidden = false
     rememberChart()
     drawChart()
+    editChart()
   })
   /**
    * REOPEN THE CHART THE FILE WAS SAVED WITH.
@@ -1052,12 +1225,12 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // build — the rule `drawChart` already follows.
     if (!sheet) { vizDown = null; viz = null; vizSheetId = null; chartEl.hidden = true; return }
     const shownId = grid.showingId()
-    chartTitle.textContent = `3D ${viz.kind} · ` +
+    chartTitle.textContent = `${t(VIZ_TITLE[viz.kind])} · ` +
       [viz.x, viz.y, viz.z, viz.lat, viz.lon].filter(Boolean)
         .map((id) => sheet.columns.find((c) => c.id === id)?.name ?? id).join(' / ') +
       // WHOSE numbers these are, whenever they are not the sheet on screen.
       (sheet.id === shownId ? '' : ` · ${sheet.name}`)
-    kindBtn.textContent = viz.kind[0].toUpperCase() + viz.kind.slice(1)
+    kindBtn.textContent = t(VIZ_KIND_LABEL[viz.kind])
     const scene = buildScene(sheet, viz, sheet.id === shownId
       ? (grid.computed as Map<string, unknown[]>)
       : (recalc(sheet, store.doc.modified).values as Map<string, unknown[]>),
@@ -1077,7 +1250,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   app.querySelector('[data-act="viz3d"]')!.addEventListener('click', () => {
     const sheet = dataset('viz3d')
     if (!sheet) return
-    clearPivot()
+    unEditChart()
     viz = defaultViz3d(sheet)
     if (!viz) {
       showFindings(findingsEl, [{ message: t('This sheet needs at least three numeric columns, or a latitude and longitude, to plot in 3D.') }])
@@ -1092,7 +1265,16 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // Sheets on the left, properties on the right — the suite's shared chrome.
   // AFTER grid.onSelectionChange is set: mountPanels CHAINS that callback
   // rather than replacing it, so the formula bar and status bar keep working.
-  panels = mountPanels({ store, grid, body: app.querySelector<HTMLElement>('.dx-body')! })
+  // The pivot's door into the tab strip. LATE-BOUND: the open/close verbs are
+  // declared further down, beside the pivot view they drive, and nothing calls
+  // these until a tab is clicked.
+  const views: SheetViews = {
+    showing: () => pivotShown,
+    canOpen: (s) => isPivotSheet(s),
+    open: (s) => openPivot(s.id),
+    close: () => closePivot(),
+  }
+  panels = mountPanels({ store, grid, body: app.querySelector<HTMLElement>('.dx-body')!, views })
 
 
   // Comments. AFTER mountPanels, which chains grid.onSheetChange.
@@ -1109,33 +1291,107 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // quarter" is an argument about what the data means, somebody built it, and
   // "look at the pivot on sheet 3" has to name something that exists in the
   // file. The sheet stores the SPEC and never the numbers.
-  let pivotSpec: PivotSpec | null = null
+  //
+  // IT OPENS LIKE A SHEET. Its tab shows it where the grid was, and the
+  // properties panel becomes its field editor (pivotfields.ts) — Excel's
+  // PivotTable Fields pane, in the place dash's panel already is. Which pivot is
+  // up is VIEW state, exactly as which tab is up is: nothing about opening one
+  // is written to the file.
+  const pivotEl = app.querySelector<HTMLElement>('.dx-pivotview')!
+  const pivotBody = app.querySelector<HTMLElement>('.dx-pivotview-body')!
+  const gridEl = app.querySelector<HTMLElement>('.dx-grid')!
   let pivotDown: (() => void) | null = null
-  const drawPivot = (): void => {
-    if (!pivotSpec || chartEl.hidden) return
-    pivotDown?.(); teardown?.(); teardown = null
-    const src = store.doc.sheets.find((sh) => sh.id === pivotSpec!.from)
-    if (!src || src.kind !== 'table') return
-    chartTitle.textContent = `${t('Pivot')} · ${src.name}`
-    // A pivot has no chart KIND, so the Bar/Line toggle beside the title is a
-    // control that does nothing to what is on screen. Hidden here and restored
-    // by the chart path below.
-    kindBtn.hidden = true
-    // `grid.computed` IS KEYED BY COLUMN ID AND BELONGS TO THE SHOWN SHEET, so
-    // handing it to a pivot pinned to another one summarises this sheet's
-    // formulas under that sheet's column names — the mistake `drawChart` names
-    // in its own comment. Off the source sheet (a spreadsheet tab included),
-    // recompute the source's own values instead.
-    const computed = src.id === grid.showingId()
+  const pivotSheet = (): PivotSheet | null => {
+    const s = store.doc.sheets.find((x) => x.id === pivotShown)
+    return s && isPivotSheet(s) ? s : null
+  }
+  const pivotSource = (spec: PivotSpec): TableSheet | null => {
+    const s = store.doc.sheets.find((x) => x.id === spec.from)
+    return s && s.kind === 'table' ? s : null
+  }
+  // `grid.computed` IS KEYED BY COLUMN ID AND BELONGS TO THE SHOWN SHEET — and
+  // under a pivot the grid is hidden on whatever sheet it was last on, which is
+  // only sometimes the source. Off the source, recompute the source's own.
+  const sourceComputed = (src: TableSheet): Map<string, unknown[]> =>
+    src.id === grid.showingId()
       ? (grid.computed as Map<string, unknown[]>)
       : (recalc(src, store.doc.modified).values as Map<string, unknown[]>)
-    pivotDown = mountPivot(chartBody, runPivot(src, pivotSpec, { computed }), { sheet: src, computed })
+  const drawPivot = (): void => {
+    const ps = pivotSheet()
+    if (!ps) return
+    const spec = readPivotSpec(ps)!
+    const src = pivotSource(spec)
+    pivotDown?.(); pivotDown = null
+    app.querySelector<HTMLElement>('.dx-pivotview-title')!.textContent = ps.name
+    const srcEl = app.querySelector<HTMLElement>('.dx-pivotview-src')!
+    if (!src) {
+      srcEl.textContent = ''
+      pivotBody.textContent = ''
+      const p = document.createElement('p')
+      p.className = 'dxp-empty'
+      p.textContent = t('The sheet this pivot summarised is not in the workbook any more.')
+      pivotBody.append(p)
+      return
+    }
+    srcEl.textContent = t('from {sheet}', { sheet: src.name })
+    const computed = sourceComputed(src)
+    pivotDown = mountPivot(pivotBody, runPivot(src, spec, { computed }), { sheet: src, computed })
   }
-  const clearPivot = (): void => {
-    pivotDown?.(); pivotDown = null; pivotSpec = null
-    kindBtn.hidden = false
+  const pivotFields = {
+    key: 'pivot',
+    build: (host: HTMLElement, kit: typeof KIT): void => {
+      const ps = pivotSheet()
+      if (!ps) return
+      const src = pivotSource(readPivotSpec(ps)!)
+      buildPivotFields({
+        host, kit, sheet: ps, source: src,
+        computed: src ? sourceComputed(src) : undefined,
+        readOnly: store.readOnly,
+        // ONE PATCH PER EDIT, so a press of undo takes back exactly the field
+        // that moved. `setSheet` replaces the sheet whole; its inverse is the
+        // sheet as it was.
+        commit: (spec) => {
+          const cur = pivotSheet()
+          if (!cur || store.readOnly) return
+          store.commit({ op: 'setSheet', id: cur.id, sheet: { ...cur, pivot: spec } as never })
+        },
+      })
+    },
   }
-  store.on('doc', () => { if (pivotSpec) drawPivot() })
+  const openPivot = (id: string): boolean => {
+    const s = store.doc.sheets.find((x) => x.id === id)
+    if (!s || !isPivotSheet(s)) return false
+    pivotShown = id
+    gridEl.hidden = true
+    dashEl.hidden = true
+    pivotEl.hidden = false
+    drawPivot()
+    panels?.setOverride(pivotFields)
+    gateActions(true)
+    syncBridge()
+    views.onChange?.()
+    return true
+  }
+  const closePivot = (): void => {
+    if (!pivotShown) return
+    pivotShown = null
+    pivotDown?.(); pivotDown = null
+    pivotEl.hidden = true
+    gridEl.hidden = false
+    if (panels?.override() === 'pivot') panels.setOverride(null)
+    gateActions(true)
+    syncBridge()
+    views.onChange?.()
+  }
+  // THE DOCUMENT CAN TAKE THE PIVOT AWAY: a delete, an undo of the Pivot button
+  // that made it, a collaborator, About's restore. The view closes rather than
+  // keeping the last numbers it drew on screen.
+  store.on('doc', () => {
+    if (!pivotShown) return
+    if (!pivotSheet()) closePivot()
+    else drawPivot()
+  })
+  store.on('view', () => { if (pivotShown) drawPivot() })
 
   // REGISTERED AFTER ALL THREE PANELS EXIST, and that is not tidiness: this
   // closure calls `drawPivot`, a `const` declared above, and a sheet switch
@@ -1151,7 +1407,9 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // hook they corrected themselves only at the next keystroke.
   grid.onSheetChange = (id) => {
     chartAfterSheetChange?.(id)
-    drawChart(); draw3d(); drawPivot()
+    // The grid moved to a sheet, so the grid is what is on screen now.
+    closePivot()
+    drawChart(); draw3d()
     gateActions()
   }
   // AND ON `doc`, because a sheet switch is not the only way the kind under the
@@ -1196,15 +1454,15 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // A PATCH, not replaceDoc: creating a pivot used to clear the undo stack,
     // so every edit you could previously take back vanished the moment you
     // asked for a summary of them.
+    // Placed RIGHT AFTER its source, where a reader looks for it, rather than
+    // at the far end of the strip.
     const id = `pivot-${Math.floor(Date.now() % 1e8).toString(36)}`
+    const at = store.doc.sheets.findIndex((s) => s.id === from.id) + 1
     store.commit({
-      op: 'setSheet', id,
-      sheet: newPivotSheet(id, `${from.name} — ${t('pivot')}`, spec),
+      op: 'setSheet', id, at,
+      sheet: newPivotSheet(id, mintSheetName(store.doc, `${from.name} — ${t('pivot')}`), spec),
     } as never)
-    binding = null; viz = null; vizDown?.(); vizDown = null; vizSheetId = null
-    pivotSpec = spec
-    chartEl.hidden = false
-    drawPivot()
+    openPivot(id)
   })
 
   // --- the dashboard. The LAYOUT is document data (doc.views); the SELECTION
@@ -1216,6 +1474,8 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   dash.computed = () => grid.computed as Map<string, unknown[]>
   app.querySelector('[data-act="dashboard"]')!.addEventListener('click', () => {
     const show = dashEl.hidden
+    // The dashboard takes the centre, so a pivot that had it gives it back.
+    if (show) closePivot()
     dashEl.hidden = !show
     app.querySelector<HTMLElement>('.dx-grid')!.hidden = show
     if (show) dash.render()
@@ -1252,25 +1512,22 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     computed: (id) => (id === grid.showingId() ? (grid.computed as Map<string, unknown[]>) : undefined),
   })
 
-  // ESCAPE CLOSES THE STORY AND PIVOT PANELS (review 4.8), as it closes every
-  // other dismissable surface in dash. One Escape closes ONE thing: anything
-  // that already claimed this key (a menu, a dialog, Find, a cell editor, the
-  // grid's copy marks) prevented or stopped it, and a dropdown still open is
+  // ESCAPE CLOSES THE STORY PANEL (review 4.8), as it closes every other
+  // dismissable surface in dash. One Escape closes ONE thing: anything that
+  // already claimed this key (a menu, a dialog, Find, a cell editor, the grid's
+  // copy marks) prevented or stopped it, and a dropdown still open is
   // shutMenus' to close. Registered before shutMenus' listener for that check.
-  // The story first, then the pivot: the story editor floats above the panel.
+  // NOT THE PIVOT: 4.8 was also about the Pivot side panel, which is gone — a
+  // pivot is a sheet with a tab, and as in Excel you leave a sheet by its tab,
+  // never with Escape.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
     if (document.querySelector('.dx-dd.open, .dx-pop, .dx-ask-back, .dx-tab-menu, .ds-overlay')) return
     const tgt = e.target as HTMLElement | null
     const inStory = !!tgt?.closest?.('.ds-editor')
-    const inPivot = !!pivotSpec && !!tgt && chartEl.contains(tgt)
     // a field elsewhere (the formula bar, a panel input) keeps its own Escape
-    if (!inStory && !inPivot && tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)) return
-    if (closeStoryEditor()) { e.preventDefault(); if (inStory) grid.focusGrid(); return }
-    if (pivotSpec && !chartEl.hidden) {
-      e.preventDefault()
-      app.querySelector<HTMLElement>('.dx-chart-close')?.click()
-    }
+    if (!inStory && tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)) return
+    if (closeStoryEditor()) { e.preventDefault(); if (inStory) grid.focusGrid() }
   })
 
   const notes: Notice[] = []
@@ -2423,6 +2680,52 @@ function esc(s: string): string {
 void DOC_BUDGET_FSA
 void DOC_BUDGET_DOWNLOAD
 
+// --- keyboard regions -------------------------------------------------------
+
+/** The keys a focused button, link or tab answers itself (see the grid's
+ *  document listener, which leaves these alone off the grid). */
+const CONTROL_KEYS = new Set([
+  'Enter', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown',
+])
+
+const TABBABLE = 'button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), ' +
+  'textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Move focus to the next (or previous) region: top bar, formula bar, grid,
+ * properties panel, sheet tabs. A region that is hidden or empty is skipped;
+ * the grid is entered through `focusGrid`, which lands on the cursor cell.
+ */
+function focusRegion(app: HTMLElement, grid: Grid, dir: 1 | -1): void {
+  const visible = (el: Element): boolean => {
+    const r = (el as HTMLElement).getBoundingClientRect()
+    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'
+  }
+  const first = (sel: string) => (): boolean => {
+    // document-wide: the sheet tabs and the panel mount beside the app root
+    const host = (app.querySelector<HTMLElement>(sel) ?? document.querySelector<HTMLElement>(sel))
+    if (!host) return false
+    const el = [host, ...host.querySelectorAll<HTMLElement>(TABBABLE)].find((x) => x.matches(TABBABLE) && visible(x))
+    if (!el) return false
+    el.focus()
+    return true
+  }
+  const regions: Array<{ sel: string; go: () => boolean }> = [
+    { sel: '.dx-bar', go: first('.dx-bar') },
+    { sel: '.dx-formula', go: first('.dx-formula') },
+    { sel: '.dg-scroll', go: () => { grid.focusGrid(); return true } },
+    { sel: '.dp-panel', go: first('.dp-panel') },
+    { sel: '.dx-tabs', go: () => first('.dx-tabs .dx-tab.active')() || first('.dx-tabs')() },
+  ]
+  const at = document.activeElement
+  let i = regions.findIndex((r) => !!at?.closest(r.sel))
+  if (i < 0) i = dir > 0 ? -1 : 0
+  for (let step = 1; step <= regions.length; step++) {
+    const r = regions[(i + dir * step + regions.length * 2) % regions.length]
+    if (r.go()) return
+  }
+}
+
 // --- formulas ---------------------------------------------------------------
 
 /**
@@ -2432,25 +2735,53 @@ void DOC_BUDGET_DOWNLOAD
 /**
  * Check a formula against the sheet it will live on, as it is typed.
  *
- * `dependencies` returns the names the expression refers to, so a typo in a
- * column name is caught here rather than becoming a column of #NAME? that the
- * author discovers later. It cannot catch everything — a syntax error still
- * surfaces as an error VALUE in the column — but a misspelt column is the
- * mistake people actually make, and it is the one a native prompt could never
- * have reported.
+ * TWO questions, in this order. Is it a formula at all — `formulaSyntax` reads
+ * it strictly, where evaluation is lenient on purpose (a column must produce a
+ * value on every row), so `Value * 2 +` is refused here instead of filling the
+ * column with #VALUE!. Then does every name it uses exist — `dependencies`
+ * catches a misspelt column, which is the mistake people actually make and the
+ * one a native prompt could never have reported.
  */
 function formulaProblem(sheet: TableSheet, expr: string): string | null {
   if (!expr.trim()) return null                       // empty clears the formula
-  const known = new Set(sheet.columns.map((c) => c.name))
+  const bad = formulaSyntax(expr)
+  if (bad) return syntaxMessage(bad)
+  // Names AND ids: the evaluator resolves both, and the starter's own Weighted
+  // column is written against ids (`value * prob`) — checking names alone
+  // refused the product's example the moment anyone opened it to edit.
+  const known = new Set(sheet.columns.flatMap((c) => [c.name, c.id]))
   const fns = new Set(FUNCTIONS)
   const unknown = dependencies(expr).filter((d) => !known.has(d) && !fns.has(d.toUpperCase()))
   if (!unknown.length) return null
   return t('No column called {name} on this sheet.').replace('{name}', `“${unknown[0]}”`)
 }
 
-/** The columns you may name, for the hint line under the field. */
-const columnHint = (sheet: TableSheet): string =>
-  `${t('Columns')}: ${sheet.columns.map((c) => (/\s/.test(c.name) ? `[${c.name}]` : c.name)).join(', ')}`
+/** What a syntax problem says to the person typing — their words, not the parser's. */
+function syntaxMessage(p: FormulaSyntaxProblem): string {
+  switch (p.kind) {
+    case 'leading-equals': return t('Leave out the “=” at the start — this box holds a formula already.')
+    case 'char': return p.ch === '%'
+      ? t('Write a percentage as a number here: 15% is 0.15.')
+      : t('“{ch}” can’t be used in a formula.', { ch: p.ch })
+    case 'string': return t('A piece of quoted text is missing its closing quote (").')
+    case 'bracket': return t('A [column name] is missing its closing ].')
+    case 'operand': return t('Something has to follow “{op}”.', { op: p.after })
+    case 'operand-before': return t('Something has to come before “{op}”.', { op: p.op })
+    case 'open': return t('A “(” is never closed — add a “)”.')
+    case 'close': return t('There is a “)” with no “(” before it.')
+    case 'unexpected': return t('“{text}” can’t follow what comes before it — is an operator or a comma missing?', { text: p.text })
+    case 'arg': return t('One of the values given to {fn} is empty.', { fn: p.fn })
+    case 'empty-parens': return t('There is nothing inside “( )”.')
+    case 'function': return t('There is no function called {name} — the list below shows the ones you can use.', { name: p.name })
+    case 'sheet': return t('“{sheet}” is another sheet. A formula column can only use the columns of its own sheet.', { sheet: p.sheet })
+  }
+}
+
+/** The formula dialog's reference list, on the first (formula) field. */
+const formulaExtra = (sheet: TableSheet) =>
+  (inputs: Record<string, HTMLInputElement | HTMLSelectElement>, revalidate: () => void) =>
+    // `expr` is a text field (it has no options), never a select
+    functionPicker(inputs.expr as HTMLInputElement, sheet.columns.map((c) => c.name), FUNCTIONS, revalidate)
 
 async function addFormula(store: Store, sheet: TableSheet): Promise<void> {
   // The old default was literally `Value * Probability` — the starter
@@ -2465,8 +2796,8 @@ async function addFormula(store: Store, sheet: TableSheet): Promise<void> {
       { key: 'expr', label: t('Formula'), value: example, mono: true, placeholder: t('e.g. Price * Quantity') },
       { key: 'name', label: t('Column name'), value: t('Computed') },
     ],
-    hint: `${columnHint(sheet)}\n${t('Functions')}: ${FUNCTIONS.slice(0, 24).join(' ')}…`,
     submit: t('Add column'),
+    extra: formulaExtra(sheet),
     check: (v) => (v.expr.trim() ? formulaProblem(sheet, v.expr) : t('A formula column needs a formula.')),
   })
   if (!got) return
@@ -2494,8 +2825,9 @@ async function editFormula(store: Store, sheet: TableSheet, col: Column): Promis
   const got = await askForm({
     title: t('Formula for “{col}”').replace('{col}', col.name),
     fields: [{ key: 'expr', label: t('Formula'), value: col.formula ?? '', mono: true }],
-    hint: `${columnHint(sheet)}\n${t('Leave it empty to turn this back into an ordinary column.')}`,
+    hint: t('Leave it empty to turn this back into an ordinary column.'),
     submit: t('Save formula'),
+    extra: formulaExtra(sheet),
     check: (v) => formulaProblem(sheet, v.expr),
   })
   if (!got) return
@@ -2562,6 +2894,11 @@ function askForm(opts: {
   hint?: string
   submit?: string
   check?: (values: Record<string, string>) => string | null
+  /** More of the form, below the hint — given the inputs and a way to re-run
+   *  `check`; its `onKey` sees each key first and returns true to keep it. */
+  extra?: (inputs: Record<string, HTMLInputElement | HTMLSelectElement>, revalidate: () => void) => {
+    el: HTMLElement; onKey?: (e: KeyboardEvent) => boolean
+  }
 }): Promise<Record<string, string> | null> {
   return new Promise((resolve) => {
     document.querySelector('.dx-ask-back')?.remove()
@@ -2615,8 +2952,13 @@ function askForm(opts: {
       card.append(hint)
     }
 
+    // The error sits UNDER THE FIELDS and above any reference list, so it is
+    // next to what it is about while the reader types. Announced politely: a
+    // screen reader hears "Something has to follow “+”" as it happens.
     const err = document.createElement('p')
     err.className = 'dx-ask-err'
+    err.setAttribute('role', 'status')
+    err.setAttribute('aria-live', 'polite')
     err.hidden = true
     card.append(err)
 
@@ -2632,6 +2974,13 @@ function askForm(opts: {
     ok.textContent = opts.submit ?? t('OK')
     foot.append(cancel, ok)
     card.append(foot)
+
+    let extraKey: ((e: KeyboardEvent) => boolean) | undefined
+    if (opts.extra) {
+      const x = opts.extra(inputs, () => { validate() })
+      extraKey = x.onKey
+      card.insertBefore(x.el, foot)
+    }
 
     const values = (): Record<string, string> => {
       const out: Record<string, string> = {}
@@ -2657,8 +3006,13 @@ function askForm(opts: {
     const onKey = (e: KeyboardEvent): void => {
       if (!back.contains(e.target as Node)) return
       e.stopPropagation()
-      if (e.key === 'Escape') { e.preventDefault(); done(null) }
-      else if (e.key === 'Enter' && validate()) { e.preventDefault(); done(values()) }
+      if (e.key === 'Escape') { e.preventDefault(); done(null); return }
+      if (extraKey?.(e)) return
+      // Enter SUBMITS from a field. On a focused button it is that button's own
+      // click (Cancel, a function in the list) — it used to submit from there
+      // too, so Enter on a focused Cancel added the column.
+      const inField = Object.values(inputs).includes(e.target as HTMLInputElement)
+      if (e.key === 'Enter' && inField && validate()) { e.preventDefault(); done(values()) }
     }
     document.addEventListener('keydown', onKey, true)
 

@@ -46,6 +46,20 @@ jobs:
         run: |
           npm ci --prefix dash
           npm run build:single --prefix dash
+      - name: The pivot and chart tools finish what they start
+        # The pivot opens from its tab with a field editor (drag and pick),
+        # distinct counts and filters compute and survive a save; the Grand
+        # total is reachable; the chart is of the selection, refuses a line
+        # through Region unless asked, puts £ on its axis and undoes its title;
+        # 3D sits behind a dev flag; the filter checklist shows £4,300.
+        run: node scripts/test-dash-pivotchart-browser.mjs
+      - name: dash first run — boot, audit locale, formula dialog, keyboard
+        # A stored x-pseudo or malformed language tag still boots; swept
+        # strings (Total, SUM/AVG, chart kind, xlsx/CSV notices) answer to the
+        # audit locale; the formula dialog errors as you type; new sheets are
+        # Sheet3; Tab walks top bar → grid → panel → tabs with the ring, F6
+        # walks regions, Tab leaves the grid at its last column.
+        run: node scripts/test-dash-firstrun-browser.mjs
       - name: Every dash field wears the suite's one field look
         # Slides' rig, ported: every text field, select and textarea on 17
         # surfaces, light and dark, has the 1px --line border, --field fill,
@@ -69,6 +83,12 @@ jobs:
         # marching ants; point mode inserts references (dataset and
         # spreadsheet, other sheets by tab); Escape closes Story and Pivot.
         run: node scripts/test-dash-gestures-browser.mjs
+      - name: Typing into a spreadsheet cell reads what was meant
+        # The review's keystrokes: 10, $5, 15% then =SUM and =G13*G15 must say
+        # 15.15 and 1.5 (they said 30 and 150). ISO and named-month dates are
+        # dates, 3/4/2026 stays text, the formula bar shows 100% not 1, and
+        # =A11+ is refused in the cell and the bar with the reason shown.
+        run: node scripts/test-dash-entryparse-browser.mjs
 
   dash-gate-browser:
     runs-on: ubuntu-latest

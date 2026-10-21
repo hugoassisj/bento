@@ -8,10 +8,49 @@ The format (`bento/dash`, version `1`) is additive and stable — every version
 below opens files from every earlier version, and unknown fields are preserved.
 There is no server, so a break here would be permanent.
 
+**dash has not been released.** No version below has been published on
+bento.page; the versions are tagged development milestones, and the README's
+status is the authority. The first published version will say so here.
+
 ## [0.3.0] — unreleased
 
-The release that came out of watching somebody use 0.2.0.
+The version that came out of watching somebody use 0.2.0.
 
+- **Pivot tables have a field editor, and open like any sheet.** Click a
+  pivot's tab and it shows where the grid was, with its fields in the
+  properties panel: drag a column (or pick it) into Rows, Columns, Values or
+  Filters, choose Sum, Average, Count, Min, Max, Median or Distinct for each
+  value, tick which values a filter keeps, and switch subtotals, grand totals
+  and (blank) groups. Values print in their column's format, so money stays
+  £. The pivot tab used to say "open it from ＋ Pivot" and the Grand total
+  column was cut off at the edge of a side panel.
+- **Chart charts what you selected, and has an editor.** Select the columns
+  first: the numbers become the series and the first text column the
+  categories (it used to chart the first three numeric columns whatever was
+  selected). Click the chart, or its Edit button, and the properties panel
+  edits it: type, title, categories, how rows are summed, legend, and a series
+  list with a colour each. The value axis wears the column's format (£, %).
+  A line through categories with no order (Region) is drawn as bars and says
+  why; "Draw a line anyway" draws it.
+- **3D is off the toolbar.** It is a developer tool for now; a story step that
+  already holds a 3D view still plays it.
+- **The column filter lists values the way the column shows them** — £4,300,
+  not 4300 — and a search for "4,300" finds it.
+- **Typing into a spreadsheet cell reads what you meant, and sums add up.**
+  `15%` is stored as 0.15 and shown as 15%; `$5`, `£1,234` and `€3,50` are
+  numbers that keep their currency symbol; `(5)` is −5; `2026-03-04` and
+  `Mar 4 2026` are dates. `3/4/2026` still stays as text, because it could be
+  either day. Pasting text into a spreadsheet reads it the same way. Before,
+  all of these were stored as text, and formulas then read the text `15%` as
+  15: a SUM over 10, $5 and 15% said 30 instead of 15.15. Formulas now treat
+  text as Excel does. A range in SUM, AVERAGE or COUNT skips text, arithmetic
+  on text that is not a number gives #VALUE!, and `=10*15%` is 1.5. `SUM(1, 2, 3)`
+  now adds every argument; it used to stop at the first one.
+- **The formula bar shows what you typed.** A cell reading 100% shows `100%`,
+  not `1`, and a currency cell shows `$300.50`.
+- **A formula with a mistake in it is not entered.** `=A11+` used to go in and
+  show #VALUE!. Now the cell stays open, the problem is shown under it, and Esc
+  cancels. The formula bar does the same.
 - **CSV export no longer lets a cell run as a formula.** Text starting with `=`, `+`, `-`, `@`, a tab or a return is written with a leading `'`, so opening the CSV in Excel or Sheets shows it as text.
 - **Neutral title while sealed, matching the saved file's title.**
 - **A sealed workbook deletes this browser's earlier plaintext recovery copy and version history of itself** on open; other workbooks' copies are untouched.
@@ -267,6 +306,12 @@ The release that came out of watching somebody use 0.2.0.
   the page. The properties panel opens from a Format button and has a close
   button, and a tap outside it closes it too.
 
+- **A stored language setting can no longer stop a workbook opening.** The
+  language choice is shared by every Bento file in the browser, and an odd value
+  in it — including the `x-pseudo` translation-check language — made dash fail
+  with "This file could not start". Numbers now fall back to the browser's own
+  language, then English.
+
 - **The properties panel shows only what applies to what you selected.** A Text,
   Date, Yes/No or Category column no longer shows a number format, a Total, or
   an empty Formula field with another column's expression as its placeholder;
@@ -286,6 +331,13 @@ The release that came out of watching somebody use 0.2.0.
   column with the same £ format. A plain number column no longer prints `8600`
   beside `24,800`: without a pattern it does not group thousands (as Excel's
   General does not), and a `#,##0` pattern groups every value.
+
+- **The formula dialog says what is wrong as you type.** `Value * 2 +` now says
+  "Something has to follow “+”" and keeps Add off, as do a missing bracket, a
+  stray `%`, an unknown function or a leading `=`. Below the field: the sheet's
+  columns to click in, and every function with its arguments, narrowing to the
+  name you are typing (↓ and Enter insert one). Editing the starter's Weighted
+  formula no longer reports its columns as unknown.
 
 - **Clicking a column header selects the column; it no longer sorts.**
   Shift-click extends the selection and ⌘-click (Ctrl-click) adds a column,
@@ -311,11 +363,26 @@ The release that came out of watching somebody use 0.2.0.
   a dataset's per-cell formulas, where a sorted view still refers to the right
   row.
 
-- **Escape closes the Story and Pivot panels.**
+- **Escape closes the Story panel.** A pivot is a sheet now, so Escape does
+  not leave it — its tab strip does, as in Excel.
 
-## [0.2.0] — 2026-08-03
+- **New sheets are called Sheet3, Sheet4…** (Hoja3, Tabelle3…), whichever kind
+  you add, instead of "Spreadsheet".
 
-First release. A workbook is one self-contained HTML file: the data, the grid,
+- **The keyboard reaches the whole window.** Tab goes through the top bar, the
+  grid, the panel and the sheet tabs, each with the same focus ring slides uses;
+  Enter presses a focused button. Inside the grid Tab still moves cell to cell,
+  and leaves the grid at the last column; F6 jumps between the areas. The kind
+  word on a sheet tab is 11px, up from 9.5.
+
+- **More of dash speaks your language:** the Total choices (Sum, Average…) and
+  the footer's SUM/AVG, the 3D kind button and messages, and every
+  note from importing or exporting an Excel or CSV file — rewritten to say what
+  happened and what to do, in all eight languages.
+
+## [0.2.0] — 2026-08-03 (tagged, not published)
+
+The first tagged version — a development milestone, never published. A workbook is one self-contained HTML file: the data, the grid,
 the formulas and the charts, opening from `file://` with no backend.
 
 - **One formula for a whole column.** A spreadsheet stores an expression per

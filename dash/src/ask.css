@@ -54,3 +54,37 @@
    the chrome, and it is not the primary button's colour */
 .dx-ask-foot .dx-ask-go:hover { background: var(--ink-2); border-color: var(--ink-2); }
 .dx-ask-go:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* --- the formula dialog's reference (fnpicker.ts) ------------------------- */
+/* Columns as chips, then every function with its signature in a scrolling
+   list that narrows to the word being typed. Signatures are mono for the same
+   reason the formula field is: they are read character by character. */
+.dx-fn { margin: 0 0 12px; display: flex; flex-direction: column; gap: 6px; }
+.dx-fn-h { font-size: 12px; color: var(--muted); }
+.dx-fn-cols { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.dx-fn-col,
+.dx-fn-item {
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dx-fn-col { padding: 2px 8px; }
+.dx-fn-search { width: 100%; }
+.dx-fn-list {
+  max-height: 168px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+}
+.dx-fn-item { text-align: left; border-color: transparent; background: transparent; padding: 3px 6px; }
+.dx-fn-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.dx-fn-col:hover, .dx-fn-item:hover { background: var(--hover); }
+.dx-fn-col:focus-visible, .dx-fn-item:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
+.dx-fn-none { font-size: 12px; color: var(--muted); padding: 4px 6px; }
