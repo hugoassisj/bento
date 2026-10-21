@@ -174,6 +174,78 @@
       "why": "\"<!--<script\" inside a data block"
     },
     {
+      "case": "served/slash-before-js-type.html",
+      "verdict": "unknown",
+      "why": "\"/\" separates attributes: the browser reads the FIRST type, JavaScript, and runs it"
+    },
+    {
+      "case": "served/slash-module-first.html",
+      "verdict": "unknown",
+      "why": "\"/\" right after the tag name: the first type is module, and it runs"
+    },
+    {
+      "case": "served/duplicate-type-js-first.html",
+      "verdict": "unknown",
+      "why": "the FIRST duplicate wins: JavaScript"
+    },
+    {
+      "case": "served/no-separator-after-quoted.html",
+      "verdict": "unknown",
+      "why": "a quoted value ends the attribute with no separator: two types, the first JavaScript"
+    },
+    {
+      "case": "served/form-feed-js-type.html",
+      "verdict": "unknown",
+      "why": "form feed is a separator: a JavaScript type"
+    },
+    {
+      "case": "served/equals-without-value.html",
+      "verdict": "unknown",
+      "why": "type= with no value is the empty type, which runs"
+    },
+    {
+      "case": "served/leading-equals-name.html",
+      "verdict": "unknown",
+      "why": "an attribute NAMED \"=type\" is not type: the script has no type, so it runs"
+    },
+    {
+      "case": "served/entity-encoded-module.html",
+      "verdict": "unknown",
+      "why": "a browser decodes the type to \"module\""
+    },
+    {
+      "case": "served/doc-block-slash-duplicate.html",
+      "verdict": "unknown",
+      "why": "the doc block opened with a JavaScript type first: it runs (home-android)"
+    },
+    {
+      "case": "served/slash-in-data-tag.html",
+      "verdict": "unknown",
+      "why": "Bento never writes \"/\" in a script tag: refused outright, whatever it means"
+    },
+    {
+      "case": "served/form-feed-separators.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "form feed between attributes is whitespace: the same block"
+    },
+    {
+      "case": "served/src-with-loader-body.html",
+      "verdict": "unknown",
+      "why": "the browser runs the src and ignores the body: the genuine loader text is no excuse (home-android)"
+    },
+    {
+      "case": "served/case-fold-breakout.html",
+      "verdict": "unknown",
+      "why": "a length-changing case fold would skip this script entirely"
+    },
+    {
+      "case": "served/genuine-length-changing-text.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "a genuine document in Turkish (and ß, ﬃ, Σ) is still genuine"
+    },
+    {
       "case": "served/single-quoted-attributes.html",
       "verdict": "genuine",
       "release": "1.0.0",
@@ -208,6 +280,11 @@
       "case": "strict/genuine-save2.html",
       "ok": true,
       "why": "another genuine save: doc, title and preview differ"
+    },
+    {
+      "case": "strict/genuine-save-length-changing-text.html",
+      "ok": true,
+      "why": "a genuine save in Turkish (and ß, ﬃ)"
     },
     {
       "case": "strict/sec1-transient-script.html",

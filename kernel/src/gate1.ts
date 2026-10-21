@@ -49,30 +49,93 @@ export interface Block {
   id: string | null
   src: string | null
   preview: boolean
+  /** the start tag repeats an attribute name, or uses "/" between attributes (Bento writes neither) */
+  duplicate: boolean
+  slash: boolean
 }
 
-function attr(attrs: string, name: string): string | null {
-  const m = new RegExp(`(?:^|\\s)${name}(?:\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+)))?(?=\\s|$)`, 'i').exec(attrs)
+/**
+ * A start tag's attributes, read the way the HTML tokenizer reads them (security,
+ * #825 review). Names are separated by whitespace (tab, LF, FF, CR, space) OR by
+ * "/". A quoted value ends the attribute even with no separator after it. Names
+ * are case-insensitive, and the FIRST of duplicate names wins. Reading them any
+ * other way lets `<script/type="module" type="application/bento+json">` look
+ * inert when a browser runs it. `duplicate` and `slash` are reported because
+ * Bento never writes either, so a script tag with either is refused outright
+ * (markupProblems). Values are taken literally: a browser decodes character
+ * references in them, but a literal read can only make a block look EXECUTABLE,
+ * never inert (no data type contains "&").
+ */
+export interface StartTag { name: string; attrs: Map<string, string>; duplicate: boolean; slash: boolean; end: number }
+/**
+ * ASCII-only case fold: the HTML spec's, and LENGTH-PRESERVING. Never use
+ * toLowerCase() on a file and index the original with its offsets: it changes
+ * length ('İ' becomes two UTF-16 units). Every İ before a block then shifts the
+ * offsets, so a genuine Turkish document reads as unknown and, worse, a <style>
+ * close can land late enough to skip over an injected <script>, and a file
+ * carrying foreign code reads as genuine (home-desktop, measured).
+ */
+export const asciiLower = (s: string): string => s.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32))
+
+const WS = (c: string | undefined) => c === '\t' || c === '\n' || c === '\f' || c === '\r' || c === ' '
+export function parseStartTag(html: string, i: number): StartTag | null {
+  const m = /^<([a-zA-Z][^\t\n\f\r />]*)/.exec(html.slice(i, i + 256))
   if (!m) return null
-  return m[1] ?? m[2] ?? m[3] ?? ''
+  const attrs = new Map<string, string>()
+  let duplicate = false, slash = false
+  let j = i + m[0].length
+  while (j < html.length) {
+    const c = html[j]
+    if (WS(c)) { j++; continue }
+    if (c === '/') { slash = true; j++; continue } // a separator, or a self-closing mark
+    if (c === '>') return { name: asciiLower(m[1]), attrs, duplicate, slash, end: j + 1 }
+    // the name: a leading "=" is part of it; it ends at whitespace, "/", ">" or "="
+    let k = j, name = ''
+    if (html[k] === '=') { name = '='; k++ }
+    while (k < html.length && !WS(html[k]) && html[k] !== '/' && html[k] !== '>' && html[k] !== '=') name += html[k++]
+    name = asciiLower(name).replace(/\u0000/g, '�')
+    let value = ''
+    let p = k
+    while (WS(html[p])) p++
+    if (html[p] === '=') {
+      p++
+      while (WS(html[p])) p++
+      if (html[p] === '"' || html[p] === "'") {
+        const close = html.indexOf(html[p], p + 1)
+        if (close < 0) return null
+        value = html.slice(p + 1, close)
+        k = close + 1
+      } else {
+        let e = p
+        while (e < html.length && !WS(html[e]) && html[e] !== '>') e++
+        value = html.slice(p, e)
+        k = e
+      }
+    }
+    if (attrs.has(name)) duplicate = true
+    else attrs.set(name, value)
+    j = k
+  }
+  return null // unterminated
 }
 
 /** Every <script> and <style> element in the file, with its raw text. */
 export function scanBlocks(html: string): Block[] {
   const out: Block[] = []
-  const lower = html.toLowerCase()
-  const open = /<(script|style)\b([^>]*)>/gi
+  const lower = asciiLower(html)
+  const open = /<(script|style)(?=[\t\n\f\r />])/gi
   let m: RegExpExecArray | null
   while ((m = open.exec(html))) {
-    const tag = m[1].toLowerCase() as 'script' | 'style'
-    const start = m.index + m[0].length
-    const close = lower.indexOf(`</${tag}`, start)
-    if (close < 0) throw new Error(`gate1: unterminated <${tag}> at ${m.index}`)
-    const attrs = m[2]
+    const tag = parseStartTag(html, m.index)
+    if (!tag) throw new Error(`gate1: unterminated <${m[1]}> start tag at ${m.index}`)
+    const name = asciiLower(m[1]) as 'script' | 'style'
+    const close = lower.indexOf(`</${name}`, tag.end)
+    if (close < 0) throw new Error(`gate1: unterminated <${name}> at ${m.index}`)
+    const get = (n: string) => tag.attrs.has(n) ? tag.attrs.get(n)! : null
     out.push({
-      tag, attrs, text: html.slice(start, close), start,
-      type: attr(attrs, 'type'), id: attr(attrs, 'id'), src: attr(attrs, 'src'),
-      preview: attr(attrs, 'data-bento-preview') !== null,
+      tag: name, attrs: html.slice(m.index, tag.end), text: html.slice(tag.end, close), start: tag.end,
+      type: get('type'), id: get('id'), src: get('src'), preview: tag.attrs.has('data-bento-preview'),
+      duplicate: tag.duplicate, slash: tag.slash,
     })
     open.lastIndex = close
   }
@@ -110,7 +173,7 @@ export const executableScripts = (blocks: Block[]): Block[] => blocks.filter((b)
  */
 export function markupProblems(html: string): string[] {
   const problems: string[] = []
-  const lower = html.toLowerCase()
+  const lower = asciiLower(html)
   let i = 0
   while ((i = html.indexOf('<', i)) !== -1) {
     if (html.startsWith('<!--', i)) {
@@ -120,19 +183,16 @@ export function markupProblems(html: string): string[] {
       if (end < 0) { problems.push('an unterminated comment'); break }
       i = end + 3; continue
     }
-    const m = /^<([a-zA-Z][a-zA-Z0-9-]*)/.exec(html.slice(i, i + 64))
-    if (!m) { i++; continue }
-    const name = m[1].toLowerCase()
-    // the tag's attributes, quote-aware, up to its closing '>'
-    let j = i + m[0].length, q: string | null = null
-    for (; j < html.length; j++) {
-      const c = html[j]
-      if (q) { if (c === q) q = null } else if (c === '"' || c === "'") q = c; else if (c === '>') break
+    const tag = parseStartTag(html, i)
+    if (!tag) {
+      if (/^<[a-zA-Z]/.test(html.slice(i, i + 2))) { problems.push('an unterminated start tag'); break }
+      i++; continue
     }
-    const attrs = html.slice(i + m[0].length, j)
+    const name = tag.name, j = tag.end - 1
     if (['iframe', 'object', 'embed', 'base'].includes(name)) problems.push(`a <${name}>`)
-    if (name === 'meta' && /http-equiv\s*=\s*["']?\s*(refresh|content-security-policy)/i.test(attrs)) problems.push('a <meta> refresh or CSP')
-    if (/(^|[\s"'/])on[a-z0-9_-]*\s*=/i.test(attrs)) problems.push(`an on*= attribute on <${name}>`)
+    if (name === 'meta' && /^\s*(refresh|content-security-policy)\s*$/i.test(tag.attrs.get('http-equiv') ?? '')) problems.push('a <meta> refresh or CSP')
+    if ([...tag.attrs.keys()].some((n) => n.startsWith('on'))) problems.push(`an on*= attribute on <${name}>`)
+    if (name === 'script' && (tag.duplicate || tag.slash)) problems.push(`a <script> start tag with a ${tag.duplicate ? 'duplicate attribute' : '"/" between attributes'} (Bento writes neither)`)
     if (name === 'script' || name === 'style') {
       const close = lower.indexOf(`</${name}`, j)
       if (close < 0) { problems.push(`an unterminated <${name}>`); break }

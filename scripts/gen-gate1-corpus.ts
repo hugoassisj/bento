@@ -100,6 +100,23 @@ const served: Served[] = [
   { name: 'script-in-style', html: g.replace('<style>body{margin:0}</style>', `<style>/* <${S}>x</${S}> */body{margin:0}</style>`), verdict: 'unknown', why: 'a <style> holding a <script>' },
   { name: 'doc-block-raw-lt', html: g.replace('"title":"A deck"}', '"title":"<b>"}'), verdict: 'unknown', why: 'a data block containing "<" (Bento always escapes it)' },
   { name: 'doc-block-double-escape', html: g.replace('"title":"A deck"}', `"title":"<!--<${S}>"}`), verdict: 'unknown', why: '"<!--<script" inside a data block' },
+  // the attribute tokenizer (security and vault, #825): "/" separates attributes,
+  // a quoted value ends one, and the FIRST duplicate wins, as a browser reads them
+  { name: 'slash-before-js-type', html: head(`<${S} /type="text/javascript" type="application/bento+json">x</${S}>`), verdict: 'unknown', why: '"/" separates attributes: the browser reads the FIRST type, JavaScript, and runs it' },
+  { name: 'slash-module-first', html: head(`<${S}/type="module" type="application/bento+json">x</${S}>`), verdict: 'unknown', why: '"/" right after the tag name: the first type is module, and it runs' },
+  { name: 'duplicate-type-js-first', html: head(`<${S} type="text/javascript" type="application/bento+json">x</${S}>`), verdict: 'unknown', why: 'the FIRST duplicate wins: JavaScript' },
+  { name: 'no-separator-after-quoted', html: head(`<${S} type="text/javascript"type="application/bento+json">x</${S}>`), verdict: 'unknown', why: 'a quoted value ends the attribute with no separator: two types, the first JavaScript' },
+  { name: 'form-feed-js-type', html: head(`<${S}\ftype="text/javascript">x</${S}>`), verdict: 'unknown', why: 'form feed is a separator: a JavaScript type' },
+  { name: 'equals-without-value', html: head(`<${S} type=>x</${S}>`), verdict: 'unknown', why: 'type= with no value is the empty type, which runs' },
+  { name: 'leading-equals-name', html: head(`<${S} =type="application/bento+json">x</${S}>`), verdict: 'unknown', why: 'an attribute NAMED "=type" is not type: the script has no type, so it runs' },
+  { name: 'entity-encoded-module', html: head(`<${S} type="&#x6d;odule">x</${S}>`), verdict: 'unknown', why: 'a browser decodes the type to "module"' },
+  { name: 'doc-block-slash-duplicate', html: g.replace(`<${S} type="application/bento+json" id="bento-doc">`, `<${S} /type="text/javascript" type="application/bento+json" id="bento-doc">`), verdict: 'unknown', why: 'the doc block opened with a JavaScript type first: it runs (home-android)' },
+  { name: 'slash-in-data-tag', html: g.replace(`<${S} type="bento/deflate-b86" id="bento-rt"`, `<${S}/type="bento/deflate-b86" id="bento-rt"`), verdict: 'unknown', why: 'Bento never writes "/" in a script tag: refused outright, whatever it means' },
+  { name: 'form-feed-separators', html: g.replace(`<${S} type="bento/deflate-b86" id="bento-rt"`, `<${S}\ftype="bento/deflate-b86"\fid="bento-rt"`), verdict: 'genuine', release: '1.0.0', why: 'form feed between attributes is whitespace: the same block' },
+  { name: 'src-with-loader-body', html: g.replace(`<${S}>load1()</${S}>`, `<${S} src="https://example.invalid/x.js">load1()</${S}>`), verdict: 'unknown', why: 'the browser runs the src and ignores the body: the genuine loader text is no excuse (home-android)' },
+  // the case fold must not change length (home-desktop): toLowerCase() makes 'İ' two units
+  { name: 'case-fold-breakout', html: body('<p>' + 'İ'.repeat(20) + `</p><style>a{}</style><${S}>window.pwned=1</${S}>`), verdict: 'unknown', why: 'a length-changing case fold would skip this script entirely' },
+  { name: 'genuine-length-changing-text', html: file(r1, { title: 'İstanbul ı ß ﬃ Σ', doc: '{"format":"bento/test","title":"İstanbul ı ß ﬃ ΣΑΣ İİİİ"}', preview: '<p>İİİİ ß ﬃ Σ</p>' }), verdict: 'genuine', release: '1.0.0', why: "a genuine document in Turkish (and ß, ﬃ, Σ) is still genuine" },
   { name: 'single-quoted-attributes', html: g.replace(/type="bento\/deflate-b86"/g, "type='bento/deflate-b86'"), verdict: 'genuine', release: '1.0.0', why: 'single-quoted attributes parse the same' },
   { name: 'unquoted-attributes', html: g.replace(/type="bento\/deflate-b86"/g, 'type=bento/deflate-b86'), verdict: 'genuine', release: '1.0.0', why: 'unquoted attributes parse the same' },
   { name: 'close-tag-with-space', html: g.replace(`>RT1</${S}>`, `>RT1</${S} >`), verdict: 'genuine', release: '1.0.0', why: '"</script >" closes a block like "</script>"' },
@@ -115,6 +132,7 @@ const at = (h: string, find: string, put: string) => { if (!h.includes(find)) th
 const strict: Strict[] = [
   { name: 'genuine-save1', html: save1, ok: true, why: 'a genuine save' },
   { name: 'genuine-save2', html: save2, ok: true, why: 'another genuine save: doc, title and preview differ' },
+  { name: 'genuine-save-length-changing-text', html: file(r1, { title: 'İstanbul ß', doc: '{"format":"bento/test","title":"İstanbul ı ß ﬃ"}', preview: '<p>İİİİ ﬃ</p>' }), ok: true, why: 'a genuine save in Turkish (and ß, ﬃ)' },
   // vault's 9
   { name: 'sec1-transient-script', html: at(save1, '</body>', `<${S} data-bento-transient>evil()</${S}></body>`), ok: false, why: 'a script under a stripped selector (§13)' },
   { name: 'sec2-extra-preview-script', html: at(save1, '</body>', `<${S} data-bento-preview>evil()</${S}></body>`), ok: false, why: 'a second remover-shaped script' },
