@@ -91,9 +91,10 @@ enum Gate1 {
         for i in 0...(h.count - word.count) where ci(h, i, word) { return true }
         return false
     }
-    /// String.prototype.toLowerCase: the full Unicode mapping, whose length can
-    /// differ from the original's (U+0130), exactly as the reference's `lower` does
-    static func jsLower(_ h: S) -> S { u(str(h).lowercased()) }
+    /// ASCII-only case fold, the HTML spec's, and LENGTH-PRESERVING: every index
+    /// into the folded copy is an index into the file. (toLowerCase() turns U+0130
+    /// into two units, so a Turkish İ before a block shifted every offset after it.)
+    static func asciiLower(_ h: S) -> S { h.map(fold) }
 
     // MARK: - the scanner
 
@@ -106,74 +107,104 @@ enum Gate1 {
         let id: String?
         let src: String?
         let preview: Bool
+        /// the start tag repeats an attribute, or puts "/" between attributes (Bento writes neither)
+        let duplicate: Bool
+        let slash: Bool
     }
 
-    struct Unterminated: Error { let tag: String; let at: Int }
+    struct Unterminated: Error { let tag: String; let at: Int; let startTag: Bool }
 
-    /// /(?:^|\s)NAME(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?(?=\s|$)/i
-    static func attr(_ attrs: S, _ name: String) -> String? {
-        let n = u(name), len = attrs.count
-        var p = 0
-        while p + n.count <= len {
-            defer { p += 1 }
-            guard p == 0 || isSpace(attrs[p - 1]), ci(attrs, p, n) else { continue }
-            let q = p + n.count
-            if let (v, end) = value(attrs, q), end == len || isSpace(attrs[end]) { return str(v) }
-            if q == len || isSpace(attrs[q]) { return "" }
+    /// the HTML tokenizer's whitespace: tab, LF, FF, CR, space
+    static func isWS(_ c: UInt16) -> Bool { c == 0x09 || c == 0x0A || c == 0x0C || c == 0x0D || c == 0x20 }
+
+    struct StartTag {
+        let name: S
+        /// first value per name: names folded to ASCII lowercase, NUL as U+FFFD
+        let attrs: [(S, S)]
+        let duplicate: Bool
+        let slash: Bool
+        let end: Int
+        func get(_ n: String) -> String? { let k = Gate1.u(n); return attrs.first { $0.0 == k }.map { Gate1.str($0.1) } }
+        func has(_ n: String) -> Bool { let k = Gate1.u(n); return attrs.contains { $0.0 == k } }
+    }
+
+    /// A start tag's attributes, read the way the HTML tokenizer reads them: names
+    /// separated by whitespace OR "/", a quoted value ends an attribute, a leading
+    /// "=" is part of a name, names fold ASCII-only, the FIRST duplicate wins.
+    /// nil: not a start tag, or unterminated.
+    static func parseStartTag(_ html: S, _ i: Int) -> StartTag? {
+        // /^<([a-zA-Z][^\t\n\f\r />]*)/ within the next 256 units
+        let window = min(html.count, i + 256)
+        guard i + 1 < window, html[i] == 0x3C, isLetter(html[i + 1]) else { return nil }
+        var ne = i + 2
+        while ne < window, !isWS(html[ne]), html[ne] != 0x2F, html[ne] != 0x3E { ne += 1 }
+        let tagName = asciiLower(Array(html[(i + 1)..<ne]))
+        var attrs: [(S, S)] = []
+        var duplicate = false, slash = false
+        var j = ne
+        let len = html.count
+        let ch = { (k: Int) -> UInt16? in k < len ? html[k] : nil }
+        while j < len {
+            let c = html[j]
+            if isWS(c) { j += 1; continue }
+            if c == 0x2F { slash = true; j += 1; continue }
+            if c == 0x3E { return StartTag(name: tagName, attrs: attrs, duplicate: duplicate, slash: slash, end: j + 1) }
+            var k = j
+            var name: S = []
+            if html[k] == 0x3D { name = [0x3D]; k += 1 }
+            while k < len, !isWS(html[k]), html[k] != 0x2F, html[k] != 0x3E, html[k] != 0x3D { name.append(html[k]); k += 1 }
+            name = asciiLower(name).map { $0 == 0 ? 0xFFFD : $0 }
+            var value: S = []
+            var p = k
+            while let x = ch(p), isWS(x) { p += 1 }
+            if ch(p) == 0x3D {
+                p += 1
+                while let x = ch(p), isWS(x) { p += 1 }
+                if let q = ch(p), q == 0x22 || q == 0x27 {
+                    let close = indexOf(html, [q], p + 1)
+                    if close < 0 { return nil }
+                    value = Array(html[(p + 1)..<close])
+                    k = close + 1
+                } else {
+                    var e = p
+                    while e < len, !isWS(html[e]), html[e] != 0x3E { e += 1 }
+                    value = slice(html, p, e)
+                    k = e
+                }
+            }
+            if attrs.contains(where: { $0.0 == name }) { duplicate = true } else { attrs.append((name, value)) }
+            j = k
         }
         return nil
     }
 
-    /// `\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))` at `q`: the value and where it ends
-    private static func value(_ a: S, _ q: Int) -> (S, Int)? {
-        var k = q
-        while k < a.count, isSpace(a[k]) { k += 1 }
-        guard k < a.count, a[k] == 0x3D else { return nil }
-        k += 1
-        while k < a.count, isSpace(a[k]) { k += 1 }
-        guard k < a.count else { return nil }
-        let c = a[k]
-        if c == 0x22 || c == 0x27 {
-            var e = k + 1
-            while e < a.count, a[e] != c { e += 1 }
-            guard e < a.count else { return nil }
-            return (Array(a[(k + 1)..<e]), e + 1)
-        }
-        var e = k
-        while e < a.count, !isSpace(a[e]), a[e] != 0x22, a[e] != 0x27, a[e] != 0x3E { e += 1 }
-        return e > k ? (Array(a[k..<e]), e) : nil
-    }
-
-    /// Every <script> and <style> element, with its raw text: /<(script|style)\b([^>]*)>/gi,
-    /// each ending at the first `</script` / `</style` in any case.
+    /// Every <script> and <style> element, with its raw text: /<(script|style)(?=[\t\n\f\r />])/gi,
+    /// each read by parseStartTag and ending at the first `</script` / `</style` in any case.
     static func scanBlocks(_ html: S) throws -> [Block] {
         var out: [Block] = []
-        let lower = jsLower(html)
-        var pos = 0, i = 0
-        let tags: [(String, S)] = [("script", u("script")), ("style", u("style"))]
+        let lower = asciiLower(html)
+        let follows: Set<UInt16> = [0x09, 0x0A, 0x0C, 0x0D, 0x20, 0x2F, 0x3E]
+        var pos = 0
         while true {
-            i = pos
-            var found: (tag: String, i: Int, nameEnd: Int, gt: Int)?
-            while i < html.count, found == nil {
+            var i = pos
+            var hit: (name: String, len: Int)?
+            while i < html.count {
                 if html[i] == 0x3C {
-                    for (t, w) in tags where ci(html, i + 1, w) {
-                        let e = i + 1 + w.count
-                        if e < html.count, isWord(html[e]) { continue }      // \b
-                        var gt = e
-                        while gt < html.count, html[gt] != 0x3E { gt += 1 }
-                        if gt < html.count { found = (t, i, e, gt); break }
+                    for w in ["script", "style"] where ci(html, i + 1, u(w)) {
+                        let e = i + 1 + w.utf16.count
+                        if e < html.count, follows.contains(html[e]) { hit = (w, w.utf16.count); break }
                     }
+                    if hit != nil { break }
                 }
-                if found == nil { i += 1 }
+                i += 1
             }
-            guard let f = found else { return out }
-            let start = f.gt + 1
-            let close = indexOf(lower, u("</" + f.tag), start)
-            if close < 0 { throw Unterminated(tag: f.tag, at: f.i) }
-            let attrs = Array(html[f.nameEnd..<f.gt])
-            out.append(Block(tag: f.tag, attrs: attrs, text: slice(html, start, close), start: start,
-                             type: attr(attrs, "type"), id: attr(attrs, "id"), src: attr(attrs, "src"),
-                             preview: attr(attrs, "data-bento-preview") != nil))
+            guard let h = hit else { return out }
+            guard let tag = parseStartTag(html, i) else { throw Unterminated(tag: h.name, at: i, startTag: true) }
+            let close = indexOf(lower, u("</" + h.name), tag.end)
+            if close < 0 { throw Unterminated(tag: h.name, at: i, startTag: false) }
+            out.append(Block(tag: h.name, attrs: slice(html, i, tag.end), text: slice(html, tag.end, close), start: tag.end,
+                             type: tag.get("type"), id: tag.get("id"), src: tag.get("src"), preview: tag.has("data-bento-preview"),
+                             duplicate: tag.duplicate, slash: tag.slash))
             pos = close
         }
     }
@@ -186,33 +217,13 @@ enum Gate1 {
     static func isDataScript(_ b: Block) -> Bool { b.tag == "script" && b.src == nil && b.type.map(dataTypes.contains) == true }
     static func executableScripts(_ blocks: [Block]) -> [Block] { blocks.filter { $0.tag == "script" && !isDataScript($0) } }
 
-    /// /http-equiv\s*=\s*["']?\s*(refresh|content-security-policy)/i
-    private static func metaRefreshOrCSP(_ a: S) -> Bool {
-        let he = u("http-equiv")
-        guard a.count >= he.count else { return false }
-        for p in 0...(a.count - he.count) where ci(a, p, he) {
-            var k = p + he.count
-            while k < a.count, isSpace(a[k]) { k += 1 }
-            guard k < a.count, a[k] == 0x3D else { continue }
-            k += 1
-            while k < a.count, isSpace(a[k]) { k += 1 }
-            if k < a.count, a[k] == 0x22 || a[k] == 0x27 { k += 1 }
-            while k < a.count, isSpace(a[k]) { k += 1 }
-            if ci(a, k, u("refresh")) || ci(a, k, u("content-security-policy")) { return true }
-        }
-        return false
-    }
-
-    /// /(^|[\s"'/])on[a-z0-9_-]*\s*=/i
-    private static func onAttribute(_ a: S) -> Bool {
-        for p in 0..<a.count {
-            if p > 0 { let c = a[p - 1]; guard isSpace(c) || c == 0x22 || c == 0x27 || c == 0x2F else { continue } }
-            guard ci(a, p, u("on")) else { continue }
-            var k = p + 2
-            while k < a.count, isLetter(a[k]) || isDigit(a[k]) || a[k] == 0x5F || a[k] == 0x2D { k += 1 }
-            while k < a.count, isSpace(a[k]) { k += 1 }
-            if k < a.count, a[k] == 0x3D { return true }
-        }
+    /// /^\s*(refresh|content-security-policy)\s*$/i on the http-equiv value
+    private static func refreshOrCSP(_ v: S) -> Bool {
+        var a = 0, b = v.count
+        while a < b, isSpace(v[a]) { a += 1 }
+        while b > a, isSpace(v[b - 1]) { b -= 1 }
+        let core = Array(v[a..<b])
+        for w in ["refresh", "content-security-policy"] where core.count == w.utf16.count && ci(core, 0, u(w)) { return true }
         return false
     }
 
@@ -220,7 +231,7 @@ enum Gate1 {
     /// element's own text. [] = none.
     static func markupProblems(_ html: S) throws -> [String] {
         var problems: [String] = []
-        let lower = jsLower(html)
+        let lower = asciiLower(html)
         var i = 0
         while true {
             i = indexOf(html, u("<"), i)
@@ -232,25 +243,17 @@ enum Gate1 {
                 if end < 0 { problems.append("an unterminated comment"); break }
                 i = end + 3; continue
             }
-            // /^<([a-zA-Z][a-zA-Z0-9-]*)/ within the next 64 code units
-            let window = min(html.count, i + 64)
-            var ne = i + 1
-            guard ne < window, isLetter(html[ne]) else { i += 1; continue }
-            ne += 1
-            while ne < window, isLetter(html[ne]) || isDigit(html[ne]) || html[ne] == 0x2D { ne += 1 }
-            let name = str(Array(html[(i + 1)..<ne])).lowercased()
-            // the tag's attributes, quote-aware, up to its closing '>'
-            var j = ne
-            var q: UInt16? = nil
-            while j < html.count {
-                let c = html[j]
-                if let qq = q { if c == qq { q = nil } } else if c == 0x22 || c == 0x27 { q = c } else if c == 0x3E { break }
-                j += 1
+            guard let tag = parseStartTag(html, i) else {
+                if i + 1 < html.count, isLetter(html[i + 1]) { problems.append("an unterminated start tag"); break }
+                i += 1; continue
             }
-            let attrs = slice(html, ne, j)
+            let name = str(tag.name), j = tag.end - 1
             if ["iframe", "object", "embed", "base"].contains(name) { problems.append("a <\(name)>") }
-            if name == "meta", metaRefreshOrCSP(attrs) { problems.append("a <meta> refresh or CSP") }
-            if onAttribute(attrs) { problems.append("an on*= attribute on <\(name)>") }
+            if name == "meta", refreshOrCSP(tag.attrs.first { $0.0 == u("http-equiv") }?.1 ?? []) { problems.append("a <meta> refresh or CSP") }
+            if tag.attrs.contains(where: { $0.0.starts(with: u("on")) }) { problems.append("an on*= attribute on <\(name)>") }
+            if name == "script", tag.duplicate || tag.slash {
+                problems.append("a <script> start tag with a \(tag.duplicate ? "duplicate attribute" : "\"/\" between attributes") (Bento writes neither)")
+            }
             if name == "script" || name == "style" {
                 let close = indexOf(lower, u("</" + name), j)
                 if close < 0 { problems.append("an unterminated <\(name)>"); break }
@@ -442,7 +445,7 @@ enum Gate1 {
             return .genuine(version: release["version"]!.string!, entry: release,
                             csp: hostPolicy(Pins(release["pins"]!), frameAncestors: frameAncestors))
         } catch let e as Unterminated {
-            return .unknown("an unterminated <\(e.tag)> at \(e.at)")
+            return .unknown("an unterminated <\(e.tag)>\(e.startTag ? " start tag" : "") at \(e.at)")
         } catch {
             return .unknown("unreadable")
         }

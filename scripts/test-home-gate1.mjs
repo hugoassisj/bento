@@ -47,11 +47,12 @@ if CommandLine.arguments[1] == "--diff" {
     switch Gate1.verifyServed(h, history: hist) {
     case .genuine(let v, _, let csp): o["served"] = "genuine " + v; o["csp"] = csp
     // the scanner's own throw (the reference throws here too); markupProblems's "an unterminated <script>" is an ordinary unknown
-    case .unknown(let why): o["served"] = why.range(of: #"^an unterminated <[a-z]+> at \d+$"#, options: .regularExpression) != nil ? "throw" : "unknown"
+    case .unknown(let why): o["served"] = why.range(of: #"^an unterminated <[a-z]+>( start tag)? at \d+$"#, options: .regularExpression) != nil ? "throw" : "unknown"
     }
     if let b = try? Gate1.scanBlocks(h) {
       o["blocks"] = b.map { ["tag": $0.tag, "type": $0.type ?? NSNull(), "id": $0.id ?? NSNull(), "src": $0.src ?? NSNull(),
-                             "preview": $0.preview, "start": $0.start, "text": Gate1.sha256hex($0.text)] as [String: Any] }
+                             "preview": $0.preview, "start": $0.start, "text": Gate1.sha256hex($0.text),
+                             "duplicate": $0.duplicate, "slash": $0.slash] as [String: Any] }
       o["markup"] = (try? Gate1.markupProblems(h)) ?? "throw"
     } else { o["blocks"] = "throw"; o["markup"] = "throw" }
     switch Gate1.verifyStrict(h, exp) { case .success: o["strict"] = "ok"; case .failure(let r): o["strict"] = r.reason }
@@ -171,7 +172,9 @@ async function differential(bin, dir) {
     ' id="bento-doc"', '<title>t</title>', '<textarea><script></textarea>', 'javascript:', '\u0130', '\u0130\u0130', 'İ<script>', '\ud83d\ude00', 'ſcript', 'K',
     '\u0085', '\u00a0', '\u2028', '\u000b', '\u180e', ' type="text/javascript"', ' type="application/bento+json" src=x',
     // whitespace JavaScript's \s and the platform disagree on, standing where a space would
-    '\u0085type="module"', '\u0085onload=1', '\u0085id="bento-rt"', '\u180etype="text/javascript"', '\u00a0onclick=1']
+    '\u0085type="module"', '\u0085onload=1', '\u0085id="bento-rt"', '\u180etype="text/javascript"', '\u00a0onclick=1',
+    // tag gluing: a "<" inside a tag name, where a scanner that searches sees a tag the browser doesn't
+    '<p<script>', '<div<style>', '<a<!--', '<meta<style><script>', '<p<script>window.x=1</script>']
   const N = Number(process.env.GATE1_FUZZ || 400)
   const seed0 = Number(process.env.GATE1_SEED || Date.now() % 1e9)
   // mulberry32: 32-bit integer arithmetic (a float LCG loses precision and cycles)
@@ -186,7 +189,10 @@ async function differential(bin, dir) {
       // half the time inside an open tag, just after its name, where scanners split
       const opens = [...t.matchAll(/<(script|style|meta|div|title)/gi)].map((x) => x.index + x[0].length)
       const at = opens.length && rnd(2) ? opens[rnd(opens.length)] : rnd(t.length + 1)
+      const lts = [...t.matchAll(/</g)].map((x) => x.index)
       if (rnd(4) === 0) t = t.slice(0, at) + t.slice(at + 1 + rnd(6))
+      // glue a tag-name prefix straight onto an existing "<": <p<script>, <meta<style>…
+      else if (rnd(5) === 0 && lts.length) { const lt = lts[rnd(lts.length)]; t = t.slice(0, lt) + ['<p', '<div', '<a', '<meta', '<x-y'][rnd(5)] + t.slice(lt) }
       else t = t.slice(0, at) + tokens[rnd(tokens.length)] + t.slice(at)
     }
     const f = join(fdir, `f${k}.html`); writeFileSync(f, t); files.push([f, t])
@@ -200,7 +206,7 @@ async function differential(bin, dir) {
     const want = {}
     try { const v = await ref.verifyServed(t, history); want.served = v.verdict === 'genuine' ? 'genuine ' + v.release.version : 'unknown'; if (v.verdict === 'genuine') want.csp = v.csp }
     catch { want.served = 'throw' }
-    try { want.blocks = await Promise.all(ref.scanBlocks(t).map(async (b) => ({ tag: b.tag, type: b.type, id: b.id, src: b.src, preview: b.preview, start: b.start, text: await sha(b.text) }))) }
+    try { want.blocks = await Promise.all(ref.scanBlocks(t).map(async (b) => ({ tag: b.tag, type: b.type, id: b.id, src: b.src, preview: b.preview, start: b.start, text: await sha(b.text), duplicate: b.duplicate, slash: b.slash }))) }
     catch { want.blocks = 'throw' }
     try { want.markup = want.blocks === 'throw' ? 'throw' : ref.markupProblems(t) } catch { want.markup = 'throw' }
     const st = ref.verifyStrict(t, expected); want.strict = st.ok ? 'ok' : st.reason
@@ -249,6 +255,7 @@ async function browserOracle(bin, dir, called, history) {
   const attacks = [
     ['U+0130 index drift (home-desktop)', attack('a-u0130', '<p>' + '\u0130'.repeat(20) + '</p><style>a{}</style><script>window.pwned=1</script>')],
     ['"/" as an attribute separator (security)', attack('a-slash', '<script /type="text/javascript" type="application/bento+json">window.pwned=2</script>')],
+    ['"<" inside a tag name hides a <script> (this oracle)', (() => { const f = join(dir, 'a-tagname.html'); writeFileSync(f, genuine.replace('<meta charset="UTF-8">', '<meta<style><script>window.pwned=3</script></style> charset="UTF-8">')); return f })()],
   ]
   const verdictOf = (f) => JSON.parse(execFileSync(bin, ['--diff', join(dir, 'h.json'), join(dir, 'x.json'), f]).toString())
   const csp100 = verdictOf(join(DIR, 'served/genuine-1.0.0.html')).csp
@@ -302,7 +309,11 @@ async function browserOracle(bin, dir, called, history) {
   const genBad = gen.filter(([, r]) => !r.loaded || scriptV(r).length)
   ok0(genBad.length === 0, `every genuine corpus file loads and runs only its loader and remover (${gen.length})` + (genBad.length ? `: ${genBad.map(([c]) => c.why).join(', ')}` : '')) || bad++
   const callBad = cases.map((c, k) => [c, res(k)]).filter(([c, r]) => c.role === 'called' && scriptV(r).length)
-  for (const [c, r] of callBad.slice(0, 5)) console.log(`  FAIL  gate 1 calls it genuine, and it runs more: ${c.why}: ${scriptV(r).map((v) => `${v.directive} ${JSON.stringify(v.sample || v.blocked)}`).join('; ')}`)
+  for (const [c, r] of callBad.slice(0, 5)) {
+    const keep = join(ROOT, `gate1-oracle-${c.file.split('/').pop()}`)
+    writeFileSync(keep, readFileSync(c.file))
+    console.log(`  FAIL  gate 1 calls it genuine, and it runs more: ${c.why} (kept as ${keep.split('/').pop()}): ${scriptV(r).map((v) => `${v.directive} ${JSON.stringify(v.sample || v.blocked)}`).join('; ')}`)
+  }
   const nCalled = cases.filter((c) => c.role === 'called').length
   ok0(callBad.length === 0, `nothing else gate 1 calls genuine runs anything but its loader and remover (${nCalled} files${callBad.length ? `, ${callBad.length} DO` : ''})`) || bad++
   return bad ? 1 : 0
