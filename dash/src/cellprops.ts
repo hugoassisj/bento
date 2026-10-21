@@ -100,7 +100,7 @@
 
 import './cellprops.css'
 import { t } from './i18n.ts'
-import { alignFor, formatValue, readPattern, typedNumber, viewerDecimal } from './format.ts'
+import { formatValue, readPattern, typedNumber, viewerDecimal } from './format.ts'
 import { readEntryNumber, type EntryNumber } from './import.ts'
 import { formatRef } from './a1.ts'
 import { isFormula } from './cellformula.ts'
@@ -125,8 +125,12 @@ export type { CellRange, Pos }
 export const TEXT_PATTERN = '@'
 /** The one date pattern dash writes. ISO, because rule 8 stores ISO. */
 export const DATE_PATTERN = 'yyyy-mm-dd'
+/** The one time pattern dash writes: 24-hour, the same canonical-text idea as
+ *  Date — a time is stored as `HH:MM` (or `HH:MM:SS`) TEXT, never a fraction
+ *  of a day nobody can read in the file. */
+export const TIME_PATTERN = 'hh:mm'
 
-export type FormatKind = 'general' | 'number' | 'currency' | 'percent' | 'date' | 'text'
+export type FormatKind = 'general' | 'number' | 'currency' | 'percent' | 'date' | 'time' | 'text'
 
 export interface FormatChoice {
   kind: FormatKind
@@ -182,6 +186,7 @@ export function buildPattern(c: FormatChoice): string | undefined {
     case 'general': return undefined
     case 'text': return TEXT_PATTERN
     case 'date': return DATE_PATTERN
+    case 'time': return TIME_PATTERN
     case 'percent': return `${digitsFor(dp, c.group)}%`
     case 'currency': return `${c.symbol}${digitsFor(dp, c.group)}`
     case 'number': return digitsFor(dp, c.group)
@@ -191,6 +196,10 @@ export function buildPattern(c: FormatChoice): string | undefined {
 /** Is this the Text format? The one question rule 1 asks of a cell. */
 export const isTextFormat = (fmt: unknown): boolean =>
   typeof fmt === 'string' && fmt.trim() === TEXT_PATTERN
+
+/** An hour token and no digit placeholder. Asked BEFORE `looksLikeDate`, whose
+ *  `m{1,4}` would otherwise claim `hh:mm` for a date by its minutes. */
+const looksLikeTime = (f: string): boolean => /h/i.test(f) && !/[#0]/.test(f) && !/[yd]/i.test(f)
 
 const looksLikeDate = (f: string): boolean =>
   /[ymd]/i.test(f) && !/[#0]/.test(f) && /y{2,4}|d{1,2}|m{1,4}/i.test(f)
@@ -206,6 +215,7 @@ export function classifyFormat(fmt: string | undefined): FormatChoice {
   const f = (fmt ?? '').trim()
   if (!f) return { ...DEFAULT_CHOICE }
   if (f === TEXT_PATTERN) return { ...DEFAULT_CHOICE, kind: 'text' }
+  if (looksLikeTime(f)) return { ...DEFAULT_CHOICE, kind: 'time' }
   if (looksLikeDate(f)) return { ...DEFAULT_CHOICE, kind: 'date' }
 
   const pct = f.includes('%')
@@ -319,6 +329,28 @@ export function readEnteredDate(text: string): string | null {
   return readTypedDate(s)
 }
 
+/**
+ * A time of day, canonical `HH:MM` (or `HH:MM:SS`), or null.
+ *
+ * Accepts `14:30`, `9:05`, `2:30 pm`, `2:30PM`, `14:30:15`. Unlike a date there
+ * is no day/month ambiguity to refuse — only an out-of-range hour or minute.
+ */
+export function readTypedTime(text: string): string | null {
+  const m = text.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]\.?m\.?)?$/i)
+  if (!m) return null
+  let h = +m[1]
+  const min = +m[2]
+  const sec = m[3] === undefined ? null : +m[3]
+  if (m[4]) {
+    if (h < 1 || h > 12) return null
+    const pm = /^p/i.test(m[4])
+    h = (h % 12) + (pm ? 12 : 0)
+  }
+  if (h > 23 || min > 59 || (sec !== null && sec > 59)) return null
+  const two = (n: number): string => String(n).padStart(2, '0')
+  return `${two(h)}:${two(min)}${sec === null ? '' : `:${two(sec)}`}`
+}
+
 // --- the two rules, as functions --------------------------------------------
 
 /** A cell with nothing in it at all is not a cell — sparseness, kept here too. */
@@ -424,6 +456,11 @@ export function recastForFormat(prev: CanvasCell | undefined, fmt: string | unde
     if (typeof v !== 'string') return { cell: base, refused: typeof v === 'number' }
     const d = readTypedDate(v)
     return d ? { cell: { ...base, v: d }, refused: false } : { cell: base, refused: true }
+  }
+  if (kind === 'time') {
+    if (typeof v !== 'string') return { cell: base, refused: typeof v === 'number' }
+    const tm = readTypedTime(v)
+    return tm ? { cell: { ...base, v: tm }, refused: false } : { cell: base, refused: true }
   }
   if (kind === 'number' || kind === 'currency' || kind === 'percent') {
     if (typeof v === 'number') return { cell: base, refused: false }   // rule 6: never rescaled
@@ -647,9 +684,16 @@ export interface CellPropsHost {
   /** something the last edit needs to say — a refusal count, usually */
   message?: string
   say(msg: string): void
+  /** rebuild the panel without a commit — Custom… opening, mostly */
+  rerender(): void
+  /** the value the cursor cell SHOWS — a formula's result, not its absent `v` */
+  value?: unknown
 }
 
-const FORMAT_KINDS: FormatKind[] = ['general', 'number', 'currency', 'percent', 'date', 'text']
+/** The presets a SPREADSHEET cell offers — every kind there is, since the cell
+ *  is where this kind of sheet decides what a value IS. */
+export const CELL_KINDS: readonly FormatKind[] =
+  ['general', 'number', 'currency', 'percent', 'date', 'time', 'text']
 
 /**
  * A LITERAL translation call per preset, rather than one over a lookup table.
@@ -666,13 +710,186 @@ const kindLabel = (k: FormatKind): string =>
       : k === 'currency' ? t('Currency')
         : k === 'percent' ? t('Percent')
           : k === 'date' ? t('Date')
-            : t('Text')
+            : k === 'time' ? t('Time')
+              : t('Text')
 
 /** A quantity for the preview when the cell is empty — something with a shape. */
 const SAMPLE = 1234.5
+/** …and a moment, for the two presets that print one. */
+const SAMPLE_DATE = '2026-03-05'
+const SAMPLE_TIME = '14:30'
 
 const valueType = (v: unknown): ColumnType =>
   typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'bool' : 'text'
+
+// ═══ ONE NUMBER-FORMAT CONTROL ═════════════════════════════════════════════
+//
+// Both kinds of sheet used to show three controls for one idea: a preset
+// dropdown, a raw Pattern field and a "Shows as" box on a spreadsheet; a cell
+// Pattern AND a column Format on a dataset, each with its own placeholder.
+// They are one control now, drawn by this one builder on both kinds:
+//
+//   Number format  [preset ▾]       General, Number, Currency, Percent, … Custom…
+//   (Decimals / Thousands separator / Symbol — only for the numeric presets)
+//   Pattern        [#,##0.00 "kg"]  — ONLY while the preset is Custom…
+//                   £1,234.50       — a live sample, printed, not a field
+//
+// and, on a dataset, an "Apply to" choice above it — this column or these
+// cells — because there the column owns the format and a cell may override it.
+// No model field changed: the column still writes `format`, a cell override
+// still writes its own `format`, a spreadsheet cell still writes its own.
+
+/** What the preset select can stand on besides a FormatKind. */
+export type FormatOption = FormatKind | 'inherit'
+
+export interface NumberFormatCtx {
+  host: HTMLElement
+  kit: PanelKit
+  /** the pattern stored in the CURRENT scope; absent = General (or inherit) */
+  fmt: string | undefined
+  /** the presets this scope offers, in order. Custom… is always appended. */
+  kinds: readonly FormatOption[]
+  /** the pattern a cell inherits when it has none (dataset, cells scope) */
+  inherited?: string
+  /** dataset only: the scope switch */
+  scope?: { value: 'column' | 'cells'; set(v: 'column' | 'cells'): void }
+  /** the sample, printed with a candidate pattern */
+  preview(fmt: string | undefined): { text: string; sample: boolean }
+  /** identifies the selection, so "Custom…" stays open across a rebuild */
+  key: string
+  locale?: string
+  readOnly: boolean
+  /** `undefined` clears the field in this scope */
+  write(next: string | undefined): void
+  rerender(): void
+}
+
+/** Which selection has Custom… open with no custom pattern stored yet. */
+let customOpen: string | null = null
+/** …and whether the Pattern field it reveals should take the focus. */
+let focusPattern = false
+
+/** What the preset select shows for a stored pattern, in a given scope. */
+export function formatOptionFor(
+  fmt: string | undefined, kinds: readonly FormatOption[],
+): FormatOption | 'custom' {
+  if (!fmt) return kinds.includes('inherit') ? 'inherit' : 'general'
+  if (isCustomPattern(fmt)) return 'custom'
+  const k = classifyFormat(fmt).kind
+  return kinds.includes(k) ? k : 'custom'
+}
+
+export function buildNumberFormat(ctx: NumberFormatCtx): void {
+  const { host, kit, fmt, kinds, readOnly } = ctx
+  const w = (next: string | undefined): void => { if (!readOnly) ctx.write(next) }
+
+  if (ctx.scope) {
+    const sc = ctx.scope
+    const scopeSel = kit.select(
+      [['column', t('This column')] as const, ['cells', t('These cells')] as const],
+      sc.value, (v) => sc.set(v as 'column' | 'cells'))
+    scopeSel.disabled = readOnly
+    scopeSel.dataset.dpField = 'format-scope'
+    kit.row(host, t('Apply to'), scopeSel)
+  }
+
+  const stored = formatOptionFor(fmt, kinds)
+  if (stored === 'custom' && customOpen === ctx.key) customOpen = null
+  const shown = customOpen === ctx.key ? 'custom' : stored
+  // A cell inheriting its column's pattern starts every preset from THAT
+  // pattern's decimals and symbol — "Number" on a £#,##0 column means 0dp.
+  const basis = fmt ?? ctx.inherited
+  const was = classifyFormat(basis)
+  const choice: FormatChoice = {
+    ...was,
+    ...(basis && was.kind === 'currency' ? {} : { symbol: localeSymbol(ctx.locale) }),
+  }
+
+  const options: Array<readonly [string, string]> = [
+    ...kinds.map((k) => [k, k === 'inherit' ? t('Same as column') : kindLabel(k)] as const),
+    ['custom', t('Custom…')] as const,
+  ]
+  const sel = kit.select(options, shown, (v) => {
+    if (v === 'custom') { customOpen = ctx.key; focusPattern = true; ctx.rerender(); return }
+    customOpen = null
+    if (v === 'inherit' || v === 'general') { w(undefined); ctx.rerender(); return }
+    const kind = v as FormatKind
+    // No pattern yet: the preset's own defaults. A pattern already: keep the
+    // decimals its author chose — switching Currency to Number must not
+    // silently re-round a column somebody set to 3dp.
+    w(buildPattern({ ...choice, ...(basis ? {} : defaultsFor(kind)), kind }))
+    ctx.rerender()
+  })
+  sel.disabled = readOnly
+  sel.dataset.dpField = 'number-format'
+  kit.row(host, t('Number format'), sel)
+
+  const preset = shown === 'number' || shown === 'currency' || shown === 'percent' ? shown : null
+  if (preset) {
+    const dp = kit.number(choice.dp, 1, (v) =>
+      w(buildPattern({ ...choice, kind: preset, dp: Math.max(0, Math.min(9, Math.round(v))) })))
+    dp.min = '0'
+    dp.max = '9'
+    dp.disabled = readOnly
+    kit.row(host, t('Decimals'), dp)
+
+    const grp = kit.check(choice.group, (v) => w(buildPattern({ ...choice, kind: preset, group: v })))
+    grp.disabled = readOnly
+    kit.row(host, t('Thousands separator'), grp)
+
+    if (preset === 'currency') {
+      const sym = kit.text(choice.symbol, (v) =>
+        w(buildPattern({ ...choice, kind: preset, symbol: v.trim() || choice.symbol })))
+      sym.disabled = readOnly
+      sym.classList.add('dp-narrow')
+      kit.row(host, t('Symbol'), sym)
+    }
+  }
+
+  // THE ESCAPE HATCH — revealed only for Custom…, where it is the whole control.
+  if (shown === 'custom') {
+    const pat = kit.text(fmt ?? '', (v) => {
+      const next = v.trim()
+      if (next === (fmt ?? '')) return
+      w(next || undefined)
+    })
+    pat.placeholder = basis ?? '#,##0.00'
+    pat.classList.add('dp-mono')
+    pat.disabled = readOnly
+    pat.dataset.dpField = 'pattern'
+    kit.row(host, t('Pattern'), pat)
+    if (focusPattern) {
+      focusPattern = false
+      // Selected, so typing REPLACES the preset's pattern it opened on and
+      // an arrow key edits it instead.
+      queueMicrotask(() => { if (pat.isConnected) { pat.focus(); pat.select() } })
+    }
+  }
+
+  // The live sample: what the pattern DOES, against this cell's own value. A
+  // printed line under the control, not a field — it is an answer, not a
+  // question, and a bordered box here read as a third control.
+  const p = ctx.preview(basis)
+  const line = document.createElement('div')
+  line.className = 'dp-row dp-row-sample'
+  const out = document.createElement('span')
+  out.className = p.sample ? 'dc-sample dc-sample-eg' : 'dc-sample'
+  out.title = t('Sample')
+  out.textContent = p.text
+  line.append(document.createElement('span'), out)
+  host.appendChild(line)
+}
+
+/** The sample for a spreadsheet cell: its own value, or a shape for the preset. */
+export function cellPreview(
+  value: unknown, fmt: string | undefined,
+): { text: string; sample: boolean } {
+  const empty = value === undefined || value === null || value === ''
+  const kind = classifyFormat(fmt).kind
+  const v = !empty ? value
+    : kind === 'date' ? SAMPLE_DATE : kind === 'time' ? SAMPLE_TIME : SAMPLE
+  return { text: formatValue(v, { type: valueType(v), format: fmt }), sample: empty }
+}
 
 /**
  * The Cell section: what this cell IS, and what it looks like.
@@ -698,82 +915,22 @@ export function buildCellProps(ctx: CellPropsHost): void {
   // --- number format --------------------------------------------------------
 
   const fmt = typeof cell?.format === 'string' ? cell.format : undefined
-  const custom = isCustomPattern(fmt)
-  const choice: FormatChoice = {
-    ...classifyFormat(fmt),
-    ...(fmt ? {} : { symbol: localeSymbol(ctx.locale) }),
-  }
-  if (!fmt) choice.kind = 'general'
-
-  const write = (next: string | undefined): void => {
-    if (readOnly) return
-    const r = formatPatch(sheet, keys, next)
-    if (r.patch) ctx.commit(r.patch)
-    ctx.say(r.refused
-      ? t('{n} value(s) could not be read as this format, and were left as they are.')
-        .replace('{n}', String(r.refused))
-      : '')
-  }
-
-  const kinds: Array<readonly [string, string]> = [
-    ...FORMAT_KINDS.map((k) => [k, kindLabel(k)] as const),
-    ...(custom ? [['custom', t('Custom')] as const] : []),
-  ]
-  const kindSel = kit.select(kinds, custom ? 'custom' : choice.kind, (v) => {
-    if (v === 'custom') return            // a hand-written pattern is not ours to respell
-    const kind = v as FormatKind
-    // A cell that had no format takes the preset's own defaults; one that had
-    // a format keeps the decimals its author chose.
-    write(buildPattern({ ...choice, ...(fmt ? {} : defaultsFor(kind)), kind }))
+  buildNumberFormat({
+    host, kit, fmt, kinds: CELL_KINDS,
+    preview: (f) => cellPreview(ctx.value !== undefined ? ctx.value : cell?.v, f),
+    key: `${sheet.id}!${cursorKey}`,
+    locale: ctx.locale,
+    readOnly,
+    rerender: ctx.rerender,
+    write: (next) => {
+      const r = formatPatch(sheet, keys, next)
+      if (r.patch) ctx.commit(r.patch)
+      ctx.say(r.refused
+        ? t('{n} value(s) could not be read as this format, and were left as they are.')
+          .replace('{n}', String(r.refused))
+        : '')
+    },
   })
-  kindSel.disabled = readOnly
-  kit.row(host, t('Format'), kindSel)
-
-  const numeric = !custom &&
-    (choice.kind === 'number' || choice.kind === 'currency' || choice.kind === 'percent')
-
-  if (numeric) {
-    const dp = kit.number(choice.dp, 1, (v) =>
-      write(buildPattern({ ...choice, dp: Math.max(0, Math.min(9, Math.round(v))) })))
-    dp.min = '0'
-    dp.max = '9'
-    dp.disabled = readOnly
-    kit.row(host, t('Decimals'), dp)
-
-    const grp = kit.check(choice.group, (v) => write(buildPattern({ ...choice, group: v })))
-    grp.disabled = readOnly
-    kit.row(host, t('Thousands separator'), grp)
-
-    if (choice.kind === 'currency') {
-      const sym = kit.text(choice.symbol, (v) =>
-        write(buildPattern({ ...choice, symbol: v.trim() || choice.symbol })))
-      sym.disabled = readOnly
-      sym.classList.add('dp-narrow')
-      kit.row(host, t('Symbol'), sym)
-    }
-  }
-
-  // THE ESCAPE HATCH, and it is not a lesser control: format.ts accepts any
-  // Excel-ish pattern and the presets are only the six people ask for by name.
-  const pat = kit.text(fmt ?? '', (v) => {
-    const next = v.trim()
-    if (next === (fmt ?? '')) return
-    write(next || undefined)
-  })
-  pat.placeholder = '#,##0.00'
-  pat.classList.add('dp-mono')
-  pat.disabled = readOnly
-  kit.row(host, t('Pattern'), pat)
-
-  // What the pattern DOES, against this cell's own value. The one control that
-  // answers "why does my number look like that" without a save and a reload.
-  const shownVal = cell?.v === undefined || cell.v === '' ? SAMPLE : cell.v
-  const prev = document.createElement('div')
-  prev.className = 'dc-preview'
-  prev.textContent = formatValue(shownVal, { type: valueType(shownVal), format: fmt })
-  if (cell?.v === undefined || cell.v === '') prev.classList.add('dc-preview-sample')
-  prev.style.textAlign = (cell?.align as string | undefined) ?? alignFor(valueType(shownVal))
-  kit.row(host, t('Shows as'), prev)
 
   if (isTextFormat(fmt)) {
     kit.note(host, t('Text cells keep exactly what is typed — leading zeros, slashes, and an = that is not a formula.'))
@@ -790,7 +947,7 @@ export function buildCellProps(ctx: CellPropsHost): void {
 
   // ONE section builder, drawn identically on the dataset kind — see
   // cellfmt.ts. This kind's own contribution above it is the FORMAT block,
-  // which is where its cell types are decided and is meaningless on a dataset.
+  // which is where its cell types are decided.
   buildAppearanceSection({ host, kit, cell: cell as Appearance | undefined, readOnly, write: style })
 
   if (ctx.message) kit.note(host, ctx.message)
