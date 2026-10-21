@@ -11749,3 +11749,35 @@ release, signed with the release key:
   fetch check. The route to style pins later is moving svg CSS into constructed
   stylesheets (a slides change); collecting the hashes from the browser's own
   CSP engine under a report-only policy was measured to work.
+## 2026-10-20 — calendar span renamed Agenda (gantt keeps Timeline); calendars prefer Due — maintainer, 2026-10-20
+
+Two rulings on the bento/spaces calendar layout, made by the maintainer.
+
+- **The calendar's second shape is "Agenda" on screen.** It was "Timeline",
+  the word the gantt layout also uses, so the view head could show two
+  different pictures under one name. Only the words changed: the span button
+  reads "Agenda" and its tooltip "Show an agenda"; the gantt layout keeps
+  "Timeline" everywhere (layout button, Insert menu, "Show as a timeline").
+- **The stored value stays `span: "timeline"`.** Files written since the
+  calendar shipped carry it, the format is additive, and renaming the value
+  would open every one of those views as a month grid. Do not "tidy" it to
+  `"agenda"`; a reader that wants the new name gets it from the label, never
+  from the file. `CAL_SPANS` in `spaces/src/calendar.ts` says so beside it.
+- **A calendar prefers Due.** The date a page sits on is: its journal date;
+  else `due`, when the schema declares it as a date field and the page carries
+  a real ISO value; else the other date fields in schema order; else "No
+  date". A task with both a Start and a Due belongs on the day it is due —
+  that is what a calendar of work is opened to answer. `DEFAULT_FIELDS` is
+  NOT reordered: the property strip still shows Start before Due. The order
+  lives in one function, `dateOrderOf`, which both `dateOf` and the hint above
+  the grid read, so the sentence cannot drift from the behaviour.
+
+## 2026-10-20 — Designs: system font stacks or embedded fonts, never web fonts — maintainer, 2026-10-20
+
+Fonts in a bento/spaces design are system font stacks (`FONT_STACKS`) or fonts
+an author embeds in the file (`asset:`). No bundled or downloaded web fonts —
+maintainer, 2026-10-20. This is already how `spaces/src/designs.ts` validates
+fonts: `validFont` accepts a `FONT_STACKS` name, or an `asset:` key that
+resolves to a `data:` font in the document's own assets, and drops anything
+else to the base design's font. It is recorded so that a later change does not
+add a web-font fetch.
