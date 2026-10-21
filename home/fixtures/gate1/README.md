@@ -17,7 +17,7 @@ disagrees with any declared verdict.
 | reference (JS, kernel/src/gate1.ts) | `node scripts/test-gate1.ts` |
 | `home/ios` (Swift) | to build |
 | `home/android` (Kotlin) | to build |
-| `home/desktop` (Rust) | to build |
+| `home/desktop` (Rust) | `cargo test` in `home/desktop/gate1` |
 
 ## The files
 
