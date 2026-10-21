@@ -697,6 +697,14 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-dash-datavalid.ts
 
+    - name: bento/dash typed entry and text in arithmetic
+      # 10, $5, 15% typed into a spreadsheet then =SUM said 30 and =G13*G15
+      # said 150: typing stored the text, and the engine read "15%" as 15.
+      # Entry values + formats, Excel's text-in-arithmetic rule, the formula
+      # bar's entered form, and malformed formulas refused at entry.
+      shell: bento-step {0}
+      run: node scripts/test-dash-entryparse.ts
+
     - name: bento/dash pivot field editor
       # The editor's spec operations (a grouping field in one area, values
       # never the same column and function twice, inputs never mutated) and

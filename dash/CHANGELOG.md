@@ -32,6 +32,21 @@ The release that came out of watching somebody use 0.2.0.
   already holds a 3D view still plays it.
 - **The column filter lists values the way the column shows them** — £4,300,
   not 4300 — and a search for "4,300" finds it.
+- **Typing into a spreadsheet cell reads what you meant, and sums add up.**
+  `15%` is stored as 0.15 and shown as 15%; `$5`, `£1,234` and `€3,50` are
+  numbers that keep their currency symbol; `(5)` is −5; `2026-03-04` and
+  `Mar 4 2026` are dates. `3/4/2026` still stays as text, because it could be
+  either day. Pasting text into a spreadsheet reads it the same way. Before,
+  all of these were stored as text, and formulas then read the text `15%` as
+  15: a SUM over 10, $5 and 15% said 30 instead of 15.15. Formulas now treat
+  text as Excel does. A range in SUM, AVERAGE or COUNT skips text, arithmetic
+  on text that is not a number gives #VALUE!, and `=10*15%` is 1.5. `SUM(1, 2, 3)`
+  now adds every argument; it used to stop at the first one.
+- **The formula bar shows what you typed.** A cell reading 100% shows `100%`,
+  not `1`, and a currency cell shows `$300.50`.
+- **A formula with a mistake in it is not entered.** `=A11+` used to go in and
+  show #VALUE!. Now the cell stays open, the problem is shown under it, and Esc
+  cancels. The formula bar does the same.
 - **CSV export no longer lets a cell run as a formula.** Text starting with `=`, `+`, `-`, `@`, a tab or a return is written with a leading `'`, so opening the CSV in Excel or Sheets shows it as text.
 - **Neutral title while sealed, matching the saved file's title.**
 - **A sealed workbook deletes this browser's earlier plaintext recovery copy and version history of itself** on open; other workbooks' copies are untouched.

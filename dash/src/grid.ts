@@ -39,6 +39,10 @@ import {
   shiftSheetFormulas, shiftDefinedNames, workbookSources,
 } from './cellformula.ts'
 import { mountFind, type FindUI, type Hit } from './find.ts'
+import { coerceInput, enteredForm, enteredNumber, isTextFormat, DATE_PATTERN } from './cellprops.ts'
+import { readEntryNumber } from './import.ts'
+import { viewerDecimal } from './format.ts'
+import { cellFormulaProblem } from './cellformula.ts'
 // The data-validation stylesheet is imported HERE rather than in datavalid.ts,
 // because this is the file that emits the markup it styles and because
 // datavalid.ts is also read by xlsx.ts, whose rig runs in node with no css
@@ -448,29 +452,21 @@ export const canvasType = (v: unknown): ColumnType =>
   typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'bool' : 'text'
 
 /**
- * What the user typed, as a stored value.
+ * What the user typed, as a stored value — `canvasCellEdit`'s value, alone.
  *
- * DELIBERATELY NARROW. A number only when the whole field is one, and a boolean
- * only for the two words; everything else is text, including `2026-01-01` (the
- * table path stores dates as strings too) and `50%`. Excel would turn `50%`
- * into 0.5 wearing a percent format, which means typing invents a FORMAT — and
- * this pass does not write formats (that is the next one). Storing the text is
- * the answer that cannot be wrong about what the author meant.
- *
- * `1,200` is 1200: a thousands separator is how people type numbers into
- * spreadsheets, and `coerceForColumn` already strips them on the table side.
+ * This used to be its own, DELIBERATELY NARROW reader: a number only when the
+ * whole field was bare digits, so `15%`, `$5` and `2026-03-04` were all stored
+ * as text, on the argument that turning `50%` into 0.5 "invents a format".
+ * Review finding 3.1 measured what that cost: the formula engine then read the
+ * TEXT "15%" as 15, so `=SUM` over 10, $5 and 15% said 30 where every other
+ * spreadsheet says 15.15. Typing now goes through cellprops.ts `coerceInput`,
+ * whose header states the rules (a MARK makes a format; an unambiguous date is
+ * read; `3/4/2026` is still refused).
  */
-const NUMERIC = /^[-+]?(?:\d+|\d{1,3}(?:,\d{3})+)?(?:\.\d+)?(?:[eE][-+]?\d+)?$/
 export function canvasValue(text: string): unknown {
   const s = text.trim()
   if (s === '') return ''
-  if (/^true$/i.test(s)) return true
-  if (/^false$/i.test(s)) return false
-  // the regex admits `.` and `+` alone, which `Number` reads as NaN/0 — so the
-  // digit test is separate rather than folded into an even hairier pattern
-  if (!/\d/.test(s) || !NUMERIC.test(s)) return s
-  const n = Number(s.replace(/,/g, ''))
-  return Number.isFinite(n) ? n : s
+  return coerceInput(undefined, s)?.v ?? s
 }
 
 /**
@@ -487,13 +483,40 @@ export function canvasValue(text: string): unknown {
  * everything but `f`. And a value and a formula are alternatives — writing one
  * drops the other, because a file that carries a number beside the formula that
  * produced it can carry a number that disagrees with it.
+ *
+ * The rules for what a typed field IS — percent, currency, accounting
+ * negatives, dates, the apostrophe, the Text format — are cellprops.ts's
+ * `coerceInput`, which this is now a name for.
  */
 export function canvasCellEdit(prev: CanvasCell | undefined, text: string): CanvasCell | null {
-  const { v: _v, f: _f, ...rest } = prev ?? {}
-  const s = text.trim()
-  if (s === '') return Object.keys(rest).length ? rest : null
-  if (isFormula(s)) return { ...rest, f: s }
-  return { ...rest, v: canvasValue(s) }
+  return coerceInput(prev, text)
+}
+
+/**
+ * Writing an already-TYPED value (a paste from this grid, a fill): a number or
+ * a boolean is stored as it is, never printed and re-read — printing 1.234 and
+ * reading it back as a German typist would is 1234. Strings go through typing.
+ */
+export function canvasCellPut(prev: CanvasCell | undefined, val: unknown): CanvasCell | null {
+  if (typeof val === 'number' || typeof val === 'boolean') {
+    const { v: _v, f: _f, ...rest } = prev ?? {}
+    return { ...rest, v: val }
+  }
+  return coerceInput(prev, val == null ? '' : String(val))
+}
+
+/**
+ * Why a typed spreadsheet formula is REFUSED, in the reader's language — or
+ * null when it parses. Exported for the rig; the two editors are its callers.
+ */
+export function formulaRefusal(src: string): string | null {
+  const p = cellFormulaProblem(src)
+  if (!p) return null
+  if (p.code === 'unclosed') return t('There’s a problem with this formula: a bracket is opened and never closed.')
+  if (p.code === 'incomplete') {
+    return t('There’s a problem with this formula: it ends after “{near}”, where a value is missing.', { near: p.near })
+  }
+  return t('There’s a problem with this formula: “{near}” cannot go there.', { near: p.near })
 }
 
 /** Clearing a cell — the same rule, with no text to store. */
@@ -517,7 +540,9 @@ export function canvasShown(cell: CanvasCell | undefined, v: unknown): string {
 }
 
 export const canvasAlign = (cell: CanvasCell | undefined, v: unknown): string =>
-  cell?.align ?? alignFor(canvasType(v))
+  cell?.align ?? (cell?.format === DATE_PATTERN && typeof v === 'string'
+    ? 'right'                  // a date is a quantity of days: it sits with the numbers
+    : alignFor(canvasType(v)))
 
 export class Grid {
   private host: HTMLElement
@@ -1908,22 +1933,37 @@ export class Grid {
       : [])
   }
 
-  /** Write the formula bar's contents into the active cell. */
-  setActiveCell(text: string): void {
+  /**
+   * Write the formula bar's contents into the active cell.
+   *
+   * Answers why it REFUSED, or null when it wrote (or had nothing to do). The
+   * one refusal is a spreadsheet formula that does not parse — the same check
+   * the in-cell editor makes, so the bar is not the door that lets `=A11+` in.
+   */
+  setActiveCell(text: string): string | null {
     // On a SPREADSHEET a leading `=` is a cell formula, full stop. The dataset
     // path sends it to the COLUMN's expression because that is where a dataset
     // keeps one; here there is no column to own it, which is the whole reason
     // this kind exists — `=SUM(A1:A5)` under a block of numbers had nowhere to
     // land.
     if (this.canvas) {
-      if (this.store.readOnly) return
+      if (this.store.readOnly) return null
       const cur = this.sel.cursor
       const key = canvasKey(cur.row, cur.col)
       const had = this.canvas.cells[key]
+      if (isFormula(text.trim()) && !isTextFormat(had?.format)) {
+        const why = formulaRefusal(text.trim())
+        if (why !== null) return why
+      }
       const next = canvasCellEdit(had, text)
       if (next !== null || had !== undefined) this.writeCanvas({ [key]: next })
-      return
+      return null
     }
+    this.setActiveDatasetCell(text)
+    return null
+  }
+
+  private setActiveDatasetCell(text: string): void {
     const s = this.sheet
     const c = cols(s)[this.sel.cursor.col]
     if (!c || this.store.readOnly) return
@@ -2411,7 +2451,7 @@ export class Grid {
     const c = vis[cur.col]
     const ref = c ? `${colToLetters(cur.col)}${cur.row + 1}` : ''
     const v = this.valueAt(cur.row, cur.col)
-    const raw = v == null ? '' : isErr(v) ? String(v) : String(v)
+    const raw = v == null ? '' : isErr(v) ? String(v) : c ? datasetEntered(v, c) : String(v)
     const summary = this.selectionSummary()
     // The formula bar shows the SOURCE when there is one — a per-cell formula
     // first, then the column's expression, then the value. A bar that shows the
@@ -2771,8 +2811,8 @@ export class Grid {
     if (!s) return ''
     const cell = s.cells[canvasKey(row, col)]
     if (typeof cell?.f === 'string') return cell.f
-    const v = cell && 'v' in cell ? cell.v : null
-    return v == null ? '' : String(v)
+    // the ENTERED form (`100%`, `$300.50`), not the stored 1 — finding 2.8
+    return enteredForm(cell)
   }
 
   private paintCanvas(s: CanvasSheet, hadFocus = false): void {
@@ -3122,11 +3162,21 @@ export class Grid {
       // deliberately so — the two editors differ only in what a cell IS.
       if (write && !isFormula(typed)) {
         const rule = canvasRuleAt(canvasRules(this.canvas ?? s), row, col)
-        const why = this.refusal(rule, canvasValue(typed))
+        const why = this.refusal(rule, coerceInput((this.canvas ?? s).cells[key], typed)?.v ?? '')
+        if (why !== null) { this.refuse(cell, why); return }
+      }
+      // A formula that does not PARSE is refused, not committed (finding 3.4).
+      // `=A11+` used to land and show #VALUE!, which reads as "A11 holds
+      // something odd" when the fault is the typing. Excel stops at "There's a
+      // problem with this formula"; Sheets keeps the editor open with the
+      // error beside it. So does this, and Escape abandons the edit.
+      if (write && isFormula(typed.trim()) && !isTextFormat((this.canvas ?? s).cells[key]?.format)) {
+        const why = formulaRefusal(typed.trim())
         if (why !== null) { this.refuse(cell, why); return }
       }
       cell.classList.remove('dv-refused')
       cell.removeAttribute('title')
+      this.dropRefusalTip()
       done = true
       this.cvEditing = null
       const text = typed
@@ -3202,8 +3252,7 @@ export class Grid {
         // A pasted value is already typed when it came from this grid; text
         // from another application arrives as a string and is read the same way
         // a typed cell is, so `1,200` from Numbers means what it does here.
-        const text = val == null ? '' : String(val)
-        const next = canvasCellEdit(had, text)
+        const next = canvasCellPut(had, val)
         if (next !== null || had !== undefined) cells[key] = next
       })
     })
@@ -3291,7 +3340,27 @@ export class Grid {
     cell.classList.add('dv-refused')
     cell.title = why
     if (this.descEl) this.descEl.textContent = why
+    // VISIBLE, under the cell. A title is a tooltip nobody hovers for while
+    // typing, and a red outline alone says "no" without saying why — the
+    // reader was left pressing Enter at a cell that would not take it.
+    this.dropRefusalTip()
+    const tip = document.createElement('div')
+    tip.className = 'dg-refuse-tip'
+    tip.setAttribute('role', 'alert')
+    tip.textContent = `${why} ${t('Press Esc to cancel.')}`
+    const r = cell.getBoundingClientRect()
+    tip.style.left = `${Math.round(r.left)}px`
+    tip.style.top = `${Math.round(r.bottom + 4)}px`
+    document.body.appendChild(tip)
+    this.refuseTip = tip
     cell.focus()
+  }
+
+  private refuseTip: HTMLElement | null = null
+
+  private dropRefusalTip(): void {
+    this.refuseTip?.remove()
+    this.refuseTip = null
   }
 
   private wire(): void {
@@ -3704,7 +3773,7 @@ export class Grid {
     const src = this.formulaAtPos(dataRow(s, rid), s.columns.findIndex((c) => c.id === colId))
     cell.textContent = seed !== undefined ? seed
       : src !== undefined ? src
-        : (raw == null ? '' : String(raw))
+        : datasetEntered(raw, col)   // the entered form, not the stored number (2.8)
     cell.focus()
     const range = document.createRange()
     range.selectNodeContents(cell)
@@ -3725,6 +3794,7 @@ export class Grid {
       }
       cell.classList.remove('dv-refused')
       cell.removeAttribute('title')
+      this.dropRefusalTip()
       done = true
       this.editing = null
       const text = typed
@@ -4070,12 +4140,31 @@ export function coerceForColumn(text: string, type: ColumnType): unknown {
   const s = text.trim()
   if (s === '') return null
   if (type === 'number' || type === 'money' || type === 'percent') {
-    const n = Number(s.replace(/[,\s£$€¥%]/g, ''))
-    if (!Number.isFinite(n)) return s        // keep what they typed rather than
-    return type === 'percent' && s.includes('%') ? n / 100 : n  // silently zeroing
+    // import.ts's reader, as the spreadsheet kind uses: `£1,234.50`, `(5)`,
+    // and `12,5 %` to a German reader all mean what they say, and text that is
+    // not a whole number (`12abc`) is kept rather than read as its digits.
+    // A `%` divides by 100 in ANY numeric column — `15%` is 0.15 wherever it
+    // is typed — and a bare `15` in a percent column stays 15, as before.
+    const r = readEntryNumber(s, { prefer: viewerDecimal() })
+    return r ? r.n : s                      // keep what they typed rather than silently zeroing
   }
   if (type === 'bool') return /^(y|yes|true|1|✓)$/i.test(s)
   return s
+}
+
+/**
+ * A dataset cell's value in the form somebody would TYPE it — what the
+ * formula bar and the cell editor show (finding 2.8: a Percent column's 1 read
+ * `1` in the bar while the cell read 100%). The column's type says percent or
+ * money; `coerceForColumn` reads the result back to the same value.
+ */
+export function datasetEntered(v: unknown, col: Pick<Column, 'type' | 'format'>): string {
+  if (v == null) return ''
+  if (typeof v === 'number') {
+    const kind = col.type === 'percent' ? 'percent' : col.type === 'money' ? 'currency' : 'plain'
+    return enteredNumber(v, kind, col.format)
+  }
+  return String(v)
 }
 
 /** Where a data bar starts, as a percentage — negatives run left of the axis. */

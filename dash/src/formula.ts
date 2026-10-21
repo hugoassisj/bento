@@ -30,7 +30,7 @@ import { sheetQualifiers } from './a1.ts'
 // implementations, deliberately: two answers to "what does #,##0.00 mean", or
 // to "what day is 03/04/2026", is one wrong number waiting for a date change.
 import { formatNumber, readPattern } from './format.ts'
-import { coerce, inferColumn } from './import.ts'
+import { coerce, inferColumn, readEntryNumber } from './import.ts'
 
 export type Cell = number | string | boolean | null | FormulaError
 export type Vec = Cell[]
@@ -67,7 +67,7 @@ type Tok =
   | { t: 'num'; v: number } | { t: 'str'; v: string } | { t: 'id'; v: string }
   | { t: 'op'; v: string } | { t: 'punc'; v: string }
 
-function lex(src: string): Tok[] {
+function lex(src: string, skipped?: (ch: string) => void): Tok[] {
   const out: Tok[] = []
   let i = 0
   const isIdStart = (c: string) => /[A-Za-z_]/.test(c)
@@ -110,9 +110,14 @@ function lex(src: string): Tok[] {
     }
     const two = src.slice(i, i + 2)
     if (two === '<=' || two === '>=' || two === '<>') { out.push({ t: 'op', v: two }); i += 2; continue }
-    if ('+-*/^&=<>'.includes(c)) { out.push({ t: 'op', v: c }); i++; continue }
+    // `%` is the POSTFIX percent, Excel's: `=10*15%` is 1.5. It was skipped as
+    // an unknown character, so that formula said 150.
+    if ('+-*/^&=<>%'.includes(c)) { out.push({ t: 'op', v: c }); i++; continue }
     if ('(),'.includes(c)) { out.push({ t: 'punc', v: c }); i++; continue }
-    i++ // anything else is skipped rather than fatal
+    // anything else is skipped rather than fatal — at EVALUATION. Entry asks
+    // `syntaxProblem` first, which reports it instead.
+    skipped?.(c)
+    i++
   }
   return out
 }
@@ -171,8 +176,15 @@ function parse(src: string): Node {
     return { k: 'lit', v: ERR.value() }
   }
 
+  /** `x%` is x / 100, binding tighter than anything — `2^50%` is 2^0.5. */
+  function postfix(): Node {
+    let e = primary()
+    while (peek()?.t === 'op' && peek()!.v === '%') { eat(); e = { k: 'bin', op: '/', l: e, r: { k: 'lit', v: 100 } } }
+    return e
+  }
+
   function expr(min: number): Node {
-    let left = primary()
+    let left = postfix()
     for (;;) {
       const tk = peek()
       if (!tk || tk.t !== 'op') break
@@ -186,6 +198,88 @@ function parse(src: string): Node {
     return left
   }
   return expr(0)
+}
+
+/** Why an expression does not parse — see `syntaxProblem`. */
+export interface SyntaxProblem {
+  /** `incomplete` — it ends where a value was due (`A11+`, `SUM(`);
+   *  `unclosed` — a bracket is opened and never closed (`(1+2`);
+   *  `unexpected` — something stands where it cannot (`1 2`, `)`, `,`, `{`) */
+  code: 'incomplete' | 'unclosed' | 'unexpected'
+  /** the token it went wrong at, or the last good one for `incomplete` */
+  near: string
+}
+
+/**
+ * Does this expression PARSE? null when it does.
+ *
+ * `parse` is forgiving by design — it never throws, skips what it does not
+ * know, closes brackets nobody closed, and drops whatever follows a complete
+ * expression — because it runs on FORMULAS ALREADY IN A FILE, where a refusal
+ * would be a blank where an answer was. That forgiveness is wrong at ENTRY:
+ * `=A11+` committed and showed #VALUE!, `=(1` said 1, `=1 2` said 1 (review
+ * finding 3.4). So entry asks this first — the same grammar, walked strictly —
+ * and refuses, the way Excel ("There's a problem with this formula") and
+ * Sheets (a parse error beside the cell) do. Evaluation is untouched.
+ */
+export function syntaxProblem(src: string): SyntaxProblem | null {
+  let odd: string | null = null
+  const toks = lex(src, (ch) => { if (odd === null) odd = ch })
+  if (odd !== null) return { code: 'unexpected', near: odd }
+  let p = 0
+  const text = (tk: Tok | undefined) => (tk === undefined ? '' : tk.t === 'str' ? `"${tk.v}"` : String(tk.v))
+  const isP = (v: string) => toks[p]?.t === 'punc' && toks[p]!.v === v
+  const isOp = (v?: string) => toks[p]?.t === 'op' && (v === undefined || toks[p]!.v === v)
+  class Stop { why: SyntaxProblem; constructor(why: SyntaxProblem) { this.why = why } }
+  function fail(code: SyntaxProblem['code']): never {
+    const near = code === 'incomplete' ? text(toks[p - 1]) : code === 'unclosed' ? '(' : text(toks[p])
+    throw new Stop({ code, near })
+  }
+  function operand(): void {
+    while (isOp('-') || isOp('+')) p++
+    const tk = toks[p]
+    if (!tk) fail('incomplete')
+    if (tk.t === 'num' || tk.t === 'str') p++
+    else if (tk.t === 'id') {
+      p++
+      if (isP('(')) {
+        p++
+        if (isP(')')) { p++ } else {
+          for (;;) {
+            if (isP(',') || isP(')')) fail('unexpected')    // an empty argument
+            expression()
+            if (isP(',')) { p++; continue }
+            if (isP(')')) { p++; break }
+            if (p >= toks.length) fail('unclosed')
+            fail('unexpected')
+          }
+        }
+      }
+    } else if (tk.t === 'punc' && tk.v === '(') {
+      p++
+      expression()
+      if (isP(')')) p++
+      else if (p >= toks.length) fail('unclosed')
+      else fail('unexpected')
+    } else fail('unexpected')
+    while (isOp('%')) p++
+  }
+  function expression(): void {
+    operand()
+    while (isOp() && PREC[toks[p]!.v] !== undefined) {
+      p++
+      operand()
+    }
+  }
+  try {
+    if (!toks.length) return { code: 'incomplete', near: '=' }
+    expression()
+    if (p < toks.length) fail('unexpected')
+    return null
+  } catch (e) {
+    if (e instanceof Stop) return e.why
+    throw e
+  }
 }
 
 /** Column names an expression depends on — the edges of the recalc graph. */
@@ -203,14 +297,43 @@ export function dependencies(src: string): string[] {
 
 // --- coercion ---------------------------------------------------------------
 
+// ═══ TEXT IN ARITHMETIC — the rule, which is Excel's ═══════════════════════
+//
+// Review finding 3.1: a spreadsheet cell holding the TEXT "15%" counted as 15
+// in `SUM` and in `*`, because this function stripped every `%`, `$` and `,`
+// it could see and read whatever digits were left. SUM(10, "$5", "15%") said
+// 30 and 10 * "15%" said 150 — numbers that look right and are not. The rule
+// now, stated once, for every caller in this file:
+//
+//   1. A RANGE OR REFERENCE handed to an aggregate (SUM, AVERAGE, COUNT, MIN,
+//      MAX, MEDIAN, PRODUCT, STDEV…, and the sum range of SUMIF/SUMIFS) counts
+//      only the NUMBERS in it. Text — even text that looks like a number — and
+//      booleans are skipped, blanks are skipped. `numbersIn` / `rangeNumber`.
+//   2. A value written DIRECTLY as an aggregate's argument (`SUM(1, "5", TRUE)`)
+//      is coerced as arithmetic would coerce it (rule 3), and text that will
+//      not read is #VALUE! — except COUNT, which simply does not count it.
+//      `aggArgs`.
+//   3. DIRECT ARITHMETIC (`+ - * / ^`, unary minus, comparisons against a
+//      number, and every function argument that wants a number) coerces text
+//      exactly as Excel does: the text must read WHOLE as a number in the
+//      notation a person types — `"15%"` is 0.15, `"$5"` is 5, `"(5)"` is -5,
+//      `"1,234"` is 1234, `"1e3"` is 1000 — and anything else is #VALUE!, never
+//      the digits that happened to be in it. The reading is import.ts's
+//      `readEntryNumber` with import's own tie-break ('.' wins `1,234`), so the
+//      answer does not depend on who opens the file. A date string is #VALUE!:
+//      dash keeps a date as a date, not as Excel's serial number (see VALUE).
+//   4. A blank is 0 in arithmetic, a boolean is 1 or 0 — unchanged.
 const num = (v: Cell): number | FormulaError => {
   if (isErr(v)) return v
   if (v == null || v === '') return 0
   if (typeof v === 'number') return v
   if (typeof v === 'boolean') return v ? 1 : 0
-  const n = Number(String(v).replace(/[,\s£$€¥%]/g, ''))
-  return Number.isFinite(n) ? n : ERR.value(`"${v}" is not a number`)
+  const r = readEntryNumber(String(v), { prefer: '.' })
+  return r ? r.n : ERR.value(`"${v}" is not a number`)
 }
+
+/** Rule 1: what a cell IN A RANGE contributes to an aggregate — a number, or nothing. */
+const rangeNumber = (x: Cell | undefined): number | null => (typeof x === 'number' ? x : null)
 const str = (v: Cell): string => (v == null ? '' : isErr(v) ? v.code : String(v))
 const bool = (v: Cell): boolean => {
   if (isErr(v)) return false
@@ -235,15 +358,17 @@ const bool = (v: Cell): boolean => {
  * 0. Excel's rule, and the reason it is Excel's rule is that a spreadsheet
  * range is mostly empty by nature.
  *
- * Non-numeric TEXT is dropped as it always was: `num()` gives an error for it
- * and an error is not a number.
+ * TEXT AND BOOLEANS ARE SKIPPED TOO — all text, including text that looks
+ * like a number (rule 1 above `num`). This used to run every cell through
+ * `num()`, which is how the text "15%" became 15 inside a SUM. A value written
+ * directly as an argument has already been coerced by `aggArgs` and arrives
+ * here as a number.
  */
 const numbersIn = (v: Vec): number[] => {
   const out: number[] = []
   for (const x of v) {
-    if (x === null || x === undefined || x === '') continue
-    const n = num(x)
-    if (typeof n === 'number') out.push(n)
+    const n = rangeNumber(x)
+    if (n !== null) out.push(n)
   }
   return out
 }
@@ -375,9 +500,12 @@ const nth = (list: number[], kArg: Cell, big: boolean): Cell => {
   return [...list].sort((x, y) => (big ? y - x : x - y))[i - 1]
 }
 
+/** The numbers among some arguments: a RANGE gives only its numbers (rule 1
+ *  above `num`), a single value is coerced (rule 3) and dropped if it will not. */
 const nums = (a: Array<Cell | Vec>): number[] =>
-  a.flatMap((x) => (Array.isArray(x) ? x : [x]))
-    .map((x) => num(x as Cell)).filter((x): x is number => typeof x === 'number')
+  a.flatMap((x) => (Array.isArray(x)
+    ? x.map(rangeNumber).filter((n): n is number => n !== null)
+    : [num(x as Cell)].filter((n): n is number => typeof n === 'number')))
 
 /**
  * Functions that consume a WHOLE COLUMN, dispatched before SCALAR.
@@ -1140,6 +1268,43 @@ const asDate = (v: Cell): Date | null => {
 const isoOf = (d: Date): string => d.toISOString().slice(0, 10)
 const DAY_MS = 86_400_000
 
+/** The aggregates that count raw entries rather than numbers — they see every arg as given. */
+const RAW_COUNT = new Set(['COUNTA', 'COUNTBLANK', 'COUNTUNIQUE'])
+
+/**
+ * An aggregate's arguments, ALL of them, as the one vector it reduces.
+ *
+ * ALL of them: this read `node.args[0]` and nothing else, so `SUM(1, 2, 3)`
+ * was 1 and `SUM(A1:A2, A3)` left A3 out — a total with a piece missing and
+ * nothing on screen to say so.
+ *
+ * Rules 1 and 2 above `num`: a range (any vector — a reference, a column, an
+ * array result) goes in as it is and `numbersIn` takes only its numbers; a
+ * value written directly is coerced here, so `SUM(1, "5", TRUE)` is 7 and
+ * `SUM(1, "abc")` is #VALUE!, as in Excel. COUNT does not count a direct value
+ * that will not read; it does not fail on one either.
+ */
+function aggArgs(name: string, args: Node[], ctx: EvalCtx): Vec | FormulaError {
+  const out: Vec = []
+  for (const a of args) {
+    const v = evalNode(a, ctx)
+    // the common case, one range, is handed over as it is — no copy of 400k cells
+    if (args.length === 1 && isVec(v)) return v
+    if (isVec(v)) {
+      for (const x of v) out.push(x)
+      continue
+    }
+    if (RAW_COUNT.has(name) || isErr(v) || v === null || typeof v === 'number') { out.push(v); continue }
+    const n = num(v)
+    if (isErr(n)) {
+      if (name === 'COUNT') continue
+      return n
+    }
+    out.push(n)
+  }
+  return out
+}
+
 function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
   const name = node.name
 
@@ -1153,8 +1318,8 @@ function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
   if (shaped) return shaped(node.args.map((x) => evalNode(x, ctx)))
 
   if (AGG[name]) {
-    const v = evalNode(node.args[0], ctx)
-    const vec = isVec(v) ? v : [v]
+    const vec = aggArgs(name, node.args, ctx)
+    if (isErr(vec)) return vec
     if (!COUNTING.has(name)) {
       const bad = vec.find(isErr)
       if (bad) return bad
@@ -1170,7 +1335,7 @@ function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
     const keep: number[] = []
     rv.forEach((x, i) => { if (matches(x, at(crit, i))) keep.push(i) })
     if (name === 'COUNTIF') return keep.length
-    const vals = keep.map((i) => num(sv[i] ?? null)).filter((x): x is number => typeof x === 'number')
+    const vals = keep.map((i) => rangeNumber(sv[i])).filter((x): x is number => x !== null)
     if (name === 'SUMIF') return vals.reduce((a, b) => a + b, 0)
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : ERR.div0()
   }
@@ -1196,7 +1361,7 @@ function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
       if (pairs.every((p) => matches(p.range[i] ?? null, at(p.crit, i)))) keep.push(i)
     }
     if (counting) return keep.length
-    const vals = keep.map((i) => num(target![i] ?? null)).filter((x): x is number => typeof x === 'number')
+    const vals = keep.map((i) => rangeNumber(target![i])).filter((x): x is number => x !== null)
     if (name === 'SUMIFS') return vals.reduce((a, b) => a + b, 0)
     if (!vals.length) return name === 'AVERAGEIFS' ? ERR.div0() : 0
     if (name === 'AVERAGEIFS') return vals.reduce((a, b) => a + b, 0) / vals.length
