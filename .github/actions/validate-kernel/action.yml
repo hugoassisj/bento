@@ -89,6 +89,14 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-body-seal.ts
 
+    - name: release history — append-only, anti-rollback, every block or unknown
+      # bento/connect K4 (security §36): the signed release history only grows;
+      # a host refuses a history that lacks an entry it holds or rolls its
+      # newest version back; a file matches a release only if ONE entry matches
+      # EVERY block. sign-history.mjs end to end with a throwaway test key.
+      shell: bento-step {0}
+      run: node scripts/test-release-history.ts
+
     - name: Language pack verification rig
       # Packs come off the network, so the signature + hash-pin chain is the
       # only thing between a hostile channel and the strings in the UI.

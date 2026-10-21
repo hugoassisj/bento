@@ -25,9 +25,8 @@
 // browser rigs do. Exits non-zero on any mismatch: release.mjs relies on that.
 
 import { readFileSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { derivePins, checkAgainstPins } from './lib/release-pins.mjs'
+import { savedBy } from './lib/saved-by.mjs'
 import { bootUnderPins, clickEverything } from './lib/csp-boot.mjs'
 
 const args = process.argv.slice(2)
@@ -38,25 +37,6 @@ const outAt = args.indexOf('--out')
 const out = outAt >= 0 ? args[outAt + 1] : null
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
-
-/** A file the app's own save wrote: ⌘S, with the picker removed so it downloads. */
-export async function savedBy(browser, path) {
-  const context = await browser.newContext({ acceptDownloads: true })
-  await context.route(/^https?:/, (r) => r.abort())
-  await context.addInitScript(() => { delete window.showSaveFilePicker; delete window.showOpenFilePicker })
-  const page = await context.newPage()
-  try {
-    await page.goto(pathToFileURL(resolve(path)).href)
-    await page.waitForFunction(() => window.bento?.doc, null, { timeout: 30000 })
-    await page.waitForTimeout(1500)
-    await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {})
-    const download = page.waitForEvent('download', { timeout: 15000 })
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+s' : 'Control+s')
-    return readFileSync(await (await download).path(), 'utf8')
-  } finally {
-    await context.close()
-  }
-}
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 let failed = false

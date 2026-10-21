@@ -11686,3 +11686,52 @@ in dash's styles.css comment.
 Also settled the same day: a stored `bento-lang` is validated before `Intl`
 sees it (dash/src/i18n.ts `intlLocale`), because the key is shared across every
 file on the origin and a bad value used to stop boot.
+
+## 2026-10-21 — bento/connect K4: release pins and the signed release history
+
+A host that SERVES a document (iOS, Android, desktop, the hosted runtime)
+decides "genuine runtime" by hashing the file's code blocks and serving it under
+a hash-pinned script CSP (security §18). K4 publishes what that needs, per
+release, signed with the release key:
+- **Pins, in the manifest (additively: shipped shells read only
+  app/version/sha256/url):** `pins = { v: 1, blocks: { bento-rt, bento-rt-css,
+  loader, remover }, scriptSrc: [loader, remover] }`. Blocks are sha256 hex of
+  each code block's text; `scriptSrc` is the CSP form. They're derived from the
+  release's OWN bytes: the built shell, and a file it saved through its real ⌘S
+  fallback (`scripts/derive-pins.mjs`). The remover exists only in saved files,
+  and one app's scripting API returns JSON, not a file.
+- **A signed, cumulative history:** `releases/<app>/history.json`, the release
+  envelope over `{ app, v: 1, releases: [{ version, sha256, at, pins }] }`,
+  newest first. It's append-only: a release must be newer than everything held,
+  and a held entry never changes. The first history is backfilled from every
+  earlier release with a signed manifest, each shell checked against its own
+  manifest's sha256 first. For slides that's 66 versions, 0.7.0 to 1.2.9.
+  Earlier shells have no compressed runtime blocks, so they're unknown to hosts.
+- **The host rules (scripts/lib/release-history.mjs, security §36):**
+  - a file matches a release only if ONE entry matches EVERY block, with
+    exactly one block per id. A partial or ambiguous match is UNKNOWN:
+    restricted mode or an update offer, never a borrowed pinned CSP.
+  - a host keeps the newest history it has verified and refuses one that lacks
+    a held entry or rolls its newest version back. (With a well-formed history
+    the second check is implied by the first, and is kept as defence in depth.)
+- **The signing gate:** `release.mjs` refuses to sign on any pins mismatch, on
+  any executable inline script in a saved file other than the pinned loader and
+  remover, and on any CSP refusal while the release is driven under its pins,
+  except the loader's two designed fallbacks (an inline script, then `new
+  Function`). Those are matched on directive AND on a line inside the pinned
+  loader's span: matching on the source file alone excused an injected script.
+  There's no unchecked path. CI runs the same check on every PR's build of all
+  four apps, and the required `validate` job's release rehearsal runs the whole
+  pipeline.
+- **No style pins in phase 1 (security §36a).** The policy is
+  `script-src <pins> blob:; style-src 'unsafe-inline'`. A document's own svg
+  `<style>` (an svg element's `css`, sanitized and scoped) can't be pinned per
+  release: measured, the pinned style policy refused it, which breaks every
+  user diagram with hover or animation. Style injection gives no route to
+  Bento's secrets: keys and the document JSON live in script text, which CSS
+  selectors can't read, and document CSS is sanitized and scoped. So pinning
+  would only remove what the svg element provides on purpose. The style control
+  is the SANITIZER, whose rig covers the obfuscated url() forms with a browser
+  fetch check. The route to style pins later is moving svg CSS into constructed
+  stylesheets (a slides change); collecting the hashes from the browser's own
+  CSP engine under a report-only policy was measured to work.

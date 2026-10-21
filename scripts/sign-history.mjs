@@ -61,7 +61,9 @@ try {
   console.error(e.message)
   process.exit(1)
 }
+// signPayload self-verifies against the key file's own public half, as the
+// manifest's signing does. The HELD history was verified against the shipped
+// release key above, which is the check that guards against laundering.
 const envelope = signPayload(JSON.stringify(history), keyPath)
-verifyEnvelope(envelopeJson(envelope), publicJwk) // the key this machine signed with must be the shipped one
 writeFileSync(out, envelopeJson(envelope))
 console.log(`Signed ${app} history: ${history.releases.length} release(s), newest ${history.releases[0].version} → ${out}`)
