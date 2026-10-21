@@ -11835,5 +11835,16 @@ whether those bytes are one genuine release's.
   The one refusal during the genuine boot is the loader's designed inline
   attempt; it then boots through `blob:`.
 
-Identity is not exposed yet: the verdict is held for the agent bridge, which
-comes next.
+- **An oracle in Android's own WebView** (`scripts/test-home-android-gate1-oracle.mjs`,
+  security). It lifts kernel's mutant generator verbatim from
+  `test-gate1-oracle.mjs`, so the two can't drift, and runs the same fixed seed
+  plus a printed random one. A debug-only Activity gives Gate1.kt's verdict for
+  every mutant, and loads every GENUINE one in a WebView with no CSP. First
+  run: 500 mutants, Gate1.kt agreeing with the reference on all of them, and
+  all 88 GENUINE files running only the loader and remover. The controls
+  confirm the oracle sees an extra script and an executing data block. It
+  needs an emulator, so CI skips it, with the reason recorded in
+  `scripts/lib/ci-skips.mjs`.
+
+Identity is not exposed yet: the verdict is held for the agent bridge (stage 4,
+after security's run of A2).
