@@ -169,6 +169,18 @@ try {
     'page.marginTop': (d) => { d.page.marginTop = `10px;background:url(http://rc.test/${tag}-mt)` },
     'page.marginX': (d) => { d.page.marginX = `10px;background:url(http://rc.test/${tag}-mx)` },
     'page.marginBottom': (d) => { d.page.marginBottom = `10px;background:url(http://rc.test/${tag}-mb)` },
+    // a block's own layout, and a named style's — both written by blockStyle /
+    // styleDeclarations into the editor, print and the saved preview
+    'block.align': (d) => { d.body[0].align = `left;background:url(http://rc.test/${tag}-align)` },
+    'block.lh': (d) => { d.body[0].lh = `1;background:url(http://rc.test/${tag}-lh)` },
+    'block.sb': (d) => { d.body[0].sb = `1;background:url(http://rc.test/${tag}-sb)` },
+    'block.sa': (d) => { d.body[0].sa = `1;background:url(http://rc.test/${tag}-sa)` },
+    'block.ind': (d) => { d.body[0].ind = `1;background:url(http://rc.test/${tag}-ind)` },
+    'style.align': (d) => { d.styles = { s1: { id: 's1', name: 'S', kind: 'para', align: `left;background:url(http://rc.test/${tag}-salign)` } }; d.body[0].styleId = 's1' },
+    'style.lh': (d) => { d.styles = { s1: { id: 's1', name: 'S', kind: 'para', lh: `1;background:url(http://rc.test/${tag}-slh)` } }; d.body[0].styleId = 's1' },
+    'style.sb': (d) => { d.styles = { s1: { id: 's1', name: 'S', kind: 'para', sb: `1;background:url(http://rc.test/${tag}-ssb)` } }; d.body[0].styleId = 's1' },
+    // the preview's colours: `rgb…` used to match with no end anchor
+    'theme.background': (d) => { d.theme = { background: `rgb(0,0,0);}*{background:url(http://rc.test/${tag}-theme)}` } },
   })
   for (const name of Object.keys(CSSP('x'))) {
     const hits = []
