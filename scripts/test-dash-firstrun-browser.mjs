@@ -48,10 +48,12 @@ async function section(run) {
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 
-async function open(lang, { w = 1440, h = 900 } = {}) {
+async function open(lang, { w = 1440, h = 900, dev3d = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, acceptDownloads: true })
   await ctx.route(/^https?:/, (r) => r.abort())
   if (lang) await ctx.addInitScript((l) => { try { localStorage.setItem('bento-lang', l) } catch {} }, lang)
+  // 3D's button is behind a per-viewer developer flag; its strings still ship
+  if (dev3d) await ctx.addInitScript(() => { try { localStorage.setItem('bento-dash-dev-3d', 'on') } catch {} })
   const page = await ctx.newPage()
   page.setDefaultTimeout(5000)
   const errors = []
@@ -90,7 +92,7 @@ try {
   // --------------------------------------------------------- 2. pseudo sweep
   console.log('\n2. the audit locale, and the strings it exposed\n')
   await section(async () => {
-    const { ctx, page, errors } = await open('x-pseudo')
+    const { ctx, page, errors } = await open('x-pseudo', { dev3d: true })
     const formulaLabel = await page.locator('[data-act="formula"] span').textContent()
     ok(formulaLabel === ps('Formula'), `control: the audit locale is active (top bar reads ${formulaLabel})`)
 

@@ -22,7 +22,8 @@
 //      with a highlight), another sheet's tab inserts `Sheet!A1`, Enter
 //      commits — on a spreadsheet AND in a dataset per-cell formula, where a
 //      sorted view still writes the FILE's row;
-//   7. Escape closes the Story and Pivot panels.
+//   7. Escape closes the Story panel — and does NOT leave a pivot sheet (a
+//      pivot is a sheet since #815; you leave a sheet by its tab).
 // Every row has a control showing the path ran (the selection moved, the menu
 // opened, the click still commits where no reference can go, …).
 // DASH_SHELL=<path> runs it against another build (the fails-on-old-code check).
@@ -336,7 +337,7 @@ console.log('point mode on a dataset')
   await ctx.close()
 }
 
-// ── 6. Escape closes Story and Pivot ─────────────────────────────────────────
+// ── 6. Escape closes Story, not a pivot sheet ────────────────────────────────
 console.log('Escape closes panels')
 {
   const { ctx, page } = await fresh()
@@ -349,14 +350,28 @@ console.log('Escape closes panels')
   await page.keyboard.press('Escape')
   ok(await page.$('.ds-editor') === null, 'Escape closes the Story panel')
   await click(page, '.ds-editor', { modifiers: [] }).catch(() => {})
+  // NOT THE PIVOT, deliberately. The Pivot side panel this section used to
+  // close is gone: since #815 a pivot is a SHEET with a tab, and as in Excel you
+  // leave a sheet by its tab, never with Escape. So the row is the opposite one:
+  // Escape on a pivot sheet leaves it on screen, and throws nothing.
+  const pivotUp = () => page.evaluate(() => {
+    const el = document.querySelector('.dx-pivotview')
+    if (!el) return false
+    const r = el.getBoundingClientRect()
+    return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== 'none'
+  })
   await click(page, '[data-act="pivot"]')
   await page.waitForTimeout(150)
-  const shown = () => page.evaluate(() => { const el = document.querySelector('.dx-chart-close')?.closest('[hidden], .dx-chart, aside, section'); return !!document.querySelector('.dx-chart-close') && document.querySelector('.dx-chart-close').offsetParent !== null })
-  ok(await shown(), 'control: the Pivot panel opened')
-  await click(page, cellSel(2, 1))
+  await page.locator('.dx-tab:not(.active)').first().click()
+  await page.waitForTimeout(150)
+  await page.locator('.dx-tab', { hasText: /pivot/i }).first().click()
+  await page.waitForTimeout(150)
+  const pivotWas = await pivotUp()
+  const errorsBefore = errors.length
   await page.keyboard.press('Escape')
   await page.waitForTimeout(60)
-  ok(!(await shown()), 'Escape closes the Pivot panel')
+  ok(pivotWas && await pivotUp() && errors.length === errorsBefore,
+    `Escape does not leave a pivot sheet, and throws nothing (control: opened from its tab, the pivot was shown: ${pivotWas})`)
   await ctx.close()
 }
 

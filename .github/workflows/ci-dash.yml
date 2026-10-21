@@ -46,6 +46,13 @@ jobs:
         run: |
           npm ci --prefix dash
           npm run build:single --prefix dash
+      - name: The pivot and chart tools finish what they start
+        # The pivot opens from its tab with a field editor (drag and pick),
+        # distinct counts and filters compute and survive a save; the Grand
+        # total is reachable; the chart is of the selection, refuses a line
+        # through Region unless asked, puts £ on its axis and undoes its title;
+        # 3D sits behind a dev flag; the filter checklist shows £4,300.
+        run: node scripts/test-dash-pivotchart-browser.mjs
       - name: dash first run — boot, audit locale, formula dialog, keyboard
         # A stored x-pseudo or malformed language tag still boots; swept
         # strings (Total, SUM/AVG, chart kind, xlsx/CSV notices) answer to the

@@ -176,8 +176,8 @@ const INDIRECT: Array<{ arg: string; file: string; name: string; pick: 'values' 
   // Average…); the footer cell labels its number with the short form.
   { arg: 'AGG_WORD[a]', file: 'format.ts', name: 'AGG_WORD', pick: 'values' },
   { arg: 'AGG_SHORT[spec]', file: 'format.ts', name: 'AGG_SHORT', pick: 'values' },
-  // The chart panel's kind button and the 3D heading.
-  { arg: 'CHART_KIND_LABEL[binding.kind]', file: 'main.ts', name: 'CHART_KIND_LABEL', pick: 'values' },
+  // The 3D heading. (The 2D chart's kind button says "Edit" since #815 and
+  // opens the chart editor, so it has no indirect words of its own.)
   { arg: 'VIZ_TITLE[viz.kind]', file: 'viz3d.ts', name: 'VIZ_TITLE', pick: 'values' },
   { arg: 'VIZ_TITLE[scene.kind]', file: 'viz3d.ts', name: 'VIZ_TITLE', pick: 'values' },
   { arg: 'VIZ_KIND_LABEL[viz.kind]', file: 'viz3d.ts', name: 'VIZ_KIND_LABEL', pick: 'values' },
@@ -238,8 +238,8 @@ const KEEP_ENGLISH = new Map<string, string>([
  * countable as translated because they are.
  */
 const SAME_AS_ENGLISH: Record<string, string[]> = {
-  es: ['Total', 'editor', 'General'],
-  fr: ['Auto', 'Date', 'Format', 'Orientation', 'Portrait', 'Surface', 'Total', 'Type'],
+  es: ['Total', 'editor', 'General', 'Series'],
+  fr: ['Auto', 'Date', 'Format', 'Orientation', 'Portrait', 'Source', 'Surface', 'Total', 'Type'],
   // Japanese and Simplified-Chinese Excel name a new sheet "Sheet2" too, and a
   // name that matches the reader's own Excel is the whole point of the key.
   ja: ['OK', 'Sheet{n}'],
