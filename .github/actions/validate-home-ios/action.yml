@@ -102,3 +102,11 @@ runs:
       # entries removed for documents a walk no longer finds. Apple only.
       shell: bento-step {0}
       run: node scripts/test-home-spotlight.mjs
+
+    - name: home/ios gate-1 rig
+      # bento/connect gate 1 in Swift against home/fixtures/gate1: the signed
+      # history, the served path (one release must match every block), the
+      # strict file:// fallback, anti-rollback and the CSP, plus a differential
+      # fuzz against kernel/src/gate1.ts. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-gate1.mjs

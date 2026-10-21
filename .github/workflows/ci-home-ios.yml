@@ -48,6 +48,7 @@ jobs:
             test-home-id-agent.mjs
             test-home-id-recovery.mjs
             test-home-spotlight.mjs
+            test-home-gate1.mjs
           )
           for rig in "${rigs[@]}"; do
             echo "::group::$rig"
