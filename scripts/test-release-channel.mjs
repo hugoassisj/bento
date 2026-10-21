@@ -166,7 +166,7 @@ ok(payload.pins?.v === 1 && /^sha256-/.test(payload.pins.scriptSrc?.[0] ?? '') &
   'the manifest carries the release pins: the CSP script hashes and the code-block hashes')
 {
   const { checkAgainstPins } = await import('./lib/release-pins.mjs')
-  ok(checkAgainstPins(readFileSync(stagedShell, 'utf8'), payload.pins).length === 0,
+  ok((await checkAgainstPins(readFileSync(stagedShell, 'utf8'), payload.pins)).length === 0,
     "the staged shell's code blocks and loader match the signed pins")
   const historyPath = join(site, `releases/${app.dir}/history.json`)
   ok(existsSync(historyPath), `the release signed a history at releases/${app.dir}/history.json`)

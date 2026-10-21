@@ -67,7 +67,7 @@ try {
     writeFileSync(path, shell)
     const saved = await savedBy(browser, path)
     const pins = derivePins(html, saved, { historic: true })
-    const self = checkAgainstPins(saved, pins)
+    const self = await checkAgainstPins(saved, pins)
     if (self.length) { refused.push(`${payload.version}: its own save does not match its pins (${self[0]})`); continue }
     entries.set(payload.version, { version: payload.version, sha256, at: payload.at, pins })
     console.log(`  ${payload.version.padEnd(8)} pinned  (remover ${pins.blocks.remover ? 'yes' : 'none'})`)
