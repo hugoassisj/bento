@@ -271,6 +271,32 @@ The version that came out of watching somebody use 0.2.0.
   name you are typing (↓ and Enter insert one). Editing the starter's Weighted
   formula no longer reports its columns as unknown.
 
+- **Clicking a column header selects the column; it no longer sorts.**
+  Shift-click extends the selection and ⌘-click (Ctrl-click) adds a column,
+  on datasets and on spreadsheet column letters alike. Sorting is in the
+  header's ▾ menu and the right-click menu. After a sort or filter, the
+  selected cell stays on the same record instead of the same screen position.
+
+- **Double-click a column name to rename it** right on the grid. Enter keeps
+  the new name (one undo step), Escape leaves it as it was.
+
+- **＋ Add a column asks for the type** as well as the name. The type label on
+  each column header is larger (11px) and no longer crowds the column letter.
+
+- **Copying shows what was copied.** ⌘C or ⌘X draws a moving dashed border
+  around the range until you press Escape, make the next edit, or paste.
+
+- **Click a cell to put it in a formula.** While typing a formula, after `=`,
+  an operator, `(` or `,`, clicking a cell or pressing an arrow key inserts
+  its address instead of finishing the edit. Shift-click, shift-arrow or a
+  drag makes a range, shown highlighted on the grid. Clicking another sheet's
+  tab inserts a reference to that sheet (`Pipeline!A1`), which the arrow keys
+  then move. Enter finishes the formula. This works in spreadsheet cells and in
+  a dataset's per-cell formulas, where a sorted view still refers to the right
+  row.
+
+- **Escape closes the Story and Pivot panels.**
+
 - **New sheets are called Sheet3, Sheet4…** (Hoja3, Tabelle3…), whichever kind
   you add, instead of "Spreadsheet".
 
