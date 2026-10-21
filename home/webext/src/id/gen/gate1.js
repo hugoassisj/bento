@@ -41,11 +41,16 @@
 
                         
                          
+                                                                             
                
-                                                                                                                
+                                                                                              
               
+                                      
+                  
                                                          
                
+                                                                                                       
+             
                      
                    
                     
@@ -80,11 +85,27 @@ export const asciiLower = (s        )         => s.replace(/[A-Z]/g, (c) => Stri
 
 const WS = (c                    ) => c === '\t' || c === '\n' || c === '\f' || c === '\r' || c === ' '
 export function parseStartTag(html        , i        )                  {
-  const m = /^<([a-zA-Z][^\t\n\f\r />]*)/.exec(html.slice(i, i + 256))
+  return html[i] === '<' ? readTag(html, i + 1) : null
+}
+
+/**
+ * An END tag, read exactly like a start tag. The tokenizer parses attributes in
+ * end tags too, quoted values included, and then drops them, so
+ * `</p a="><b c='">` ends at its SECOND ">". Skipping an end tag to its first ">"
+ * instead read `<b c='">'<script>` as one tag and missed the script after it
+ * (both engines ran it). null if `i` isn't "</" and a letter, or it's unterminated.
+ */
+export function parseEndTag(html        , i        )                  {
+  return html[i] === '<' && html[i + 1] === '/' ? readTag(html, i + 2) : null
+}
+
+/** A tag's name and attributes, from its name's first character. */
+function readTag(html        , at        )                  {
+  const m = /^([a-zA-Z][^\t\n\f\r />]*)/.exec(html.slice(at, at + 256))
   if (!m) return null
   const attrs = new Map                ()
   let duplicate = false, slash = false
-  let j = i + m[0].length
+  let j = at + m[0].length
   while (j < html.length) {
     const c = html[j]
     if (WS(c)) { j++; continue }
@@ -162,8 +183,18 @@ function walk(html        )       {
       if (end < 0) { problems.push('an unterminated comment'); break }
       i = end + 3; continue
     }
+    if (html[i + 1] === '/' && /[a-zA-Z]/.test(html[i + 2] ?? '')) {
+      // an end tag: tokenized with the start tag's attribute rules (see parseEndTag)
+      const et = parseEndTag(html, i)
+      if (!et) { problems.push('an unterminated end tag'); break }
+      if (!TAG_NAME.test(et.name)) problems.push(`an end tag named ${JSON.stringify(et.name)}`)
+      // a browser drops them, but they move where the tag ends: Bento writes none
+      if (et.attrs.size) problems.push(`an end tag </${et.name}> carrying attributes`)
+      i = et.end; continue
+    }
+    if (html.startsWith('</>', i)) { i += 3; continue } // ignored entirely
     if (html[i + 1] === '/' || html[i + 1] === '!' || html[i + 1] === '?') {
-      // an end tag, a doctype or a bogus comment: no attributes a browser acts on
+      // a doctype or a bogus comment: it ends at the first ">", quotes or not
       const end = html.indexOf('>', i + 2)
       if (end < 0) { problems.push('an unterminated tag'); break }
       i = end + 1; continue
@@ -186,13 +217,16 @@ function walk(html        )       {
       // would count it: refuse, so every host's scanner reaches the same verdict
       if (name !== 'script' && lower.slice(tag.end, close).includes('<script')) problems.push(`a <${name}> holds a <script>`)
       if (name === 'textarea' || name === 'title') { i = close; continue }
+      const et = parseEndTag(html, close)
+      if (!et) { problems.push(`an unterminated </${name}>`); break }
       const get = (n        ) => tag.attrs.has(n) ? tag.attrs.get(n)  : null
       blocks.push({
-        tag: name                      , attrs: html.slice(i, tag.end), text: html.slice(tag.end, close), start: tag.end,
+        tag: name                      , attrs: html.slice(i, tag.end), text: html.slice(tag.end, close),
+        tagStart: i, start: tag.end, end: et.end,
         type: get('type'), id: get('id'), src: get('src'), preview: tag.attrs.has('data-bento-preview'),
         duplicate: tag.duplicate, slash: tag.slash,
       })
-      i = close; continue // its end tag is skipped as an end tag
+      i = close; continue // its end tag is judged next, as an end tag
     }
     i = tag.end
   }

@@ -5,7 +5,8 @@
 //
 //   node scripts/test-webext-serve.ts
 //
-// WHAT THIS PROVES (so far: the release histories gate 1 checks against).
+// WHAT THIS PROVES (so far: the release histories gate 1 checks against, and
+// what may become running script in the sandbox).
 //   · A history is held only if it verifies under the release key, names the
 //     right app, is well-formed, and kernel's acceptHistory accepts it over
 //     what is held (anti-rollback: an older signed history can't hide a release).
@@ -115,6 +116,47 @@ console.log('\n— no phone-home for someone who never used it')
   await s.set(H.USED_KEY, true)
   await H.refreshIfUsed(APPS, deps(s, n))
   ok(n.calls.length === 1, 'after it has been used, the browser-start refresh fetches')
+}
+
+console.log('\n— prepare: gate 1 decides, against the held histories (every served corpus row)')
+const P = await import('../home/webext/src/serve/prepare.js')
+const EXP = JSON.parse(readFileSync(join(FIX, 'expected.json'), 'utf8'))
+const histories = { [payload.app]: payload }
+{
+  let agree = 0
+  for (const row of EXP.served) {
+    const html = readFileSync(join(FIX, row.case), 'utf8')
+    const r = await P.prepare(html, histories)
+    const want = row.verdict === 'genuine' ? 'genuine' : 'unknown'
+    if (r.verdict === want && (want === 'unknown' || r.release.version === row.release)) agree++
+    else console.log(`        ${row.case}: got ${r.verdict}, expected ${want}`)
+  }
+  ok(agree === EXP.served.length, `prepare reaches the corpus verdict on every served row (${agree}/${EXP.served.length})`)
+  const genuine = readFileSync(join(FIX, 'served/genuine-1.2.0.html'), 'utf8')
+  ok((await P.prepare(genuine, {})).verdict === 'unknown', 'with NO history held, even a genuine file is UNKNOWN (never a guess)')
+  ok((await P.prepare(genuine, { a: payload, b: payload })).reason === 'matches more than one app', 'a file matching two apps is UNKNOWN')
+}
+
+console.log('\n— splice: only the planned elements become blob: scripts')
+{
+  for (const name of ['genuine-1.0.0.html', 'genuine-1.2.0.html', 'genuine-1.1.0-shared-runtime.html']) {
+    const html = readFileSync(join(FIX, 'served', name), 'utf8')
+    const r = await P.prepare(html, histories)
+    const urls: string[] = []
+    const out = P.splice(html, r.plan, (text: string) => { urls.push(text); return `blob:test/${urls.length}` })
+    const scripts = G.scanBlocks(out).filter((b: any) => b.tag === 'script')
+    const exec = G.executableScripts(G.scanBlocks(out))
+    ok(r.plan.length >= 1 && urls.length === r.plan.length && exec.length === r.plan.length && exec.every((b: any) => b.text === '' && /^blob:test\/\d+$/.test(b.src)), `${name}: each executable element (${r.plan.length}) became an EMPTY script loading a blob:, and nothing else became one`)
+    const before = G.scanBlocks(html).filter((b: any) => !G.executableScripts([b]).length).map((b: any) => b.text)
+    const after = scripts.filter((b: any) => !b.src).map((b: any) => b.text).concat(G.scanBlocks(out).filter((b: any) => b.tag === 'style').map((b: any) => b.text))
+    ok(before.every((t: string) => after.includes(t)), `${name}: data blocks and styles pass through byte for byte`)
+    ok(urls.join('\u0000') === r.plan.map((p: any) => p.text).join('\u0000'), `${name}: the blob: contents are exactly the verified texts, in document order`)
+  }
+  const html = readFileSync(join(FIX, 'served/genuine-1.2.0.html'), 'utf8')
+  const r = await P.prepare(html, histories)
+  const throws = (f: () => unknown) => { try { f(); return false } catch { return true } }
+  ok(throws(() => P.splice(html + ' ', [...r.plan].reverse(), () => 'blob:x')) || r.plan.length < 2, 'a plan out of document order is refused')
+  ok(throws(() => P.splice('<p>other</p>' + html, r.plan, () => 'blob:x')), 'a plan that does not line up with the bytes is refused')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
