@@ -1540,6 +1540,11 @@ jobs:
         # dead end wearing a live button.
         run: node scripts/test-dash-recovery.ts
 
+      - name: dash CSV export rig
+        # Text starting = + - @ tab or CR is exported with a leading quote, so
+        # opening the CSV in a spreadsheet never runs it as a formula.
+        run: node scripts/test-dash-csv-export.ts
+
       - name: dash i18n rig
         # A core catalog ships inside every saved workbook and cannot be patched
         # without a release, so drift has to fail here rather than in the field:
@@ -2736,6 +2741,15 @@ jobs:
         # surface must show fields in its own container, and a planted
         # browser-dressed field must be flagged.
         run: node scripts/test-dash-fields-browser.mjs
+      - name: The dash properties panel shows only what applies
+        # Per column type on a dataset, Number format / Total / Formula appear
+        # only where they apply, with no money or formula placeholders; one
+        # Number format control on both sheet kinds (Custom… reveals the
+        # pattern, Apply to writes a cell override); unset colour wells paint
+        # the field's own fill, measured from pixels with a set-colour
+        # positive control, light and dark; bare checkboxes; a formula over
+        # Money is Money and one column never mixes grouping.
+        run: node scripts/test-dash-panel-context-browser.mjs
 
   dash-gate-browser:
     runs-on: ubuntu-latest
