@@ -51,7 +51,7 @@ if CommandLine.arguments[1] == "--diff" {
     }
     if let b = try? Gate1.scanBlocks(h) {
       o["blocks"] = b.map { ["tag": $0.tag, "type": $0.type ?? NSNull(), "id": $0.id ?? NSNull(), "src": $0.src ?? NSNull(),
-                             "preview": $0.preview, "start": $0.start, "text": Gate1.sha256hex($0.text),
+                             "preview": $0.preview, "start": $0.start, "text": Gate1.sha256hex($0.text), "tagStart": $0.tagStart, "end": $0.end,
                              "duplicate": $0.duplicate, "slash": $0.slash] as [String: Any] }
       o["markup"] = (try? Gate1.markupProblems(h)) ?? "throw"
     } else { o["blocks"] = "throw"; o["markup"] = "throw" }
@@ -174,7 +174,9 @@ async function differential(bin, dir) {
     // whitespace JavaScript's \s and the platform disagree on, standing where a space would
     '\u0085type="module"', '\u0085onload=1', '\u0085id="bento-rt"', '\u180etype="text/javascript"', '\u00a0onclick=1',
     // tag gluing: a "<" inside a tag name, where a scanner that searches sees a tag the browser doesn't
-    '<p<script>', '<div<style>', '<a<!--', '<meta<style><script>', '<p<script>window.x=1</script>']
+    '<p<script>', '<div<style>', '<a<!--', '<meta<style><script>', '<p<script>window.x=1</script>',
+    // attributes on END tags, which the tokenizer reads (quotes and all) before dropping
+    '</p a=">', '</p a="><b c=\'">\'', "</div x='>'", '</>', '</p\t/>', '</b c=">">']
   const N = Number(process.env.GATE1_FUZZ || 1500)
   const seed0 = Number(process.env.GATE1_SEED || Date.now() % 1e9)
   // mulberry32: 32-bit integer arithmetic (a float LCG loses precision and cycles)
@@ -195,7 +197,9 @@ async function differential(bin, dir) {
       else if (rnd(5) === 0 && lts.length) { const lt = lts[rnd(lts.length)]; t = t.slice(0, lt) + ['<p', '<div', '<a', '<meta', '<x-y'][rnd(5)] + t.slice(lt) }
       else t = t.slice(0, at) + tokens[rnd(tokens.length)] + t.slice(at)
     }
-    const f = join(fdir, `f${k}.html`); writeFileSync(f, t); files.push([f, t])
+    // the reference judges the file AS WRITTEN, as a host reads it: UTF-8 can't hold a
+    // lone surrogate a mutation leaves behind, so the bytes on disk carry U+FFFD instead
+    const f = join(fdir, `f${k}.html`); writeFileSync(f, t); files.push([f, readFileSync(f, 'utf8')])
   }
   writeFileSync(join(dir, 'h.json'), JSON.stringify(history)); writeFileSync(join(dir, 'x.json'), JSON.stringify(expected))
   const lines = execFileSync(bin, ['--diff', join(dir, 'h.json'), join(dir, 'x.json'), ...files.map(([f]) => f)], { maxBuffer: 1 << 28 }).toString().trim().split('\n').map((l) => JSON.parse(l))
@@ -206,7 +210,7 @@ async function differential(bin, dir) {
     const want = {}
     try { const v = await ref.verifyServed(t, history); want.served = v.verdict === 'genuine' ? 'genuine ' + v.release.version : 'unknown'; if (v.verdict === 'genuine') want.csp = v.csp }
     catch { want.served = 'throw' }
-    try { want.blocks = await Promise.all(ref.scanBlocks(t).map(async (b) => ({ tag: b.tag, type: b.type, id: b.id, src: b.src, preview: b.preview, start: b.start, text: await sha(b.text), duplicate: b.duplicate, slash: b.slash }))) }
+    try { want.blocks = await Promise.all(ref.scanBlocks(t).map(async (b) => ({ tag: b.tag, type: b.type, id: b.id, src: b.src, preview: b.preview, start: b.start, text: await sha(b.text), tagStart: b.tagStart, end: b.end, duplicate: b.duplicate, slash: b.slash }))) }
     catch { want.blocks = 'throw' }
     try { want.markup = want.blocks === 'throw' ? 'throw' : ref.markupProblems(t) } catch { want.markup = 'throw' }
     const st = ref.verifyStrict(t, expected); want.strict = st.ok ? 'ok' : st.reason
@@ -255,6 +259,7 @@ async function browserOracle(bin, dir, called, history) {
   const attacks = [
     ['U+0130 index drift (home-desktop)', attack('a-u0130', '<p>' + '\u0130'.repeat(20) + '</p><style>a{}</style><script>window.pwned=1</script>')],
     ['"/" as an attribute separator (security)', attack('a-slash', '<script /type="text/javascript" type="application/bento+json">window.pwned=2</script>')],
+    ['a quoted ">" in an END tag hides a <script> (kernel)', attack('a-endtag', `</p a="><b c='">'<script>window.pwned=4</script>'>`)],
     ['"<" inside a tag name hides a <script> (this oracle)', (() => { const f = join(dir, 'a-tagname.html'); writeFileSync(f, genuine.replace('<meta charset="UTF-8">', '<meta<style><script>window.pwned=3</script></style> charset="UTF-8">')); return f })()],
   ]
   const verdictOf = (f) => JSON.parse(execFileSync(bin, ['--diff', join(dir, 'h.json'), join(dir, 'x.json'), f]).toString())

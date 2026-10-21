@@ -102,7 +102,11 @@ enum Gate1 {
         let tag: String           // "script" | "style"
         let attrs: S
         let text: S
+        /// offset of the start tag's "<"
+        let tagStart: Int
         let start: Int
+        /// just past the end tag's ">", as the tokenizer ends it (quoted values and all)
+        let end: Int
         let type: String?
         let id: String?
         let src: String?
@@ -133,12 +137,24 @@ enum Gate1 {
     /// "=" is part of a name, names fold ASCII-only, the FIRST duplicate wins.
     /// nil: not a start tag, or unterminated.
     static func parseStartTag(_ html: S, _ i: Int) -> StartTag? {
-        // /^<([a-zA-Z][^\t\n\f\r />]*)/ within the next 256 units
-        let window = min(html.count, i + 256)
-        guard i + 1 < window, html[i] == 0x3C, isLetter(html[i + 1]) else { return nil }
-        var ne = i + 2
+        i < html.count && html[i] == 0x3C ? readTag(html, i + 1) : nil
+    }
+
+    /// An END tag, read exactly like a start tag: the tokenizer parses attributes
+    /// in end tags too, quoted values included, then drops them. So
+    /// `</p a="><b c='">` ends at its SECOND ">". nil if not "</" and a letter, or unterminated.
+    static func parseEndTag(_ html: S, _ i: Int) -> StartTag? {
+        i + 1 < html.count && html[i] == 0x3C && html[i + 1] == 0x2F ? readTag(html, i + 2) : nil
+    }
+
+    /// A tag's name and attributes, from its name's first character.
+    private static func readTag(_ html: S, _ at0: Int) -> StartTag? {
+        // /^([a-zA-Z][^\t\n\f\r />]*)/ within the next 256 units
+        let window = min(html.count, at0 + 256)
+        guard at0 < window, isLetter(html[at0]) else { return nil }
+        var ne = at0 + 1
         while ne < window, !isWS(html[ne]), html[ne] != 0x2F, html[ne] != 0x3E { ne += 1 }
-        let tagName = asciiLower(Array(html[(i + 1)..<ne]))
+        let tagName = asciiLower(Array(html[at0..<ne]))
         var attrs: [(S, S)] = []
         var duplicate = false, slash = false
         var j = ne
@@ -243,8 +259,17 @@ enum Gate1 {
                 i = end + 3; continue
             }
             let c1: UInt16? = i + 1 < html.count ? html[i + 1] : nil
+            if c1 == 0x2F, i + 2 < html.count, isLetter(html[i + 2]) {
+                // an end tag: tokenized with the start tag's attribute rules (see parseEndTag)
+                guard let et = parseEndTag(html, i) else { problems.append("an unterminated end tag"); break }
+                if !plainTagName(et.name) { problems.append("an end tag named \(jsonString(et.name))") }
+                // a browser drops them, but they move where the tag ends: Bento writes none
+                if !et.attrs.isEmpty { problems.append("an end tag </\(str(et.name))> carrying attributes") }
+                i = et.end; continue
+            }
+            if at(html, i, u("</>")) { i += 3; continue }   // ignored entirely
             if c1 == 0x2F || c1 == 0x21 || c1 == 0x3F {
-                // an end tag, a doctype or a bogus comment: no attributes a browser acts on
+                // a doctype or a bogus comment: it ends at the first ">", quotes or not
                 let end = indexOf(html, u(">"), i + 2)
                 if end < 0 { problems.append("an unterminated tag"); break }
                 i = end + 1; continue
@@ -264,10 +289,12 @@ enum Gate1 {
                 if close < 0 { problems.append("an unterminated <\(name)>"); break }
                 if name != "script", includes(slice(lower, tag.end, close), u("<script")) { problems.append("a <\(name)> holds a <script>") }
                 if name == "textarea" || name == "title" { i = close; continue }
-                blocks.append(Block(tag: name, attrs: slice(html, i, tag.end), text: slice(html, tag.end, close), start: tag.end,
+                guard let et = parseEndTag(html, close) else { problems.append("an unterminated </\(name)>"); break }
+                blocks.append(Block(tag: name, attrs: slice(html, i, tag.end), text: slice(html, tag.end, close),
+                                    tagStart: i, start: tag.end, end: et.end,
                                     type: tag.get("type"), id: tag.get("id"), src: tag.get("src"), preview: tag.has("data-bento-preview"),
                                     duplicate: tag.duplicate, slash: tag.slash))
-                i = close; continue   // its end tag is skipped as an end tag
+                i = close; continue   // its end tag is judged next, as an end tag
             }
             i = tag.end
         }

@@ -99,6 +99,7 @@ try {
     ['a-u0130', 'U+0130 index drift', genuine.replace('</body>', '<p>' + 'İ'.repeat(20) + '</p><style>a{}</style><script>window.pwned=1</script></body>')],
     ['a-slash', '"/" as an attribute separator', genuine.replace('</body>', '<script /type="text/javascript" type="application/bento+json">window.pwned=2</script></body>')],
     ['a-tagname', '"<" inside a tag name', genuine.replace('<meta charset="UTF-8">', '<meta<style><script>window.pwned=3</script></style> charset="UTF-8">')],
+    ['a-endtag', 'a quoted ">" in an end tag', genuine.replace('</body>', `</p a="><b c='">'<script>window.pwned=4</script>'></body>`)],
   ]) {
     const a = open(name, text)
     if (a.verdict === 'genuine') ok(a.pwned === 'undefined', `${why}: gate 1 says genuine, and the CSP still kept the injected script from running (pwned ${a.pwned})`)
