@@ -272,7 +272,9 @@ async function browserOracle(bin, dir, called, history) {
     const d = Object.fromEntries(c.split(/;\s*/).map((x) => { const [k, ...v] = x.trim().split(/\s+/); return [k, v] }))
     const ss = (d['script-src'] ?? []).filter((t) => t !== "'report-sample'")
     if (JSON.stringify(d['default-src']) !== JSON.stringify(["'none'"])) return 'default-src is not none'
-    if (ss.length !== 3 || !/^'sha256-[A-Za-z0-9+/]{43}='$/.test(ss[0]) || !/^'sha256-[A-Za-z0-9+/]{43}='$/.test(ss[1]) || ss[2] !== 'blob:') return `script-src is not two hashes and blob: (${ss.join(' ')})`
+    // the loader's pin, and the remover's when the release has one (0.9.0, from before previews, doesn't)
+    const pinsIn = ss.slice(0, -1)
+    if (ss.at(-1) !== 'blob:' || pinsIn.length < 1 || pinsIn.length > 2 || !pinsIn.every((t) => /^'sha256-[A-Za-z0-9+/]{43}='$/.test(t))) return `script-src is not the release's pins and blob: (${ss.join(' ')})`
     if (/unsafe-inline|unsafe-eval|unsafe-hashes|strict-dynamic|\*/.test((d['script-src'] ?? []).join(' '))) return 'script-src is weakened'
     for (const k of ['script-src-elem', 'script-src-attr', 'worker-src']) if (k in d && k !== 'worker-src') return `${k} overrides script-src`
     if (JSON.stringify(d['object-src']) !== JSON.stringify(["'none'"]) || JSON.stringify(d['base-uri']) !== JSON.stringify(["'none'"])) return 'object-src or base-uri is open'
@@ -284,7 +286,7 @@ async function browserOracle(bin, dir, called, history) {
   const weakCases = cases.filter((c) => policyProblem(c.csp))
   for (const c of weakCases.slice(0, 3)) console.log(`  FAIL  not served: ${c.why} would have run under a weak policy: ${policyProblem(c.csp)}`)
   const policyOk = weakCases.length === 0
-  ok0(policyOk, `every policy the oracle serves is exactly hostPolicy's shape (${cases.length})`)
+  ok0(policyOk, `every policy the oracle serves is exactly hostPolicy's shape: the release's one or two pins and blob: (${cases.length})`)
   if (!policyOk) return 1
   writeFileSync(join(dir, 'cases.json'), JSON.stringify(cases.map(({ file, csp }) => ({ file, csp }))))
   const out = execFileSync(oracle, [join(dir, 'cases.json')], { maxBuffer: 1 << 26, timeout: 30 * 60 * 1000 }).toString().trim().split('\n').map((l) => JSON.parse(l))
