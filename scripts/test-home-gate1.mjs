@@ -224,7 +224,7 @@ async function differential(bin, dir) {
   // every fuzz file EITHER implementation calls genuine goes to the browser
   const called = files.flatMap(([f, t], k) => {
     const csp = lines[k].csp ?? null
-    return lines[k].served.startsWith('genuine') ? [{ file: f, csp, why: `fuzz ${lines[k].file} (${lines[k].served})` }] : []
+    return lines[k].served.startsWith('genuine') ? [{ file: f, csp, why: `fuzz ${lines[k].file} (${lines[k].served})`, version: lines[k].served.replace(/^genuine /, '') }] : []
   })
   return (okAll ? 0 : 1) | (await browserOracle(bin, dir, called, history))
 }
@@ -239,6 +239,8 @@ async function differential(bin, dir) {
  */
 async function browserOracle(bin, dir, called, history) {
   if (process.platform !== 'darwin') return 0
+  const pinsOf = (version) => history.releases.find((e) => e.version === version)?.pins.scriptSrc ?? []
+  const versionOf = (served) => served.replace(/^genuine /, '')
   const { readFileSync } = await import('node:fs')
   const oracle = join(dir, 'oracle')
   execFileSync('swiftc', ['-O', '-o', oracle, join(ROOT, 'scripts/lib/gate1-oracle.swift')], { stdio: 'pipe' })
@@ -257,34 +259,35 @@ async function browserOracle(bin, dir, called, history) {
   cases.push({ role: 'control', file: join(DIR, 'served/extra-plain-script.html'), csp: withSample(csp100), why: 'extra-plain-script under 1.0.0\'s CSP' })
   for (const row of E.served.filter((r) => r.verdict === 'genuine')) {
     const v = verdictOf(join(DIR, row.case))
-    cases.push({ role: 'genuine', file: join(DIR, row.case), csp: withSample(v.csp), why: row.case })
+    cases.push({ role: 'genuine', file: join(DIR, row.case), csp: withSample(v.csp), why: row.case, version: row.release })
   }
   for (const [why, f] of attacks) {
     const v = verdictOf(f)
-    if (v.served.startsWith('genuine')) cases.push({ role: 'called', file: f, csp: withSample(v.csp), why: `${why}: gate 1 says ${v.served}` })
+    if (v.served.startsWith('genuine')) cases.push({ role: 'called', file: f, csp: withSample(v.csp), why: `${why}: gate 1 says ${v.served}`, version: versionOf(v.served) })
     else console.log(`  ok    ${why}: gate 1 says ${v.served}, so nothing is served under a pinned CSP`)
   }
-  for (const c of called) cases.push({ role: 'called', file: c.file, csp: withSample(c.csp), why: c.why })
+  for (const c of called) cases.push({ role: 'called', file: c.file, csp: withSample(c.csp), why: c.why, version: c.version })
   // The oracle only sees what the CSP REFUSES, so it trusts the policy it's handed.
   // Every policy it serves must be exactly hostPolicy's shape, or the run is red:
   // a weak policy must never make the oracle quiet.
-  const policyProblem = (c) => {
+  const policyProblem = (c, version) => {
     const d = Object.fromEntries(c.split(/;\s*/).map((x) => { const [k, ...v] = x.trim().split(/\s+/); return [k, v] }))
     const ss = (d['script-src'] ?? []).filter((t) => t !== "'report-sample'")
     if (JSON.stringify(d['default-src']) !== JSON.stringify(["'none'"])) return 'default-src is not none'
-    // the loader's pin, and the remover's when the release has one (0.9.0, from before previews, doesn't)
-    const pinsIn = ss.slice(0, -1)
-    if (ss.at(-1) !== 'blob:' || pinsIn.length < 1 || pinsIn.length > 2 || !pinsIn.every((t) => /^'sha256-[A-Za-z0-9+/]{43}='$/.test(t))) return `script-src is not the release's pins and blob: (${ss.join(' ')})`
+    // exactly THIS release's pins from the signed history (the loader's, and the
+    // remover's when it has one: 0.9.0, from before previews, doesn't), then blob:
+    const want = [...pinsOf(version).map((h) => `'${h}'`), 'blob:']
+    if (!pinsOf(version).length || JSON.stringify(ss) !== JSON.stringify(want)) return `script-src is not ${version}'s pins and blob: (${ss.join(' ')})`
     if (/unsafe-inline|unsafe-eval|unsafe-hashes|strict-dynamic|\*/.test((d['script-src'] ?? []).join(' '))) return 'script-src is weakened'
     for (const k of ['script-src-elem', 'script-src-attr', 'worker-src']) if (k in d && k !== 'worker-src') return `${k} overrides script-src`
     if (JSON.stringify(d['object-src']) !== JSON.stringify(["'none'"]) || JSON.stringify(d['base-uri']) !== JSON.stringify(["'none'"])) return 'object-src or base-uri is open'
     return null
   }
   const weak = withSample(csp100).replace('blob:', "blob: 'unsafe-inline'")
-  ok0(policyProblem(withSample(csp100)) === null && policyProblem(weak) !== null && policyProblem(csp100.replace(/'sha256-[^']+' /, '')) !== null,
+  ok0(policyProblem(withSample(csp100), '1.0.0') === null && policyProblem(weak, '1.0.0') !== null && policyProblem(csp100.replace(/'sha256-[^']+' /, ''), '1.0.0') !== null,
     "the policy check passes hostPolicy's own policy and refuses a weakened one ('unsafe-inline' added, a pin dropped)")
-  const weakCases = cases.filter((c) => policyProblem(c.csp))
-  for (const c of weakCases.slice(0, 3)) console.log(`  FAIL  not served: ${c.why} would have run under a weak policy: ${policyProblem(c.csp)}`)
+  const weakCases = cases.filter((c) => c.role !== 'control' && policyProblem(c.csp, c.version))
+  for (const c of weakCases.slice(0, 3)) console.log(`  FAIL  not served: ${c.why} would have run under a weak policy: ${policyProblem(c.csp, c.version)}`)
   const policyOk = weakCases.length === 0
   ok0(policyOk, `every policy the oracle serves is exactly hostPolicy's shape: the release's one or two pins and blob: (${cases.length})`)
   if (!policyOk) return 1
