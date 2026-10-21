@@ -62,25 +62,31 @@ class RecoveryTest {
         fun bytes(n: Int) = ByteArray(n).also { rnd.nextBytes(it) }
         data class Case(val pw: ByteArray, val salt: ByteArray, val secret: ByteArray?, val ad: ByteArray?,
                         val m: Int, val t: Int, val p: Int, val len: Int)
-        val cases = List(24) {
+        val cases = List(24) { idx ->
             val p = 1 + rnd.nextInt(4)
-            Case(bytes(rnd.nextInt(40)), bytes(8 + rnd.nextInt(24)),
+            // Case 0 always has an EMPTY password (valid Argon2 input): it once
+            // shifted every field of the line Node read, so it stays pinned.
+            Case(bytes(if (idx == 0) 0 else rnd.nextInt(40)), bytes(8 + rnd.nextInt(24)),
                 if (rnd.nextBoolean()) bytes(1 + rnd.nextInt(16)) else null,
                 if (rnd.nextBoolean()) bytes(1 + rnd.nextInt(16)) else null,
                 8 * p + rnd.nextInt(512), 1 + rnd.nextInt(3), p, 16 + rnd.nextInt(33))
         }
+        // Every field is non-blank on the wire: "=" is zero bytes, "-" is absent.
+        // A blank first field once vanished under Node's trim() and shifted the rest.
+        fun field(b: ByteArray?) = when { b == null -> "-"; b.isEmpty() -> "="; else -> Hex.str(b) }
         val input = cases.joinToString("\n") { c ->
-            listOf(Hex.str(c.pw), Hex.str(c.salt), c.secret?.let { Hex.str(it) } ?: "-", c.ad?.let { Hex.str(it) } ?: "-",
+            listOf(field(c.pw), field(c.salt), field(c.secret), field(c.ad),
                 c.m, c.t, c.p, c.len).joinToString(" ")
         }
         val script = """
             const c = require('crypto'); const out = []
+            const buf = (f) => f === '=' ? Buffer.alloc(0) : Buffer.from(f, 'hex')
             for (const l of require('fs').readFileSync(0, 'utf8').trim().split('\n')) {
               const [pw, salt, sec, ad, m, t, p, len] = l.split(' ')
-              const o = { message: Buffer.from(pw, 'hex'), nonce: Buffer.from(salt, 'hex'),
+              const o = { message: buf(pw), nonce: buf(salt),
                 memory: +m, passes: +t, parallelism: +p, tagLength: +len }
-              if (sec !== '-') o.secret = Buffer.from(sec, 'hex')
-              if (ad !== '-') o.associatedData = Buffer.from(ad, 'hex')
+              if (sec !== '-') o.secret = buf(sec)
+              if (ad !== '-') o.associatedData = buf(ad)
               out.push(c.argon2Sync('argon2id', o).toString('hex'))
             }
             process.stdout.write(out.join('\n'))
@@ -95,6 +101,12 @@ class RecoveryTest {
                 secret = c.secret, ad = c.ad)
             assertEquals("case $i (m=${c.m} t=${c.t} p=${c.p} len=${c.len})", node[i], Hex.str(ours))
         }
+    }
+
+    @Test fun `a salt under RFC 9106's 8 bytes is refused, 8 is accepted`() {
+        assertTrue(runCatching { Recovery.argon2id(ByteArray(10), ByteArray(7), memoryKiB = 64) }.exceptionOrNull() is IllegalArgumentException)
+        assertTrue(runCatching { Recovery.argon2id(ByteArray(10), ByteArray(0), memoryKiB = 64) }.exceptionOrNull() is IllegalArgumentException)
+        assertEquals(16, Recovery.argon2id(ByteArray(10), ByteArray(8), memoryKiB = 64, tagLen = 16).size)
     }
 
     @Test fun `every block Argon2 used reads back as zero afterwards`() {
