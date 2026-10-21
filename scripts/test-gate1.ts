@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createPublicKey, verify } from 'node:crypto'
-import { verifyServed, verifyStrict, acceptHistory, hostPolicy, type History, type StrictExpected } from '../kernel/src/gate1.ts'
+import { verifyServed, verifyStrict, acceptHistory, hostPolicy, scanBlocks, parseStartTag, parseEndTag, type History, type StrictExpected } from '../kernel/src/gate1.ts'
 
 let failures = 0
 let checks = 0
@@ -56,6 +56,24 @@ for (const row of E.served) {
 }
 
 console.log('\nambiguous: two entries matching every block is UNKNOWN, never "the first"')
+console.log('\nblock offsets: a host can splice a whole element without a second parser (home-webext, W2)')
+{
+  let blocks = 0, bad: string[] = []
+  for (const row of E.served) {
+    const html = read(row.case)
+    let scanned
+    try { scanned = scanBlocks(html) } catch { continue }
+    for (const b of scanned) {
+      blocks++
+      const open = html.slice(b.tagStart, b.start), close = html.slice(b.start + b.text.length, b.end)
+      const st = parseStartTag(html, b.tagStart), et = parseEndTag(html, b.start + b.text.length)
+      if (open !== b.attrs || st?.end !== b.start || st?.name !== b.tag) bad.push(`${row.case} @${b.tagStart}: open tag`)
+      if (et?.end !== b.end || et?.name !== b.tag || !close.endsWith('>')) bad.push(`${row.case} @${b.tagStart}: close tag ${JSON.stringify(close)}`)
+    }
+  }
+  ok(blocks > 100 && bad.length === 0, `on every served row (${blocks} blocks): html.slice(tagStart, start) is the exact start tag and html.slice(start + text.length, end) the exact end tag${bad.length ? ' — ' + bad.slice(0, 3).join('; ') : ''}`)
+}
+
 for (const row of E.ambiguous) ok((await verifyServed(read(row.case), row.history)).verdict === row.verdict, `${row.case.replace('served/', '')} under its own history: ${row.verdict} (${row.why})`)
 
 console.log('\nstrict (file://): both genuine saves pass, all 16 tampers refuse')

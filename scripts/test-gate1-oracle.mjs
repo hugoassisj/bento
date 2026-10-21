@@ -98,6 +98,13 @@ function mutant(r, n) {
       `<a<!--${candidate}-->`, `<!-->${candidate}`, `<!--->${candidate}`])
     h = h.replace(pick(['</head>', '</body>', '<meta charset="UTF-8">']), (m) => m === '<meta charset="UTF-8">' ? glue + ' ' + m : glue + m)
   }
+  // quoted attributes in END tags: the tokenizer reads them, so a ">" inside the
+  // quotes doesn't end the tag, and what a first-">" skip reads as a tag is text
+  if (r() < 0.15) {
+    const t = pick(['p', 'div', 'span', 'b'])
+    const shut = pick([`</${t} a="><b c='">'${candidate}'>`, `</${t} x='><i y="'>"${candidate}">`, `</${t}${sep()}a=${q('>')}>${candidate}`])
+    h = h.replace(pick(['</body>', '</head>']), (m) => shut + m)
+  }
   // the loader's own text behind a src=: the browser runs the src and ignores it
   if (r() < 0.1) h = h.replace(`<${S}>${LOADER}`, `<${S}${sep()}src=${q('data:text/javascript,' + encodeURIComponent(body))}>${LOADER}`)
   // or edit a real block's tag the ways scanners split

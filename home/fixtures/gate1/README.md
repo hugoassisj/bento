@@ -17,7 +17,7 @@ disagrees with any declared verdict.
 | reference (JS, kernel/src/gate1.ts) | `node scripts/test-gate1.ts` |
 | `home/ios` (Swift) | `node scripts/test-home-gate1.mjs` (corpus, a differential fuzz against this reference, and a WebKit oracle); `node scripts/test-home-gate1-host.mjs` (in the app, on a simulator) |
 | `home/android` (Kotlin) | to build |
-| `home/desktop` (Rust) | to build |
+| `home/desktop` (Rust) | `cargo test` in `home/desktop/gate1` |
 
 ## The files
 
@@ -56,6 +56,20 @@ Two parsing rules the reference got wrong once, so state them exactly:
   separator after it. A leading `=` is part of a name. Names fold ASCII-only,
   and the FIRST of duplicate names wins. A `<script>` tag with a duplicate
   attribute or a `/` is refused outright, because Bento writes neither.
+- **Walk tags in document order, never search.** One walk, tag by tag, as the
+  tokenizer meets them, feeds both the block list and the markup rules. A tag
+  name runs to whitespace, `/` or `>`, so `<meta<style>` is ONE tag, and any
+  name outside `[a-z][a-z0-9-]*` is refused. `script`, `style`, `textarea` and
+  `title` hold text up to their real end tag: `</name` followed by whitespace,
+  `/` or `>`. `<!-->` and `<!--->` are whole comments; `</>` is ignored.
+- **Read END tags like start tags.** The tokenizer parses attributes in end tags,
+  quoted values included, so `</p a="><b c='">` ends at its second `>`.
+  Skipping to the first `>` hides the script after it. An end tag carrying any
+  attribute, or an odd name, is refused, because Bento writes neither.
+- **Offsets for splicing.** Each block carries `tagStart` (its start tag's `<`)
+  and `end` (just past its end tag's `>`), from the same walk. A host that
+  replaces an element splices `html.slice(tagStart, end)` and never finds a
+  boundary itself.
 - **Fold case in ASCII only, never with a length-changing fold.** `toLowerCase()`
   turns `İ` into two UTF-16 units. Searching a folded copy while slicing the
   original then drifts: a genuine Turkish document reads as unknown, and a run
@@ -93,7 +107,9 @@ differently:
 - unquoted and single-quoted attributes;
 - `</script >`;
 - tabs and newlines inside a tag;
-- a script inside a comment, `<textarea>`, `<title>` or `<style>`.
+- a script inside a comment, `<textarea>`, `<title>` or `<style>`;
+- glued tags (`<meta<style>`), empty comments, and false end tags (`</stylex>`);
+- attributes, quoted `>` included, on an end tag.
 
 Your scanner must agree on every one of them.
 

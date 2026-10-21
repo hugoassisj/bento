@@ -130,6 +130,15 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-webext-store.ts
 
+    - name: WebExtension Bento ID setup rig
+      # Creating a Bento ID: the device certificate verifies under kernel's
+      # verifier; the passkey and recovery blobs open with kernel's openers to
+      # the account key; the recovery code and the raw scalar appear nowhere in
+      # the stored record; both keys are non-extractable; no PRF means no blob,
+      # and with no way back at all, setup refuses.
+      shell: bento-step {0}
+      run: node scripts/test-webext-connect.ts
+
     - name: WebExtension bento/connect rig
       # The extension's identity code must be the kernel reference, unaltered
       # (a generated type-strip, checked current), and pass kernel's own rigs
