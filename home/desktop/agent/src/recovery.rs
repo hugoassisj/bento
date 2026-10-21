@@ -30,6 +30,38 @@ pub const ARGON2_TAG_LEN: usize = 32;
 pub const SALT_LEN: usize = 16;
 pub const CODE_BYTES: usize = 10;
 
+/// Free memory Argon2id insists on beyond its own working set.
+pub const MEMORY_HEADROOM_KIB: u64 = 64 * 1024;
+
+thread_local! {
+    /// Rigs only: pretend this much memory is available (KiB).
+    static AVAILABLE_OVERRIDE_KIB: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Rigs only: simulate low memory for the current thread.
+#[doc(hidden)]
+pub fn set_available_memory_override_kib(v: Option<u64>) {
+    AVAILABLE_OVERRIDE_KIB.with(|c| c.set(v));
+}
+
+/// Physical memory available right now, in KiB, where the platform says.
+/// Linux: /proc/meminfo MemAvailable. Windows: GlobalMemoryStatusEx (owed with
+/// the Windows store). Elsewhere: unknown (None), and only the fallible
+/// reservation guards.
+pub fn available_memory_kib() -> Option<u64> {
+    if let Some(v) = AVAILABLE_OVERRIDE_KIB.with(|c| c.get()) {
+        return Some(v);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let info = std::fs::read_to_string("/proc/meminfo").ok()?;
+        let line = info.lines().find(|l| l.starts_with("MemAvailable:"))?;
+        return line.split_whitespace().nth(1)?.parse().ok();
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
 /// Raw Argon2id with explicit parameters, an optional secret and associated
 /// data (the RFC 9106 §5.3 vector needs both). Our derivations use `argon2id`.
 pub fn argon2id_raw(
@@ -53,15 +85,40 @@ pub fn argon2id_raw(
         Some(s) => Argon2::new_with_secret(s, Algorithm::Argon2id, Version::V0x13, params).map_err(|e| e.to_string())?,
         None => Argon2::new(Algorithm::Argon2id, Version::V0x13, params),
     };
+    // FAIL CLOSED ON LOW MEMORY. A Rust allocation failure ABORTS the process
+    // rather than returning an error (home-android saw the same with
+    // OutOfMemoryError: catching it did not fail closed). And a fallible
+    // reservation is NOT enough on its own (measured: with overcommit a 4 TiB
+    // try_reserve SUCCEEDS, and the process is SIGKILLed later when the pages are
+    // touched). So: check the AVAILABLE physical memory first (need + headroom),
+    // then reserve fallibly and hand the buffer to the crate, which allocates
+    // nothing itself.
+    let blocks = a.params().block_count();
+    let need_kib = blocks as u64; // one Argon2 block = 1 KiB
+    if let Some(avail) = available_memory_kib() {
+        if avail < need_kib + MEMORY_HEADROOM_KIB {
+            return Err(format!("not enough free memory for Argon2id: need {need_kib} KiB + {MEMORY_HEADROOM_KIB} KiB headroom, {avail} KiB available"));
+        }
+    }
+    let mut memory: Vec<argon2::Block> = Vec::new();
+    memory
+        .try_reserve_exact(blocks)
+        .map_err(|_| format!("not enough memory for Argon2id ({} KiB)", blocks))?;
+    memory.resize(blocks, argon2::Block::default());
     let mut out = Zeroizing::new(vec![0u8; tag_len]);
-    a.hash_password_into(password, salt, &mut out).map_err(|e| e.to_string())?;
+    let r = a.hash_password_into_with_memory(password, salt, &mut out, &mut memory);
+    // the working memory held password-derived state: wipe it
+    for b in memory.iter_mut() {
+        *b = argon2::Block::default();
+    }
+    r.map_err(|e| e.to_string())?;
     Ok(out)
 }
 
 /// Argon2id with OUR parameters (v0x13, p=1, 64 MiB, t=3, 32 bytes).
-pub fn argon2id(password: &[u8], salt: &[u8]) -> Secret {
+/// Err when the 64 MiB cannot be reserved: refuse cleanly, never abort.
+pub fn argon2id(password: &[u8], salt: &[u8]) -> Result<Secret, String> {
     argon2id_raw(password, salt, None, None, ARGON2_MEMORY_KIB, ARGON2_PASSES, ARGON2_PARALLELISM, ARGON2_TAG_LEN)
-        .expect("fixed Argon2id parameters are valid")
 }
 
 // --- the recovery code: 80 bits, Crockford base32, with a check symbol ----------
@@ -151,13 +208,13 @@ fn hkdf(ikm: &[u8], salt: &[u8], info: &str) -> Secret {
 }
 
 /// HKDF-SHA-256(Argon2id(code, salt), empty, "bento/id/rc-wrap/v1").
-pub fn recovery_wrap_key(code: &[u8], salt: &[u8]) -> Secret {
+pub fn recovery_wrap_key(code: &[u8], salt: &[u8]) -> Result<Secret, String> {
     assert_eq!((code.len(), salt.len()), (CODE_BYTES, SALT_LEN));
-    hkdf(&argon2id(code, salt), &[], "bento/id/rc-wrap/v1")
+    Ok(hkdf(&argon2id(code, salt)?, &[], "bento/id/rc-wrap/v1"))
 }
 
 /// What the client sends the directory: Argon2id(code, salt_v).
-pub fn recovery_verifier(code: &[u8], salt_v: &[u8]) -> Secret {
+pub fn recovery_verifier(code: &[u8], salt_v: &[u8]) -> Result<Secret, String> {
     assert_eq!((code.len(), salt_v.len()), (CODE_BYTES, SALT_LEN));
     argon2id(code, salt_v)
 }
