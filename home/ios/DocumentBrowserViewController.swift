@@ -122,6 +122,9 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
             var bytes: Data?
             do {
                 bytes = try await Releases.seed(for: app)
+                // the person asked for the network: the one time the release
+                // history is refreshed too (never on open or launch)
+                _ = await ReleaseHistory.refresh(app.id)
             } catch {
                 failure = error.localizedDescription
                 // Offline, or the server is down. A shell cached by an earlier

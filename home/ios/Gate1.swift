@@ -456,10 +456,27 @@ enum Gate1 {
     /// `{ payload, sig }`: ECDSA P-256 SHA-256 over the payload's UTF-8, r‖s in
     /// base64. The payload, parsed, when the signature verifies; nil otherwise.
     static func openSigned(_ envelope: Data, publicKey: P256.Signing.PublicKey) -> JSON? {
+        openSigned(envelope) { sig, msg in
+            (try? P256.Signing.ECDSASignature(rawRepresentation: sig)).map { publicKey.isValidSignature($0, for: msg) } ?? false
+        }
+    }
+
+    /// The same, checked by `verify(signature, message)`: ReleaseKeys.verify, any pinned key.
+    static func openSigned(_ envelope: Data, verify: (Data, Data) -> Bool) -> JSON? {
         guard let env = try? JSON.parse(envelope), let payload = env["payload"]?.string, let sigB64 = env["sig"]?.string,
-              let sigRaw = Data(base64Encoded: sigB64), let sig = try? P256.Signing.ECDSASignature(rawRepresentation: sigRaw),
-              publicKey.isValidSignature(sig, for: Data(payload.utf8)) else { return nil }
+              let sigRaw = Data(base64Encoded: sigB64), verify(sigRaw, Data(payload.utf8)) else { return nil }
         return try? JSON.parse(Data(payload.utf8))
+    }
+
+    /// Is this file's runtime one the history knows at all? UNKNOWN with a runtime
+    /// no entry carries reads as "made with a Bento this app doesn't know yet:
+    /// check for updates", never as damage, because a newer release looks
+    /// exactly like that until the history is refreshed. (Not part of the
+    /// reference: only what the host tells the person.)
+    static func runtimeKnown(_ html: S, history: JSON) -> Bool {
+        guard let rt = try? scanBlocks(html).filter({ $0.id == "bento-rt" }), rt.count == 1 else { return false }
+        let h = sha256hex(rt[0].text)
+        return (history["releases"]?.array ?? []).contains { $0["pins"]?["blocks"]?["bento-rt"]?.string == h }
     }
 
     /// A public key from its JWK (EC, P-256).
