@@ -1829,6 +1829,11 @@ export class Grid {
     el.hidden = false
   }
 
+  /** The value under the cursor — the properties panel's format sample. */
+  cursorValue(): unknown {
+    return this.valueAt(this.sel.cursor.row, this.sel.cursor.col)
+  }
+
   /** Value at a VISIBLE position — what the clipboard and the status bar read. */
   private valueAt(row: number, ci: number): unknown {
     if (this.canvas) return this.cvValueAt(row, ci)

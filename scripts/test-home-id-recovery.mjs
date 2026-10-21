@@ -57,6 +57,7 @@ typealias R = IdentityRecovery
 func hx(_ s: String) -> [UInt8] { var o: [UInt8] = []; var i = s.startIndex; while i < s.endIndex { let j = s.index(i, offsetBy: 2); o.append(UInt8(s[i..<j], radix: 16)!); i = j }; return o }
 func hs(_ b: [UInt8]?) -> String { b.map { $0.map { String(format: "%02x", $0) }.joined() } ?? "nil" }
 func emit(_ k: String, _ v: Any) { print("\(k)=\(v)") }
+func code10() -> [UInt8] { hx("009e01a578034a5304ef") }
 func j(_ path: String) -> Any { try! JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) }
 func verdict<T>(_ v: R.Verdict<T>, _ show: (T) -> String) -> String { switch v { case .ok(let x): return "ok:" + show(x); case .no(let r): return "no:" + r } }
 let F = j(CommandLine.arguments[1]) as! [String: Any]
@@ -79,6 +80,22 @@ Argon2id.probe = { p, n in released += 1; largest = max(largest, n); for i in 0.
 _ = Argon2id.hash(password: hx("009e01a578034a5304ef"), salt: hx("101112131415161718191a1b1c1d1e1f"))
 Argon2id.probe = nil
 emit("wipe", "\(released)|\(largest)|\(dirty)")
+
+// memory: refused BEFORE anything is allocated when the process can't afford it
+released = 0
+Argon2id.probe = { _, _ in released += 1 }
+Argon2id.availableMemory = { 48 << 20 }
+let low = Argon2id.hash(password: code10(), salt: hx("101112131415161718191a1b1c1d1e1f"))
+let lowWrap = R.recoveryWrapKey(code: code10(), salt: hx("101112131415161718191a1b1c1d1e1f"))
+emit("mem.low", "\(low == nil)|\(lowWrap == nil)|\(released)|\(Argon2id.hasMemory())")
+Argon2id.availableMemory = { Argon2id.memoryNeeded(Argon2id.bento) }
+emit("mem.edge", Argon2id.hash(password: code10(), salt: hx("101112131415161718191a1b1c1d1e1f")).map(hs) ?? "nil")
+Argon2id.availableMemory = { Argon2id.memoryNeeded(Argon2id.bento) - 1 }
+emit("mem.short1", Argon2id.hash(password: code10(), salt: hx("101112131415161718191a1b1c1d1e1f")) == nil)
+Argon2id.availableMemory = { nil }
+emit("mem.nolimit", Argon2id.hasMemory())
+emit("mem.needed", Argon2id.memoryNeeded(Argon2id.bento))
+Argon2id.probe = nil
 
 // codes and parsing
 for (i, c) in (F["codes"] as! [[String: Any]]).enumerated() { emit("fmt\(i)", R.formatCode(hx(c["bytes"] as! String)) ?? "nil") }
@@ -165,6 +182,16 @@ console.log(`  (64 MiB, t = 3 took ${out.argon2_ms} ms here)`)
 {
   const [released, largest, dirty] = (out.wipe ?? '').split('|').map(Number)
   ok(released >= 6 && largest === 65536 * 128 && dirty === 0, `every buffer is zeroed before it's freed, the 64 MiB of blocks included (${released} buffers, ${dirty} not zeroed)`)
+}
+console.log('memory (iOS ends a process past its limit; nothing to catch):')
+{
+  const [lowNil, wrapNil, released, has] = (out['mem.low'] ?? '').split('|')
+  ok(lowNil === 'true' && wrapNil === 'true' && has === 'false', 'with 48 MiB free, Argon2id and the wrap key refuse, and hasMemory() says so')
+  ok(released === '0', 'and nothing was allocated first (no buffer was ever released)')
+  ok(out['mem.edge'] === F.derivations.argon2_A, 'with exactly 64 MiB + headroom free it runs, and gives the fixture\'s bytes')
+  ok(out['mem.short1'] === 'true', 'one byte short of that: refused')
+  ok(out['mem.nolimit'] === 'true', 'where there is no limit (the simulator, the Mac), it runs')
+  ok(Number(out['mem.needed']) === 64 * 1024 * 1024 + 32 * 1024 * 1024, `it asks for the 64 MiB of blocks plus 32 MiB headroom (${out['mem.needed']})`)
 }
 console.log('the recovery code:')
 F.codes.forEach((c, i) => ok(out[`fmt${i}`] === c.printed, `${c.bytes} prints as ${c.printed}`))

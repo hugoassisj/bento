@@ -20,6 +20,7 @@
 // apart HERE, where the DOM is still visible, or an oversized workbook opens
 // as the starter and saves over itself.
 
+import { csvField } from './csvout.ts'
 import './styles.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import {
@@ -74,7 +75,7 @@ import {
 import { cellKey, isFormula, recalcWorkbook, workbookSources } from './cellformula.ts'
 import { Store, type Patch, setColumnType } from './store.ts'
 import { starterDoc } from './starter.ts'
-import { inferComputedType } from './computedtype.ts'
+import { inferComputedType, retypePatch } from './computedtype.ts'
 import { validateDoc } from './validate.ts'
 import { mountHelp } from './help.ts'
 // The grid's three context menus, and the popover every menu in this file is
@@ -2294,14 +2295,15 @@ function retype(store: Store, col: Column, x: number, y: number): void {
  * calls this defect out by name.
  */
 function exportCsv(store: Store, sheet: TableSheet): void {
-  const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s)
+  // csvout.ts: RFC 4180 quoting AND the formula-injection escape - a text cell
+  // starting = + - @ tab or CR must not run as a formula in whoever opens this.
   const n = sheet.rids.reduce((a, [, c]) => a + c, 0)
-  const lines = [sheet.columns.map((c) => q(c.name)).join(',')]
+  const lines = [sheet.columns.map((c) => csvField(c.name)).join(',')]
   for (let i = 0; i < n; i++) {
     lines.push(sheet.columns.map((c) => {
       const d = sheet.data[c.id]
       const v = d?.enc === 'raw' ? d.v[i] : d?.enc === 'dict' ? (d.idx[i] == null ? null : d.dict[d.idx[i]!]) : null
-      return q(v == null ? '' : String(v))
+      return csvField(v)
     }).join(','))
   }
   const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' })
@@ -2382,11 +2384,14 @@ async function addFormula(store: Store, sheet: TableSheet): Promise<void> {
   // to nothing. computedtype.ts runs the expression against this sheet and
   // judges the values; when they cannot be judged it says text, which is the
   // type that makes no claim.
+  // …and a number computed from Money is Money, with its format and unit, so
+  // `Value * 2` prints £8,600 beside £24,800 rather than 8600 beside 24,800.
+  const inferred = inferComputedType(sheet, got.expr)
   store.commit({
     op: 'addColumn', sheet: sheet.id,
     column: {
       id, name: got.name.trim() || t('Computed'),
-      type: inferComputedType(sheet, got.expr).type, formula: got.expr,
+      type: inferred.type, ...inferred.carry, formula: got.expr,
     },
   })
 }
@@ -2413,10 +2418,9 @@ async function editFormula(store: Store, sheet: TableSheet, col: Column): Promis
   // is exactly the case "nobody has touched this".
   const before = inferComputedType(sheet, col.formula ?? '', col.id)
   const after = inferComputedType(sheet, got.expr, col.id)
-  const retype = col.type === before.type && after.type !== col.type
   store.commit({
     op: 'setColumn', sheet: sheet.id, col: col.id,
-    patch: retype ? { formula: got.expr, type: after.type } : { formula: got.expr },
+    patch: retypePatch(col, before, after, got.expr),
   })
 }
 
