@@ -175,7 +175,7 @@ async function differential(bin, dir) {
     '\u0085type="module"', '\u0085onload=1', '\u0085id="bento-rt"', '\u180etype="text/javascript"', '\u00a0onclick=1',
     // tag gluing: a "<" inside a tag name, where a scanner that searches sees a tag the browser doesn't
     '<p<script>', '<div<style>', '<a<!--', '<meta<style><script>', '<p<script>window.x=1</script>']
-  const N = Number(process.env.GATE1_FUZZ || 400)
+  const N = Number(process.env.GATE1_FUZZ || 1500)
   const seed0 = Number(process.env.GATE1_SEED || Date.now() % 1e9)
   // mulberry32: 32-bit integer arithmetic (a float LCG loses precision and cycles)
   let st = seed0 >>> 0

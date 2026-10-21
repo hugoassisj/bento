@@ -178,36 +178,104 @@ enum Gate1 {
         return nil
     }
 
-    /// Every <script> and <style> element, with its raw text: /<(script|style)(?=[\t\n\f\r />])/gi,
-    /// each read by parseStartTag and ending at the first `</script` / `</style` in any case.
-    static func scanBlocks(_ html: S) throws -> [Block] {
-        var out: [Block] = []
-        let lower = asciiLower(html)
-        let follows: Set<UInt16> = [0x09, 0x0A, 0x0C, 0x0D, 0x20, 0x2F, 0x3E]
-        var pos = 0
+    /// Elements whose content is TEXT to a browser, never tags, up to their real end tag.
+    static let rawText: Set<String> = ["script", "style", "textarea", "title"]
+
+    /// Where a raw-text element really ends: "</name" (ASCII case-insensitive)
+    /// followed by whitespace, "/" or ">", as the tokenizer requires. -1 if never.
+    static func rawTextEnd(_ lower: S, _ name: S, _ from: Int) -> Int {
+        var at = from
+        let n = u("</") + name
         while true {
-            var i = pos
-            var hit: (name: String, len: Int)?
-            while i < html.count {
-                if html[i] == 0x3C {
-                    for w in ["script", "style"] where ci(html, i + 1, u(w)) {
-                        let e = i + 1 + w.utf16.count
-                        if e < html.count, follows.contains(html[e]) { hit = (w, w.utf16.count); break }
-                    }
-                    if hit != nil { break }
-                }
-                i += 1
-            }
-            guard let h = hit else { return out }
-            guard let tag = parseStartTag(html, i) else { throw Unterminated(tag: h.name, at: i, startTag: true) }
-            let close = indexOf(lower, u("</" + h.name), tag.end)
-            if close < 0 { throw Unterminated(tag: h.name, at: i, startTag: false) }
-            out.append(Block(tag: h.name, attrs: slice(html, i, tag.end), text: slice(html, tag.end, close), start: tag.end,
-                             type: tag.get("type"), id: tag.get("id"), src: tag.get("src"), preview: tag.has("data-bento-preview"),
-                             duplicate: tag.duplicate, slash: tag.slash))
-            pos = close
+            at = indexOf(lower, n, at)
+            if at < 0 { return -1 }
+            let k = at + 2 + name.count
+            if k >= lower.count || isWS(lower[k]) || lower[k] == 0x2F || lower[k] == 0x3E { return at }
+            at += 2
         }
     }
+
+    /// /^[a-z][a-z0-9-]*$/: the only tag names Bento writes
+    static func plainTagName(_ n: S) -> Bool {
+        guard let f = n.first, f >= 0x61 && f <= 0x7A else { return false }
+        return n.allSatisfy { ($0 >= 0x61 && $0 <= 0x7A) || isDigit($0) || $0 == 0x2D }
+    }
+
+    /// JSON.stringify of a string, as the reference words its problems
+    static func jsonString(_ s: S) -> String {
+        var out: S = [0x22]
+        var k = 0
+        while k < s.count {
+            let c = s[k]
+            switch c {
+            case 0x22: out += u("\\\""); case 0x5C: out += u("\\\\")
+            case 0x08: out += u("\\b"); case 0x0C: out += u("\\f"); case 0x0A: out += u("\\n")
+            case 0x0D: out += u("\\r"); case 0x09: out += u("\\t")
+            case 0xD800...0xDBFF where k + 1 < s.count && (0xDC00...0xDFFF).contains(s[k + 1]):
+                out += [c, s[k + 1]]; k += 1
+            case 0..<0x20, 0xD800...0xDFFF: out += u(String(format: "\\u%04x", c))
+            default: out.append(c)
+            }
+            k += 1
+        }
+        return str(out + [0x22])
+    }
+
+    /// ONE walk over the file, in document order, tag by tag, as a browser's
+    /// tokenizer meets them. Both scanBlocks and markupProblems read it, so the
+    /// blocks hashed and the markup judged come from the same reading. Searching
+    /// for "<script" instead found one inside another tag's name
+    /// (`<meta<style><script>`), where a browser sees one tag and a real script.
+    static func walk(_ html: S) -> (blocks: [Block], problems: [String]) {
+        var blocks: [Block] = [], problems: [String] = []
+        let lower = asciiLower(html)
+        var i = 0
+        while true {
+            i = indexOf(html, u("<"), i)
+            if i < 0 { break }
+            if at(html, i, u("<!--")) {
+                // "<!-->" and "<!--->" are whole (empty) comments to a browser
+                if at(html, i, u("<!-->")) { i += 5; continue }
+                if at(html, i, u("<!--->")) { i += 6; continue }
+                let end = indexOf(html, u("-->"), i + 4)
+                if includes(slice(lower, i + 4, end < 0 ? html.count : end), u("<script")) { problems.append("a comment holds a <script>") }
+                if end < 0 { problems.append("an unterminated comment"); break }
+                i = end + 3; continue
+            }
+            let c1: UInt16? = i + 1 < html.count ? html[i + 1] : nil
+            if c1 == 0x2F || c1 == 0x21 || c1 == 0x3F {
+                // an end tag, a doctype or a bogus comment: no attributes a browser acts on
+                let end = indexOf(html, u(">"), i + 2)
+                if end < 0 { problems.append("an unterminated tag"); break }
+                i = end + 1; continue
+            }
+            guard let c = c1, isLetter(c) else { i += 1; continue }   // a "<" that starts no tag is text
+            guard let tag = parseStartTag(html, i) else { problems.append("an unterminated start tag"); break }
+            let name = str(tag.name)
+            if !plainTagName(tag.name) { problems.append("a start tag named \(jsonString(tag.name))") }
+            if ["iframe", "object", "embed", "base"].contains(name) { problems.append("a <\(name)>") }
+            if name == "meta", refreshOrCSP(tag.attrs.first { $0.0 == u("http-equiv") }?.1 ?? []) { problems.append("a <meta> refresh or CSP") }
+            if tag.attrs.contains(where: { $0.0.starts(with: u("on")) }) { problems.append("an on*= attribute on <\(name)>") }
+            if name == "script", tag.duplicate || tag.slash {
+                problems.append("a <script> start tag with a \(tag.duplicate ? "duplicate attribute" : "\"/\" between attributes") (Bento writes neither)")
+            }
+            if rawText.contains(name) {
+                let close = rawTextEnd(lower, tag.name, tag.end)
+                if close < 0 { problems.append("an unterminated <\(name)>"); break }
+                if name != "script", includes(slice(lower, tag.end, close), u("<script")) { problems.append("a <\(name)> holds a <script>") }
+                if name == "textarea" || name == "title" { i = close; continue }
+                blocks.append(Block(tag: name, attrs: slice(html, i, tag.end), text: slice(html, tag.end, close), start: tag.end,
+                                    type: tag.get("type"), id: tag.get("id"), src: tag.get("src"), preview: tag.has("data-bento-preview"),
+                                    duplicate: tag.duplicate, slash: tag.slash))
+                i = close; continue   // its end tag is skipped as an end tag
+            }
+            i = tag.end
+        }
+        return (blocks, problems)
+    }
+
+    /// Every <script> and <style> element in the file, with its raw text, in document order.
+    static func scanBlocks(_ html: S) throws -> [Block] { walk(html).blocks }
 
     // MARK: - the grammar (security, 2026-10-21)
 
@@ -230,41 +298,9 @@ enum Gate1 {
     /// Markup a genuine Bento file never carries, outside a script or style
     /// element's own text. [] = none.
     static func markupProblems(_ html: S) throws -> [String] {
-        var problems: [String] = []
-        let lower = asciiLower(html)
-        var i = 0
-        while true {
-            i = indexOf(html, u("<"), i)
-            if i < 0 { break }
-            if at(html, i, u("<!--")) {
-                let end = indexOf(html, u("-->"), i + 4)
-                let body = slice(lower, i + 4, end < 0 ? html.count : end)
-                if includes(body, u("<script")) { problems.append("a comment holds a <script>") }
-                if end < 0 { problems.append("an unterminated comment"); break }
-                i = end + 3; continue
-            }
-            guard let tag = parseStartTag(html, i) else {
-                if i + 1 < html.count, isLetter(html[i + 1]) { problems.append("an unterminated start tag"); break }
-                i += 1; continue
-            }
-            let name = str(tag.name), j = tag.end - 1
-            if ["iframe", "object", "embed", "base"].contains(name) { problems.append("a <\(name)>") }
-            if name == "meta", refreshOrCSP(tag.attrs.first { $0.0 == u("http-equiv") }?.1 ?? []) { problems.append("a <meta> refresh or CSP") }
-            if tag.attrs.contains(where: { $0.0.starts(with: u("on")) }) { problems.append("an on*= attribute on <\(name)>") }
-            if name == "script", tag.duplicate || tag.slash {
-                problems.append("a <script> start tag with a \(tag.duplicate ? "duplicate attribute" : "\"/\" between attributes") (Bento writes neither)")
-            }
-            if name == "script" || name == "style" {
-                let close = indexOf(lower, u("</" + name), j)
-                if close < 0 { problems.append("an unterminated <\(name)>"); break }
-                if name == "style", includes(slice(lower, j, close), u("<script")) { problems.append("a <style> holds a <script>") }
-                i = close + 2; continue
-            }
-            i = j + 1
-        }
-        for b in try scanBlocks(html) where isDataScript(b) && b.text.contains(0x3C) {
-            problems.append("the \(b.type ?? "") block contains \"<\"")
-        }
+        let (blocks, problems0) = walk(html)
+        var problems = problems0
+        for b in blocks where isDataScript(b) && b.text.contains(0x3C) { problems.append("the \(b.type ?? "") block contains \"<\"") }
         return problems
     }
 
