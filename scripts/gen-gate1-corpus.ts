@@ -114,6 +114,14 @@ const served: Served[] = [
   { name: 'slash-in-data-tag', html: g.replace(`<${S} type="bento/deflate-b86" id="bento-rt"`, `<${S}/type="bento/deflate-b86" id="bento-rt"`), verdict: 'unknown', why: 'Bento never writes "/" in a script tag: refused outright, whatever it means' },
   { name: 'form-feed-separators', html: g.replace(`<${S} type="bento/deflate-b86" id="bento-rt"`, `<${S}\ftype="bento/deflate-b86"\fid="bento-rt"`), verdict: 'genuine', release: '1.0.0', why: 'form feed between attributes is whitespace: the same block' },
   { name: 'src-with-loader-body', html: g.replace(`<${S}>load1()</${S}>`, `<${S} src="https://example.invalid/x.js">load1()</${S}>`), verdict: 'unknown', why: 'the browser runs the src and ignores the body: the genuine loader text is no excuse (home-android)' },
+  // tags glued together (home-ios, found by a WebKit oracle): a tag name runs to
+  // whitespace, "/" or ">", so "<meta<style>" is ONE tag and what follows is real
+  { name: 'meta-glued-style', html: g.replace('<meta charset="UTF-8">', `<meta<style><${S}>window.pwned=3</${S}></style> charset="UTF-8">`), verdict: 'unknown', why: '"<meta<style>" is one tag: the script after it is real and runs' },
+  { name: 'p-glued-script', html: body(`<p<${S}>x</${S}>`), verdict: 'unknown', why: 'a start tag named "p<script": Bento writes only plain names' },
+  { name: 'div-glued-style', html: body('<div<style>a{}</style>'), verdict: 'unknown', why: 'a start tag named "div<style"' },
+  { name: 'a-glued-comment', html: body('<a<!-- x -->'), verdict: 'unknown', why: 'a start tag named "a<!--"' },
+  { name: 'empty-comment-then-script', html: body(`<!--><${S}>window.pwned=4</${S}>`), verdict: 'unknown', why: '"<!-->" is a whole comment: the script after it is real' },
+  { name: 'empty-comment-alone', html: body('<!--><!---><p>after</p>'), verdict: 'genuine', release: '1.0.0', why: '"<!-->" and "<!--->" end at once: nothing after them is swallowed' },
   // the case fold must not change length (home-desktop): toLowerCase() makes 'İ' two units
   { name: 'case-fold-breakout', html: body('<p>' + 'İ'.repeat(20) + `</p><style>a{}</style><${S}>window.pwned=1</${S}>`), verdict: 'unknown', why: 'a length-changing case fold would skip this script entirely' },
   { name: 'genuine-length-changing-text', html: file(r1, { title: 'İstanbul ı ß ﬃ Σ', doc: '{"format":"bento/test","title":"İstanbul ı ß ﬃ ΣΑΣ İİİİ"}', preview: '<p>İİİİ ß ﬃ Σ</p>' }), verdict: 'genuine', release: '1.0.0', why: "a genuine document in Turkish (and ß, ﬃ, Σ) is still genuine" },

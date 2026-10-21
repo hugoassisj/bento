@@ -123,9 +123,15 @@ and two such bugs were found in the reference: `/` as an attribute separator, an
 a case fold that changed the string's length.
 
 The oracle mutates genuine files the ways scanners disagree. It loads every
-mutant gate1 calls GENUINE with no CSP, and fails unless exactly the loader and
-the remover ran. Each failure is written to `oracle-failures/` here: add it to
-the corpus as a declared row, so every port runs it.
+mutant gate1 calls GENUINE with no CSP, in BOTH Chromium and WebKit
+(`ORACLE_ENGINES`), and fails unless exactly the loader and the remover ran. One
+engine isn't enough: a Chromium-only run missed a bypass that a WebKit run found.
+
+Each failure is written to `oracle-failures/` with that release's unsigned
+`history.json`. Every file there is expected UNKNOWN against it. A port can run
+the folder as is; then promote the case into the generator as a declared row. A
+port that lifts the mutant generator should take the text between the
+`// --- a synthetic release` and `// --- the browsers` markers.
 
 ## Changing the rules
 

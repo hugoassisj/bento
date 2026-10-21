@@ -38,9 +38,11 @@ jobs:
           node-version: 24
       - name: Install browser test runtime
         # Pinned outside app packages: browser automation is not shipped in documents.
+        # WebKit too, for the gate-1 oracle: a Chromium-only oracle missed a bypass
+        # that a WebKit oracle found.
         run: |
           npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
-          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       - name: Build the tested standalone documents
         run: |
@@ -70,8 +72,8 @@ jobs:
         # K5 (security): a differential fuzz can't see a bug the reference and a
         # port SHARE, and both the "/" attribute separator and the length-changing
         # case fold were shared. So genuine files are mutated the ways scanners
-        # split, and every mutant gate1 calls GENUINE is loaded with NO CSP:
-        # exactly the loader and the remover may run. A fixed seed, plus a short
+        # split, and every mutant gate1 calls GENUINE is loaded with NO CSP, in
+        # Chromium AND WebKit: exactly the loader and the remover may run. A fixed seed, plus a short
         # random run whose seed is printed for replay. Any failure is written to
         # home/fixtures/gate1/oracle-failures/ as a corpus row.
         run: node scripts/test-gate1-oracle.mjs

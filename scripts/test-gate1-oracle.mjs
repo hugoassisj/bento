@@ -91,6 +91,13 @@ function mutant(r, n) {
   // a run of length-changing characters, then a <style>, then the candidate: a
   // case fold that changes length lands the style's close late and skips it
   if (r() < 0.2) h = h.replace('</body>', `<p>${len()}${len()}</p><style>a{}</style>${candidate}</body>`)
+  // tags glued together: a name runs to whitespace, "/" or ">", so "<meta<style>"
+  // is one tag and what follows is real (home-ios found this with a WebKit oracle)
+  if (r() < 0.2) {
+    const glue = pick([`<${pick(['meta', 'p', 'div', 'a', 'span'])}<style>${candidate}</style>`, `<${pick(['p', 'div', 'b'])}${candidate}`,
+      `<a<!--${candidate}-->`, `<!-->${candidate}`, `<!--->${candidate}`])
+    h = h.replace(pick(['</head>', '</body>', '<meta charset="UTF-8">']), (m) => m === '<meta charset="UTF-8">' ? glue + ' ' + m : glue + m)
+  }
   // the loader's own text behind a src=: the browser runs the src and ignores it
   if (r() < 0.1) h = h.replace(`<${S}>${LOADER}`, `<${S}${sep()}src=${q('data:text/javascript,' + encodeURIComponent(body))}>${LOADER}`)
   // or edit a real block's tag the ways scanners split
@@ -108,9 +115,14 @@ function mutant(r, n) {
   return { html: h, name }
 }
 
-// --- the browser ------------------------------------------------------------------
-const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
+// --- the browsers -----------------------------------------------------------------
+// BOTH engines: a Chromium-only oracle missed the glued-tag bypass that a WebKit
+// oracle found (home-ios). ORACLE_ENGINES=chromium,webkit (the default) or one.
+const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
+const engines = (process.env.ORACLE_ENGINES || 'chromium,webkit').split(',').map((e) => e.trim()).filter(Boolean)
+const browsers = []
+for (const e of engines) browsers.push({ engine: e, b: await pw[e].launch(e === 'chromium' ? { executablePath: process.env.CHROME_PATH, headless: true } : { headless: true }) })
+let browser = browsers[0].b
 const URL_ = 'https://bento-oracle.test/doc.html'
 async function whatRan(html) {
   const context = await browser.newContext()
@@ -131,16 +143,19 @@ async function whatRan(html) {
 
 let failures = 0, checks = 0
 const ok = (cond, what) => { checks++; if (cond) console.log('  ok    ' + what); else { failures++; console.log('  FAIL  ' + what) } }
+/** What ran in EVERY engine; a mutant is clean only if it's clean in all of them. */
+async function whatRanEverywhere(html) {
+  const out = []
+  for (const { engine, b } of browsers) { browser = b; out.push({ engine, ...(await whatRan(html)) }) }
+  return out
+}
 const onlyPinned = (r) => r.errors === 0 && r.ran.length === 2 && r.ran.includes('loader') && r.ran.includes('remover')
 
 try {
-  console.log('\ncontrols: the oracle can see both kinds of extra execution')
-  const base = await whatRan(genuine())
-  ok(onlyPinned(base), `a genuine file runs exactly the loader and the remover (${JSON.stringify(base)})`)
-  const extra = await whatRan(genuine().replace('</body>', `<${S}>window.__ran.push('extra')</${S}></body>`))
-  ok(extra.ran.includes('extra'), 'an extra script is SEEN running')
-  const data = await whatRan(genuine().replace('type="bento/deflate-b86" id="bento-rt"', 'id="bento-rt"'))
-  ok(data.errors > 0, 'a data block that executes is SEEN (its text throws)')
+  console.log(`\ncontrols, in each engine (${engines.join(', ')}): the oracle can see both kinds of extra execution`)
+  for (const r of await whatRanEverywhere(genuine())) ok(onlyPinned(r), `${r.engine}: a genuine file runs exactly the loader and the remover (${JSON.stringify(r.ran)}, ${r.errors} errors)`)
+  for (const r of await whatRanEverywhere(genuine().replace('</body>', `<${S}>window.__ran.push('extra')</${S}></body>`))) ok(r.ran.includes('extra'), `${r.engine}: an extra script is SEEN running`)
+  for (const r of await whatRanEverywhere(genuine().replace('type="bento/deflate-b86" id="bento-rt"', 'id="bento-rt"'))) ok(r.errors > 0, `${r.engine}: a data block that executes is SEEN (its text throws)`)
   ok((await verifyServed(genuine(), history)).verdict === 'genuine', 'gate1 calls the genuine file genuine')
 
   const runs = [[FIXED_SEED, CASES, 'fixed seed'], [Math.floor(Math.random() * 2 ** 31), RANDOM, 'random seed']]
@@ -153,19 +168,22 @@ try {
       const v = await verifyServed(html, history)
       if (v.verdict !== 'genuine') continue
       genuineCount++
-      const ran = await whatRan(html)
-      if (!onlyPinned(ran)) {
+      const dirty = (await whatRanEverywhere(html)).filter((r) => !onlyPinned(r))
+      if (dirty.length) {
         bad++
         mkdirSync(OUT, { recursive: true })
+        // each failure is UNKNOWN against THIS history: written beside it, so a
+        // port can run the folder with nothing else
+        writeFileSync(join(OUT, 'history.json'), JSON.stringify(history, null, 2) + '\n')
         const file = join(OUT, `seed-${seed}-case-${n}.html`)
         writeFileSync(file, html)
-        console.log(`  FAIL  case ${n}: gate1 says GENUINE but the browser ran ${JSON.stringify(ran)} → ${file}`)
+        console.log(`  FAIL  case ${n}: gate1 says GENUINE but ${dirty.map((r) => `${r.engine} ran ${JSON.stringify(r.ran)} (${r.errors} errors)`).join('; ')} → ${file}`)
       }
     }
     ok(bad === 0, `${label}: every one of the ${genuineCount} GENUINE verdicts ran only the loader and remover (${cases - genuineCount} unknown)`)
   }
 } finally {
-  await browser.close()
+  for (const { b } of browsers) await b.close()
 }
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

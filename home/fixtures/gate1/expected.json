@@ -235,6 +235,37 @@
       "why": "the browser runs the src and ignores the body: the genuine loader text is no excuse (home-android)"
     },
     {
+      "case": "served/meta-glued-style.html",
+      "verdict": "unknown",
+      "why": "\"<meta<style>\" is one tag: the script after it is real and runs"
+    },
+    {
+      "case": "served/p-glued-script.html",
+      "verdict": "unknown",
+      "why": "a start tag named \"p<script\": Bento writes only plain names"
+    },
+    {
+      "case": "served/div-glued-style.html",
+      "verdict": "unknown",
+      "why": "a start tag named \"div<style\""
+    },
+    {
+      "case": "served/a-glued-comment.html",
+      "verdict": "unknown",
+      "why": "a start tag named \"a<!--\""
+    },
+    {
+      "case": "served/empty-comment-then-script.html",
+      "verdict": "unknown",
+      "why": "\"<!-->\" is a whole comment: the script after it is real"
+    },
+    {
+      "case": "served/empty-comment-alone.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "\"<!-->\" and \"<!--->\" end at once: nothing after them is swallowed"
+    },
+    {
       "case": "served/case-fold-breakout.html",
       "verdict": "unknown",
       "why": "a length-changing case fold would skip this script entirely"

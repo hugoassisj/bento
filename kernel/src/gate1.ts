@@ -119,27 +119,88 @@ export function parseStartTag(html: string, i: number): StartTag | null {
   return null // unterminated
 }
 
-/** Every <script> and <style> element in the file, with its raw text. */
-export function scanBlocks(html: string): Block[] {
-  const out: Block[] = []
-  const lower = asciiLower(html)
-  const open = /<(script|style)(?=[\t\n\f\r />])/gi
-  let m: RegExpExecArray | null
-  while ((m = open.exec(html))) {
-    const tag = parseStartTag(html, m.index)
-    if (!tag) throw new Error(`gate1: unterminated <${m[1]}> start tag at ${m.index}`)
-    const name = asciiLower(m[1]) as 'script' | 'style'
-    const close = lower.indexOf(`</${name}`, tag.end)
-    if (close < 0) throw new Error(`gate1: unterminated <${name}> at ${m.index}`)
-    const get = (n: string) => tag.attrs.has(n) ? tag.attrs.get(n)! : null
-    out.push({
-      tag: name, attrs: html.slice(m.index, tag.end), text: html.slice(tag.end, close), start: tag.end,
-      type: get('type'), id: get('id'), src: get('src'), preview: tag.attrs.has('data-bento-preview'),
-      duplicate: tag.duplicate, slash: tag.slash,
-    })
-    open.lastIndex = close
+/**
+ * ONE walk over the file, in document order, tag by tag, as a browser's
+ * tokenizer meets them. Both scanBlocks and markupProblems read it, so the
+ * blocks gate1 hashes and the markup it judges come from the SAME reading.
+ * Searching for "<script" or "<style" instead finds them where a browser never
+ * would: inside another tag's name. In `<meta<style><script>…` a browser sees ONE
+ * tag, named "meta<style", and then a real <script> that runs. A search saw a
+ * <style> whose close swallowed the script (home-ios, found by a WebKit oracle).
+ */
+interface Walk { blocks: Block[]; problems: string[] }
+const TAG_NAME = /^[a-z][a-z0-9-]*$/
+/** Elements whose content is TEXT to a browser, never tags, up to their real end tag. */
+const RAW_TEXT = ['script', 'style', 'textarea', 'title']
+
+/**
+ * Where a raw-text element really ends: "</name" (ASCII case-insensitive)
+ * followed by whitespace, "/" or ">", as the tokenizer requires. "</scriptx>"
+ * is text inside the script, not its end. -1 if it never ends.
+ */
+function rawTextEnd(lower: string, name: string, from: number): number {
+  let at = from
+  while ((at = lower.indexOf(`</${name}`, at)) !== -1) {
+    const c = lower[at + 2 + name.length]
+    if (c === undefined || WS(c) || c === '/' || c === '>') return at
+    at += 2
   }
-  return out
+  return -1
+}
+function walk(html: string): Walk {
+  const blocks: Block[] = [], problems: string[] = []
+  const lower = asciiLower(html)
+  let i = 0
+  while ((i = html.indexOf('<', i)) !== -1) {
+    if (html.startsWith('<!--', i)) {
+      // "<!-->" and "<!--->" are whole (empty) comments to a browser
+      if (html.startsWith('<!-->', i)) { i += 5; continue }
+      if (html.startsWith('<!--->', i)) { i += 6; continue }
+      const end = html.indexOf('-->', i + 4)
+      if (lower.slice(i + 4, end < 0 ? html.length : end).includes('<script')) problems.push('a comment holds a <script>')
+      if (end < 0) { problems.push('an unterminated comment'); break }
+      i = end + 3; continue
+    }
+    if (html[i + 1] === '/' || html[i + 1] === '!' || html[i + 1] === '?') {
+      // an end tag, a doctype or a bogus comment: no attributes a browser acts on
+      const end = html.indexOf('>', i + 2)
+      if (end < 0) { problems.push('an unterminated tag'); break }
+      i = end + 1; continue
+    }
+    if (!/^<[a-zA-Z]/.test(html.slice(i, i + 2))) { i++; continue } // a "<" that starts no tag is text
+    const tag = parseStartTag(html, i)
+    if (!tag) { problems.push('an unterminated start tag'); break }
+    const name = tag.name
+    // Bento writes only plain tag names. Anything else ("meta<style", a NUL, a
+    // non-ASCII letter) is a tag a scanner and a browser may read differently.
+    if (!TAG_NAME.test(name)) problems.push(`a start tag named ${JSON.stringify(name)}`)
+    if (['iframe', 'object', 'embed', 'base'].includes(name)) problems.push(`a <${name}>`)
+    if (name === 'meta' && /^\s*(refresh|content-security-policy)\s*$/i.test(tag.attrs.get('http-equiv') ?? '')) problems.push('a <meta> refresh or CSP')
+    if ([...tag.attrs.keys()].some((n) => n.startsWith('on'))) problems.push(`an on*= attribute on <${name}>`)
+    if (name === 'script' && (tag.duplicate || tag.slash)) problems.push(`a <script> start tag with a ${tag.duplicate ? 'duplicate attribute' : '"/" between attributes'} (Bento writes neither)`)
+    if (RAW_TEXT.includes(name)) {
+      const close = rawTextEnd(lower, name, tag.end)
+      if (close < 0) { problems.push(`an unterminated <${name}>`); break }
+      // inert to a browser, but a scanner that doesn't treat these as text
+      // would count it: refuse, so every host's scanner reaches the same verdict
+      if (name !== 'script' && lower.slice(tag.end, close).includes('<script')) problems.push(`a <${name}> holds a <script>`)
+      if (name === 'textarea' || name === 'title') { i = close; continue }
+      const get = (n: string) => tag.attrs.has(n) ? tag.attrs.get(n)! : null
+      blocks.push({
+        tag: name as 'script' | 'style', attrs: html.slice(i, tag.end), text: html.slice(tag.end, close), start: tag.end,
+        type: get('type'), id: get('id'), src: get('src'), preview: tag.attrs.has('data-bento-preview'),
+        duplicate: tag.duplicate, slash: tag.slash,
+      })
+      i = close; continue // its end tag is skipped as an end tag
+    }
+    i = tag.end
+  }
+  return { blocks, problems }
+}
+
+/** Every <script> and <style> element in the file, with its raw text, in document order. */
+export function scanBlocks(html: string): Block[] {
+  return walk(html).blocks
 }
 
 // --- the grammar (security, 2026-10-21) ------------------------------------------
@@ -172,38 +233,8 @@ export const executableScripts = (blocks: Block[]): Block[] => blocks.filter((b)
  * Returns the problems; [] = none.
  */
 export function markupProblems(html: string): string[] {
-  const problems: string[] = []
-  const lower = asciiLower(html)
-  let i = 0
-  while ((i = html.indexOf('<', i)) !== -1) {
-    if (html.startsWith('<!--', i)) {
-      const end = html.indexOf('-->', i + 4)
-      const body = lower.slice(i + 4, end < 0 ? html.length : end)
-      if (body.includes('<script')) problems.push('a comment holds a <script>')
-      if (end < 0) { problems.push('an unterminated comment'); break }
-      i = end + 3; continue
-    }
-    const tag = parseStartTag(html, i)
-    if (!tag) {
-      if (/^<[a-zA-Z]/.test(html.slice(i, i + 2))) { problems.push('an unterminated start tag'); break }
-      i++; continue
-    }
-    const name = tag.name, j = tag.end - 1
-    if (['iframe', 'object', 'embed', 'base'].includes(name)) problems.push(`a <${name}>`)
-    if (name === 'meta' && /^\s*(refresh|content-security-policy)\s*$/i.test(tag.attrs.get('http-equiv') ?? '')) problems.push('a <meta> refresh or CSP')
-    if ([...tag.attrs.keys()].some((n) => n.startsWith('on'))) problems.push(`an on*= attribute on <${name}>`)
-    if (name === 'script' && (tag.duplicate || tag.slash)) problems.push(`a <script> start tag with a ${tag.duplicate ? 'duplicate attribute' : '"/" between attributes'} (Bento writes neither)`)
-    if (name === 'script' || name === 'style') {
-      const close = lower.indexOf(`</${name}`, j)
-      if (close < 0) { problems.push(`an unterminated <${name}>`); break }
-      // inert to a browser, but a scanner that doesn't special-case <style>
-      // would count it: refuse, so every host's scanner reaches the same verdict
-      if (name === 'style' && lower.slice(j, close).includes('<script')) problems.push('a <style> holds a <script>')
-      i = close + 2; continue
-    }
-    i = j + 1
-  }
-  for (const b of scanBlocks(html)) if (isDataScript(b) && b.text.includes('<')) problems.push(`the ${b.type} block contains "<"`)
+  const { blocks, problems } = walk(html)
+  for (const b of blocks) if (isDataScript(b) && b.text.includes('<')) problems.push(`the ${b.type} block contains "<"`)
   return problems
 }
 
