@@ -20,14 +20,31 @@ import Foundation
 enum ReleaseHistory {
     static func url(_ app: String) -> String { "https://bento.page/releases/\(app)/history.json" }
 
+    /// Where histories come from and are kept, and what they're verified with.
+    /// The app uses `.app`; the rig points both elsewhere and signs with a test key.
+    struct Store {
+        let bundled: (String) -> Data?
+        let heldDir: URL?
+        let verify: (Data, Data) -> Bool
+        static let app = Store(
+            bundled: { name in Bundle.main.url(forResource: name, withExtension: "json", subdirectory: "release-history").flatMap { try? Data(contentsOf: $0) } },
+            // a folder of our own: on an unsandboxed Mac, Application Support is the
+            // person's shared folder, not a container
+            heldDir: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                .appendingPathComponent(Bundle.main.bundleIdentifier ?? "page.bento.home", isDirectory: true)
+                .appendingPathComponent("release-history", isDirectory: true),
+            verify: ReleaseKeys.verify)
+        func held(_ app: String) -> URL? { heldDir?.appendingPathComponent("\(app).json") }
+    }
+
     /// The newest verified history this device holds for `app`, or nil when it
     /// holds none (gate 1 then calls every document unknown).
-    static func current(_ app: String) -> JSON? {
+    static func current(_ app: String, in store: Store = .app) -> JSON? {
         #if DEBUG
-        if let rig = rigHistory() { return rig }
+        if store.heldDir == Store.app.heldDir, let rig = rigHistory() { return rig }
         #endif
-        let floor = bundledData(app).flatMap { open($0, app: app) }
-        guard let held = heldData(app).flatMap({ open($0, app: app) }) else { return floor }
+        let floor = store.bundled(app).flatMap { open($0, app: app, in: store) }
+        guard let held = store.held(app).flatMap({ try? Data(contentsOf: $0) }).flatMap({ open($0, app: app, in: store) }) else { return floor }
         // a held copy counts only while it's a valid successor of the floor
         if let floor, Gate1.acceptHistory(held: floor, incoming: held, app: app) != .ok { return floor }
         return held
@@ -37,21 +54,21 @@ enum ReleaseHistory {
 
     /// Fetch the published history and keep it if it's a valid successor of
     /// what's held. Call only from something the person asked for.
-    static func refresh(_ app: String) async -> Refresh {
+    static func refresh(_ app: String, in store: Store = .app) async -> Refresh {
         let data: Data
         do { data = try await Releases.fetch(url(app)) } catch { return .failed(error.localizedDescription) }
-        return accept(data, app: app)
+        return accept(data, app: app, in: store)
     }
 
     /// The decision, apart from the network, so the rig can drive it.
-    static func accept(_ data: Data, app: String) -> Refresh {
-        guard let incoming = open(data, app: app) else { return .refused("not a valid signed history for \(app)") }
-        let held = current(app)
+    static func accept(_ data: Data, app: String, in store: Store = .app) -> Refresh {
+        guard let incoming = open(data, app: app, in: store) else { return .refused("not a valid signed history for \(app)") }
+        let held = current(app, in: store)
         if let held, held == incoming { return .unchanged }
         switch Gate1.acceptHistory(held: held, incoming: incoming, app: app) {
         case .refused(let why): return .refused(why)
         case .ok:
-            guard let dest = heldURL(app) else { return .failed("no place to keep it") }
+            guard let dest = store.held(app) else { return .failed("no place to keep it") }
             do {
                 try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try data.write(to: dest, options: .atomic)
@@ -61,25 +78,10 @@ enum ReleaseHistory {
     }
 
     /// A verified, well-formed history for this app, or nil.
-    static func open(_ envelope: Data, app: String) -> JSON? {
-        guard let h = Gate1.openSigned(envelope, verify: ReleaseKeys.verify),
+    static func open(_ envelope: Data, app: String, in store: Store = .app) -> JSON? {
+        guard let h = Gate1.openSigned(envelope, verify: store.verify),
               Gate1.historyProblems(h).isEmpty, h["app"]?.string == app else { return nil }
         return h
-    }
-
-    private static func bundledData(_ app: String) -> Data? {
-        Bundle.main.url(forResource: app, withExtension: "json", subdirectory: "release-history").flatMap { try? Data(contentsOf: $0) }
-    }
-
-    private static func heldData(_ app: String) -> Data? { heldURL(app).flatMap { try? Data(contentsOf: $0) } }
-
-    /// a folder of our own: on an unsandboxed Mac, Application Support is the
-    /// person's shared folder, not a container
-    private static func heldURL(_ app: String) -> URL? {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "page.bento.home", isDirectory: true)
-            .appendingPathComponent("release-history", isDirectory: true)
-            .appendingPathComponent("\(app).json")
     }
 
     #if DEBUG
