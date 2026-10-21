@@ -20,11 +20,12 @@
 // apart HERE, where the DOM is still visible, or an oversized workbook opens
 // as the starter and saves over itself.
 
+import { csvField } from './csvout.ts'
 import './styles.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, saveFile,
-  parseEnvelope, decryptEnvelope, setEncryptionPassword, isEncryptionActive,
+  parseEnvelope, decryptEnvelope, setEncryptionPassword, isBodySealed,
   canWriteInPlace, downloadFile, suggestedFileName, openedFileName, registerPreview,
   currentFileName,
 } from '../../kernel/src/save.ts'
@@ -74,7 +75,7 @@ import {
 import { cellKey, isFormula, recalcWorkbook, workbookSources } from './cellformula.ts'
 import { Store, type Patch, setColumnType } from './store.ts'
 import { starterDoc } from './starter.ts'
-import { inferComputedType } from './computedtype.ts'
+import { inferComputedType, retypePatch } from './computedtype.ts'
 import { validateDoc } from './validate.ts'
 import { mountHelp } from './help.ts'
 // The grid's three context menus, and the popover every menu in this file is
@@ -214,6 +215,7 @@ function markMountedWithoutDoc(extra: Record<string, unknown> = {}): void {
 
 /** An encrypted workbook: ask, then take the same boot path. */
 async function passwordGate(raw: string): Promise<void> {
+  document.title = appConfig().appName // neutral title while sealed, matching the saved file's title
   markMountedWithoutDoc()
   dismissSplashNow()
   document.body.innerHTML =
@@ -321,8 +323,13 @@ function refuse(res: Extract<ParseResult, { ok: false }>): void {
  * through that path. Defaulting to false means a new call site that forgets
  * this argument stays silent rather than phoning home.
  */
+/** The tab title: neutral title while sealed, matching the saved file's title. */
+function tabTitle(title: string): string {
+  return isBodySealed() ? appConfig().appName : `${title} — ${appConfig().appName}`
+}
+
 function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', saved = false): void {
-  document.title = `${doc.title} — ${appConfig().appName}`
+  document.title = tabTitle(doc.title)
   dismissSplash()
 
   const store = new Store(doc)
@@ -1266,7 +1273,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
       // NEVER write an encrypted workbook's plaintext to IndexedDB. The kernel
       // states the rule in its own header and enforces it in neither place, so
       // every app has to remember — and the second one did not.
-      if (!isEncryptionActive()) {
+      if (!isBodySealed()) {
         // THE RETURN VALUE IS THE POINT, and it was being thrown away.
         //
         // `putRecovery` resolves FALSE rather than throwing when there is no
@@ -1293,7 +1300,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
         // it refuses an encrypted workbook for the same reason putRecovery does
         void rememberVersion(store.doc)
       }
-      // …AND THE FILE ITSELF. Deliberately outside the `isEncryptionActive`
+      // …AND THE FILE ITSELF. Deliberately outside the `isBodySealed`
       // guard above: that guard is about writing PLAINTEXT into IndexedDB,
       // and this writes the workbook's own file through the encryption-aware
       // `serializeAuto`. See writeback.ts's header — two channels, two rules.
@@ -1458,7 +1465,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
       // the chrome nothing else refreshes: the title field is written once at
       // boot and thereafter only by its own input handler
       titleEl.value = next.title
-      document.title = `${next.title} — ${appConfig().appName}`
+      document.title = tabTitle(next.title)
     },
   }
   void mountRecovery(openHost)
@@ -1472,7 +1479,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
 
   titleEl.addEventListener('input', () => {
     store.commit({ op: 'setTitle', title: titleEl.value })
-    document.title = `${titleEl.value} — ${appConfig().appName}`
+    document.title = tabTitle(titleEl.value)
   })
 
   // --- the top-bar dropdowns.
@@ -2267,14 +2274,15 @@ function retype(store: Store, col: Column, x: number, y: number): void {
  * calls this defect out by name.
  */
 function exportCsv(store: Store, sheet: TableSheet): void {
-  const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s)
+  // csvout.ts: RFC 4180 quoting AND the formula-injection escape - a text cell
+  // starting = + - @ tab or CR must not run as a formula in whoever opens this.
   const n = sheet.rids.reduce((a, [, c]) => a + c, 0)
-  const lines = [sheet.columns.map((c) => q(c.name)).join(',')]
+  const lines = [sheet.columns.map((c) => csvField(c.name)).join(',')]
   for (let i = 0; i < n; i++) {
     lines.push(sheet.columns.map((c) => {
       const d = sheet.data[c.id]
       const v = d?.enc === 'raw' ? d.v[i] : d?.enc === 'dict' ? (d.idx[i] == null ? null : d.dict[d.idx[i]!]) : null
-      return q(v == null ? '' : String(v))
+      return csvField(v)
     }).join(','))
   }
   const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' })
@@ -2355,11 +2363,14 @@ async function addFormula(store: Store, sheet: TableSheet): Promise<void> {
   // to nothing. computedtype.ts runs the expression against this sheet and
   // judges the values; when they cannot be judged it says text, which is the
   // type that makes no claim.
+  // …and a number computed from Money is Money, with its format and unit, so
+  // `Value * 2` prints £8,600 beside £24,800 rather than 8600 beside 24,800.
+  const inferred = inferComputedType(sheet, got.expr)
   store.commit({
     op: 'addColumn', sheet: sheet.id,
     column: {
       id, name: got.name.trim() || t('Computed'),
-      type: inferComputedType(sheet, got.expr).type, formula: got.expr,
+      type: inferred.type, ...inferred.carry, formula: got.expr,
     },
   })
 }
@@ -2386,10 +2397,9 @@ async function editFormula(store: Store, sheet: TableSheet, col: Column): Promis
   // is exactly the case "nobody has touched this".
   const before = inferComputedType(sheet, col.formula ?? '', col.id)
   const after = inferComputedType(sheet, got.expr, col.id)
-  const retype = col.type === before.type && after.type !== col.type
   store.commit({
     op: 'setColumn', sheet: sheet.id, col: col.id,
-    patch: retype ? { formula: got.expr, type: after.type } : { formula: got.expr },
+    patch: retypePatch(col, before, after, got.expr),
   })
 }
 

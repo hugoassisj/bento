@@ -47,7 +47,7 @@
 import { openDialog } from './dialog.ts'
 import { openSettings, updateWaiting, type SettingsHooks } from './settings.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
-import { canWriteInPlace, isEncryptionActive, openedFileName } from '../../kernel/src/save.ts'
+import { canWriteInPlace, isBodySealed, openedFileName } from '../../kernel/src/save.ts'
 import { addVersion, listVersions } from '../../kernel/src/autosave.ts'
 // CIRCULAR, DELIBERATELY, and safe: recovery.ts imports `planReplace` from
 // here. Both directions are used only inside function bodies — nothing at
@@ -188,7 +188,7 @@ let lastVersionAt = 0
  * remembers it for `putRecovery`; this is the second store and the same rule.
  */
 export async function rememberVersion(doc: DashDoc): Promise<void> {
-  if (isEncryptionActive()) return
+  if (isBodySealed()) return
   if (Date.now() - lastVersionAt < VERSION_EVERY_MS) return
   lastVersionAt = Date.now()
   await addVersion(doc)

@@ -428,9 +428,10 @@ for (const [label, input, err] of [
   // as slides keeps them; About no longer holds either
   const about = fs.readFileSync(new URL('../spaces/src/doccmds.ts', import.meta.url), 'utf8')
 
-  // the debounce body must stand down when encryption is on
-  const guarded = /if \(isEncryptionActive\(\)\) return[\s\S]{0,200}?putRecovery/.test(main)
-  ok(guarded, 'main.ts skips the recovery snapshot while a space is encrypted')
+  // the debounce body must stand down while the body is sealed: a password OR
+  // the identity seal (isBodySealed; isEncryptionActive is only the password)
+  const guarded = /if \(isBodySealed\(\)\) return[\s\S]{0,200}?putRecovery/.test(main)
+  ok(guarded, 'main.ts skips the recovery snapshot while a space is sealed (password or identity seal)')
 
   // and turning encryption ON must remove what was written before it
   ok(/clearVersions\(/.test(about) && /clearRecovery\(/.test(about),
@@ -445,8 +446,10 @@ for (const [label, input, err] of [
   ok(/addVersion\(/.test(main), 'main.ts writes a version timeline at all')
   const throttled = /Date\.now\(\) - lastVersionAt > VERSION_EVERY_MS[\s\S]{0,120}?addVersion/.test(main)
   ok(throttled, '…on a throttle while editing, so one session cannot spend the cap')
-  const saveGuarded = /if \(!isEncryptionActive\(\)\) \{ void addVersion/.test(main)
-  ok(saveGuarded, '…and the SAVE path checks encryption itself, having no early return above it')
+  const saveGuarded = /if \(!isBodySealed\(\)\) \{ void addVersion/.test(main)
+  ok(saveGuarded, '…and the SAVE path checks the seal itself, having no early return above it')
+  ok(!/isEncryptionActive/.test(main.replace(/\/\/.*$/gm, '')),
+    'main.ts asks isBodySealed everywhere: no plaintext-to-disk guard reads the password-only flag')
 
   // The restore has to go through replaceDoc: it is the one path that
   // checkpoints undo first, which is what makes the note "Restoring is
@@ -1829,8 +1832,11 @@ function fsTable(f: string): string {
     'the width is the READER\'s — localStorage under the key readers already have, never the document')
   ok(!/storageKey:/.test(ed.slice(ed.indexOf('private makePanel('), ed.indexOf('private syncScrim('))),
     '…written by the editor, not the primitive, so a phone drawer never persists a desktop preference')
-  ok(/if \(!this\.isDrawer\(\)\) \{\s*\n\s*try \{\s*\n\s*localStorage\.setItem\(o\.widthKey/.test(ed),
-    '…and only while the panel is a column')
+  // gated on the mode the CHANGE came from: the onChange that fires as the
+  // viewport crosses out of drawer width carries the drawer's state, and must
+  // not be written (test-spaces-chrome drives the behaviour)
+  ok(/if \(!drawer && !crossed\) \{\s*\n\s*desk = p\.collapsed\s*\n\s*try \{\s*\n\s*localStorage\.setItem\(o\.widthKey/.test(ed),
+    '…and only for a change made while the panel was already a column')
 
   const tabRule = kcss.slice(kcss.indexOf('.bkp-toggle {'), kcss.indexOf('}', kcss.indexOf('.bkp-toggle {')))
   ok(tabRule.length > 20 && !/opacity:\s*0\b/.test(tabRule), 'the collapse chevron is visible without hovering')
