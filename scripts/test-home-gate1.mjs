@@ -221,8 +221,67 @@ async function differential(bin, dir) {
   }
   const okAll = differ === 0
   console.log(`  ${okAll ? 'ok  ' : 'FAIL'}  ${files.length - differ}/${files.length} agree on verdict, release, CSP, problems, blocks and strict (${genuine} still genuine, ${thrown} unterminated)`)
-  return okAll ? 0 : 1
+  // every fuzz file EITHER implementation calls genuine goes to the browser
+  const called = files.flatMap(([f, t], k) => {
+    const csp = lines[k].csp ?? null
+    return lines[k].served.startsWith('genuine') ? [{ file: f, csp, why: `fuzz ${lines[k].file} (${lines[k].served})` }] : []
+  })
+  return (okAll ? 0 : 1) | (await browserOracle(bin, dir, called, history))
 }
+
+/**
+ * THE BROWSER decides what runs. A differential against the reference can't
+ * find a bug the two share; WebKit can. Each file is served from a custom scheme
+ * under the CSP gate 1 gave it (plus 'report-sample'), and every script that
+ * CSP refuses is recorded: an inline script, a handler or a src= that isn't the
+ * release's loader or remover. Anything gate 1 calls GENUINE must cause none.
+ * Standing attack rows: the U+0130 index drift and the "/" type separator.
+ */
+async function browserOracle(bin, dir, called, history) {
+  if (process.platform !== 'darwin') return 0
+  const { readFileSync } = await import('node:fs')
+  const oracle = join(dir, 'oracle')
+  execFileSync('swiftc', ['-O', '-o', oracle, join(ROOT, 'scripts/lib/gate1-oracle.swift')], { stdio: 'pipe' })
+  const genuine = readFileSync(join(DIR, 'served/genuine-1.0.0.html'), 'utf8')
+  const attack = (name, payload) => { const f = join(dir, `${name}.html`); writeFileSync(f, genuine.replace('</body>', payload + '</body>')); return f }
+  const attacks = [
+    ['U+0130 index drift (home-desktop)', attack('a-u0130', '<p>' + '\u0130'.repeat(20) + '</p><style>a{}</style><script>window.pwned=1</script>')],
+    ['"/" as an attribute separator (security)', attack('a-slash', '<script /type="text/javascript" type="application/bento+json">window.pwned=2</script>')],
+  ]
+  const verdictOf = (f) => JSON.parse(execFileSync(bin, ['--diff', join(dir, 'h.json'), join(dir, 'x.json'), f]).toString())
+  const csp100 = verdictOf(join(DIR, 'served/genuine-1.0.0.html')).csp
+  const withSample = (c) => c.replace('script-src ', "script-src 'report-sample' ")
+  const E = JSON.parse(readFileSync(join(DIR, 'expected.json'), 'utf8'))
+  const cases = []
+  // the control: the oracle must SEE an extra script, or its silence means nothing
+  cases.push({ role: 'control', file: join(DIR, 'served/extra-plain-script.html'), csp: withSample(csp100), why: 'extra-plain-script under 1.0.0\'s CSP' })
+  for (const row of E.served.filter((r) => r.verdict === 'genuine')) {
+    const v = verdictOf(join(DIR, row.case))
+    cases.push({ role: 'genuine', file: join(DIR, row.case), csp: withSample(v.csp), why: row.case })
+  }
+  for (const [why, f] of attacks) {
+    const v = verdictOf(f)
+    if (v.served.startsWith('genuine')) cases.push({ role: 'called', file: f, csp: withSample(v.csp), why: `${why}: gate 1 says ${v.served}` })
+    else console.log(`  ok    ${why}: gate 1 says ${v.served}, so nothing is served under a pinned CSP`)
+  }
+  for (const c of called) cases.push({ role: 'called', file: c.file, csp: withSample(c.csp), why: c.why })
+  writeFileSync(join(dir, 'cases.json'), JSON.stringify(cases.map(({ file, csp }) => ({ file, csp }))))
+  const out = execFileSync(oracle, [join(dir, 'cases.json')], { maxBuffer: 1 << 26, timeout: 30 * 60 * 1000 }).toString().trim().split('\n').map((l) => JSON.parse(l))
+  console.log(`\nthe browser oracle (WebKit decides what runs): ${cases.length} files`)
+  let bad = 0
+  const res = (k) => out[k] ?? { loaded: false, violations: [{ directive: 'no result' }] }
+  const scriptV = (r) => r.violations.filter((v) => v.directive.startsWith('script-src'))
+  ok0(res(0).loaded && scriptV(res(0)).length > 0, `the control: the oracle sees an extra script (${scriptV(res(0)).map((v) => v.sample).join(', ')})`) || bad++
+  const gen = cases.map((c, k) => [c, res(k)]).filter(([c]) => c.role === 'genuine')
+  const genBad = gen.filter(([, r]) => !r.loaded || scriptV(r).length)
+  ok0(genBad.length === 0, `every genuine corpus file loads and runs only its loader and remover (${gen.length})` + (genBad.length ? `: ${genBad.map(([c]) => c.why).join(', ')}` : '')) || bad++
+  const callBad = cases.map((c, k) => [c, res(k)]).filter(([c, r]) => c.role === 'called' && scriptV(r).length)
+  for (const [c, r] of callBad.slice(0, 5)) console.log(`  FAIL  gate 1 calls it genuine, and it runs more: ${c.why}: ${scriptV(r).map((v) => `${v.directive} ${JSON.stringify(v.sample || v.blocked)}`).join('; ')}`)
+  const nCalled = cases.filter((c) => c.role === 'called').length
+  ok0(callBad.length === 0, `nothing else gate 1 calls genuine runs anything but its loader and remover (${nCalled} files${callBad.length ? `, ${callBad.length} DO` : ''})`) || bad++
+  return bad ? 1 : 0
+}
+function ok0(c, m) { console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`); return c }
 
 const dir = mkdtempSync(join(tmpdir(), 'bento-gate1-'))
 let code = 0
