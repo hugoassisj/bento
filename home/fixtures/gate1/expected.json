@@ -266,6 +266,32 @@
       "why": "\"<!-->\" and \"<!--->\" end at once: nothing after them is swallowed"
     },
     {
+      "case": "served/endtag-quoted-gt.html",
+      "verdict": "unknown",
+      "why": "the end tag ends at its second \">\": the script after it is real and runs"
+    },
+    {
+      "case": "served/endtag-attribute.html",
+      "verdict": "unknown",
+      "why": "an end tag carrying attributes: a browser drops them, but they move where the tag ends, and Bento writes none"
+    },
+    {
+      "case": "served/endtag-on-pinned-script.html",
+      "verdict": "unknown",
+      "why": "an attribute on a pinned script's END tag: the block text is unchanged, and still refused"
+    },
+    {
+      "case": "served/endtag-glued-name.html",
+      "verdict": "unknown",
+      "why": "an end tag named \"p<b\""
+    },
+    {
+      "case": "served/endtag-empty.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "\"</>\" is ignored entirely: nothing after it is swallowed"
+    },
+    {
       "case": "served/empty-comment-in-paragraph.html",
       "verdict": "genuine",
       "release": "1.0.0",
