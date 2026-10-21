@@ -122,6 +122,14 @@ const served: Served[] = [
   { name: 'a-glued-comment', html: body('<a<!-- x -->'), verdict: 'unknown', why: 'a start tag named "a<!--"' },
   { name: 'empty-comment-then-script', html: body(`<!--><${S}>window.pwned=4</${S}>`), verdict: 'unknown', why: '"<!-->" is a whole comment: the script after it is real' },
   { name: 'empty-comment-alone', html: body('<!--><!---><p>after</p>'), verdict: 'genuine', release: '1.0.0', why: '"<!-->" and "<!--->" end at once: nothing after them is swallowed' },
+  // END tags are tokenized like start tags, quoted attribute values and all: in
+  // `</p a="><b c='">` the tag ends at the SECOND ">", so the script after it runs.
+  // Skipping an end tag to its first ">" read `<b c='">'<script>` as one tag.
+  { name: 'endtag-quoted-gt', html: body(`</p a="><b c='">'<${S}>window.pwned=5</${S}>'>`), verdict: 'unknown', why: 'the end tag ends at its second ">": the script after it is real and runs' },
+  { name: 'endtag-attribute', html: body('<p>x</p class="x">'), verdict: 'unknown', why: 'an end tag carrying attributes: a browser drops them, but they move where the tag ends, and Bento writes none' },
+  { name: 'endtag-on-pinned-script', html: g.replace(/<\/script>/, '</script a=">">'), verdict: 'unknown', why: 'an attribute on a pinned script\'s END tag: the block text is unchanged, and still refused' },
+  { name: 'endtag-glued-name', html: body('<p>x</p<b>'), verdict: 'unknown', why: 'an end tag named "p<b"' },
+  { name: 'endtag-empty', html: body('<p>x</>y</p>'), verdict: 'genuine', release: '1.0.0', why: '"</>" is ignored entirely: nothing after it is swallowed' },
   // the browser's reading must WIN in the genuine direction too (home-desktop):
   // a walk that ends raw text at any "</name", or doesn't know "<!-->", would
   // wrongly refuse these, and no unknown row could tell
