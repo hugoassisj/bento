@@ -167,6 +167,9 @@ pub fn devices() -> Result<Vec<String>, FidoError> {
     init();
     unsafe {
         let mut di = fido_dev_info_new(16);
+        if di.is_null() {
+            return Err(FidoError::Unavailable("libfido2 could not allocate".into()));
+        }
         let mut n = 0usize;
         let r = fido_dev_info_manifest(di, 16, &mut n);
         let out = (0..n)
@@ -185,6 +188,9 @@ impl Dev {
         let c = CString::new(path).map_err(|e| FidoError::Unavailable(e.to_string()))?;
         unsafe {
             let d = fido_dev_new();
+            if d.is_null() {
+                return Err(FidoError::Unavailable("libfido2 could not allocate".into()));
+            }
             let r = fido_dev_open(d, c.as_ptr());
             let dev = Dev(d);
             ok(r)?;
@@ -247,6 +253,9 @@ pub fn get_assertion(
     let pin_c = pin_bytes(pin)?;
     unsafe {
         let mut a = fido_assert_new();
+        if a.is_null() {
+            return Err(FidoError::Unavailable("libfido2 could not allocate".into()));
+        }
         let res = (|| {
             ok(fido_assert_set_rp(a, rp.as_ptr()))?;
             ok(fido_assert_set_clientdata_hash(a, cdh.as_ptr(), cdh.len()))?;
@@ -301,6 +310,9 @@ pub fn make_credential(
     let pin_c = pin_bytes(pin)?;
     unsafe {
         let mut cr = fido_cred_new();
+        if cr.is_null() {
+            return Err(FidoError::Unavailable("libfido2 could not allocate".into()));
+        }
         let res = (|| {
             ok(fido_cred_set_type(cr, COSE_ES256))?;
             ok(fido_cred_set_clientdata_hash(cr, cdh.as_ptr(), cdh.len()))?;

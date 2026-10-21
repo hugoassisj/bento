@@ -170,18 +170,3 @@ fn normaliser_is_unicode_17_or_later() {
     assert!(major >= 17, "unicode-normalization data is {:?}", unicode_normalization::UNICODE_VERSION);
 }
 
-#[test]
-fn argon2id_refuses_cleanly_when_memory_is_short() {
-    // kernel/home-android finding: low memory must FAIL CLOSED with an Err,
-    // never abort or get the process killed. Simulated: 64 MiB needed + 64 MiB
-    // headroom, only 100 MiB "available".
-    rc::set_available_memory_override_kib(Some(100 * 1024));
-    let r = rc::argon2id(b"pw", &[0u8; 16]);
-    rc::set_available_memory_override_kib(None);
-    let e = r.err().expect("refused");
-    assert!(e.contains("not enough free memory"), "{e}");
-    // control: with enough available, it runs
-    rc::set_available_memory_override_kib(Some(1024 * 1024));
-    assert!(rc::argon2id(b"pw", &[0u8; 16]).is_ok());
-    rc::set_available_memory_override_kib(None);
-}
