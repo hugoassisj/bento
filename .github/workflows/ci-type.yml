@@ -144,6 +144,30 @@ jobs:
       - name: A sealed document leaves no plaintext and shows a neutral title
         run: node scripts/test-type-sealed-browser.mjs
 
+  type-printframe-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: The print frame is inert and runs under the identity CSP; saved previews stay inert
+        # bento/connect gate-1 invariant 3's one exception (R-t): the builder
+        # emits inert markup, the frame inherits the hash-only CSP and carries
+        # its own script-src 'none', and the real shell prints under the CSP.
+        run: node scripts/test-type-printframe-browser.mjs
+
   type-sinks-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15

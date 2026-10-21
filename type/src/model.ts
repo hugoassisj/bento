@@ -220,6 +220,43 @@ export const LETTER: PageSpec = {
   width: 816, height: 1056, marginX: 104, marginTop: 104, marginBottom: 104,
 };
 
+/**
+ * A font stack a document may carry, by GRAMMAR: a comma-separated list of
+ * names, each quoted ("Iowan Old Style", 'Iowan Old Style') or bare (Georgia,
+ * serif), made of letters, digits, spaces, hyphens, dots and underscores.
+ * Anything else is REFUSED (undefined), never trimmed into shape: nothing that
+ * could end a CSS declaration or rule (`;` `{` `}`), a string, or an HTML
+ * element (`<` `>`) can pass. Every consumer interpolates this into CSS —
+ * print and the preview into HTML strings — and a SYNCED value never passes
+ * parseDoc, so the consumers call it too, not only parseDoc.
+ */
+export function safeFontFamily(v: unknown): string | undefined {
+  if (typeof v !== 'string' || v.length > 300) return undefined;
+  const NAME = /^(?:"[A-Za-z0-9 ._-]+"|'[A-Za-z0-9 ._-]+'|[A-Za-z0-9][A-Za-z0-9 ._-]*)$/;
+  const parts = v.split(',').map(p => p.trim());
+  return parts.every(p => NAME.test(p)) ? parts.join(', ') : undefined;
+}
+
+/** Page geometry from a file — or from a synced doc, which never passed
+ *  parseDoc: print and the preview call this too. NUMBERS, or the default. Every consumer
+ *  interpolates these into CSS (print into an HTML string), so a string here
+ *  could end the element it is written into. Unknown keys ride along. */
+export function readPage(raw: Record<string, unknown>): PageSpec {
+  const num = (v: unknown, lo: number, hi: number): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : undefined;
+  const out = { ...LETTER, ...raw } as PageSpec & Record<string, unknown>;
+  out.width = num(raw.width, 100, 20000) ?? LETTER.width;
+  out.height = num(raw.height, 100, 20000) ?? LETTER.height;
+  out.marginX = num(raw.marginX, 0, 5000) ?? LETTER.marginX;
+  out.marginTop = num(raw.marginTop, 0, 5000) ?? LETTER.marginTop;
+  out.marginBottom = num(raw.marginBottom, 0, 5000) ?? LETTER.marginBottom;
+  for (const k of ['marginLeft', 'marginRight'] as const) {
+    const v = num(raw[k], 0, 5000);
+    if (v === undefined) delete out[k]; else out[k] = v;
+  }
+  return out;
+}
+
 export interface Signature {
   alg: 'ES256';
   /** raw P-256 public key, base64url — the identity. The name is only a claim. */
@@ -833,12 +870,21 @@ export function parseDoc(raw: string): ParseResult {
     version: typeof json.version === 'number' ? json.version : VERSION,
     docId: typeof json.docId === 'string' && json.docId ? json.docId : newDocId(),
     title: typeof json.title === 'string' ? json.title : 'Untitled',
-    page: isObj(json.page) ? { ...LETTER, ...(json.page as object) } as PageSpec : { ...LETTER },
+    page: isObj(json.page) ? readPage(json.page) : { ...LETTER },
     body, footnotes,
     revisions: Array.isArray(json.revisions) ? json.revisions as Revision[] : [],
     ...(json.track === true ? { track: true } : {}),
     signatures: readSignatures(json.signatures, typeof json.docId === 'string' ? json.docId : ''),
   };
+  // the document's default type: a filtered family and a size in range, or none
+  // (both are interpolated into CSS by every consumer — see readPage)
+  if (isObj(json.type)) {
+    const ty: { family?: string; size?: number } = {};
+    const f = safeFontFamily(json.type.family); if (f) ty.family = f;
+    const sz = json.type.size;
+    if (typeof sz === 'number' && Number.isFinite(sz) && sz >= 6 && sz <= 96) ty.size = sz;
+    if (Object.keys(ty).length) doc.type = ty; else delete doc.type;
+  } else delete doc.type;
   if (Object.keys(styles).length) doc.styles = styles; else delete doc.styles;
   // A salt is 16 bytes, base64url without padding: exactly 22 characters. Anything
   // else is not a salt — dropped, so its signatures report the history MISSING
