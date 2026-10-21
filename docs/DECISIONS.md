@@ -11687,6 +11687,110 @@ Also settled the same day: a stored `bento-lang` is validated before `Intl`
 sees it (dash/src/i18n.ts `intlLocale`), because the key is shared across every
 file on the origin and a bad value used to stop boot.
 
+## 2026-10-21 — bento/connect K4: release pins and the signed release history
+
+A host that SERVES a document (iOS, Android, desktop, the hosted runtime)
+decides "genuine runtime" by hashing the file's code blocks and serving it under
+a hash-pinned script CSP (security §18). K4 publishes what that needs, per
+release, signed with the release key:
+- **Pins, in the manifest (additively: shipped shells read only
+  app/version/sha256/url):** `pins = { v: 1, blocks: { bento-rt, bento-rt-css,
+  loader, remover }, scriptSrc: [loader, remover] }`. Blocks are sha256 hex of
+  each code block's text; `scriptSrc` is the CSP form. They're derived from the
+  release's OWN bytes: the built shell, and a file it saved through its real ⌘S
+  fallback (`scripts/derive-pins.mjs`). The remover exists only in saved files,
+  and one app's scripting API returns JSON, not a file.
+- **A signed, cumulative history:** `releases/<app>/history.json`, the release
+  envelope over `{ app, v: 1, releases: [{ version, sha256, at, pins }] }`,
+  newest first. It's append-only: a release must be newer than everything held,
+  and a held entry never changes. The first history is backfilled from every
+  earlier release with a signed manifest, each shell checked against its own
+  manifest's sha256 first. For slides that's 66 versions, 0.7.0 to 1.2.9.
+  Earlier shells have no compressed runtime blocks, so they're unknown to hosts.
+- **The host rules (scripts/lib/release-history.mjs, security §36):**
+  - a file matches a release only if ONE entry matches EVERY block, with
+    exactly one block per id. A partial or ambiguous match is UNKNOWN:
+    restricted mode or an update offer, never a borrowed pinned CSP.
+  - a host keeps the newest history it has verified and refuses one that lacks
+    a held entry or rolls its newest version back. (With a well-formed history
+    the second check is implied by the first, and is kept as defence in depth.)
+- **The signing gate:** `release.mjs` refuses to sign on any pins mismatch, on
+  any executable inline script in a saved file other than the pinned loader and
+  remover, and on any CSP refusal while the release is driven under its pins,
+  except the loader's two designed fallbacks (an inline script, then `new
+  Function`). Those are matched on directive AND on a line inside the pinned
+  loader's span: matching on the source file alone excused an injected script.
+  There's no unchecked path. CI runs the same check on every PR's build of all
+  four apps, and the required `validate` job's release rehearsal runs the whole
+  pipeline.
+- **Refusal COLUMNS aren't reliable across Chrome versions.** Chrome Headless
+  Shell 149, Playwright's bundled browser and the one CI runs, reports a script
+  injected right after the loader's `</script>` at column 0, a position INSIDE
+  the loader's span. Chrome 155 reports its real column. So on CI's browser the
+  line-and-column rule alone would excuse that script, and the ONCE-EACH CAP
+  (at most one inline and one eval refusal excused) is what catches it. The cap
+  is the real guard and the column a refinement (security, measured). Rigs
+  identify an injected refusal by its line, with its column matching or 0, and
+  run under the bundled browser as well as system Chrome.
+- **The verdict is a GRAMMAR, not a list of cases (security, 2026-10-21).** A
+  `<script>` is inert only if its type is exactly one of the data types Bento
+  writes (`application/bento+json`, `application/bento+lang`,
+  `bento/deflate-b64`, `bento/deflate-b86`). Everything else is executable,
+  including no type, any JavaScript type, `module`, an unknown type, a
+  differently cased data type, and any `src=`. An executable script must then
+  be exactly the pinned loader or remover by hash. A file carrying `<iframe>`,
+  `<object>`, `<embed>`, `<base>`, a `<meta>` refresh or CSP, an `on*=`
+  attribute, a comment or `<style>` holding a `<script>`, or a data block
+  containing `<` is UNKNOWN. Bento's data blocks never contain `<`: the JSON is
+  escaped and the b64/b86 alphabets exclude it. Every genuine build of the four
+  apps, a real deck with a live embed and an svg diagram, and all 66 backfilled
+  slides releases pass it unchanged. Agreement between the hosts' scanners
+  (Rust, Swift, Kotlin, JS) is K5's shared corpus.
+- **No style pins in phase 1 (security §36a).** The policy is
+  `script-src <pins> blob:; style-src 'unsafe-inline'`. A document's own svg
+  `<style>` (an svg element's `css`, sanitized and scoped) can't be pinned per
+  release: measured, the pinned style policy refused it, which breaks every
+  user diagram with hover or animation. Style injection gives no route to
+  Bento's secrets: keys and the document JSON live in script text, which CSS
+  selectors can't read, and document CSS is sanitized and scoped. So pinning
+  would only remove what the svg element provides on purpose. The style control
+  is the SANITIZER, whose rig covers the obfuscated url() forms with a browser
+  fetch check. The route to style pins later is moving svg CSS into constructed
+  stylesheets (a slides change); collecting the hashes from the browser's own
+  CSP engine under a report-only policy was measured to work.
+## 2026-10-20 — calendar span renamed Agenda (gantt keeps Timeline); calendars prefer Due — maintainer, 2026-10-20
+
+Two rulings on the bento/spaces calendar layout, made by the maintainer.
+
+- **The calendar's second shape is "Agenda" on screen.** It was "Timeline",
+  the word the gantt layout also uses, so the view head could show two
+  different pictures under one name. Only the words changed: the span button
+  reads "Agenda" and its tooltip "Show an agenda"; the gantt layout keeps
+  "Timeline" everywhere (layout button, Insert menu, "Show as a timeline").
+- **The stored value stays `span: "timeline"`.** Files written since the
+  calendar shipped carry it, the format is additive, and renaming the value
+  would open every one of those views as a month grid. Do not "tidy" it to
+  `"agenda"`; a reader that wants the new name gets it from the label, never
+  from the file. `CAL_SPANS` in `spaces/src/calendar.ts` says so beside it.
+- **A calendar prefers Due.** The date a page sits on is: its journal date;
+  else `due`, when the schema declares it as a date field and the page carries
+  a real ISO value; else the other date fields in schema order; else "No
+  date". A task with both a Start and a Due belongs on the day it is due —
+  that is what a calendar of work is opened to answer. `DEFAULT_FIELDS` is
+  NOT reordered: the property strip still shows Start before Due. The order
+  lives in one function, `dateOrderOf`, which both `dateOf` and the hint above
+  the grid read, so the sentence cannot drift from the behaviour.
+
+## 2026-10-20 — Designs: system font stacks or embedded fonts, never web fonts — maintainer, 2026-10-20
+
+Fonts in a bento/spaces design are system font stacks (`FONT_STACKS`) or fonts
+an author embeds in the file (`asset:`). No bundled or downloaded web fonts —
+maintainer, 2026-10-20. This is already how `spaces/src/designs.ts` validates
+fonts: `validFont` accepts a `FONT_STACKS` name, or an `asset:` key that
+resolves to a `data:` font in the document's own assets, and drops anything
+else to the base design's font. It is recorded so that a later change does not
+add a web-font fetch.
+
 ## 2026-10-18 — bento/connect: the desktop agent's security-key ceremony, and one rule for C libraries (home/desktop/agent)
 
 - **One authenticator stack per platform.**
