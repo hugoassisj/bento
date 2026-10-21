@@ -122,19 +122,31 @@ for scn, wins in [
             ok(b0["origin_host"] == b2["origin_host"] != u["origin_host"], "tri: same file, same origin; other file, other origin")
 
 # rig 9: the watchdog's recreate path (security's ruling: a NEW label)
-wd = report("watchdog-doc0")
-L = log("watchdog")
-ex = (out / "watchdog.exit").read_text().strip() if (out / "watchdog.exit").exists() else "missing"
-ok(ex == "0", f"watchdog: the host exited cleanly (exit {ex})")
-ok(re.search(r"RECREATE doc0 -> doc0_r1", L) is not None, "watchdog: recreated under a NEW label (doc0 -> doc0_r1)")
-ok(re.search(r'IPC bento_file op="read" id="wd-dead-old" webview=doc0 REFUSED: unknown webview', L) is not None, "watchdog: the dead webview's own secret is refused (unknown webview)")
-ok(re.search(r"SERVED doc0_r1 \d+ bytes, genuine", L) is not None, "watchdog: gate 1 re-ran on the bytes served to the new webview")
-ok(re.search(r"PENDING doc0_r1 generation 1 url=\S+\n(?:.*\n)*?ARM doc0_r1 generation 1: ARMED", L) is not None, "watchdog: the new webview armed from PENDING at a fresh generation")
-if wd:
+def rig9(scn, genuine):
+    wd = report(f"{scn}-doc0")
+    L = log(scn)
+    ex = (out / f"{scn}.exit").read_text().strip() if (out / f"{scn}.exit").exists() else "missing"
+    ok(ex == "0", f"{scn}: the host exited cleanly (exit {ex})")
+    ok(re.search(r"RECREATE doc0 -> doc0_r1", L) is not None, f"{scn}: recreated under a NEW label (doc0 -> doc0_r1)")
+    ok(re.search(r'IPC bento_file op="read" id="wd-dead-old" webview=doc0 REFUSED: unknown webview', L) is not None, f"{scn}: the dead webview's own secret is refused (unknown webview)")
+    ok(re.search(r"SERVED doc0_r1 \d+ bytes, %s" % ("genuine" if genuine else "unknown"), L) is not None, f"{scn}: gate 1 re-ran on the bytes served to the new webview")
+    ok(re.search(r"PENDING doc0_r1 generation 1 url=\S+\n(?:.*\n)*?ARM doc0_r1 generation 1: ARMED", L) is not None, f"{scn}: the new webview armed from PENDING at a fresh generation")
+    if not wd:
+        return
     W = wd["page"].get("watchdog") or {}
-    ok(W.get("armed") is True and W.get("fresh_cap") is True, f"watchdog: a freshly minted secret, never the old one ({W.get('fresh_cap')})")
-    ok(W.get("old_on_new") == "capability refused", f"watchdog: the OLD secret presented through the NEW label is refused ({W.get('old_on_new')})")
-    ok(W.get("own_on_new") == "only the open document is readable", f"watchdog: the new webview's own secret works ({W.get('own_on_new')})")
+    ok(W.get("armed") is True and W.get("fresh_cap") is True, f"{scn}: a freshly minted secret, never the old one ({W.get('fresh_cap')})")
+    ok(W.get("old_on_new") == "capability refused", f"{scn}: the OLD secret presented through the NEW label is refused ({W.get('old_on_new')})")
+    ok(W.get("own_on_new") == "only the open document is readable", f"{scn}: the new webview's own secret works ({W.get('own_on_new')})")
+    if genuine:
+        # under the pinned CSP no fetch to the origin is even made (connect-src)
+        ok(str(W.get("new_fetch", "")).startswith("blocked"), f"{scn}: under the pinned CSP a page cannot fetch its own origin at all ({W.get('new_fetch')})")
+    else:
+        ok(W.get("new_fetch") == "200", f"{scn}: control: the LIVE label's fetch of its document reaches the handler ({W.get('new_fetch')})")
+        ok(re.search(r"PROTO REFUSED doc0 [0-9a-f]{24}\.localhost/", L) is not None, f"{scn}: the DEAD label's fetch was refused by the protocol handler (host log)")
+        ok(W.get("old_fetch") in ("404", None) or str(W.get("old_fetch")).startswith("blocked"), f"{scn}: and the dead page got no document ({W.get('old_fetch')})")
+
+rig9("watchdog", True)
+rig9("watchdogu", False)
 
 for o in oks:
     print("ok  ", o)

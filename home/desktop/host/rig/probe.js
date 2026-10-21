@@ -34,12 +34,18 @@
         await inv('rig_stash', { key: 'wd.oldcap', value: window.__rigCap })
         await inv('rig_recreate', {})
         raw('wd-dead-old', window.__rigCap) // its Load is gone: the host logs the refusal
+        // and the PROTOCOL handler: no read of the document from the dead label
+        fetch(location.href, { cache: 'no-store' }).then((r) => String(r.status), (e) => 'blocked ' + e)
+          .then((v) => inv('rig_stash', { key: 'wd.oldfetch', value: v }))
         return
       }
       const old = await inv('rig_stash', { key: 'wd.oldcap' })
       const W = { label: full, armed: !!window.__rigCap, fresh_cap: !!old && window.__rigCap !== old }
       W.old_on_new = await raw('wd-old-on-new', old)
       W.own_on_new = await raw('wd-own-on-new', window.__rigCap)
+      // control: the LIVE label's fetch of its own document reaches the handler
+      W.new_fetch = await fetch(location.href, { cache: 'no-store' }).then((r) => String(r.status), (e) => 'blocked ' + e)
+      W.old_fetch = await inv('rig_stash', { key: 'wd.oldfetch' })
       await inv('rig_done', { report: { watchdog: W, violations: [] } })
       return
     }

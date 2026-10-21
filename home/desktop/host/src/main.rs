@@ -386,8 +386,11 @@ fn main() {
             let label = ctx.webview_label().to_string();
             // A document's origin serves only its root, and only to a webview that
             // document was opened in (the same file opened twice shares its origin).
-            if rest != "/" { return not_found() }
-            let Some(d) = h.docs.iter().find(|d| d.host == host && d.label == label) else { return not_found() };
+            if rest != "/" { eprintln!("PROTO REFUSED {label} {host}{rest}"); return not_found() }
+            let Some(d) = h.docs.iter().find(|d| d.host == host && d.label == label) else {
+                eprintln!("PROTO REFUSED {label} {host}{rest}");
+                return not_found();
+            };
             let mut res = http::Response::builder()
                 .header("Content-Type", "text/html; charset=utf-8")
                 .header("Cache-Control", "no-store")

@@ -41,4 +41,7 @@ scenario pair 120 "$OUT/A.bento.html" "$OUT/U.bento.html"
 scenario tri 150 "$OUT/B.bento.html" "$OUT/U2.bento.html" "$OUT/B.bento.html"
 cp "$OUT/fix/A.bento.html" "$OUT/W.bento.html"
 BENTO_RIG_WATCHDOG=1 scenario watchdog 90 "$OUT/W.bento.html"
+# the same on an UNKNOWN document: no CSP, so a fetch can reach the protocol handler
+cp "$OUT/fix/U.bento.html" "$OUT/WU.bento.html"
+BENTO_RIG_WATCHDOG=1 scenario watchdogu 90 "$OUT/WU.bento.html"
 python3 rig/check.py "$OUT"
