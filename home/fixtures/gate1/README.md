@@ -50,6 +50,17 @@ The releases in the history:
 A block's TEXT is everything between its open tag's `>` and the first `</script`
 or `</style`, in ANY case, as the HTML tokenizer ends it.
 
+Two parsing rules the reference got wrong once, so state them exactly:
+- **Read attributes as a browser does.** Names are separated by whitespace (tab,
+  LF, FF, CR, space) OR by `/`. A quoted value ends an attribute even with no
+  separator after it. A leading `=` is part of a name. Names fold ASCII-only,
+  and the FIRST of duplicate names wins. A `<script>` tag with a duplicate
+  attribute or a `/` is refused outright, because Bento writes neither.
+- **Fold case in ASCII only, never with a length-changing fold.** `toLowerCase()`
+  turns `İ` into two UTF-16 units. Searching a folded copy while slicing the
+  original then drifts: a genuine Turkish document reads as unknown, and a run
+  of `İ` before a `<style>` hides a later script.
+
 ## The served path: the rules
 
 A file is a release's only if ONE history entry matches EVERY block:
@@ -103,6 +114,18 @@ leading bytes, CRLF, `<\tscript>`, uppercase preview scripts).
 Both genuine saves pass, and all 16 tamper rows refuse. A file:// result is
 never grounds for identity calls (security §16): only a host that serves the
 bytes it verified may expose identity.
+
+## The browser oracle
+
+`scripts/test-gate1-oracle.mjs` asks a browser, the ground truth for "what runs".
+A differential fuzz between the reference and a port can't see a bug they share,
+and two such bugs were found in the reference: `/` as an attribute separator, and
+a case fold that changed the string's length.
+
+The oracle mutates genuine files the ways scanners disagree. It loads every
+mutant gate1 calls GENUINE with no CSP, and fails unless exactly the loader and
+the remover ran. Each failure is written to `oracle-failures/` here: add it to
+the corpus as a declared row, so every port runs it.
 
 ## Changing the rules
 

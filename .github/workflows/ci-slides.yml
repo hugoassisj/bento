@@ -66,6 +66,15 @@ jobs:
         # or on the loader's own lines is reported, and the rig checks WHICH
         # refusal was excused, not just how many. A wrong loader pin never boots.
         run: node scripts/test-csp-boot-browser.mjs
+      - name: Gate 1 against a browser oracle in Chromium
+        # K5 (security): a differential fuzz can't see a bug the reference and a
+        # port SHARE, and both the "/" attribute separator and the length-changing
+        # case fold were shared. So genuine files are mutated the ways scanners
+        # split, and every mutant gate1 calls GENUINE is loaded with NO CSP:
+        # exactly the loader and the remover may run. A fixed seed, plus a short
+        # random run whose seed is printed for replay. Any failure is written to
+        # home/fixtures/gate1/oracle-failures/ as a corpus row.
+        run: node scripts/test-gate1-oracle.mjs
       - name: A sealed slides deck keeps its content out of IndexedDB in Chromium
         # The autosave and ⌘S checkpoints write no recovery copy or version for
         # a deck sealed by identity; the password menu stays keyed to the
