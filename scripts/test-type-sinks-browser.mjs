@@ -47,6 +47,10 @@ const HOSTILE = {
   'remote url() fill': `<svg width="80" height="80"><rect width="70" height="70" fill="url(http://rc.test/x)"/></svg>`,
   'css-escaped url() fill': `<svg width="80" height="80"><rect width="70" height="70" fill="\\75 rl(http://rc.test/y)"/></svg>`,
   'style element @import': `<svg width="80" height="80"><style>@import url(http://rc.test/z);</style><rect width="70" height="70"/></svg>`,
+  // values no scheme check refuses (no javascript:, no url()) — only the rule
+  // that judges an animation by the attribute it WRITES stops these
+  'use animated to a remote href': `<svg width="80" height="80"><defs><rect id="a" width="60" height="60"/></defs><use href="#a"><animate attributeName="href" to="https://rc.test/x.svg#a" begin="0s" fill="freeze"/></use></svg>`,
+  'a animated to a scheme-relative href': `<svg width="80" height="80"><a href="#x"><rect width="70" height="70"/><animate attributeName="href" to="//rc.test/p" begin="0s" fill="freeze"/></a></svg>`,
 }
 const BENIGN = `<svg width="200" height="120" viewBox="0 0 200 120"><defs><linearGradient id="g"><stop offset="0" stop-color="#f7a600"/><stop offset="1" stop-color="#5b8def"/></linearGradient><circle id="c" r="10"/></defs><rect width="200" height="120" fill="url(#g)"/><use href="#c" x="30" y="30"/><text x="10" y="110">Q3</text></svg>`
 
@@ -98,7 +102,9 @@ try {
     const targets = await p.$$('#paper .t-embed, #paper .t-embed *')
     for (const t of targets) { await t.hover({ force: true }).catch(() => {}); await t.click({ force: true, timeout: 500 }).catch(() => {}) }
     await p.waitForTimeout(300)
+    await p.waitForTimeout(300)                     // let a frozen animation land before reading
     const ran = await p.evaluate(() => window.__pwned || 0)
+    const stayed = p.url() === SHELL
     const printed = await p.evaluate(() => {
       const d = new DOMParser().parseFromString(window.bento.printHtml(), 'text/html')
       const all = [...d.querySelectorAll('.t-embed, .t-embed *')]
@@ -107,9 +113,9 @@ try {
                js: all.filter((e) => [...e.attributes].some((a) => /javascript:/i.test(a.value))).length }
     })
     const fetched = requests.slice(before).filter((u) => u.includes('rc.test')).length
-    ok(scan.svg && scan.on === 0 && scan.js === 0 && scan.bad === 0 && ran === 0 && fetched === 0
+    ok(scan.svg && scan.on === 0 && scan.js === 0 && scan.bad === 0 && ran === 0 && fetched === 0 && stayed
        && printed.on === 0 && printed.bad === 0 && printed.js === 0,
-      `${name}: the picture still RENDERS (${scan.svg}), inert in the editor (on* ${scan.on}, js/remote ${scan.js}, script/foreign/style ${scan.bad}, ran ${ran}, fetched ${fetched}) and in print (on* ${printed.on}, ${printed.bad}, js ${printed.js})`)
+      `${name}: the picture still RENDERS (${scan.svg}), no navigation on click (${stayed}), inert in the editor (on* ${scan.on}, js/remote ${scan.js}, script/foreign/style ${scan.bad}, ran ${ran}, fetched ${fetched}) and in print (on* ${printed.on}, ${printed.bad}, js ${printed.js})`)
     await p.close()
   }
 
