@@ -11723,6 +11723,20 @@ release, signed with the release key:
   There's no unchecked path. CI runs the same check on every PR's build of all
   four apps, and the required `validate` job's release rehearsal runs the whole
   pipeline.
+- **The verdict is a GRAMMAR, not a list of cases (security, 2026-10-21).** A
+  `<script>` is inert only if its type is exactly one of the data types Bento
+  writes (`application/bento+json`, `application/bento+lang`,
+  `bento/deflate-b64`, `bento/deflate-b86`). Everything else is executable,
+  including no type, any JavaScript type, `module`, an unknown type, a
+  differently cased data type, and any `src=`. An executable script must then
+  be exactly the pinned loader or remover by hash. A file carrying `<iframe>`,
+  `<object>`, `<embed>`, `<base>`, a `<meta>` refresh or CSP, an `on*=`
+  attribute, a comment or `<style>` holding a `<script>`, or a data block
+  containing `<` is UNKNOWN. Bento's data blocks never contain `<`: the JSON is
+  escaped and the b64/b86 alphabets exclude it. Every genuine build of the four
+  apps, a real deck with a live embed and an svg diagram, and all 66 backfilled
+  slides releases pass it unchanged. Agreement between the hosts' scanners
+  (Rust, Swift, Kotlin, JS) is K5's shared corpus.
 - **No style pins in phase 1 (security §36a).** The policy is
   `script-src <pins> blob:; style-src 'unsafe-inline'`. A document's own svg
   `<style>` (an svg element's `css`, sanitized and scoped) can't be pinned per

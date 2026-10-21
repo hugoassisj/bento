@@ -23,7 +23,7 @@
 
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { scanBlocks, executableScripts } from './release-pins.mjs'
+import { scanBlocks } from './release-pins.mjs'
 
 export const ORIGIN = 'https://bento-pins.test'
 const DOC_URL = `${ORIGIN}/doc.bento.html`
@@ -53,7 +53,7 @@ async function servedPage(browser, shellPath, policy) {
   await page.addInitScript(() => {
     document.addEventListener('securitypolicyviolation', (e) => {
       // eslint-disable-next-line no-undef
-      __bentoPinsViolation({ directive: e.effectiveDirective, disposition: e.disposition, blockedURI: e.blockedURI, sourceFile: e.sourceFile, line: e.lineNumber })
+      __bentoPinsViolation({ directive: e.effectiveDirective, disposition: e.disposition, blockedURI: e.blockedURI, sourceFile: e.sourceFile, line: e.lineNumber, column: e.columnNumber })
     }, true)
   })
   const errors = []
@@ -79,15 +79,20 @@ export async function bootUnderPins(browser, shellPath, pins, drive = async (p) 
   }
   // The loader is the document's own inline script, so matching on the source
   // FILE alone would excuse ANY inline script in the document (measured: an
-  // injected <script> passed as "the loader's fallback"). A refusal is the
-  // loader's only if it comes from a line INSIDE the loader's own span.
-  const [from, to] = loaderLines(readFileSync(shellPath, 'utf8'), pins.scriptSrc[0])
-  const inLoader = (v) => v.sourceFile === DOC_URL && v.line >= from && v.line <= to
+  // injected <script> passed as "the loader's fallback"). Whole LINES aren't
+  // enough either: the loader's open and close tags share lines with other
+  // markup (</body> sits on its closing line), and a script injected there was
+  // excused (security, measured). So a refusal is the loader's only if its
+  // line AND column fall inside the loader's own text, and at most ONE of each
+  // fallback is excused: the loader tries each once.
+  const span = loaderSpan(readFileSync(shellPath, 'utf8'), pins.scriptSrc[0])
+  const inLoader = (v) => v.sourceFile === DOC_URL && within(span, v.line, v.column)
   const expected = [], unexpected = []
+  let inline = 0, evals = 0
   const enforced = s.violations.filter((v) => v.disposition === 'enforce')
   for (const v of enforced) {
-    if (inLoader(v) && v.directive === 'script-src-elem' && v.blockedURI === 'inline') expected.push(v)
-    else if (inLoader(v) && v.directive === 'script-src' && v.blockedURI === 'eval') expected.push(v)
+    if (inLoader(v) && v.directive === 'script-src-elem' && v.blockedURI === 'inline' && inline++ === 0) expected.push(v)
+    else if (inLoader(v) && v.directive === 'script-src' && v.blockedURI === 'eval' && evals++ === 0) expected.push(v)
     else unexpected.push(v)
   }
   // Chrome LOGS every refusal except an eval one (measured, Chrome 150: a
@@ -101,19 +106,26 @@ export async function bootUnderPins(browser, shellPath, pins, drive = async (p) 
 }
 
 /**
- * The 1-based [first, last] lines of the PINNED loader: the executable inline
+ * Where the PINNED loader's text sits in the served HTML, as 1-based
+ * {line, column} from its first character to its last: the executable inline
  * script whose CSP hash is the pins' first script hash. Identified by its hash,
  * not by being the only script, so a doctored file with an extra script still
  * finds the real loader (and the extra script stays unexcused).
  */
-export function loaderLines(html, loaderCspHash) {
-  const loaders = executableScripts(scanBlocks(html))
-    .filter((b) => `sha256-${createHash('sha256').update(b.text, 'utf8').digest('base64')}` === loaderCspHash)
+export function loaderSpan(html, loaderCspHash) {
+  const loaders = scanBlocks(html).filter((b) => b.tag === 'script' && b.src === null &&
+    `sha256-${createHash('sha256').update(b.text, 'utf8').digest('base64')}` === loaderCspHash)
   if (loaders.length !== 1) throw new Error(`csp-boot: ${loaders.length} scripts match the pinned loader; exactly one expected`)
-  const at = html.indexOf(loaders[0].text)
-  const first = html.slice(0, at).split('\n').length
-  return [first - 1, first + loaders[0].text.split('\n').length] // the open tag's line through the close tag's
+  const pos = (offset) => {
+    const before = html.slice(0, offset)
+    const line = before.split('\n').length
+    return { line, column: offset - before.lastIndexOf('\n') } // 1-based
+  }
+  return { from: pos(loaders[0].start), to: pos(loaders[0].start + loaders[0].text.length) }
 }
+const after = (a, b) => a.line > b.line || (a.line === b.line && a.column >= b.column)
+/** Is (line, column), 1-based, inside the span? */
+const within = (span, line, column) => after({ line, column }, span.from) && after(span.to, { line, column })
 
 // --- driving --------------------------------------------------------------------
 //

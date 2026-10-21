@@ -79,6 +79,41 @@ ok(matchRelease(h3, html({ rt: 'RTX' })) === null, 'an unknown runtime is UNKNOW
 const twin = { ...h3, releases: [{ ...r1.entry, version: '1.3.0' }, ...h3.releases] }
 ok(matchRelease(twin, r1.saved) === null, 'two entries with identical blocks are ambiguous: UNKNOWN')
 
+console.log('\nthe grammar (security, 2026-10-21): only Bento data types are inert; foreign markup is UNKNOWN')
+{
+  const genuine = r1.saved
+  ok(matchRelease(h3, genuine)?.version === '1.0.0', 'control: the genuine file matches')
+  const head = (extra: string) => genuine.replace('</head>', extra + '</head>')
+  const body = (extra: string) => genuine.replace('</body>', extra + '</body>')
+  const rows: Array<[string, string]> = [
+    ['an external <script src=…>', head(`<${S} src="https://evil.example/x.js"></${S}>`)],
+    ['a script of an unknown type', head(`<${S} type="text/x-template">x</${S}>`)],
+    ['type="Module" (any case)', head(`<${S} type="Module">x</${S}>`)],
+    ['a data type in different case', genuine.replace('type="application/bento+json"', 'type="Application/Bento+JSON"')],
+    ['an uppercase <SCRIPT>', head(`<SCRIPT>x</SCRIPT>`)],
+    ['a NUL inside the type attribute name', genuine.replace('type="bento/deflate-b86" id="bento-rt"', 'ty\u0000pe="bento/deflate-b86" id="bento-rt"')],
+    ['an <iframe>', body('<iframe src="https://evil.example/"></iframe>')],
+    ['an <object>', body('<object data="x"></object>')],
+    ['an <embed>', body('<embed src="x">')],
+    ['a <base>', head('<base href="https://evil.example/">')],
+    ['a <meta> refresh', head('<meta http-equiv="refresh" content="0;url=https://evil.example/">')],
+    ['a <meta> CSP', head(`<meta http-equiv='Content-Security-Policy' content="script-src *">`)],
+    ['an on*= attribute', genuine.replace('<body>', '<body onload="evil()">')],
+    ['a comment holding a <script>, before the loader', head(`<!-- <${S}>evil()</${S}> -->`)],
+    ['a <script> inside <textarea>', body(`<textarea><${S}>x</${S}></textarea>`)],
+    ['a <script> inside <title>', head(`<title><${S}>x</${S}></title>`)],
+    ['a <script> inside <style>', head(`<style>/* <${S}>x</${S}> */</style>`)],
+    // the DOCUMENT block isn't hashed (it holds the user's content), so only
+    // the "<" rule can catch these: Bento always writes it <-escaped
+    ['the document block holding a raw "<"', genuine.replace('id="bento-doc">{}<', 'id="bento-doc">{"x":"<b>"}<')],
+    ['"<!--<script" inside the document block', genuine.replace('id="bento-doc">{}<', `id="bento-doc">{"x":"<!--<${S}>"}<`)],
+  ]
+  for (const [name, html] of rows) ok(matchRelease(h3, html) === null, `UNKNOWN: ${name}`)
+  ok(matchRelease(h3, genuine.replace(/type="bento\/deflate-b86"/g, "type='bento/deflate-b86'"))?.version === '1.0.0', 'single-quoted attributes parse the same (still matches)')
+  ok(matchRelease(h3, genuine.replace(/type="bento\/deflate-b86"/g, 'type=bento/deflate-b86'))?.version === '1.0.0', 'unquoted attributes parse the same (still matches)')
+  ok(matchRelease(h3, genuine.replace(`id="bento-rt">RT1</${S}>`, `id="bento-rt">RT1</${S} >`))?.version === '1.0.0', '"</script >" closes a block like "</script>"')
+}
+
 console.log('\nsign-history.mjs, end to end with a TEST key')
 {
   const dir = mkdtempSync(join(tmpdir(), 'bento-history-'))

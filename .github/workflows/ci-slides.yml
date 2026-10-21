@@ -60,6 +60,12 @@ jobs:
         # UI is driven, with only the loader's two designed refusals. What
         # release.mjs requires before it signs, checked on every PR.
         run: node scripts/derive-pins.mjs slides/dist-single/Bento_Slides.bento.html
+      - name: The pinned-CSP boot check refuses doctored copies in Chromium
+        # K4: the boot check excuses only the loader's two fallbacks, from a
+        # line AND column inside its own text. An injected <script> in <head>
+        # or on the loader's own lines is reported, and the rig checks WHICH
+        # refusal was excused, not just how many. A wrong loader pin never boots.
+        run: node scripts/test-csp-boot-browser.mjs
       - name: A sealed slides deck keeps its content out of IndexedDB in Chromium
         # The autosave and ⌘S checkpoints write no recovery copy or version for
         # a deck sealed by identity; the password menu stays keyed to the
