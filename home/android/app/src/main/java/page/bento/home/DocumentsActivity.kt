@@ -365,6 +365,17 @@ class DocumentsActivity : AppCompatActivity() {
         }.start()
     }
 
+    /** Refresh every app's signed release history (gate 1's list of genuine releases). */
+    private fun checkForUpdates() {
+        Thread {
+            val reached = Releases.APPS.map { ReleaseHistory.refresh(applicationContext, it) }.all { it }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                notify(getString(if (reached) R.string.updates_checked else R.string.updates_offline))
+            }
+        }.start()
+    }
+
     private fun open(uri: Uri) =
         startActivity(Intent(this, EditorActivity::class.java).putExtra(EditorActivity.EXTRA_URI, uri))
 
@@ -535,6 +546,17 @@ class DocumentsActivity : AppCompatActivity() {
             }
         }
         header.addView(viewToggle)
+        // ⋮: actions that aren't about one document. "Check for updates" is the
+        // only contact with bento.page besides New, and the person starts it.
+        header.addView(TextView(this, null, 0, R.style.IconBtn).apply {
+            text = "⋮"
+            contentDescription = getString(R.string.more_actions)
+            setOnClickListener { v ->
+                android.widget.PopupMenu(this@DocumentsActivity, v).apply {
+                    menu.add(R.string.check_updates).setOnMenuItemClickListener { checkForUpdates(); true }
+                }.show()
+            }
+        })
         // Only offered where it can be honoured: setApplicationNightMode is API
         // 31+, and without AndroidX there is no way to override the system
         // theme below it. A control that silently does nothing is worse than no

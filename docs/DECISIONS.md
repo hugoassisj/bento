@@ -11798,17 +11798,21 @@ asks gate 1 (`Gate1.kt`, a port of `kernel/src/gate1.ts`, served path only)
 whether those bytes are one genuine release's.
 
 - **The history.** Each app's signed release history
-  (`releases/<app>/history.json`) is fetched ONLY alongside the app's existing
-  contact with bento.page, a New document (`ReleaseHistory`). Opening a
-  document never fetches it; the editor uses the held copy (vault: no phone-home
-  per open). So a person who only ever opens existing files holds no history,
-  and their documents are UNKNOWN until their first New document. It is accepted only if it verifies under the release key
-  AND passes anti-rollback against the one held. It's kept in no-backup storage
-  as the signed envelope and re-verified on every read. Until a history is
-  held, every document is UNKNOWN. Release builds trust the release key alone
-  (`src/release/HistoryKeys.kt`). Debug builds also trust one throwaway test
-  key, so the path can be exercised on an emulator before any real history is
-  published. Checked: that key's string is absent from the release APK's dex.
+  (`releases/<app>/history.json`) is BUNDLED in the APK at build time, from the
+  published site clone (`BENTO_SITE_DIR`, never a URL fetched at build time).
+  It is verified under the release key on first read like any fetched copy, and
+  acts as the floor: acceptHistory only moves forward from it, and a newer
+  bundle (an app update) is adopted only as such a forward move. Refreshes ride
+  ONLY on contacts the person starts: a New document, or "Check for updates"
+  in the documents screen's ⋮ menu. Opening a document never phones home
+  (vault). Reinstalling an older app resets the floor (accepted).
+  Release builds FAIL CLOSED (`checkBundledHistoriesRelease`): for every app
+  with a published manifest, a history must be bundled, verify under the
+  release key (read from `Releases.kt`, its one home), and be at least as new
+  as the manifest. Otherwise the build fails with "no published release history
+  for <app>; publish a release first". Debug builds only warn. Release builds
+  trust the release key alone (`src/release/HistoryKeys.kt`). Debug builds also
+  trust one throwaway test key, absent from the release APK's dex (checked).
 - **The decision.** The bytes are tried against EVERY held app's history, never
   chosen from the document's `format`. A sealed document says `bento/enc` and
   a never-saved shell says nothing, but gate 1 is about the runtime. GENUINE

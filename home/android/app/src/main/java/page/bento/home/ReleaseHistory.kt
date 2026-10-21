@@ -28,9 +28,26 @@ object ReleaseHistory {
     /** The history this device holds for [app], verified again on read; null if none. */
     fun held(c: Context, app: Releases.App): Gate1.History? = heldPayload(c, app)?.let { Gate1.historyOf(it) }
 
-    private fun heldPayload(c: Context, app: Releases.App): Any? = try {
-        val f = file(c, app)
-        if (!f.exists()) null else verified(f.readText())?.takeIf { (it as? Map<*, *>)?.get("app") == app.appId }
+    /**
+     * The held history: the stored copy, or the one BUNDLED in the APK (vault),
+     * which is the floor. Both are verified under the trusted keys on every read.
+     * A bundle newer than the stored copy is adopted only as a forward move that
+     * acceptHistory allows (an app update), so anti-rollback holds across both.
+     */
+    private fun heldPayload(c: Context, app: Releases.App): Any? {
+        val stored = try {
+            val f = file(c, app)
+            if (!f.exists()) null else verified(f.readText())?.takeIf { (it as? Map<*, *>)?.get("app") == app.appId }
+        } catch (e: Exception) { null }
+        val bundledRaw = bundled(c, app) ?: return stored
+        val bundle = verified(bundledRaw)?.takeIf { (it as? Map<*, *>)?.get("app") == app.appId } ?: return stored
+        if (stored == null || Gate1.acceptHistory(stored, bundle, app.appId) is Gate1.Accept.Ok) return bundle
+        return stored
+    }
+
+    /** The signed envelope the APK was built with (assets/history/<app>.json), or null. */
+    private fun bundled(c: Context, app: Releases.App): String? = try {
+        c.assets.open("history/${app.id}.json").use { String(it.readBytes(), Charsets.UTF_8) }
     } catch (e: Exception) { null }
 
     /**
@@ -51,17 +68,20 @@ object ReleaseHistory {
 
     /**
      * Fetch and offer the newest published history. Network: call off the main
-     * thread. Called ONLY where the app already contacts bento.page for [app]
-     * (a New document); opening a document never phones home for it.
+     * thread. Called ONLY on a contact the person starts: a New document (for
+     * [app]) or "Check for updates". Opening a document never phones home.
      */
-    fun refresh(c: Context, app: Releases.App) {
-        try {
-            val why = offer(c, app, String(Releases.get(url(app)), Charsets.UTF_8))
-            if (why != null) Log.w(TAG, "release history for ${app.id} not taken: $why")
+    /** Returns false only when bento.page could not be reached; a refused or unpublished history is a reached server. */
+    fun refresh(c: Context, app: Releases.App): Boolean {
+        val raw = try { String(Releases.get(url(app)), Charsets.UTF_8) } catch (e: Releases.Failed) {
+            // reached, but nothing published for this app yet (or refused): the held one stands
+            Log.i(TAG, "release history for ${app.id} unavailable: ${e.message}"); return true
         } catch (e: Exception) {
-            // no history published yet, offline, or refused: the held one stands
-            Log.i(TAG, "release history for ${app.id} unavailable: ${e.message}")
+            Log.i(TAG, "release history for ${app.id}: offline (${e.message})"); return false
         }
+        val why = offer(c, app, raw)
+        if (why != null) Log.w(TAG, "release history for ${app.id} not taken: $why")
+        return true
     }
 
     /**
