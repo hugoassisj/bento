@@ -274,6 +274,33 @@ The release that came out of watching somebody use 0.2.0.
   beside `24,800`: without a pattern it does not group thousands (as Excel's
   General does not), and a `#,##0` pattern groups every value.
 
+- **Clicking a column header selects the column; it no longer sorts.**
+  Shift-click extends the selection and ⌘-click (Ctrl-click) adds a column,
+  on datasets and on spreadsheet column letters alike. Sorting is in the
+  header's ▾ menu and the right-click menu. After a sort or filter, the
+  selected cell stays on the same record instead of the same screen position.
+
+- **Double-click a column name to rename it** right on the grid. Enter keeps
+  the new name (one undo step), Escape leaves it as it was.
+
+- **＋ Add a column asks for the type** as well as the name. The type label on
+  each column header is larger (11px) and no longer crowds the column letter.
+
+- **Copying shows what was copied.** ⌘C or ⌘X draws a moving dashed border
+  around the range until you press Escape, make the next edit, or paste.
+
+- **Click a cell to put it in a formula.** While typing a formula, after `=`,
+  an operator, `(` or `,`, clicking a cell or pressing an arrow key inserts
+  its address instead of finishing the edit. Shift-click, shift-arrow or a
+  drag makes a range, shown highlighted on the grid. Clicking another sheet's
+  tab inserts a reference to that sheet (`Pipeline!A1`), which the arrow keys
+  then move. Enter finishes the formula. This works in spreadsheet cells and in
+  a dataset's per-cell formulas, where a sorted view still refers to the right
+  row.
+
+- **Escape closes the Story panel.** A pivot is a sheet now, so Escape does
+  not leave it — its tab strip does, as in Excel.
+
 ## [0.2.0] — 2026-08-03
 
 First release. A workbook is one self-contained HTML file: the data, the grid,
