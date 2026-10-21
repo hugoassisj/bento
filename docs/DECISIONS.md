@@ -11545,6 +11545,148 @@ installed jsdom.
   step red. It also checks that every allowlist entry's rig still prints its
   line, and that every rig step in every CI file runs through the wrapper.
 
+## 2026-10-20 — dash: the shell takes slides' chrome (Share popover, measured bar, live language)
+
+Dash's bar, Save menu and sharing now follow slides and spaces, per the rule
+that slides is the chrome reference. Four things a later session could undo
+by accident:
+
+- **Sharing is a popover, and connecting needs eligibility.** The one-click
+  "Start live session" chip is gone; dash/src/shareui.ts is spaces' Share
+  panel. Nothing connects until Go live (or a live copy is sent). A workbook
+  that arrives SHARED — saved with its session on, an invite, a view-only copy
+  — rejoins its room on open through `SyncSession.shareEligible()`, which is
+  what slides and spaces do. Before this, dash never joined on open, so a copy
+  sent to someone stayed offline. A fresh workbook or template still never
+  connects: the keys are minted a beat after boot, so only the eligibility
+  test stands between the first edit and the relay.
+- **Copies for someone else go through the kernel copy table.**
+  dash/src/docclass.ts is dash's field map (exhaustive over DashDoc's declared
+  keys, enforced by tsc); dash/src/share.ts builds the reading copy ('package'),
+  the invite ('invite') and the view-only copy ('reader') with it, so a
+  top-level field this build does not declare is dropped from all three.
+- **The bar is fitted by measuring, not by breakpoints.** dash/src/topbar.ts
+  ports slides' fitTopbar and fold. Below the fold the BAR scrolls, never the
+  document, and the ＋/⋯ menus are position: fixed under it. Widgets parked in
+  ⋯ (Share, 🌐, Data) render inline (CLAUDE.md hard-won 9 and 10).
+- **The language switches live by translating in place.** Slides rebuilds its
+  editor. Dash builds its app once from one template, so re-running boot would
+  mint a second store and sync session, and a reload of a file:// page drops
+  unsaved work. Instead the visible strings are mapped back to their
+  English-as-key source under the old locale and re-translated. Interpolated
+  strings are re-rendered by their owners.
+
+Comments take the accent colour. The violet `--cmt` was dash's own and read as
+a third accent next to amber and the selection blue; slides' comment pins are
+amber.
+
+## 2026-10-20 — dash: a column header click selects; sorting is a command
+
+In dash a click on a column header (dataset name or spreadsheet letter) selects
+the column, shift extends, ⌘/Ctrl adds, and it never sorts. Excel, Sheets,
+Numbers and Airtable all do this, and the old click-to-sort left the selection
+on its screen rectangle, which after the sort held different records. Sorting
+lives in the header's ▾ menu and the right-click menu. Double-clicking a
+dataset column's name renames it in place. A sort or filter now carries the
+selection by ROW identity: whole columns stay whole, single-row ranges move
+with their row, and a taller block collapses to the cursor cell (its rows no
+longer sit together). Point mode inserts a dataset reference in the FILE's
+row and column numbering (`tableCellSource`), not the sorted view's.
+
+## 2026-10-20 — bento/dash: what typing into a spreadsheet cell stores, and text in arithmetic
+
+Typing into a spreadsheet cell (and pasting text into one) goes through
+`cellprops.ts coerceInput`. It was written and tested earlier but never wired:
+grid.ts kept a narrower reader, so `15%` and `$5` were stored as TEXT. The rules
+are in cellprops.ts's header. Two of them changed here:
+
+- **Unambiguous dates are read from typing.** ISO (`2026-03-04`) and a named
+  month (`Mar 4 2026`, `4 March 2026`) store the canonical `YYYY-MM-DD` string
+  and stamp the Date format. A slash date stays text from typing even when the
+  day is over 12. Otherwise `13/2/2026` would be a date and `12/2/2026` one row
+  up would be text. In a cell already formatted Date, every unambiguous spelling
+  is read, as before. The refusal of `3/4/2026` is unchanged.
+- **One digit reader.** `import.ts readEntryNumber` reads typed entry, the
+  formula engine's text coercion, and (through the same digit shapes)
+  `inferColumn`. A field that fits only one decimal convention reads that way
+  for everyone (`3,50` is 3.5). A field that fits both (`1,234`) follows the
+  viewer's locale when typed, because the typist meant something by it. The
+  formula engine always uses '.', import's own tie-break, because a computed
+  value is document data and must not depend on who opens the file.
+
+**Text in arithmetic follows Excel** (formula.ts, the block above `num`). A
+range or reference given to an aggregate counts only its numbers: text, even
+numeric-looking text, and booleans are skipped. This includes the step
+engine's open-coded fast path, which test-dash-steps.ts keeps bit-identical. A
+value written directly as an argument is coerced, and #VALUE! if it is not a
+number (COUNT just doesn't count it). Direct arithmetic coerces text only when
+the whole string reads as a typed number (`"15%"` is 0.15, `"(5)"` is -5).
+Anything else is #VALUE!; the old code read whatever digits were left after
+stripping symbols. Aggregates take every argument (`SUM(1,2,3)` was 1), and
+`%` is a postfix operator (`=10*15%` was 150).
+
+**A cell formula that does not parse is refused at entry**, in the cell editor
+and in the formula bar (`cellFormulaProblem` → `formula.ts syntaxProblem`). It
+is never refused on evaluation: formulas already in a file evaluate as
+leniently as before, because refusing them would put a blank where an answer
+was. The formula bar shows a value cell's ENTERED form (`cellprops.ts
+enteredForm`): `100%`, `$300.50`, or `'15%` for text that would otherwise be
+read back as a number. Re-entering what the bar shows always stores the same
+value again.
+
+Guarded by scripts/test-dash-entryparse.ts and
+scripts/test-dash-entryparse-browser.mjs.
+
+## 2026-10-20 — dash: a pivot opens as a sheet; the chart is edited in the panel
+
+A pivot sheet now OPENS where the grid was (its tab works), and the properties
+panel becomes its field editor — Excel's PivotTable Fields layout. Which pivot
+is up is view state, like which tab is up; the grid stays on its last sheet
+underneath, and `isOpenable` still means "the grid can show it" (tabs.ts takes a
+separate `SheetViews` hook for kinds another owner draws). The pivot's own
+filters are stored in model.ts's `StoredFilter` spelling (`isOneOf` as a
+`values` array, never a Set); a Filters-area field with no `pred` means
+"(All)". A grouping field sits in one of Filters/Columns/Rows; Values may repeat
+a column but not a column-and-function.
+
+The 2D chart is edited in the properties panel while it is selected (clicking
+the plot or Edit), as a slides chart is. New `ChartBinding` fields are additive:
+`title`, `legend`, `colors` (keyed by column id, never position) and
+`allowLine`. A line whose category column has no order (text, enum, bool) is
+drawn as bars unless `allowLine` is set, and the refusal is made in
+`optionFor`, so the panel, a story and a dashboard all refuse alike. The value
+axis takes its label pattern from the series columns only when they all share
+one format; percent axes are scaled by 100.
+
+3D is hidden behind a per-viewer developer flag
+(`localStorage['bento-dash-dev-3d'] = 'on'`), never in the document; viz3d.ts
+stays.
+
+Escape does not leave a pivot: it is a sheet now, and as in Excel you leave a
+sheet by its tab. #808's Escape-closes-Pivot existed for the Pivot side panel
+(review 4.8), which this removes; Escape still closes the Story panel.
+
+## 2026-10-20 — dash: the grid owns Tab only inside itself; F6 walks regions; slides' focus ring
+
+dash's document key handler took every key from every target that was not a
+text field, so Tab moved the grid's cursor from anywhere — the top bar, panel
+and sheet tabs could not be reached by keyboard — and Enter on a focused button
+moved the cursor instead of pressing it. Now: off the grid, Tab is always the
+browser's, and on a focused control Enter, Space and the navigation keys are
+the control's; other keys (a letter typed after clicking a toolbar button, ⌘Z)
+still reach the grid. Inside the grid Tab stays "next cell" (the data-entry
+run every spreadsheet keeps), and at the sheet's first or last column it hands
+the key back to the browser so the grid is not a keyboard trap. F6 / ⇧F6 move
+between top bar, formula bar, grid, panel and sheet tabs, Excel's key for it.
+Focus rings move from --blue to --accent-ink, the token slides' buttons and
+every field already use, with a zero-specificity floor for any reachable
+control that has no ring of its own. This supersedes the --blue choice recorded
+in dash's styles.css comment.
+
+Also settled the same day: a stored `bento-lang` is validated before `Intl`
+sees it (dash/src/i18n.ts `intlLocale`), because the key is shared across every
+file on the origin and a bad value used to stop boot.
+
 ## 2026-10-18 — bento/connect: the desktop agent's security-key ceremony, and one rule for C libraries (home/desktop/agent)
 
 - **One authenticator stack per platform.**
