@@ -62,6 +62,13 @@ jobs:
         # positive control, light and dark; bare checkboxes; a formula over
         # Money is Money and one column never mixes grouping.
         run: node scripts/test-dash-panel-context-browser.mjs
+      - name: The grid's core gestures, with a real mouse and keyboard
+        # A header click selects the column and never sorts (sort lives in ▾,
+        # and the selection follows its row); double-click renames in place;
+        # Add a column picks the type; the type chip reads at 11px; ⌘C draws
+        # marching ants; point mode inserts references (dataset and
+        # spreadsheet, other sheets by tab); Escape closes Story and Pivot.
+        run: node scripts/test-dash-gestures-browser.mjs
       - name: Typing into a spreadsheet cell reads what was meant
         # The review's keystrokes: 10, $5, 15% then =SUM and =G13*G15 must say
         # 15.15 and 1.5 (they said 30 and 150). ISO and named-month dates are

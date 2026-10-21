@@ -11545,6 +11545,19 @@ installed jsdom.
   step red. It also checks that every allowlist entry's rig still prints its
   line, and that every rig step in every CI file runs through the wrapper.
 
+## 2026-10-20 — dash: a column header click selects; sorting is a command
+
+In dash a click on a column header (dataset name or spreadsheet letter) selects
+the column, shift extends, ⌘/Ctrl adds, and it never sorts. Excel, Sheets,
+Numbers and Airtable all do this, and the old click-to-sort left the selection
+on its screen rectangle, which after the sort held different records. Sorting
+lives in the header's ▾ menu and the right-click menu. Double-clicking a
+dataset column's name renames it in place. A sort or filter now carries the
+selection by ROW identity: whole columns stay whole, single-row ranges move
+with their row, and a taller block collapses to the cursor cell (its rows no
+longer sit together). Point mode inserts a dataset reference in the FILE's
+row and column numbering (`tableCellSource`), not the sorted view's.
+
 ## 2026-10-20 — bento/dash: what typing into a spreadsheet cell stores, and text in arithmetic
 
 Typing into a spreadsheet cell (and pasting text into one) goes through
