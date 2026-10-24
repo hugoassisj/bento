@@ -8,15 +8,14 @@ set -u
 cd "$(dirname "$0")/.."
 OUT=${1:-/tmp/h2-rig}
 rm -rf "$OUT"; mkdir -p "$OUT/fix"
-# Histories: the corpus's (test key, rig builds only) and the REAL published
-# slides history (release key), so a real 1.2.10 deck can be served genuine.
-mkdir -p "$OUT/hist/corpus" "$OUT/real"
+# Histories: the corpus's (test key, rig builds only) and the REAL slides
+# release frozen in the corpus (home/fixtures/gate1/real/slides-1.2.10, signed
+# with the release key), so a real deck can be served genuine with no fetch.
+# (release-check.sh is what fetches: proving the bundle CURRENT needs the live one.)
+mkdir -p "$OUT/hist/corpus" "$OUT/hist/slides"
 cp ../../fixtures/gate1/history.json "$OUT/hist/corpus/history.json"
-BASE=${BENTO_RELEASES_URL:-https://bento.page/releases}
-curl -fsS -o "$OUT/real/history.json" "$BASE/slides/history.json" || exit 1
-curl -fsS -o "$OUT/real/manifest.json" "$BASE/slides/manifest.json" || exit 1
-curl -fsS -o "$OUT/real/Bento_Slides.bento.html" "$BASE/slides/Bento_Slides.bento.html" || exit 1
-mkdir -p "$OUT/hist/slides" && cp "$OUT/real/history.json" "$OUT/hist/slides/history.json"
+cp -r ../../fixtures/gate1/real/slides-1.2.10 "$OUT/real"
+cp "$OUT/real/history.json" "$OUT/hist/slides/history.json"
 BENTO_HISTORIES_DIR="$OUT/hist" cargo build -q --features rig || exit 1
 BIN=target/debug/bento-home-desktop
 python3 - "$OUT/fix" <<'PY'

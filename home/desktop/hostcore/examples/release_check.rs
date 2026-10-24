@@ -33,24 +33,40 @@ fn main() {
     if pinned_keys() != vec![RELEASE_KEY] { fail("built with the rig feature: this check trusts the release key ONLY".into()) }
     let read = |p: &Path| std::fs::read(p).unwrap_or_else(|e| fail(format!("{}: {e}", p.display())));
     let hist_env = String::from_utf8(read(&dir.join("history.json"))).unwrap();
-    let man_env = String::from_utf8(read(&dir.join("manifest.json"))).unwrap();
     let keys = pinned_keys();
+    // A frozen snapshot (home/fixtures/gate1/real/<app>-<version>) carries the key
+    // it was signed with: it must be the key this build pins.
+    if let Ok(k) = std::fs::read(dir.join("release-public-key.json")) {
+        let k: serde_json::Value = serde_json::from_slice(&k).unwrap_or_else(|e| fail(format!("release-public-key.json: {e}")));
+        if (k["x"].as_str(), k["y"].as_str()) != (Some(RELEASE_KEY.0), Some(RELEASE_KEY.1)) { fail("the snapshot's release key is not the pinned release key".into()) }
+        ok("the snapshot's release key is the pinned release key".into());
+    }
     let hist = verify_envelope(&hist_env, &keys).unwrap_or_else(|e| fail(format!("history: {e}")));
-    let man = verify_envelope(&man_env, &keys).unwrap_or_else(|e| fail(format!("manifest: {e}")));
     let app = hist.app().unwrap_or("").to_string();
-    ok(format!("history ({app}, {} releases) and manifest verify against the pinned release key", hist.entries().len()));
-    let m = &man.raw;
-    let (version, sha) = (m["version"].as_str().unwrap_or(""), m["sha256"].as_str().unwrap_or(""));
-    if m["app"].as_str() != Some(app.as_str()) { fail(format!("manifest is for {:?}, history for {app}", m["app"])) }
+    ok(format!("history ({app}, {} releases) verifies against the pinned release key", hist.entries().len()));
     let newest = hist.raw["releases"][0].clone();
-    if newest["version"].as_str() != Some(version) {
-        fail(format!("the history's newest release is {:?}, the published manifest's is {version}: the bundle is not current", newest["version"]))
+    let (version, sha): (String, String);
+    if dir.join("manifest.json").exists() {
+        let man_env = String::from_utf8(read(&dir.join("manifest.json"))).unwrap();
+        let man = verify_envelope(&man_env, &keys).unwrap_or_else(|e| fail(format!("manifest: {e}")));
+        let m = &man.raw;
+        version = m["version"].as_str().unwrap_or("").to_string();
+        sha = m["sha256"].as_str().unwrap_or("").to_string();
+        if m["app"].as_str() != Some(app.as_str()) { fail(format!("manifest is for {:?}, history for {app}", m["app"])) }
+        if newest["version"].as_str() != Some(version.as_str()) {
+            fail(format!("the history's newest release is {:?}, the published manifest's is {version}: the bundle is not current", newest["version"]))
+        }
+        if newest["sha256"].as_str() != Some(sha.as_str()) { fail("the history's newest entry and the manifest disagree on the shell's sha256".into()) }
+        if m.get("pins").is_some() && serde_json::to_string(&m["pins"]).ok() != serde_json::to_string(&newest["pins"]).ok() {
+            fail("the history's pins and the manifest's pins differ".into())
+        }
+        ok(format!("the manifest verifies and the history is current: its newest release is the published {version}, same sha256 and pins"));
+    } else {
+        version = newest["version"].as_str().unwrap_or("").to_string();
+        sha = newest["sha256"].as_str().unwrap_or("").to_string();
+        ok(format!("frozen snapshot (no manifest): currency is NOT checked here; the shell must be the history's newest, {version}"));
     }
-    if newest["sha256"].as_str() != Some(sha) { fail("the history's newest entry and the manifest disagree on the shell's sha256".into()) }
-    if m.get("pins").is_some() && serde_json::to_string(&m["pins"]).ok() != serde_json::to_string(&newest["pins"]).ok() {
-        fail("the history's pins and the manifest's pins differ".into())
-    }
-    ok(format!("the history is current: its newest release is the published {version}, same sha256 and pins"));
+    let (version, sha) = (version.as_str(), sha.as_str());
     // the shell: whichever *.html sits beside them
     let shell_path = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().and_then(|x| x.to_str()) == Some("html")).unwrap_or_else(|| fail("no shell .html in the dir".into()));
     let shell = read(&shell_path);
