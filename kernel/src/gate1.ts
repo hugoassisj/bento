@@ -40,11 +40,16 @@ export interface History { app: string; v: 1; releases: HistoryEntry[] }
 
 export interface Block {
   tag: 'script' | 'style'
+  /** the whole start tag, exactly as written: html.slice(tagStart, start) */
   attrs: string
-  /** the raw text, which ends at the first `</script` / `</style` in any case, as the HTML tokenizer ends it */
+  /** the raw text, which ends at the element's real end tag, as the HTML tokenizer ends it */
   text: string
+  /** offset of the start tag's "<" */
+  tagStart: number
   /** offset of the text's first character in the file */
   start: number
+  /** offset just past the end tag's ">", as the tokenizer ends it (quoted attribute values and all) */
+  end: number
   type: string | null
   id: string | null
   src: string | null
@@ -79,11 +84,27 @@ export const asciiLower = (s: string): string => s.replace(/[A-Z]/g, (c) => Stri
 
 const WS = (c: string | undefined) => c === '\t' || c === '\n' || c === '\f' || c === '\r' || c === ' '
 export function parseStartTag(html: string, i: number): StartTag | null {
-  const m = /^<([a-zA-Z][^\t\n\f\r />]*)/.exec(html.slice(i, i + 256))
+  return html[i] === '<' ? readTag(html, i + 1) : null
+}
+
+/**
+ * An END tag, read exactly like a start tag. The tokenizer parses attributes in
+ * end tags too, quoted values included, and then drops them, so
+ * `</p a="><b c='">` ends at its SECOND ">". Skipping an end tag to its first ">"
+ * instead read `<b c='">'<script>` as one tag and missed the script after it
+ * (both engines ran it). null if `i` isn't "</" and a letter, or it's unterminated.
+ */
+export function parseEndTag(html: string, i: number): StartTag | null {
+  return html[i] === '<' && html[i + 1] === '/' ? readTag(html, i + 2) : null
+}
+
+/** A tag's name and attributes, from its name's first character. */
+function readTag(html: string, at: number): StartTag | null {
+  const m = /^([a-zA-Z][^\t\n\f\r />]*)/.exec(html.slice(at, at + 256))
   if (!m) return null
   const attrs = new Map<string, string>()
   let duplicate = false, slash = false
-  let j = i + m[0].length
+  let j = at + m[0].length
   while (j < html.length) {
     const c = html[j]
     if (WS(c)) { j++; continue }
@@ -161,8 +182,18 @@ function walk(html: string): Walk {
       if (end < 0) { problems.push('an unterminated comment'); break }
       i = end + 3; continue
     }
+    if (html[i + 1] === '/' && /[a-zA-Z]/.test(html[i + 2] ?? '')) {
+      // an end tag: tokenized with the start tag's attribute rules (see parseEndTag)
+      const et = parseEndTag(html, i)
+      if (!et) { problems.push('an unterminated end tag'); break }
+      if (!TAG_NAME.test(et.name)) problems.push(`an end tag named ${JSON.stringify(et.name)}`)
+      // a browser drops them, but they move where the tag ends: Bento writes none
+      if (et.attrs.size) problems.push(`an end tag </${et.name}> carrying attributes`)
+      i = et.end; continue
+    }
+    if (html.startsWith('</>', i)) { i += 3; continue } // ignored entirely
     if (html[i + 1] === '/' || html[i + 1] === '!' || html[i + 1] === '?') {
-      // an end tag, a doctype or a bogus comment: no attributes a browser acts on
+      // a doctype or a bogus comment: it ends at the first ">", quotes or not
       const end = html.indexOf('>', i + 2)
       if (end < 0) { problems.push('an unterminated tag'); break }
       i = end + 1; continue
@@ -185,13 +216,16 @@ function walk(html: string): Walk {
       // would count it: refuse, so every host's scanner reaches the same verdict
       if (name !== 'script' && lower.slice(tag.end, close).includes('<script')) problems.push(`a <${name}> holds a <script>`)
       if (name === 'textarea' || name === 'title') { i = close; continue }
+      const et = parseEndTag(html, close)
+      if (!et) { problems.push(`an unterminated </${name}>`); break }
       const get = (n: string) => tag.attrs.has(n) ? tag.attrs.get(n)! : null
       blocks.push({
-        tag: name as 'script' | 'style', attrs: html.slice(i, tag.end), text: html.slice(tag.end, close), start: tag.end,
+        tag: name as 'script' | 'style', attrs: html.slice(i, tag.end), text: html.slice(tag.end, close),
+        tagStart: i, start: tag.end, end: et.end,
         type: get('type'), id: get('id'), src: get('src'), preview: tag.attrs.has('data-bento-preview'),
         duplicate: tag.duplicate, slash: tag.slash,
       })
-      i = close; continue // its end tag is skipped as an end tag
+      i = close; continue // its end tag is judged next, as an end tag
     }
     i = tag.end
   }
@@ -391,6 +425,23 @@ export async function verifyServed(html: string, history: History, opts: { frame
     return { verdict: 'unknown', reason: markup.length ? markup[0] : 'no single release matches every block' }
   }
   return { verdict: 'genuine', release, csp: hostPolicy(release.pins, opts.frameAncestors) }
+}
+
+/**
+ * A served file, judged against EVERY history the host holds. A fresh shell (as
+ * New writes it, and as a release publishes it) has an empty document block, so
+ * nothing in the file says which app it is: never pick the history by a name read
+ * from the file or by a directory name. Exactly one app's history must match;
+ * none, or more than one, is UNKNOWN. The verdict names the app that matched.
+ */
+export async function verifyServedHeld(html: string, held: History[], opts: { frameAncestors?: string } = {}): Promise<ServedVerdict & { app?: string }> {
+  const hits: Array<{ app: string; v: ServedVerdict }> = []
+  for (const h of held) {
+    const v = await verifyServed(html, h, opts)
+    if (v.verdict === 'genuine') hits.push({ app: h.app, v })
+  }
+  if (hits.length === 1) return { ...hits[0].v, app: hits[0].app }
+  return { verdict: 'unknown', reason: hits.length ? `${hits.length} held histories match (${hits.map((x) => x.app).join(', ')})` : 'no held history matches' }
 }
 
 // --- the strict file:// fallback (vault's strict verifier; security §15) ------------

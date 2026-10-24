@@ -945,8 +945,60 @@ export function cssColor(v: unknown, fallback: string): string {
   const s = v.trim()
   if (!s || s.length > 48) return fallback
   if (!/^[#a-zA-Z0-9(),.%\s/-]+$/.test(s)) return fallback
-  if (/url\s*\(|expression|@|\\/i.test(s)) return fallback
+  if (/expression|@|\\/i.test(s) || CSS_NOT_A_COLOUR.test(s)) return fallback
   return s
+}
+
+/**
+ * Functions a colour never needs and a fetch or an indirection does: url() and
+ * the image functions load, var()/env()/attr() pull a value the gate never saw,
+ * paint()/element() reach outside the value. A colour written with any of them
+ * is not a colour, so it never reaches a sink.
+ */
+const CSS_NOT_A_COLOUR = /\b(url|image-set|-webkit-image-set|image|cross-fade|element|paint|env|attr|var)\s*\(/i
+
+/**
+ * An svg paint (`fill`, `stroke`, `stop-color`) from the document. The only
+ * url() a paint may carry is a LOCAL paint server, `url(#id)` (gradients and
+ * patterns are drawn that way); anything else goes through cssColor, so an
+ * external paint server, which the browser fetches, never reaches the
+ * attribute.
+ */
+export function svgPaint(v: unknown, fallback: string): string {
+  if (typeof v !== 'string') return fallback
+  const s = v.trim()
+  if (/^url\(\s*#[-\w.:]+\s*\)$/.test(s) || s === 'none') return s
+  return cssColor(s, fallback)
+}
+
+/**
+ * A shape's paint, gated: what the shape sinks (render, and present's morph,
+ * which tweens fill/stroke/stop-color straight into attributes) receive
+ * instead of the model's own strings. A copy; the model is untouched.
+ */
+export function paintSafeShape<T extends { fill?: unknown; stroke?: unknown; fillGradient?: { stops?: Array<{ color?: unknown }> } }>(el: T): T {
+  const out = { ...el }
+  if ('fill' in el) out.fill = svgPaint(el.fill, 'transparent')
+  if ('stroke' in el) out.stroke = svgPaint(el.stroke, 'transparent')
+  if (el.fillGradient?.stops) {
+    out.fillGradient = { ...el.fillGradient, stops: el.fillGradient.stops.map((s) => ({ ...s, color: cssColor(s.color, 'transparent') })) }
+  }
+  return out
+}
+
+/**
+ * A chart option for the engine, with every string that could load something
+ * removed (the engine writes option colours into svg fill/stroke attributes).
+ * A copy; labels, names and template formatters pass unchanged unless they
+ * carry a fetching function, which no legitimate one does.
+ */
+export function fetchFreeOption<T>(v: T): T {
+  // judged as the svg attribute's CSS parser will read it: escapes decoded, so
+  // `u\rl(` and `\75 rl(` are the url( they spell
+  if (typeof v === 'string') return (CSS_NOT_A_COLOUR.test(cssDecodeIdentEscapes(v)) ? '' : v) as T
+  if (Array.isArray(v)) return v.map(fetchFreeOption) as T
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fetchFreeOption(x)])) as T
+  return v
 }
 
 /** A model number as a CSS length: finite and in range, or the fallback. */
@@ -1110,7 +1162,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       break
     }
     case 'shape':
-      node.appendChild(shapeSvg(el))
+      node.appendChild(shapeSvg(paintSafeShape(el)))
       break
     case 'table':
       node.dataset.table = '1'
@@ -1213,7 +1265,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       // instance (mountLiveCharts) for tooltips/zoom. Kept as innerHTML so
       // print and thumbnails need no chart runtime at render time.
       node.dataset.chart = '1'
-      node.innerHTML = chartSnapshotSvg(el)
+      node.innerHTML = chartSnapshotSvg({ ...el, option: fetchFreeOption(el.option) })
       const csvg = node.querySelector('svg')
       if (csvg) {
         csvg.setAttribute('preserveAspectRatio', 'none')

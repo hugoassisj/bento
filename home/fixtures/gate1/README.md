@@ -17,7 +17,7 @@ disagrees with any declared verdict.
 | reference (JS, kernel/src/gate1.ts) | `node scripts/test-gate1.ts` |
 | `home/ios` (Swift) | to build |
 | `home/android` (Kotlin) | to build |
-| `home/desktop` (Rust) | to build |
+| `home/desktop` (Rust) | `cargo test` in `home/desktop/gate1` |
 
 ## The files
 
@@ -30,8 +30,33 @@ disagrees with any declared verdict.
 - `served/*.html`: files for the **served path** (`verifyServed`).
 - `strict/*.html` and `strict-expected.json`: the **file:// fallback**
   (`verifyStrict`).
-- `expected.json`: the answer key, with four sections: `served`, `ambiguous`,
-  `strict` and `history`.
+- `real/slides-1.2.10/`: a **frozen real release**. These are bento.page's slides
+  1.2.10 shell, its signed history, and the release public key that
+  `kernel/src/update.ts` embeds. They were copied once, are never regenerated,
+  and are real bytes, so CI needs no download. The app id is `bento-slides`, not
+  the directory's `slides`. The shell's document block is empty: a published
+  shell is a fresh shell.
+- `expected.json`: the answer key, with six sections: `served`, `ambiguous`,
+  `strict`, `history`, `histories` (where each history and its key live) and
+  `held`.
+
+### Held histories (`verifyServedHeld`)
+
+A fresh shell, as New writes it and as a release publishes it, has an empty
+document block. Nothing in the file says which app it is. So a host judges a
+served file against **every** history it holds: exactly one app's history must
+match, and the verdict names that app. None, or more than one, is UNKNOWN.
+
+Never choose the history from a name read out of the file, or from a directory
+name: the real app id is `bento-slides`, its directory is `slides`, and the
+synthetic `bento-test` hid that difference until a real history was measured.
+Each `held` row lists the histories (by their key in `histories`) in the order
+the host holds them.
+
+The rig also checks that the synthetic history has the real one's exact shape:
+the same fields at every level, the same format versions, and the
+`bento-<app>` form. So the synthetic rows can't drift from what is actually
+published.
 
 The releases in the history:
 - **1.0.0 and 1.1.0** share a runtime and differ in their loader;
@@ -56,6 +81,20 @@ Two parsing rules the reference got wrong once, so state them exactly:
   separator after it. A leading `=` is part of a name. Names fold ASCII-only,
   and the FIRST of duplicate names wins. A `<script>` tag with a duplicate
   attribute or a `/` is refused outright, because Bento writes neither.
+- **Walk tags in document order, never search.** One walk, tag by tag, as the
+  tokenizer meets them, feeds both the block list and the markup rules. A tag
+  name runs to whitespace, `/` or `>`, so `<meta<style>` is ONE tag, and any
+  name outside `[a-z][a-z0-9-]*` is refused. `script`, `style`, `textarea` and
+  `title` hold text up to their real end tag: `</name` followed by whitespace,
+  `/` or `>`. `<!-->` and `<!--->` are whole comments; `</>` is ignored.
+- **Read END tags like start tags.** The tokenizer parses attributes in end tags,
+  quoted values included, so `</p a="><b c='">` ends at its second `>`.
+  Skipping to the first `>` hides the script after it. An end tag carrying any
+  attribute, or an odd name, is refused, because Bento writes neither.
+- **Offsets for splicing.** Each block carries `tagStart` (its start tag's `<`)
+  and `end` (just past its end tag's `>`), from the same walk. A host that
+  replaces an element splices `html.slice(tagStart, end)` and never finds a
+  boundary itself.
 - **Fold case in ASCII only, never with a length-changing fold.** `toLowerCase()`
   turns `İ` into two UTF-16 units. Searching a folded copy while slicing the
   original then drifts: a genuine Turkish document reads as unknown, and a run
@@ -93,7 +132,9 @@ differently:
 - unquoted and single-quoted attributes;
 - `</script >`;
 - tabs and newlines inside a tag;
-- a script inside a comment, `<textarea>`, `<title>` or `<style>`.
+- a script inside a comment, `<textarea>`, `<title>` or `<style>`;
+- glued tags (`<meta<style>`), empty comments, and false end tags (`</stylex>`);
+- attributes, quoted `>` included, on an end tag.
 
 Your scanner must agree on every one of them.
 

@@ -566,6 +566,10 @@ function scrubEmbeds(doc: Record<string, unknown>, depth: number): Record<string
   return changed ? { ...doc, body: next } : doc;
 }
 
+/** A footnote id a FILE may carry: what uid() mints and nothing that could
+ *  leave an attribute. Render escapes ids too — a synced op never passes here. */
+const NOTE_ID = /^[A-Za-z0-9_.:-]{1,80}$/;
+
 export const uid = (p = 'b'): string => {
   const r = globalThis.crypto?.randomUUID?.();
   return r ? `${p}-${r.slice(0, 8)}` : `${p}-${Math.random().toString(36).slice(2, 10)}`;
@@ -669,7 +673,7 @@ export function parseDoc(raw: string): ParseResult {
                                                  && typeof m.to === 'number' && typeof m.t === 'string'), text.length)
       : undefined;
     const notes = Array.isArray(b.notes)
-      ? (b.notes as NoteRef[]).filter(n => isObj(n) && typeof n.id === 'string' && typeof n.at === 'number')
+      ? (b.notes as NoteRef[]).filter(n => isObj(n) && typeof n.id === 'string' && NOTE_ID.test(n.id) && typeof n.at === 'number')
           .map(n => ({ id: n.id, at: Math.max(0, Math.min(n.at, text.length)) }))
           .sort((x, y) => x.at - y.at)
       : undefined;
@@ -809,7 +813,7 @@ export function parseDoc(raw: string): ParseResult {
 
   const footnotes: Record<string, string> = {};
   if (isObj(json.footnotes)) {
-    for (const [k, v] of Object.entries(json.footnotes)) if (typeof v === 'string') footnotes[k] = v;
+    for (const [k, v] of Object.entries(json.footnotes)) if (typeof v === 'string' && NOTE_ID.test(k)) footnotes[k] = v;
   }
   // a reference to a note that is not there would render as a marker with
   // nothing behind it — drop the reference, keep the text

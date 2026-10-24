@@ -27,6 +27,12 @@
       "why": "a release from before previews saves no remover"
     },
     {
+      "case": "served/fresh-empty-doc.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "a fresh shell, as New writes it: an EMPTY document block, which names no app"
+    },
+    {
       "case": "served/genuine-1.0.0-shell.html",
       "verdict": "genuine",
       "release": "1.0.0",
@@ -264,6 +270,32 @@
       "verdict": "genuine",
       "release": "1.0.0",
       "why": "\"<!-->\" and \"<!--->\" end at once: nothing after them is swallowed"
+    },
+    {
+      "case": "served/endtag-quoted-gt.html",
+      "verdict": "unknown",
+      "why": "the end tag ends at its second \">\": the script after it is real and runs"
+    },
+    {
+      "case": "served/endtag-attribute.html",
+      "verdict": "unknown",
+      "why": "an end tag carrying attributes: a browser drops them, but they move where the tag ends, and Bento writes none"
+    },
+    {
+      "case": "served/endtag-on-pinned-script.html",
+      "verdict": "unknown",
+      "why": "an attribute on a pinned script's END tag: the block text is unchanged, and still refused"
+    },
+    {
+      "case": "served/endtag-glued-name.html",
+      "verdict": "unknown",
+      "why": "an end tag named \"p<b\""
+    },
+    {
+      "case": "served/endtag-empty.html",
+      "verdict": "genuine",
+      "release": "1.0.0",
+      "why": "\"</>\" is ignored entirely: nothing after it is swallowed"
     },
     {
       "case": "served/empty-comment-in-paragraph.html",
@@ -1406,6 +1438,84 @@
       },
       "ok": false,
       "why": "malformed: not newest first"
+    }
+  ],
+  "histories": {
+    "synthetic": {
+      "history": "history.json",
+      "key": "test-public-key.json"
+    },
+    "real": {
+      "history": "real/slides-1.2.10/history.json",
+      "key": "real/slides-1.2.10/release-public-key.json"
+    }
+  },
+  "held": [
+    {
+      "name": "real-1.2.10-own-history",
+      "case": "real/slides-1.2.10/Bento_Slides.bento.html",
+      "held": [
+        "real"
+      ],
+      "verdict": "genuine",
+      "app": "bento-slides",
+      "release": "1.2.10",
+      "why": "the published 1.2.10 shell against its own published history"
+    },
+    {
+      "name": "real-1.2.10-every-held",
+      "case": "real/slides-1.2.10/Bento_Slides.bento.html",
+      "held": [
+        "synthetic",
+        "real"
+      ],
+      "verdict": "genuine",
+      "app": "bento-slides",
+      "release": "1.2.10",
+      "why": "its document block is empty, so the host tries EVERY held history: exactly one matches"
+    },
+    {
+      "name": "real-1.2.10-wrong-history",
+      "case": "real/slides-1.2.10/Bento_Slides.bento.html",
+      "held": [
+        "synthetic"
+      ],
+      "verdict": "unknown",
+      "why": "only another app's history is held: nothing matches (the control: matching is not vacuous)"
+    },
+    {
+      "name": "synthetic-every-held",
+      "case": "served/genuine-1.0.0.html",
+      "held": [
+        "real",
+        "synthetic"
+      ],
+      "verdict": "genuine",
+      "app": "bento-test",
+      "release": "1.0.0",
+      "why": "a synthetic genuine file, with the real history held first"
+    },
+    {
+      "name": "two-held-match",
+      "case": "served/genuine-1.0.0.html",
+      "held": [
+        "synthetic",
+        "synthetic"
+      ],
+      "verdict": "unknown",
+      "why": "two held histories match: ambiguous, never the first one found"
+    },
+    {
+      "name": "synthetic-fresh-every-held",
+      "case": "served/fresh-empty-doc.html",
+      "held": [
+        "real",
+        "synthetic"
+      ],
+      "verdict": "genuine",
+      "app": "bento-test",
+      "release": "1.0.0",
+      "why": "a synthetic fresh shell names no app: found by trying every held history"
     }
   ],
   "ambiguous": [

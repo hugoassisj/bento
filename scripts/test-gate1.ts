@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createPublicKey, verify } from 'node:crypto'
-import { verifyServed, verifyStrict, acceptHistory, hostPolicy, type History, type StrictExpected } from '../kernel/src/gate1.ts'
+import { verifyServed, verifyServedHeld, verifyStrict, acceptHistory, hostPolicy, scanBlocks, parseStartTag, parseEndTag, type History, type StrictExpected } from '../kernel/src/gate1.ts'
 
 let failures = 0
 let checks = 0
@@ -56,6 +56,69 @@ for (const row of E.served) {
 }
 
 console.log('\nambiguous: two entries matching every block is UNKNOWN, never "the first"')
+console.log('\nblock offsets: a host can splice a whole element without a second parser (home-webext, W2)')
+{
+  let blocks = 0, bad: string[] = []
+  for (const row of E.served) {
+    const html = read(row.case)
+    let scanned
+    try { scanned = scanBlocks(html) } catch { continue }
+    for (const b of scanned) {
+      blocks++
+      const open = html.slice(b.tagStart, b.start), close = html.slice(b.start + b.text.length, b.end)
+      const st = parseStartTag(html, b.tagStart), et = parseEndTag(html, b.start + b.text.length)
+      if (open !== b.attrs || st?.end !== b.start || st?.name !== b.tag) bad.push(`${row.case} @${b.tagStart}: open tag`)
+      if (et?.end !== b.end || et?.name !== b.tag || !close.endsWith('>')) bad.push(`${row.case} @${b.tagStart}: close tag ${JSON.stringify(close)}`)
+    }
+  }
+  ok(blocks > 100 && bad.length === 0, `on every served row (${blocks} blocks): html.slice(tagStart, start) is the exact start tag and html.slice(start + text.length, end) the exact end tag${bad.length ? ' — ' + bad.slice(0, 3).join('; ') : ''}`)
+}
+
+console.log('\nthe frozen REAL release: bento.page\'s slides 1.2.10 shell and its signed history (vault)')
+const heldHistories: Record<string, History> = {}
+{
+  const verifies = (name: string) => {
+    const f = E.histories[name]
+    const env = JSON.parse(read(f.history))
+    heldHistories[name] = JSON.parse(env.payload)
+    try {
+      const k = createPublicKey({ key: JSON.parse(read(f.key)), format: 'jwk' })
+      return verify('sha256', Buffer.from(env.payload, 'utf8'), { key: k, dsaEncoding: 'ieee-p1363' }, Buffer.from(env.sig, 'base64'))
+    } catch { return false } // not even a key on the curve
+  }
+  ok(verifies('real'), 'the real history verifies with the real release key')
+  ok(verifies('synthetic'), 'the synthetic history verifies with the corpus test key')
+  // the frozen key must BE the key every shipped file trusts, not a copy that drifted
+  const upd = readFileSync(join(DIR, '..', '..', '..', 'kernel/src/update.ts'), 'utf8')
+  const jwk = JSON.parse(read(E.histories.real.key))
+  ok(upd.includes(`x: '${jwk.x}'`) && upd.includes(`y: '${jwk.y}'`), 'the frozen release key is the one kernel/src/update.ts embeds')
+
+  // the synthetic history must have the real one's SHAPE, so a host built against
+  // the corpus can't be surprised by what is actually published
+  const real = heldHistories.real, syn = heldHistories.synthetic
+  const keys = (o: object) => Object.keys(o).sort().join(',')
+  ok(keys(syn) === keys(real), `the history payloads have the same fields (${keys(real)})`)
+  ok(keys(syn.releases[0]) === keys(real.releases[0]), `the release entries have the same fields (${keys(real.releases[0])})`)
+  ok(keys(syn.releases[0].pins) === keys(real.releases[0].pins) && keys(syn.releases[0].pins.blocks) === keys(real.releases[0].pins.blocks), 'the pins have the same fields, block ids included')
+  ok(syn.v === real.v && syn.releases[0].pins.v === real.releases[0].pins.v, 'the same format versions')
+  const APP = /^bento-[a-z][a-z0-9-]*$/
+  ok(APP.test(real.app) && APP.test(syn.app), `both apps have the published form "bento-<app>" (${real.app}, ${syn.app})`)
+  ok(real.app !== 'slides' && !E.histories.real.history.split('/').includes(real.app), 'the real app id is not a directory name: compare against the history\'s app, never a path')
+}
+
+console.log('\nheld histories: a file that names no app is matched by trying EVERY history the host holds')
+for (const row of E.held) {
+  const v = await verifyServedHeld(read(row.case), row.held.map((n: string) => heldHistories[n]))
+  const got = v.verdict === 'genuine' ? `genuine ${v.app} ${v.release.version}` : 'unknown'
+  const want = row.verdict === 'genuine' ? `genuine ${row.app} ${row.release}` : 'unknown'
+  ok(got === want, `${row.name} [${row.held.join(', ')}]: ${want}${got !== want ? ` (got ${got})` : ''} (${row.why})`)
+}
+{
+  // the empty document block is real: the published shell carries no doc at all
+  const doc = scanBlocks(read(E.histories.real.history.replace('history.json', 'Bento_Slides.bento.html'))).find((b) => b.id === 'bento-doc')
+  ok(doc !== undefined && doc.text.trim() === '', 'the published 1.2.10 shell\'s document block is empty (a fresh shell)')
+}
+
 for (const row of E.ambiguous) ok((await verifyServed(read(row.case), row.history)).verdict === row.verdict, `${row.case.replace('served/', '')} under its own history: ${row.verdict} (${row.why})`)
 
 console.log('\nstrict (file://): both genuine saves pass, all 16 tampers refuse')
