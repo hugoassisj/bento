@@ -20,7 +20,7 @@
 //   · an inline script the plan did not list does NOT run (the sandbox CSP).
 // Defaults to the frozen real 1.2.10 deck if present, else fetches the live shell.
 
-import { chromium } from 'playwright'
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 import { readdirSync, mkdtempSync, existsSync, cpSync, writeFileSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'

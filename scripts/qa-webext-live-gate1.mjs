@@ -20,7 +20,7 @@
 //   · that deck with one DOCUMENT byte changed → GENUINE (content is free).
 // Exit status is the verdict.
 
-import { chromium } from 'playwright'
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 import { readdirSync, mkdtempSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
