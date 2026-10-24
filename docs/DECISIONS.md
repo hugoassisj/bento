@@ -11895,10 +11895,13 @@ couplings below.
   value. No option can add a name to a list. scripts/test-svgsafe-policy-browser.mjs
   holds that: each option removes what the default keeps, and nothing an option
   keeps was refused by the default.
-- **`styleSheet` is required.** There is no safe default scope for a kept
-  `<style>`, so a caller either passes its scoping (slides:
-  `scopeCss(sanitizeSvgCss(css), scope)`) or `null`, which refuses `<style>`
-  elements and `style` attributes.
+- **`scopeStyle` is required, and it only scopes.** There is no safe default
+  scope for a kept `<style>`, so a caller either passes its scoping (slides:
+  `css => scopeCss(css, scope)`) or `null`, which refuses `<style>` elements and
+  `style` attributes. The walk runs sanitizeSvgCss itself and hands the hook
+  the result, so an app passing `css => css` keeps a sanitized sheet, never a
+  raw one. Without that, this hook would be the one option able to loosen
+  (security's condition on #847).
 - **What stays in the app** is what isn't security: how it parses input into an
   inert document, and scopeCss (hard-won detail #7).
 - **One decoder.** slides' colour gate reads values through the kernel's

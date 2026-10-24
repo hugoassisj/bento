@@ -14,8 +14,11 @@
 // that passes nothing extra gets exactly slides' behaviour, and every option
 // refuses MORE (a tag, an attribute, data-* names, remote hrefs, escapes or
 // foreign schemes in a value). No option can add a name to a list. The one
-// required field is `styleSheet`, because there is no safe default scope: a
+// required field is `scopeStyle`, because there is no safe default scope: a
 // caller either says how its kept sheets are scoped or refuses <style> outright.
+// It is handed CSS the walk has ALREADY sanitized, so it can only scope: an app
+// passing `css => css` keeps a sanitized, unscoped sheet, never a raw one
+// (security, 2026-10-24).
 //
 // cssDecodeIdentEscapes is exported because slides' colour gate (render.ts,
 // the themed-value sink) reads values through the SAME decoder. The two gates
@@ -409,16 +412,17 @@ export function sanitizeSvgCss(css: string): string {
 // --- the walk, and the per-app policy ------------------------------------------------
 
 /**
- * How an app tightens the walk. Every field but `styleSheet` is optional and
+ * How an app tightens the walk. Every field but `scopeStyle` is optional and
  * defaults to slides' behaviour; each one only ever refuses more.
  */
 export interface SvgPolicy {
   /**
-   * What a kept `<style>` element's text becomes: sanitizeSvgCss plus the
-   * app's scoping (slides: `css => scopeCss(sanitizeSvgCss(css), scope)`).
-   * `null` refuses `<style>` elements AND `style` attributes outright.
+   * The app's SCOPING for a kept `<style>` element (slides: `css =>
+   * scopeCss(css, scope)`). The walk runs sanitizeSvgCss first and hands this
+   * the result, so it never sees, and can never keep, unsanitized CSS. `null`
+   * refuses `<style>` elements AND `style` attributes outright.
    */
-  styleSheet: ((css: string) => string) | null
+  scopeStyle: ((sanitizedCss: string) => string) | null
   /** Tags refused on top of SVG_TAGS. */
   refuseTags?: Iterable<string>
   /** Attributes refused on top of svgAttrAllowed. */
@@ -442,7 +446,7 @@ export interface SvgPolicy {
 interface Rules {
   tag: (t: string) => boolean
   attr: (n: string) => boolean
-  styleSheet: ((css: string) => string) | null
+  scopeStyle: ((sanitizedCss: string) => string) | null
   remoteHref: boolean
   strictValues: boolean
 }
@@ -450,12 +454,12 @@ interface Rules {
 function rulesOf(p: SvgPolicy): Rules {
   const tags = new Set(Array.from(p.refuseTags ?? [], (t) => t.toLowerCase()))
   const attrs = new Set(Array.from(p.refuseAttrs ?? [], (a) => a.toLowerCase()))
-  if (p.styleSheet === null) { tags.add('style'); attrs.add('style') }
+  if (p.scopeStyle === null) { tags.add('style'); attrs.add('style') }
   const data = p.dataAttrs !== false
   return {
     tag: (t) => SVG_TAGS.has(t) && !tags.has(t),
     attr: (n) => svgAttrAllowed(n) && !attrs.has(n) && (data || !n.startsWith('data-')),
-    styleSheet: p.styleSheet,
+    scopeStyle: p.scopeStyle,
     remoteHref: p.remoteHref !== false,
     strictValues: p.strictValues === true,
   }
@@ -525,8 +529,9 @@ function cleanElement(el: Element, r: Rules): boolean {
     // html parser really does build here: inside foreign content the
     // tokenizer stays in the data state, so `<svg><style><img src=x
     // onerror=…></style>` parses that img as an ELEMENT, not as css text.
-    // (r.tag refused 'style' already when styleSheet is null.)
-    el.textContent = r.styleSheet!(el.textContent ?? '')
+    // Sanitized HERE, always; the app's hook only scopes the result. (r.tag
+    // refused 'style' already when scopeStyle is null.)
+    el.textContent = r.scopeStyle!(sanitizeSvgCss(el.textContent ?? ''))
     return true
   }
   cleanChildren(el, r)

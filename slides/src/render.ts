@@ -484,7 +484,8 @@ export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
   // Scoped as well as sanitized. An svg <style> applies DOCUMENT-WIDE, so one
   // diagram's rules would reach every other svg on the page — the exact hazard
   // scopeCss exists for, which once only `el.css` got.
-  cleanSvgChildren(parsed.body, { styleSheet: (css) => scopeCss(sanitizeSvgCss(css), scope) })
+  // (the walk sanitizes each sheet itself; this hook only scopes it)
+  cleanSvgChildren(parsed.body, { scopeStyle: (css) => scopeCss(css, scope) })
   // importNode, not a bare append: the nodes live in the inert parsed document,
   // and relying on DOM4's implicit adopt is a trap for the next edit.
   for (const n of Array.from(parsed.body.childNodes)) out.appendChild(document.importNode(n, true))

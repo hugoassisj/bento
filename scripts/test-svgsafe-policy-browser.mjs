@@ -38,15 +38,19 @@ await import('node:fs').then((fs) => fs.writeFileSync(entry,
   `    kept.push(p); for (const a of Array.from(c.attributes)) kept.push(p + '@' + a.name.toLowerCase() + '=' + a.value)\n` +
   `    walk(c, p) })\n` +
   `  walk(doc.body, '')\n` +
-  `  return kept\n}\n`))
+  `  return kept\n}\n` +
+  `;(globalThis as any).__sheetOf = (markup: string) => {\n` +
+  `  const doc = new DOMParser().parseFromString(markup, 'text/html')\n` +
+  `  cleanSvgChildren(doc.body, { scopeStyle: (css: string) => css })\n` +
+  `  return doc.body.querySelector('style')?.textContent ?? null\n}\n`))
 execFileSync(join(ROOT, 'slides/node_modules/.bin/esbuild'), [entry, '--bundle', '--format=iife', '--log-level=error', `--outfile=${out}`])
 const bundle = readFileSync(out, 'utf8')
 rmSync(dir, { recursive: true, force: true })
 
 const S = 'script'
-const scoped = 'css => css' // the default's styleSheet hook (slides scopes; scoping is not under test)
+const scoped = 'css => css' // the default's scopeStyle hook: a no-op scope (scoping is not under test)
 const OPTIONS = {
-  'styleSheet: null': { styleSheet: null },
+  'scopeStyle: null': { scopeStyle: null },
   'refuseTags: [a]': { refuseTags: ['a'] },
   'refuseAttrs: [cursor, title]': { refuseAttrs: ['cursor', 'title'] },
   'dataAttrs: false': { dataAttrs: false },
@@ -55,7 +59,7 @@ const OPTIONS = {
 }
 // one input per option where the DEFAULT keeps something that option must remove
 const BITES = {
-  'styleSheet: null': '<svg><style>rect{fill:red}</style><rect width="5" height="5" style="fill:red"/></svg>',
+  'scopeStyle: null': '<svg><style>rect{fill:red}</style><rect width="5" height="5" style="fill:red"/></svg>',
   'refuseTags: [a]': '<svg><a href="#x"><circle r="5"/></a></svg>',
   'refuseAttrs: [cursor, title]': '<svg><rect width="5" height="5" cursor="pointer" title="t"/></svg>',
   'dataAttrs: false': '<svg><rect width="5" height="5" data-part="bar"/></svg>',
@@ -89,7 +93,7 @@ try {
   await page.setContent('<!doctype html><html><body></body></html>')
   await page.addScriptTag({ content: bundle })
   const run = (markup, extra) => page.evaluate(([m, e, hook]) => {
-    const policy = { styleSheet: eval(hook), ...e }
+    const policy = { scopeStyle: eval(hook), ...e }
     return globalThis.__run(m, policy)
   }, [markup, extra, scoped])
 
@@ -109,9 +113,16 @@ try {
     ok(extra.length === 0, `${name}, over ${INPUTS.length} inputs${extra.length ? ' — kept beyond the default: ' + extra.slice(0, 3).join('; ') : ''}`)
   }
 
-  console.log('\nthe default refuses a policy-free shortcut: no styleSheet hook, no kept <style>')
-  const noHook = await page.evaluate((m) => { try { return globalThis.__run(m, { styleSheet: null }) } catch (e) { return String(e) } }, BITES['styleSheet: null'])
-  ok(Array.isArray(noHook) && !noHook.some((k) => k.endsWith(':style') || k.includes('@style=')), 'styleSheet: null drops <style> and style= alike')
+  console.log('\nthe style hook only scopes: the walk sanitizes every kept sheet itself (security)')
+  // an app passing the identity hook still gets a SANITIZED sheet, never the raw one
+  const raw = '<svg><style>@import "https://example.test/x.css"; rect{fill:url(https://example.test/p)} @\\69mport "https://example.test/y.css";</style></svg>'
+  const text = await page.evaluate((m) => globalThis.__sheetOf(m), raw)
+  // both at-rules renamed (the escaped one too), so the parser drops them whole;
+  // the url() to a remote target rewritten to none
+  ok(typeof text === 'string' && !/@import|@\\69/i.test(text) && (text.match(/@bento-refused/g) ?? []).length === 2 && !/url\(\s*['"]?https/i.test(text) && text.includes('fill:none'),
+    `with css => css as the hook, the kept sheet is still sanitized: ${JSON.stringify(text).slice(0, 90)}`)
+  const noHook = await page.evaluate((m) => { try { return globalThis.__run(m, { scopeStyle: null }) } catch (e) { return String(e) } }, BITES['scopeStyle: null'])
+  ok(Array.isArray(noHook) && !noHook.some((k) => k.endsWith('/style') || k.includes('@style=')), 'scopeStyle: null drops <style> and style= alike')
 } finally {
   await browser.close()
 }
