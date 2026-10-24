@@ -51,6 +51,11 @@ const HOSTILE = {
   // that judges an animation by the attribute it WRITES stops these
   'use animated to a remote href': `<svg width="80" height="80"><defs><rect id="a" width="60" height="60"/></defs><use href="#a"><animate attributeName="href" to="https://rc.test/x.svg#a" begin="0s" fill="freeze"/></use></svg>`,
   'a animated to a scheme-relative href': `<svg width="80" height="80"><a href="#x"><rect width="70" height="70"/><animate attributeName="href" to="//rc.test/p" begin="0s" fill="freeze"/></a></svg>`,
+  // an embed's picture may hold NO remote reference (a fetch out of a
+  // self-contained file is a read receipt) and NO data-* (names like
+  // data-bento-preview and data-el-id are what the shell and editor look up)
+  'remote https image': `<svg width="80" height="80"><image href="https://rc.test/i.png" width="70" height="70"/><rect width="10" height="10"/></svg>`,
+  'data-* attributes': `<svg width="80" height="80" data-bento-preview="1"><rect data-el-id="x" data-note="n1" width="70" height="70"/></svg>`,
 }
 const BENIGN = `<svg width="200" height="120" viewBox="0 0 200 120"><defs><linearGradient id="g"><stop offset="0" stop-color="#f7a600"/><stop offset="1" stop-color="#5b8def"/></linearGradient><circle id="c" r="10"/></defs><rect width="200" height="120" fill="url(#g)"/><use href="#c" x="30" y="30"/><text x="10" y="110">Q3</text></svg>`
 
@@ -93,9 +98,10 @@ try {
       return {
         on: els.filter((e) => [...e.attributes].some((a) => /^on/i.test(a.name))).length,
         js: els.filter((e) => [...e.attributes].some((a) => /^(href|xlink:href|values|to|from)$/i.test(a.name) && /javascript:|https?:/i.test(a.value))).length,
-        bad: document.querySelectorAll('#paper .t-embed script, #paper .t-embed foreignObject, #paper .t-embed style').length,
+        bad: document.querySelectorAll('#paper .t-embed script, #paper .t-embed foreignObject, #paper .t-embed style, #paper .t-embed-view a').length,
         boxes: els.length,
         svg: !!document.querySelector('#paper .t-embed-view svg'),
+        data: [...document.querySelectorAll('#paper .t-embed-view svg, #paper .t-embed-view svg *')].filter((e) => [...e.attributes].some((a) => /^data-/i.test(a.name))).length,
       }
     })
     // hover and click every element of the picture (or its placeholder)
@@ -109,13 +115,13 @@ try {
       const d = new DOMParser().parseFromString(window.bento.printHtml(), 'text/html')
       const all = [...d.querySelectorAll('.t-embed, .t-embed *')]
       return { on: all.filter((e) => [...e.attributes].some((a) => /^on/i.test(a.name))).length,
-               bad: d.querySelectorAll('.t-embed script, .t-embed foreignObject, .t-embed style').length,
+               bad: d.querySelectorAll('.t-embed script, .t-embed foreignObject, .t-embed style, .t-embed a').length,
                js: all.filter((e) => [...e.attributes].some((a) => /javascript:/i.test(a.value))).length }
     })
     const fetched = requests.slice(before).filter((u) => u.includes('rc.test')).length
-    ok(scan.svg && scan.on === 0 && scan.js === 0 && scan.bad === 0 && ran === 0 && fetched === 0 && stayed
+    ok(scan.svg && scan.on === 0 && scan.js === 0 && scan.bad === 0 && scan.data === 0 && ran === 0 && fetched === 0 && stayed
        && printed.on === 0 && printed.bad === 0 && printed.js === 0,
-      `${name}: the picture still RENDERS (${scan.svg}), no navigation on click (${stayed}), inert in the editor (on* ${scan.on}, js/remote ${scan.js}, script/foreign/style ${scan.bad}, ran ${ran}, fetched ${fetched}) and in print (on* ${printed.on}, ${printed.bad}, js ${printed.js})`)
+      `${name}: the picture still RENDERS (${scan.svg}), no navigation on click (${stayed}), inert in the editor (on* ${scan.on}, js/remote ${scan.js}, data-* ${scan.data}, script/foreign/style/a ${scan.bad}, ran ${ran}, fetched ${fetched}) and in print (on* ${printed.on}, ${printed.bad}, js ${printed.js})`)
     await p.close()
   }
 
