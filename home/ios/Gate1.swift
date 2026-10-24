@@ -514,6 +514,21 @@ enum Gate1 {
         }
     }
 
+    /// A served file judged against EVERY history the host holds. A fresh shell has
+    /// an empty document block, so nothing in the file says which app it is: the
+    /// history is never picked by a name read from the file. Exactly one held
+    /// history must match; none, or more than one, is UNKNOWN. The verdict names
+    /// the app that matched.
+    static func verifyServedHeld(_ html: S, _ held: [JSON], frameAncestors: String = "'none'") -> (verdict: Served, app: String?) {
+        var hits: [(app: String, v: Served)] = []
+        for h in held {
+            let v = verifyServed(html, history: h, frameAncestors: frameAncestors)
+            if case .genuine = v { hits.append((h["app"]?.string ?? "", v)) }
+        }
+        if hits.count == 1 { return (hits[0].v, hits[0].app) }
+        return (.unknown(hits.isEmpty ? "no held history matches" : "\(hits.count) held histories match (\(hits.map(\.app).joined(separator: ", ")))"), nil)
+    }
+
     // MARK: - the signed history envelope
 
     /// `{ payload, sig }`: ECDSA P-256 SHA-256 over the payload's UTF-8, r‖s in

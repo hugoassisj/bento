@@ -56,6 +56,18 @@ enum ReleaseHistory {
         return held
     }
 
+    /// Every history this host holds, one per app that has one. Gate 1 judges a
+    /// document against all of them (Gate1.verifyServedHeld), never one picked by
+    /// a name read from the file. Each is a distinct app's: its payload must name
+    /// that app, so two held histories are never the same one.
+    static func held(_ apps: [String] = Releases.apps.map(\.id), in store: Store = .app) -> [JSON] {
+        #if DEBUG
+        // the rig's single test history stands in for every app: hold it ONCE
+        if store.heldDir == Store.app.heldDir, let rig = rigHistory() { return [rig] }
+        #endif
+        return apps.compactMap { current($0, in: store) }
+    }
+
     enum Refresh: Equatable { case updated, unchanged, refused(String), failed(String) }
 
     /// Fetch the published history and keep it if it's a valid successor of

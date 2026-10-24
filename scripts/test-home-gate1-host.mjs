@@ -122,11 +122,19 @@ try {
   // corpus can't show this: in the rig's mode the test history answers for any
   // app, so a document that names no app (a fresh shell's document block is
   // EMPTY until its first save) passed there and read UNKNOWN for real.
-  // GATE1_REAL_SHELL=<a release's shell, e.g. bento.page/releases/slides/Bento_Slides.bento.html>
-  if (process.env.GATE1_REAL_SHELL) {
+  // The corpus freezes a real release (real/<app>-<version>/); GATE1_REAL_SHELL
+  // points at another shell instead, e.g. one just downloaded from bento.page.
+  const frozen = join(DIR, 'real/slides-1.2.10/Bento_Slides.bento.html')
+  const realShell = process.env.GATE1_REAL_SHELL || (existsSync(frozen) ? frozen : null)
+  if (realShell) {
     console.log('a real release, against the bundled history only')
-    const shell = readFileSync(process.env.GATE1_REAL_SHELL, 'utf8')
-    const newest = JSON.parse(JSON.parse(readFileSync(join(ROOT, 'home/ios/release-history/slides.json'), 'utf8')).payload).releases[0].version
+    const shell = readFileSync(realShell, 'utf8')
+    // its version: the bundled history's entry whose sha256 is this file's
+    const { createHash } = await import('node:crypto')
+    const fileHash = createHash('sha256').update(readFileSync(realShell)).digest('hex')
+    const entryFor = JSON.parse(JSON.parse(readFileSync(join(ROOT, 'home/ios/release-history/slides.json'), 'utf8')).payload).releases.find((e) => e.sha256 === fileHash)
+    ok(!!entryFor, `the shell is a release the bundled history carries (sha256 ${fileHash.slice(0, 12)}…${entryFor ? ` = ${entryFor.version}` : ''})`)
+    const newest = entryFor?.version
     const s = open('real-shell', shell, { withHistory: false })
     ok(s.verdict === 'genuine' && s.version === newest, `the ${newest} shell (what New writes, its document block empty): ${s.verdict} ${s.version ?? s.why ?? ''}`)
     ok(s.booted === true && s.slides > 0 && !!s.csp, `and its runtime boots under its pinned CSP (${s.slides} slides)`)

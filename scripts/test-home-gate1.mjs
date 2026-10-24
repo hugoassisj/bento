@@ -108,6 +108,28 @@ for row in E["ambiguous"]!.array! {
   ok(got == row["verdict"]!.string!, "\(c.replacingOccurrences(of: "served/", with: "")) under its own history: \(row["verdict"]!.string!)")
 }
 
+if let heldRows = E["held"]?.array, let names = E["histories"] {
+  print("held: a file is judged against EVERY history the host holds; exactly one must match")
+  var histories: [String: JSON] = [:]
+  if case .object(let o) = names {
+    for (name, spec) in o {
+      let k = Gate1.publicKey(jwk: data(spec["key"]!.string!))
+      let h = k.flatMap { Gate1.openSigned(data(spec["history"]!.string!), publicKey: $0) }
+      ok(h != nil, "the \(name) history verifies with its own key")
+      histories[name] = h
+    }
+  }
+  for row in heldRows {
+    let list = row["held"]!.array!.compactMap { histories[$0.string!] }
+    let (v, app) = Gate1.verifyServedHeld(text(row["case"]!.string!), list)
+    let got: String
+    switch v { case .genuine(let ver, _, _): got = "genuine \(app ?? "?") \(ver)"; case .unknown: got = "unknown" }
+    let want = row["verdict"]!.string! == "genuine" ? "genuine \(row["app"]!.string!) \(row["release"]!.string!)" : "unknown"
+    var why = ""; if case .unknown(let r) = v { why = " (\(r))" }
+    ok(got == want, "\(row["name"]!.string!): \(want)\(why)")
+  }
+}
+
 print("strict (file://): both genuine saves pass, all 16 tampers refuse")
 let se = try! JSON.parse(data("strict-expected.json"))
 let expected = Gate1.StrictExpected(skeleton: Gate1.u(se["skeleton"]!.string!), remover: se["remover"]?.string.map(Gate1.u))
