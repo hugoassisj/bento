@@ -204,8 +204,16 @@ export function docStyleCss(doc: TypeDoc, b: Block): string {
   return s ? styleDeclarations(s) : '';
 }
 
-/** A style's escaped id, safe inside a double-quoted CSS attribute selector. */
-const cssAttrId = (id: string): string => id.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+/**
+ * A style's id, safe inside a double-quoted CSS attribute selector: every code
+ * point outside [A-Za-z0-9_-] is written as a hex escape. Escaping only `\`
+ * and `"` was not enough — a newline, CR or form feed ENDS a CSS string, and
+ * what followed the id was parsed as rules (measured: a file's style id
+ * carried `*{background:url(…)}` into #t-style-rules and fetched on open). A
+ * synced op never passes parseDoc, so this is the layer it meets.
+ */
+export const cssAttrId = (id: string): string =>
+  id.replace(/[^A-Za-z0-9_-]/gu, (c) => `\\${c.codePointAt(0)!.toString(16)} `);
 
 /**
  * Every style the document could paint, as ONE stylesheet — `[data-style-id]`
