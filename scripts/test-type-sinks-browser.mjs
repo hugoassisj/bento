@@ -116,12 +116,13 @@ try {
       const all = [...d.querySelectorAll('.t-embed, .t-embed *')]
       return { on: all.filter((e) => [...e.attributes].some((a) => /^on/i.test(a.name))).length,
                bad: d.querySelectorAll('.t-embed script, .t-embed foreignObject, .t-embed style, .t-embed a').length,
-               js: all.filter((e) => [...e.attributes].some((a) => /javascript:/i.test(a.value))).length }
+               js: all.filter((e) => [...e.attributes].some((a) => /javascript:/i.test(a.value))).length,
+               data: d.querySelectorAll('.t-embed svg').length ? [...d.querySelectorAll('.t-embed svg, .t-embed svg *')].filter((e) => [...e.attributes].some((a) => /^data-/i.test(a.name))).length : 0 }
     })
     const fetched = requests.slice(before).filter((u) => u.includes('rc.test')).length
     ok(scan.svg && scan.on === 0 && scan.js === 0 && scan.bad === 0 && scan.data === 0 && ran === 0 && fetched === 0 && stayed
-       && printed.on === 0 && printed.bad === 0 && printed.js === 0,
-      `${name}: the picture still RENDERS (${scan.svg}), no navigation on click (${stayed}), inert in the editor (on* ${scan.on}, js/remote ${scan.js}, data-* ${scan.data}, script/foreign/style/a ${scan.bad}, ran ${ran}, fetched ${fetched}) and in print (on* ${printed.on}, ${printed.bad}, js ${printed.js})`)
+       && printed.on === 0 && printed.bad === 0 && printed.js === 0 && printed.data === 0,
+      `${name}: the picture still RENDERS (${scan.svg}), no navigation on click (${stayed}), inert in the editor (on* ${scan.on}, js/remote ${scan.js}, data-* ${scan.data}, script/foreign/style/a ${scan.bad}, ran ${ran}, fetched ${fetched}) and in print (on* ${printed.on}, ${printed.bad}, js ${printed.js}, data-* ${printed.data})`)
     await p.close()
   }
 
