@@ -23,7 +23,7 @@ writeFileSync(join(work, 'key.json'), JSON.stringify(key.publicKey.export({ form
 const hex = () => randomBytes(32).toString('hex')
 const entry = (version) => ({ version, sha256: hex(), at: '2026-10-21T00:00:00Z', pins: { v: 1, blocks: { 'bento-rt': hex(), 'bento-rt-css': hex(), loader: hex(), remover: null }, scriptSrc: ['sha256-x'] } })
 const e1 = entry('1.0.0'), e2 = entry('1.1.0')
-const env = (releases, { app = 'slides', k = key } = {}) => {
+const env = (releases, { app = 'bento-slides', k = key } = {}) => {
   const payload = JSON.stringify({ app, v: 1, releases })
   return JSON.stringify({ payload, sig: sign('sha256', Buffer.from(payload), { key: k.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64') })
 }
@@ -55,8 +55,10 @@ r = run({ published: env([e2, e1]), bundled: env([e2, { ...e1, sha256: hex() }])
 ok(r.code === 1 && /lacks or changes 1\.0\.0/.test(r.out), 'bundled changes a published entry: fails')
 r = run({ published: env([e1]), bundled: env([e1], { k: other }) })
 ok(r.code === 1 && /does not verify/.test(r.out), 'bundled signed by another key: fails')
-r = run({ published: env([e1]), bundled: env([e1], { app: 'dash' }) })
-ok(r.code === 1 && /not a v1 history for slides/.test(r.out), "bundled is another app's: fails")
+r = run({ published: env([e1]), bundled: env([e1], { app: 'bento-dash' }) })
+ok(r.code === 1 && /not a v1 history for bento-slides/.test(r.out), "bundled is another app's: fails")
+r = run({ published: env([e1]), bundled: env([e1], { app: 'slides' }) })
+ok(r.code === 1 && /not a v1 history for bento-slides/.test(r.out), 'bundled names the app by its directory, not its appId: fails')
 r = run({ published: env([e1]), bundled: env([e1]) })
 ok(r.code === 0 && /current \(1\.0\.0\)/.test(r.out), 'bundled IS the published one: passes')
 r = run({ published: env([e1]), bundled: env([e2, e1]) })

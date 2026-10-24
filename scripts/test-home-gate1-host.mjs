@@ -17,7 +17,8 @@
  * - the attack rows: whatever the verdict, nothing gate 1 didn't account for runs
  *   in a document it called genuine
  * - a runtime the history doesn't carry: "check for updates", not damage
- * - no history on the device: UNKNOWN, and the document still opens
+ * - with only the bundled histories, a document from no held release: UNKNOWN,
+ *   and it still opens
  *
  * Needs Xcode and an iOS simulator; skips elsewhere.
  */
@@ -111,8 +112,29 @@ try {
   ok(rt.verdict === 'unknown' && /check for updates/.test(rt.why ?? ''), `a runtime the history doesn't carry: "${rt.why}"`)
   const ld = open('ld', read('served/loader-byte-changed.html'))
   ok(ld.verdict === 'unknown' && !/check for updates/.test(ld.why ?? ''), `a known runtime with an altered loader is not offered an update: "${ld.why}"`)
-  const none = open('nohistory', genuine, { withHistory: false })
-  ok(none.verdict === 'unknown' && /no release history/.test(none.why ?? '') && none.previews === 0, `no history on the device: unknown (${none.why}), and the document still opens`)
+  // without the test history the app has only what it BUNDLES: the real signed
+  // release histories. A corpus document is from none of those releases.
+  const none = open('bundledonly', genuine, { withHistory: false })
+  ok(none.verdict === 'unknown' && /no release history|check for updates/.test(none.why ?? '') && none.previews === 0,
+    `with only the bundled histories, a document from no held release: unknown (${none.why}), and it still opens`)
+
+  // A REAL release, against only the history the app bundles (no test key). The
+  // corpus can't show this: in the rig's mode the test history answers for any
+  // app, so a document that names no app (a fresh shell's document block is
+  // EMPTY until its first save) passed there and read UNKNOWN for real.
+  // GATE1_REAL_SHELL=<a release's shell, e.g. bento.page/releases/slides/Bento_Slides.bento.html>
+  if (process.env.GATE1_REAL_SHELL) {
+    console.log('a real release, against the bundled history only')
+    const shell = readFileSync(process.env.GATE1_REAL_SHELL, 'utf8')
+    const newest = JSON.parse(JSON.parse(readFileSync(join(ROOT, 'home/ios/release-history/slides.json'), 'utf8')).payload).releases[0].version
+    const s = open('real-shell', shell, { withHistory: false })
+    ok(s.verdict === 'genuine' && s.version === newest, `the ${newest} shell (what New writes, its document block empty): ${s.verdict} ${s.version ?? s.why ?? ''}`)
+    ok(s.booted === true && s.slides > 0 && !!s.csp, `and its runtime boots under its pinned CSP (${s.slides} slides)`)
+    const at = shell.indexOf('id="bento-rt"'), mid = shell.indexOf('>', at) + 200
+    const flipped = shell.slice(0, mid) + (shell[mid] === 'A' ? 'B' : 'A') + shell.slice(mid + 1)
+    const f = open('real-byte', flipped, { withHistory: false })
+    ok(f.verdict === 'unknown' && f.csp === undefined, `one byte changed in its runtime: unknown (${f.why}), no CSP`)
+  }
 } finally {
   try { run('xcrun', ['simctl', 'terminate', DEV, BUNDLE]) } catch {}
   rmSync(work, { recursive: true, force: true })

@@ -62,7 +62,7 @@ function open(path, app, ks) {
   if (!ok) return { err: `${path} does not verify with a pinned release key` }
   let h
   try { h = JSON.parse(env.payload) } catch { return { err: `${path} has a payload that is not JSON` } }
-  if (h.v !== 1 || h.app !== app || !Array.isArray(h.releases) || !h.releases.length) return { err: `${path} is not a v1 history for ${app}` }
+  if (h.v !== 1 || h.app !== (appIdOf[app] ?? app) || !Array.isArray(h.releases) || !h.releases.length) return { err: `${path} is not a v1 history for ${appIdOf[app] ?? app}` }
   return { h }
 }
 
@@ -75,12 +75,15 @@ if (!existsSync(join(site, 'releases'))) {
   process.exit(warn ? 0 : 1)
 }
 const ks = keys()
+let bad = 0
 if (!ks.length) { say('no release key is pinned in home/ios/ReleaseKeys.swift'); process.exit(warn ? 0 : 1) }
 
 // the DOCUMENT apps K4 signs histories for (scripts/apps.mjs), once published;
 // the tray's own manifest is the app binary's, not a document runtime
 const apps = Object.values(APPS).map((a) => a.dir).filter((dir) => existsSync(join(site, 'releases', dir, 'manifest.json'))).sort()
-let bad = 0
+// a history names its app by appId; ReleaseHistory.historyApp derives it as "bento-" + dir
+const appIdOf = Object.fromEntries(Object.values(APPS).map((a) => [a.dir, a.appId]))
+for (const a of Object.values(APPS)) if (a.appId !== `bento-${a.dir}`) { say(`scripts/apps.mjs names ${a.dir} "${a.appId}", but ReleaseHistory.historyApp expects "bento-${a.dir}"`); bad++ }
 for (const app of apps) {
   const pubPath = join(site, 'releases', app, 'history.json')
   if (!existsSync(pubPath)) { say(`no published release history for ${app}; publish a release first`); bad++; continue }

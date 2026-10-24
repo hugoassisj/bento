@@ -37,13 +37,16 @@ const hex = () => randomBytes(32).toString('hex')
 const entry = (version) => ({ version, sha256: hex(), at: '2026-10-21T00:00:00Z', pins: { v: 1, blocks: { 'bento-rt': hex(), 'bento-rt-css': hex(), loader: hex(), remover: hex() }, scriptSrc: ['sha256-' + randomBytes(32).toString('base64')] } })
 const e100 = entry('1.0.0'), e110 = entry('1.1.0'), e120 = entry('1.2.0')
 const env = (payload, k = key) => JSON.stringify({ payload, sig: sign('sha256', Buffer.from(payload), { key: k.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64') })
-const hist = (releases, app = 'slides') => JSON.stringify({ app, v: 1, releases })
+// the payload names the app by its appId (scripts/apps.mjs), as the real history does
+const hist = (releases, app = 'bento-slides') => JSON.stringify({ app, v: 1, releases })
 const files = {
   v1: env(hist([e100])),
   v2: env(hist([e110, e100])),
   v3: env(hist([e120, e110, e100])),
   changed: env(hist([e110, { ...e100, sha256: hex() }])),
-  otherApp: env(hist([e110, e100], 'dash')),
+  otherApp: env(hist([e110, e100], 'bento-dash')),
+  // the directory's name, not the appId: what the real history does NOT carry
+  bareName: env(hist([e110, e100], 'slides')),
   tampered: JSON.stringify({ ...JSON.parse(env(hist([e110, e100]))), payload: hist([e110, e100]).replace('1.1.0', '1.1.1') }),
   otherKey: env(hist([e120, e110, e100]), other),
 }
@@ -75,7 +78,8 @@ print("refreshing: only a valid successor is kept")
 ok(ReleaseHistory.accept(f("v2"), app: "slides", in: s) == .updated && newest(ReleaseHistory.current("slides", in: s)) == "1.1.0", "a newer superset is kept (1.1.0)")
 ok(ReleaseHistory.accept(f("v2"), app: "slides", in: s) == .unchanged, "the same one again changes nothing")
 for (n, why) in [("v1", "an OLDER history (rollback)"), ("changed", "a history that changes a held entry"), ("otherApp", "another app's history"),
-                 ("tampered", "a tampered payload"), ("otherKey", "a history signed by another key")] {
+                 ("tampered", "a tampered payload"), ("otherKey", "a history signed by another key"),
+                 ("bareName", "a history naming the app \"slides\" instead of its appId \"bento-slides\"")] {
   let r = ReleaseHistory.accept(f(n), app: "slides", in: s)
   var refused = false; if case .refused = r { refused = true }
   ok(refused && newest(ReleaseHistory.current("slides", in: s)) == "1.1.0", "\(why): refused, and 1.1.0 is still held (\(r))")

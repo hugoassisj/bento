@@ -333,23 +333,38 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
 
     // MARK: - gate 1
 
-    /// The verdict for a document's bytes against the history held for its app.
+    /// The verdict for a document's bytes against the release histories held.
+    ///
+    /// The app a document names (its `"format"`) is tried first, then every app
+    /// this host knows: a fresh shell, which is what New writes, has an EMPTY
+    /// document block until its first save, so it names none (measured on the
+    /// 1.2.10 shell). Which history is tried is never a trust decision; the
+    /// signature and the pins are. A document is genuine only if one app's
+    /// history matches every block.
     static func gate(_ html: Data) -> Gate1.Served {
         let head = Array(String(decoding: html.prefix(BentoIndex.headBytes), as: UTF8.self).utf16)
-        let app = BentoIndex.app(head) ?? ""
-        guard let history = ReleaseHistory.current(app) else {
-            return .unknown("no release history for \(app.isEmpty ? "this document" : app) on this device yet")
-        }
+        let named = BentoIndex.app(head)
+        let candidates = ([named].compactMap { $0 } + Releases.apps.map(\.id)).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
         let text = Gate1.u(String(decoding: html, as: UTF8.self))
-        let v = Gate1.verifyServed(text, history: history)
+        var first: Gate1.Served?
+        var runtimeKnown = false, anyHistory = false
+        for app in candidates {
+            guard let history = ReleaseHistory.current(app) else { continue }
+            anyHistory = true
+            let v = Gate1.verifyServed(text, history: history)
+            if case .genuine = v { return v }
+            if first == nil { first = v }   // the named app is tried first, so its reason leads
+            if Gate1.runtimeKnown(text, history: history) { runtimeKnown = true }
+        }
+        guard anyHistory, let first else {
+            return .unknown("no release history for \(named ?? "this document") on this device yet")
+        }
         // A runtime no held release carries offers "check for updates". It never
         // claims the file IS newer: files carry no version, and a tampered file
         // looks exactly the same. (The words the person sees are the
         // maintainer's to set; this is the reason it carries.)
-        if case .unknown = v, !Gate1.runtimeKnown(text, history: history) {
-            return .unknown("matches no release this app holds: check for updates, it may be from a newer version")
-        }
-        return v
+        if !runtimeKnown { return .unknown("matches no release this app holds: check for updates, it may be from a newer version") }
+        return first
     }
 
     #if DEBUG
@@ -361,7 +376,8 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             guard let self else { return }
             // pwned: did a script gate 1 didn't account for run? previews: did the pinned
             // remover run (it deletes every [data-bento-preview] element)?
-            webView.evaluateJavaScript("JSON.stringify({pwned: String(window.pwned), previews: document.querySelectorAll('[data-bento-preview]').length})") { value, _ in
+            // booted: did the release's own runtime come up under that policy?
+            webView.evaluateJavaScript("JSON.stringify({pwned: String(window.pwned), previews: document.querySelectorAll('[data-bento-preview]').length, booted: !!(window.bento && window.bento.doc), slides: (window.bento && window.bento.doc && window.bento.doc.slides) ? window.bento.doc.slides.length : -1})") { value, _ in
                 var o: [String: Any] = (value as? String).flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] } ?? ["pwned": "unreadable"]
                 switch self.gate {
                 case .genuine(let v, _, let csp): o["verdict"] = "genuine"; o["version"] = v; o["csp"] = csp

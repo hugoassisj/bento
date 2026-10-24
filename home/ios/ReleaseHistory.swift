@@ -20,6 +20,12 @@ import Foundation
 enum ReleaseHistory {
     static func url(_ app: String) -> String { "https://bento.page/releases/\(app)/history.json" }
 
+    /// The name a history carries INSIDE its signed payload: the release tooling's
+    /// `appId` (scripts/apps.mjs), which is "bento-" + the app's directory. The
+    /// directory names the file and the URL; the payload names the app. The
+    /// release-build check fails if apps.mjs ever breaks this rule.
+    static func historyApp(_ dir: String) -> String { "bento-\(dir)" }
+
     /// Where histories come from and are kept, and what they're verified with.
     /// The app uses `.app`; the rig points both elsewhere and signs with a test key.
     struct Store {
@@ -46,7 +52,7 @@ enum ReleaseHistory {
         let floor = store.bundled(app).flatMap { open($0, app: app, in: store) }
         guard let held = store.held(app).flatMap({ try? Data(contentsOf: $0) }).flatMap({ open($0, app: app, in: store) }) else { return floor }
         // a held copy counts only while it's a valid successor of the floor
-        if let floor, Gate1.acceptHistory(held: floor, incoming: held, app: app) != .ok { return floor }
+        if let floor, Gate1.acceptHistory(held: floor, incoming: held, app: historyApp(app)) != .ok { return floor }
         return held
     }
 
@@ -65,7 +71,7 @@ enum ReleaseHistory {
         guard let incoming = open(data, app: app, in: store) else { return .refused("not a valid signed history for \(app)") }
         let held = current(app, in: store)
         if let held, held == incoming { return .unchanged }
-        switch Gate1.acceptHistory(held: held, incoming: incoming, app: app) {
+        switch Gate1.acceptHistory(held: held, incoming: incoming, app: historyApp(app)) {
         case .refused(let why): return .refused(why)
         case .ok:
             guard let dest = store.held(app) else { return .failed("no place to keep it") }
@@ -80,7 +86,7 @@ enum ReleaseHistory {
     /// A verified, well-formed history for this app, or nil.
     static func open(_ envelope: Data, app: String, in store: Store = .app) -> JSON? {
         guard let h = Gate1.openSigned(envelope, verify: store.verify),
-              Gate1.historyProblems(h).isEmpty, h["app"]?.string == app else { return nil }
+              Gate1.historyProblems(h).isEmpty, h["app"]?.string == historyApp(app) else { return nil }
         return h
     }
 
