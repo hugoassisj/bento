@@ -8,7 +8,7 @@ import type { Store } from '../store'
 import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type ImageElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
 import { CROP_MAX_SCALE, normalizeCrop } from '../crop'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
-import { resolveAsset } from '../render'
+import { cssColor, resolveAsset } from '../render'
 import { measureElement } from '../measure'
 import { PALETTE_SLOTS, paletteOf, refAt, setColor, slotIsSet } from '../palette'
 import { isMacOS } from '../screens'
@@ -2497,7 +2497,7 @@ export class PropsPanel {
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'ed-swatch'
-      b.style.background = base
+      b.style.background = cssColor(base, 'transparent') // a document colour: gated
       b.title = slot
       if (current && current.split(' ')[0] === slot) b.classList.add('is-on')
       b.addEventListener('click', () => {

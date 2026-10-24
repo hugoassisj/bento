@@ -10,9 +10,10 @@ import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
-import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
+import { applyElementFrame, cssColor, fetchFreeOption, gradientLineCoords, paintSafeShape, renderSlide } from './render'
 import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
+import { speakerWindowTitle } from './wintitle'
 import { ICONS } from './icons'
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
@@ -89,7 +90,8 @@ export function startPresentation(
 
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
-  overlay.style.setProperty('--bento-accent', doc.theme.accent)
+  // a document colour, so it is gated like every other (render.ts cssColor)
+  overlay.style.setProperty('--bento-accent', cssColor(doc.theme.accent, '#f7a600'))
   // Reveal ignores key events originating from form fields. If focus is still
   // on an editor input (title, notes…) when the show starts, arrows go dead.
   ;(document.activeElement as HTMLElement | null)?.blur?.()
@@ -993,7 +995,7 @@ export function startPresentation(
     setSpeakerWindow(speaker)
     ;(window as unknown as Record<string, unknown>).__bentoSpeaker = speaker // diagnostics
     const d = speaker.document
-    d.title = `${doc.title} — ${t('Speaker view')}`
+    d.title = speakerWindowTitle(doc.title)
     if (!d.head.querySelector('style')) { // already styled when adopting an editor window
       for (const st of document.querySelectorAll('style')) d.head.appendChild(d.importNode(st, true))
     }
@@ -1212,7 +1214,7 @@ export function startPresentation(
       if (speakerAdopted) {
         // editor-owned window — leave it open, reset to the idle placeholder so
         // it's ready for the next run instead of freezing on the last slide
-        paintSpeaker(speaker, `${doc.title} — ${t('Speaker view')}`,
+        paintSpeaker(speaker, speakerWindowTitle(doc.title),
           speakerIdleBody(doc.title, t('Presentation ended. Start it again to bring these notes back to life.')))
       } else {
         speaker.close()
@@ -1581,10 +1583,12 @@ function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) 
     if (!node) continue
     // a matching chart on the other side of a morph: animate its data over
     const fromEl = fromSlide?.elements.find((e) => e.id === el.id && e.type === 'chart')
-    const dispose = mountChart(el, node, fromEl && fromEl.type === 'chart' ? fromEl.option : undefined)
+    // the engine writes option colours into svg paint: hand it a fetch-free copy
+    const live = { ...el, option: fetchFreeOption(el.option) }
+    const dispose = mountChart(live, node, fromEl && fromEl.type === 'chart' ? fetchFreeOption(fromEl.option) : undefined)
     handles.push(() => {
       dispose()
-      node.innerHTML = chartSnapshotSvg(el)
+      node.innerHTML = chartSnapshotSvg(live)
       const csvg = node.querySelector('svg')
       if (csvg) {
         csvg.setAttribute('preserveAspectRatio', 'none')
@@ -2455,6 +2459,9 @@ function sampleGradient(stops: GradientFill['stops'], t: number): string {
  * temporary gradient that collapses to the flat color and is then removed.
  */
 function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
+  // the model's paint goes into fill/stroke/stop-color attributes: gated first
+  a = paintSafeShape(a)
+  b = paintSafeShape(b)
   if (a.fill === b.fill && JSON.stringify(a.fillGradient) === JSON.stringify(b.fillGradient)) return
   // line shapes paint with stroke (fill is the line color in the model)
   if (b.shape === 'line' && target.tagName === 'line') {

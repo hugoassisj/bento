@@ -28,6 +28,34 @@ defaults:
     shell: bash scripts/ci/bento-step {0}
 
 jobs:
+  # Its own job: ten spellings across every surface is several minutes, and it
+  # runs in parallel with the main browser job rather than against its timeout.
+  slides-egress-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the packaged document
+        run: |
+          npm ci --prefix slides
+          npm run build:single --prefix slides
+      - name: No document string makes slides fetch anything in Chromium
+        # Every string field of every element kind, the slide and the theme, in
+        # ten url() spellings (escaped ones included), plus a morph into payload
+        # paint, the preview's lower tiers and a peer's presence colour: on every
+        # surface (canvas, panels, present, speaker, print, the saved file with
+        # JS off) the payload origin is never requested; a raw url() is.
+        run: node scripts/test-slides-css-egress-browser.mjs
+
   slides-font-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -82,6 +110,12 @@ jobs:
         # a deck sealed by identity; the password menu stays keyed to the
         # password; the unsealed control shows the scan sees a leak.
         run: node scripts/test-slides-sealed-guards-browser.mjs
+      - name: A sealed deck's title stays out of window titles in Chromium
+        # At the gate, after unlock, after an edit, and in the speaker window;
+        # adding a password neutralises the tab before the save, and removing
+        # it brings the title back (an unencrypted deck is the control); a deck
+        # sealed by identity, on the build:sealtest shell above, too.
+        run: node scripts/test-slides-sealed-title-browser.mjs
       - name: Exercise the packaged documents in Chromium
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
