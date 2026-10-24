@@ -14,6 +14,7 @@ import { PALETTE_SLOTS, paletteOf, refAt, setColor, slotIsSet } from '../palette
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
+import { fontFaceDescriptors } from '../fontmeta'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
 import { TIPS } from '../tips'
 import { DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS, formatDate } from '../datefmt'
@@ -1286,13 +1287,17 @@ export class PropsPanel {
       const file = input.files?.[0]
       if (!file) return
       const reader = new FileReader()
-      reader.onload = () => {
+      reader.onload = async () => {
         const family = file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim() || 'Embedded font'
         const asset = `font_${family.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+        const src = String(reader.result)
+        // the weights and style the file states (#850): otherwise every face is
+        // declared 400 and Bold on a variable or bold font is faux bold
+        const faces = await fontFaceDescriptors(new Uint8Array(await file.arrayBuffer()), src)
         this.store.commit(() => {
           const doc = this.store.doc
-          doc.assets = { ...(doc.assets ?? {}), [asset]: String(reader.result) }
-          doc.fonts = [...(doc.fonts ?? []).filter((f) => f.family !== family), { family, asset }]
+          doc.assets = { ...(doc.assets ?? {}), [asset]: src }
+          doc.fonts = [...(doc.fonts ?? []).filter((f) => f.family !== family), { family, asset, ...faces }]
           const live = this.store.element(el.id)
           if (live && live.type === 'text') live.fontFamily = family
         })
