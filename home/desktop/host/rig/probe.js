@@ -130,13 +130,24 @@
         document.body.appendChild(f)
         R.embeds[tag] = await got
       }
-      // save in place through the bridge: the launch handle, marker into the
-      // doc block's JSON (the block is not pinned, so a genuine file stays genuine)
+      // save in place through the bridge. A real Bento app saves with its own
+      // serializer (what ⌘S writes); a corpus file gets a marker in its doc
+      // block (the block is not pinned, so a genuine file stays genuine)
       mark('save')
+      R.booted = await until(() => window.bento && typeof window.bento.serialize === 'function', 30000)
       const handle = await new Promise((res) => window.launchQueue.setConsumer((p) => res(p.files[0])))
       R.handle_name = handle && handle.name
       const text = await (await handle.getFile()).text()
-      const next = text.replace('"docId"', '"rigMarker":"desktop-rig-marker","docId"')
+      let next
+      if (R.booted) {
+        const d = JSON.parse(JSON.stringify(window.bento.doc)); d.title = 'desktop-rig-marker'
+        window.bento.loadDoc(JSON.stringify(d))
+        await sleep(500)
+        next = await window.bento.serialize()
+        R.saved_by_runtime = true
+      } else {
+        next = text.replace('"docId"', '"rigMarker":"desktop-rig-marker","docId"')
+      }
       R.save_changed = next !== text
       const w = await handle.createWritable(); await w.write(next); await w.close()
       R.saved = true

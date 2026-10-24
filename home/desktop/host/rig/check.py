@@ -148,6 +148,28 @@ def rig9(scn, genuine):
 rig9("watchdog", True)
 rig9("watchdogu", False)
 
+# the REAL release (1.2.10 from bento.page, verified with the release key)
+r = report("real-doc0")
+L = log("real")
+ex = (out / "real.exit").read_text().strip() if (out / "real.exit").exists() else "missing"
+ok(ex == "0", f"real: the host exited cleanly (exit {ex})")
+ok(re.search(r"opened doc0: bento-slides \d+\.\d+\.\d+", L) is not None, "real: the published shell reads GENUINE at open (bento-slides)")
+ok(re.search(r"SERVED doc0 \d+ bytes, genuine \(pinned CSP\)", L) is not None, "real: served under its release's pinned CSP")
+if r:
+    p = r["page"]
+    ok(not p.get("error"), f"real: no error in the probe ({p.get('error')})")
+    ok(p.get("booted") is True, "real: the real editor booted under the pinned CSP (window.bento)")
+    ok(bool(p.get("armed_in_time")) and p.get("cap_rotated") is True, "real: armed, and a reload rotated the secret")
+    ok(p.get("dom_inline_ran") is False, "real: an added inline script does not run")
+    ok(p.get("saved_by_runtime") is True and p.get("save_changed") is True, "real: saved by the runtime's own serializer through the bridge")
+    ok(r.get("on_disk_has_marker") is True, "real: the edit is in the saved file")
+    ok(r.get("verdict_on_disk_after", "").startswith("genuine"), f"real: the SAVED deck is genuine to the host ({r.get('verdict_on_disk_after')})")
+    other = [v for v in p.get("violations", []) if "__rigInline" not in str(v.get("sample", ""))]
+    print(f"note real: CSP reports other than the rig's own inline script: {other}")
+rc = (out / "real-release-check.exit").read_text().strip() if (out / "real-release-check.exit").exists() else "missing"
+txt = (out / "real-release-check.txt").read_text() if (out / "real-release-check.txt").exists() else ""
+ok(rc == "0" and "R.bento.html: GENUINE" in txt and "R-flipped.bento.html: UNKNOWN" in txt, f"real: against the release key ONLY, the saved deck is GENUINE and a one-byte-changed copy UNKNOWN (exit {rc})")
+
 for o in oks:
     print("ok  ", o)
 for f in fails:

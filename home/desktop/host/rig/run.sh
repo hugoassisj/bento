@@ -8,7 +8,16 @@ set -u
 cd "$(dirname "$0")/.."
 OUT=${1:-/tmp/h2-rig}
 rm -rf "$OUT"; mkdir -p "$OUT/fix"
-BENTO_HISTORIES_DIR=../../fixtures/gate1 cargo build -q --features rig || exit 1
+# Histories: the corpus's (test key, rig builds only) and the REAL published
+# slides history (release key), so a real 1.2.10 deck can be served genuine.
+mkdir -p "$OUT/hist/corpus" "$OUT/real"
+cp ../../fixtures/gate1/history.json "$OUT/hist/corpus/history.json"
+BASE=${BENTO_RELEASES_URL:-https://bento.page/releases}
+curl -fsS -o "$OUT/real/history.json" "$BASE/slides/history.json" || exit 1
+curl -fsS -o "$OUT/real/manifest.json" "$BASE/slides/manifest.json" || exit 1
+curl -fsS -o "$OUT/real/Bento_Slides.bento.html" "$BASE/slides/Bento_Slides.bento.html" || exit 1
+mkdir -p "$OUT/hist/slides" && cp "$OUT/real/history.json" "$OUT/hist/slides/history.json"
+BENTO_HISTORIES_DIR="$OUT/hist" cargo build -q --features rig || exit 1
 BIN=target/debug/bento-home-desktop
 python3 - "$OUT/fix" <<'PY'
 import sys, pathlib
@@ -44,4 +53,18 @@ BENTO_RIG_WATCHDOG=1 scenario watchdog 90 "$OUT/W.bento.html"
 # the same on an UNKNOWN document: no CSP, so a fetch can reach the protocol handler
 cp "$OUT/fix/U.bento.html" "$OUT/WU.bento.html"
 BENTO_RIG_WATCHDOG=1 scenario watchdogu 90 "$OUT/WU.bento.html"
+# the REAL release: the published shell, served genuine, booted, saved by the
+# runtime's own serializer through the bridge
+cp "$OUT/real/Bento_Slides.bento.html" "$OUT/R.bento.html"
+scenario real 150 "$OUT/R.bento.html"
+# the saved file against the release key ONLY (hostcore's release_check), and a
+# one-byte-changed copy of it
+python3 - "$OUT" <<'PY'
+import sys, pathlib
+out = pathlib.Path(sys.argv[1]); b = bytearray((out / "R.bento.html").read_bytes())
+i = b.find(b'id="bento-rt"'); j = b.find(b'>', i) + 50
+b[j] = ord('B') if b[j] == ord('A') else ord('A')
+(out / "R-flipped.bento.html").write_bytes(bytes(b))
+PY
+( cd ../hostcore && cargo run -q --example release_check -- "$OUT/real" --genuine "$OUT/R.bento.html" --unknown "$OUT/R-flipped.bento.html" ) > "$OUT/real-release-check.txt" 2>&1; echo "$?" > "$OUT/real-release-check.exit"
 python3 rig/check.py "$OUT"
