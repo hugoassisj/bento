@@ -21,40 +21,18 @@
 //     releases sharing a runtime can't be confused, and anything partial is
 //     UNKNOWN: restricted mode or an update offer, never a borrowed pinned CSP.
 
-import { checkAgainstPins, scanBlocks } from './release-pins.mjs'
-import { createHash } from 'node:crypto'
+// The HOST rules (acceptHistory, matchRelease, historyProblems) are the kernel's
+// gate-1 module, one implementation for every JavaScript host (K5). This file
+// adds only what SIGNING needs: nextHistory().
+import { acceptHistory, matchRelease, historyProblems, cmpVersion } from '../../kernel/src/gate1.ts'
+export { acceptHistory, matchRelease, historyProblems, cmpVersion }
 
 export const HISTORY_V = 1
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/
-export function cmpVersion(a, b) {
-  const x = SEMVER.exec(a), y = SEMVER.exec(b)
-  if (!x || !y) throw new Error(`release-history: not a version: ${!x ? a : b}`)
-  for (let i = 1; i <= 3; i++) { const d = Number(x[i]) - Number(y[i]); if (d) return d }
-  return 0
-}
-
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const entryOk = (e) => e && typeof e.version === 'string' && SEMVER.test(e.version) &&
   /^[0-9a-f]{64}$/.test(e.sha256 ?? '') && typeof e.at === 'string' && e.pins?.v === 1 && typeof e.pins.blocks === 'object'
-
-/** Check a history payload's shape; returns the problems ([] = well-formed). */
-export function historyProblems(h) {
-  const p = []
-  if (!h || h.v !== HISTORY_V) p.push(`version ${h?.v} (expected ${HISTORY_V})`)
-  if (typeof h?.app !== 'string' || !h.app) p.push('no app')
-  if (!Array.isArray(h?.releases)) { p.push('no releases'); return p }
-  const seen = new Set()
-  h.releases.forEach((e, i) => {
-    if (!entryOk(e)) p.push(`entry ${i} is malformed`)
-    else {
-      if (seen.has(e.version)) p.push(`version ${e.version} appears twice`)
-      seen.add(e.version)
-      if (i > 0 && entryOk(h.releases[i - 1]) && cmpVersion(h.releases[i - 1].version, e.version) <= 0) p.push(`entries are not newest-first at ${e.version}`)
-    }
-  })
-  return p
-}
 
 /**
  * The next history: `held` (null for the first) plus `entry` for a new release.
@@ -79,41 +57,4 @@ export function nextHistory(app, held, entry) {
     throw new Error(`release-history: ${entry.version} is not newer than ${releases[0].version}: a history only grows forward`)
   }
   return { app, v: HISTORY_V, releases: [entry, ...releases] }
-}
-
-/**
- * A HOST's acceptance of an incoming (already signature-verified) history,
- * given the newest it holds. Returns { ok: true } or { ok: false, reason }.
- */
-export function acceptHistory(held, incoming, app) {
-  const problems = historyProblems(incoming)
-  if (problems.length) return { ok: false, reason: `malformed: ${problems[0]}` }
-  if (incoming.app !== app) return { ok: false, reason: `for ${incoming.app}, not ${app}` }
-  if (!held) return { ok: true }
-  if (!incoming.releases.length || (held.releases.length && cmpVersion(incoming.releases[0].version, held.releases[0].version) < 0)) {
-    return { ok: false, reason: 'rollback: its newest release is older than the newest already held' }
-  }
-  for (const e of held.releases) {
-    const there = incoming.releases.find((x) => x.version === e.version)
-    if (!there) return { ok: false, reason: `rollback: it lacks ${e.version}, which is already held` }
-    if (!same(there, e)) return { ok: false, reason: `${e.version} changed: a history never changes an entry` }
-  }
-  return { ok: true }
-}
-
-const blockHash = (html, id) => {
-  const found = scanBlocks(html).filter((b) => b.id === id)
-  return found.length === 1 ? createHash('sha256').update(found[0].text, 'utf8').digest('hex') : null
-}
-
-/**
- * Which release made this file? The ONE entry matching every block; null when
- * none does, or when more than one would (UNKNOWN either way).
- */
-export function matchRelease(history, html) {
-  const rt = blockHash(html, 'bento-rt')
-  if (!rt) return null
-  const candidates = history.releases.filter((e) => e.pins.blocks['bento-rt'] === rt)
-  const full = candidates.filter((e) => checkAgainstPins(html, e.pins).length === 0)
-  return full.length === 1 ? full[0] : null
 }

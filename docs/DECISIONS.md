@@ -11791,6 +11791,98 @@ resolves to a `data:` font in the document's own assets, and drops anything
 else to the base design's font. It is recorded so that a later change does not
 add a web-font fetch.
 
+## 2026-10-21 — bento/connect K5: one gate-1 verifier, and the corpus every host runs
+
+`kernel/src/gate1.ts` is the ONE gate-1 implementation for every JavaScript
+host (the extension, the hosted runtime) and for the release tooling. The K4
+scripts import its scanner, grammar and host rules rather than carrying copies.
+It hashes with WebCrypto, so it runs in a page, a worker, an extension and node.
+- **`verifyServed(html, history)`** is the PRIMARY path, for a host that serves
+  the bytes it verified (security §17). ONE release must match EVERY block
+  under the grammar (§36 and the 2026-10-21 ruling). The answer carries the CSP
+  to serve under (`hostPolicy`). Unknown never borrows a release's CSP.
+- **`verifyStrict(html, expected)`** is the file:// fallback: vault's strict
+  verifier, signed off in security §15. The final whole-string compare, bound
+  at both ends, is the load-bearing part. Its expectation comes from a genuine
+  saved file of the release (`strictExpectedFrom`). A signed skeleton waits for
+  canonical save, and a file:// result is never grounds for identity (§16).
+- **`home/fixtures/gate1/`** is the conformance corpus: a synthetic app's signed
+  history (with a test key), served rows, the 16 strict tamper rows plus two
+  genuine saves, anti-rollback rows, and an ambiguous-history row. Every row
+  DECLARES its verdict, and the generator refuses to write the corpus if the
+  reference disagrees, so the answers are the rules, not what the JS happens to
+  do. Native hosts (Swift, Kotlin, Rust) port gate 1 and must pass every row.
+  Encodings are stated per field: block pins are sha256 HEX of the block text,
+  `scriptSrc` is `'sha256-'` + BASE64, and the entry `sha256` is HEX of the
+  shell file.
+## 2026-10-21 — bento/connect in the extension: Argon2id is @noble/hashes, and the recovery code is generated from kernel
+
+**Argon2id is `@noble/hashes` 2.4.0, vendored, not hash-wasm.** The recovery
+code is stretched with Argon2id, which WebCrypto lacks, so the extension
+vendors one. hash-wasm was the first choice, but its Argon2id takes no
+associated data, so it can't run the RFC 9106 §5.3 test vector, which has
+some. Security requires that vector. Noble's `argon2idAsync` runs it, equals
+Node's native Argon2id at Bento's parameters, and is pure JavaScript, so the
+extension needs no `'wasm-unsafe-eval'` anywhere. It takes about a second per
+derivation at 64 MiB, which is fine for a code used at setup and recovery.
+
+The files are copied unmodified from the npm tarball, each pinned by sha256 in
+`home/webext/src/id/vendor/noble-hashes/VENDOR.json`. `scripts/test-webext-id.ts`
+recomputes the hashes on every run, then checks RFC 9106, every
+`recovery-v1.json` derivation, and a randomized cross-check against Node's
+native Argon2id. It proves by probe that the 64 MiB block array reads zero
+afterwards. A derivation that can't allocate that memory reports "recovery
+unavailable on this device" and never retries with weaker parameters.
+
+**The recovery code and the key blobs are generated from kernel too.**
+`kernel/src/recovery.ts` now covers everything the extension's hand-written
+`id/blob.js` and `id/recovery.js` did, plus the recovery wrap. So it is
+type-stripped into `id/gen/` like the statements, and the hand-written
+modules are gone: one implementation, held to `recovery-v1.json` by kernel's
+own rig run against the extension's copy.
+
+## 2026-10-18 — bento/connect: the desktop agent's security-key ceremony, and one rule for C libraries (home/desktop/agent)
+
+- **One authenticator stack per platform.**
+  - **Linux** uses the distribution's **libfido2** (Yubico, BSD-2-Clause,
+    minimum 1.12). **Windows** will use only the platform WebAuthn API
+    (`webauthn.dll`), which covers security keys, Windows Hello and phone
+    hybrid: non-admin apps can't reach CTAP-HID keys directly there. libfido2 is
+    never shipped on Windows.
+  - **The PRF → CTAP hmac-secret transform**, SHA-256("WebAuthn PRF" ‖ 0x00 ‖
+    input), is applied exactly once. On Linux the agent applies it before
+    libfido2. On Windows the raw input goes to `webauthn.dll`'s PRF path, which
+    applies it itself. Applying it twice still gives deterministic output, but
+    it never matches what the same key gives on the web.
+- **The desktop's clientDataJSON origin** is exactly `bento-desktop:linux` or
+  `bento-desktop:windows`, never `https://bento.page`. A native app
+  self-asserts its origin; on the web the browser vouches for it, which is where
+  phishing resistance comes from. The fields are type, challenge, origin and
+  crossOrigin, in spec order, with CCDToString escaping and no topOrigin.
+- **C libraries are the distribution's, behind a thin in-tree FFI.** That
+  applies to libfido2 and to the keyring. The keyring moved from the
+  secret-service crate to libsecret, which removed a zbus tree carrying three
+  RustSec "unmaintained" notices. There are no binding crates, no bundled
+  copies and no OpenSSL crate in the shipped graph. Any future bundled build
+  must say so and pin and checksum its source.
+- **Supply chain (`supply-chain-check.sh`).** cargo-deny runs over the shipped
+  graph: a permissive-only licence allow-list, RustSec advisories and
+  crates.io-only sources. A second check proves the test-only authenticator is
+  absent from that graph. Each has a positive control: an LGPL crate, and the
+  testkit as a normal dependency, must both be refused.
+- **The test authenticator is Google's OpenSK** (Apache-2.0, pinned commit and
+  nightly), in a separate test-only crate with our own MIT uhid adapter. An
+  AGPL alternative was rejected even for tests.
+- **The PRF interop rig.** One virtual key and one credential, with an
+  independent WebAuthn client (Yubico python-fido2, BSD-2, hash-pinned) that
+  applies the PRF transform itself, as a browser does. The agent's output must
+  be byte-equal to it. Two mutant builds, double-hash and raw-input-hash, must
+  each fail ON THAT COMPARISON, not by failing to build or to reach the key.
+- **The no-TPM store's wipe** re-counts every item, locked or not, after
+  clearing. Measured: libsecret's clear silently skips items in a locked
+  keyring, so the re-count is what keeps a wipe from reporting success while
+  keys remain.
+
 ## 2026-10-21 — bento/connect on Android: gate 1 when serving a document (A2)
 
 The Android editor serves the document's bytes itself, so before serving it

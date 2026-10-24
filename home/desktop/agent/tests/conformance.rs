@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// The desktop agent against the bento/id conformance vectors
+// The desktop agent against the bento/connect conformance vectors
 // (kernel/fixtures/identity-v1.json), mirroring scripts/test-statements.ts:
 // every row's verdict AND reason, the builder round-trip and three tamperings of
 // every accepted row, the attack rows' presence, the derivations, low-S, the
@@ -244,7 +244,7 @@ fn strict_base64url() {
 fn signing_emits_low_s_that_the_verifier_accepts() {
     // A software key round-trip: 64 signatures, every one low-S and accepted.
     let key = p256::ecdsa::SigningKey::from_slice(&[7u8; 32]).unwrap();
-    let pubkey = b64u::enc(key.verifying_key().to_encoded_point(false).as_bytes());
+    let pubkey = b64u::enc(key.verifying_key().to_sec1_point(false).as_bytes());
     for i in 0..64 {
         let text = format!("dev.test.{i}");
         let sig = st::sign_statement(&key, &text);

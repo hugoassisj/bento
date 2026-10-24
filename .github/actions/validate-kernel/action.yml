@@ -97,6 +97,15 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-release-history.ts
 
+    - name: gate 1 — the shared verifier against the conformance corpus
+      # bento/connect K5: kernel/src/gate1.ts, the one JavaScript gate-1
+      # verifier, against home/fixtures/gate1/ read from disk as every host
+      # reads it. The served path (one release matches every block, under the
+      # grammar), the strict file:// path (both genuine saves pass, all 16
+      # tampers refuse), anti-rollback, and the CSP a host serves under.
+      shell: bento-step {0}
+      run: node scripts/test-gate1.ts
+
     - name: Language pack verification rig
       # Packs come off the network, so the signature + hash-pin chain is the
       # only thing between a hostile channel and the strings in the UI.
@@ -484,6 +493,15 @@ runs:
       # dirty flag — so a surviving slides assumption shows up there.
       shell: bento-step {0}
       run: node --no-warnings scripts/test-sync-session.ts
+
+    - name: the blob cache holds ciphertext only
+      # Live-session media is cached in IndexedDB, which every page on the
+      # same origin can read (on file://, every local file). The cache must
+      # hold the relay's ciphertext, never the decrypted bytes: every write
+      # path, a hit, a tampered entry, the version-1 purge, the shipped v1
+      # opener against an upgraded database, and a blocked upgrade.
+      shell: bento-step {0}
+      run: node --no-warnings scripts/test-blobcache.ts
 
     - name: Room snapshot carries no capability fields
       # Every snapshot path (relay upload, fork broadcast, re-snap, flush-time
