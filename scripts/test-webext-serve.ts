@@ -159,5 +159,43 @@ console.log('\n— splice: only the planned elements become blob: scripts')
   ok(throws(() => P.splice('<p>other</p>' + html, r.plan, () => 'blob:x')), 'a plan that does not line up with the bytes is refused')
 }
 
+// --- the host's port: only the fixed shape is acted on ------------------------
+{
+  const { parseRequest, answer } = await import('../home/webext/src/serve/host.js')
+  const good = [
+    { id: 's1', op: 'identity.whoami', args: null },
+    { id: 's2', op: 'identity.sign', args: { purpose: 'frame', payload: '0.x' } },
+    { id: 's3', op: 'identity.resolve', args: { pub: null, email: 'a@b.c' } },
+    { id: 's4', op: 'save.write', args: { text: '<!doctype html>' } },
+  ]
+  ok(good.every((g) => JSON.stringify(parseRequest(g)) === JSON.stringify(g)), 'each well-formed request parses to exactly itself')
+  const bad: [string, unknown][] = [
+    ['not an object', 'identity.whoami'],
+    ['an array', [1, 2]],
+    ['an unknown op', { id: 's1', op: 'identity.export', args: null }],
+    ['an extra top-level field', { id: 's1', op: 'identity.whoami', args: null, consent: 'granted' }],
+    ['a consent outcome dressed as an op', { id: 's1', op: 'consent.granted', args: null }],
+    ['a missing id', { op: 'identity.whoami', args: null }],
+    ['an id that is not a short token', { id: 'x'.repeat(40), op: 'identity.whoami', args: null }],
+    ['whoami with arguments', { id: 's1', op: 'identity.whoami', args: { who: 1 } }],
+    ['sign with an unknown purpose', { id: 's1', op: 'identity.sign', args: { purpose: 'anything', payload: 'x' } }],
+    ['sign with an extra field', { id: 's1', op: 'identity.sign', args: { purpose: 'frame', payload: 'x', approved: true } }],
+    ['sign with a non-string payload', { id: 's1', op: 'identity.sign', args: { purpose: 'frame', payload: { a: 1 } } }],
+    ['sign with an oversized payload', { id: 's1', op: 'identity.sign', args: { purpose: 'frame', payload: 'x'.repeat(5000) } }],
+    ['resolve with a missing field', { id: 's1', op: 'identity.resolve', args: { pub: null } }],
+    ['save.write naming its own path', { id: 's1', op: 'save.write', args: { text: 'x', path: '/etc/passwd' } }],
+    ['save.write with a non-string text', { id: 's1', op: 'save.write', args: { text: 42 } }],
+  ]
+  for (const [why, m] of bad) ok(parseRequest(m) === null, `refused: ${why}`)
+  // a request's object never reaches answer() — only the parsed copy does
+  const proto = Object.create({ inherited: 1 })
+  ok(parseRequest(Object.assign(proto, { id: 's1', op: 'identity.whoami', args: null }))?.hasOwnProperty('inherited') === false, 'the parsed request is a fresh plain object')
+  let wrote = ''
+  const deps = { writeFile: async (t: string) => { wrote = t; return { ok: true } } }
+  ok((await answer(parseRequest(good[0])!, deps)) === null, 'whoami answers null (no verified Bento ID yet)')
+  ok(JSON.stringify(await answer(parseRequest(good[1])!, deps)) === '{"ok":false,"reason":"no-identity"}', 'sign answers no-identity')
+  ok(JSON.stringify(await answer(parseRequest(good[3])!, deps)) === '{"ok":true}' && wrote === '<!doctype html>', 'save.write writes exactly the text, to the path the HOST opened (none is accepted from the frame)')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
