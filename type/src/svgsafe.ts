@@ -32,10 +32,10 @@ export const EMBED_POLICY: SvgPolicy = {
     'font', 'font-size-adjust', 'font-stretch', 'font-variant', 'isolation', 'media', 'mix-blend-mode',
     'pointer-events', 'requiredextensions', 'requiredfeatures', 'systemlanguage', 'tabindex', 'target',
     'title', 'type', 'unicode-bidi', 'white-space', 'zoomandpan',
-  ],                             // 'title' is the ATTRIBUTE; the <title> element stays allowed
+  ],                             // hygiene, not a boundary: 'title' is the ATTRIBUTE (the <title> element stays)
   dataAttrs: false,
   remoteHref: false,             // #refs, and inline rasters on image/feImage only
-  strictValues: true,            // no escapes, no foreign schemes, url(#…) only
+  strictValues: true,            // no escapes, no foreign schemes, url(#…) only (defence in depth: the base walk decodes escapes before judging url())
 };
 
 /**
