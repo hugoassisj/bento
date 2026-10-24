@@ -10,7 +10,7 @@ import type { Store } from '../store'
 import { t } from '../i18n'
 import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
-import { renderSlide, sanitizeHtml } from '../render'
+import { cssColor, renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
 import { inList, shiftList, shiftListHtml, undoIndent } from './listindent'
 import { bulletsToLists } from './bullets'
@@ -943,14 +943,14 @@ export class SlideCanvas {
         box.style.top = `${el.y}px`
         box.style.width = `${el.w}px`
         box.style.height = `${el.h}px`
-        box.style.borderColor = peer.color
+        box.style.borderColor = cssColor(peer.color, '#888') // a peer's colour: gated
         box.style.borderWidth = `${2 * inv}px`
         if (el.rotation) box.style.transform = `rotate(${el.rotation}deg)`
         if (peer.editing === id) box.classList.add('ed-remote-editing')
         if (!tagged) {
           const tag = document.createElement('div')
           tag.className = 'ed-remote-tag'
-          tag.style.background = peer.color
+          tag.style.background = cssColor(peer.color, '#888')
           tag.textContent = peer.editing === id ? `✏️ ${peer.name}` : peer.name
           tag.style.transform = `scale(${inv})`
           tag.style.transformOrigin = 'bottom left'

@@ -11,6 +11,31 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.10] — 2026-10-24
+
+- **Code can type itself out.** Give a code block the new Typewriter effect
+  (Presenting panel) and, in the show, its code appears character by character
+  behind a moving cursor. Morphing from one code slide to the next keeps the
+  lines that stay and types only the new ones. A long snippet types faster, so
+  no block takes more than six seconds, and reduced motion (M) shows it all at
+  once. Thanks to tikurahul.
+- **Saving a large deck is faster.** Saving no longer rebuilds the file's
+  thumbnail preview from scratch when a slide's images are too big for it, and
+  does its bookkeeping after the file is written rather than before. On a deck
+  with large images, a save took about a third of the time in our tests.
+  Thanks to tikurahul.
+- **A new document saves where it was created.** A document made with New in
+  the Bento app on iPhone, iPad or Android, or in installed Bento, saved its
+  first changes into a second file and left the one you created empty. Its
+  first save now writes to that file.
+- **Clicking a slide no longer makes the slide list jump.** In a long deck,
+  clicking a thumbnail could scroll the list so a different slide ended up
+  under the pointer. The list now only scrolls when it needs to bring the
+  current slide into view.
+- **Security: update this file. This release closes issues found in our own
+  review.** What they were is described here once people have had time to
+  update.
+
 ## [1.2.9] — 2026-10-17
 
 - **Password-protected decks open again.** Since 1.2.0, a deck saved with a

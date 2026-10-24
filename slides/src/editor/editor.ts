@@ -15,7 +15,7 @@ import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
-import { renderSlide, renderThumbnail } from '../render'
+import { cssColor, renderSlide, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
 import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
@@ -32,7 +32,8 @@ import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, onRecoveryOff, pruneOld, putRecovery, recoveryLooksOlder, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { estimatedFrames, fencedElements, splitFences } from './codefence'
-import { openSpeakerWindow, speakerIdleBody } from '../screens'
+import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
+import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
 import { routeAllConnectors } from '../connectors'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
@@ -154,6 +155,8 @@ export class Editor {
   /** Name of a deck opened by DROP when no writable handle came with it. */
   private openedAs?: string
   private thumbTimer = 0
+  /** The slide the list last scrolled into view (highlightSidebar). */
+  private thumbRevealed = -1
   private presenting = false
   private updatesB!: HTMLElement
   private avatarsBox!: HTMLElement
@@ -278,7 +281,7 @@ export class Editor {
     for (const peer of peers.slice(0, MAX)) {
       const chip = document.createElement('button')
       chip.className = 'ed-avatar'
-      chip.style.background = peer.color
+      chip.style.background = cssColor(peer.color, '#888') // a peer's colour: gated
       chip.textContent = (peer.name || '?').trim().charAt(0).toUpperCase() || '?'
       const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
       chip.title =
@@ -981,6 +984,7 @@ export class Editor {
           t('Stop encrypting this file — the next save writes it as plain, readable JSON again.'),
           () => {
             setEncryptionPassword(null)
+            this.syncWindowTitle() // the deck title may return to the tab
             this.toast(t('Password removed — the next save writes an unencrypted file'))
             void this.save(false)
           })
@@ -1272,6 +1276,7 @@ export class Editor {
     const pass = await this.promptPassword()
     if (pass === null) return
     setEncryptionPassword(pass)
+    this.syncWindowTitle() // the deck title leaves the tab now, not at the next save
     // Purge any plaintext snapshots already written to IndexedDB before encryption
     // was enabled — otherwise up to MAX_VERSIONS version snapshots + a recovery copy
     // (full plaintext JSON, incl. collab keys) would linger ~30 days, defeating the
@@ -1464,7 +1469,7 @@ export class Editor {
         row.className = 'ed-share-peer'
         const dot = document.createElement('span')
         dot.className = 'dot'
-        dot.style.background = peer.color
+        dot.style.background = cssColor(peer.color, '#888')
         const who = document.createElement('span')
         who.className = 'who'
         who.textContent = peer.editing ? `${peer.name} ✏️` : peer.name
@@ -2103,7 +2108,17 @@ export class Editor {
       n.classList.toggle('selected', selected.has(idx))
       if (isActive) active = n
     })
-    active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    // Bring the current slide into view only when it CHANGED. This also runs
+    // for a selection change and after a rebuild, with the current slide where
+    // it was — and a click on a thumb clears the selection BEFORE it moves the
+    // current slide, so revealing then scrolled the list to the slide being
+    // LEFT (often off-screen), and the click landed with a different thumb
+    // under the pointer. Keyboard and show navigation still reveal: they
+    // change the current slide.
+    if (active && this.store.currentIndex !== this.thumbRevealed) {
+      active.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+    if (active) this.thumbRevealed = this.store.currentIndex
   }
 
   private scheduleThumbs() {
@@ -2378,7 +2393,7 @@ export class Editor {
    *  can be placed on a second screen before presenting — present mode adopts it. */
   openSpeakerView() {
     const w = openSpeakerWindow(
-      `${this.store.doc.title} — ${t('Speaker view')}`,
+      speakerWindowTitle(this.store.doc.title),
       speakerIdleBody(this.store.doc.title, t('Notes, controls and slide thumbnails appear here when you start presenting. Drag this window to your second display.')),
     )
     if (!w) this.toast(t('Couldn’t open the speaker view — allow pop-ups for this site.'))
@@ -2824,9 +2839,16 @@ export class Editor {
     const named = file && fileBase(file) !== this.store.doc.title
     // Two segments, never three: a tab is narrow, and once a file name is
     // shown the app name is the least informative thing competing for it.
-    document.title = named
-      ? `${this.store.doc.title} — ${file}`
-      : `${this.store.doc.title} — ${appConfig().appName}`
+    // While the body is sealed the deck title stays out of the tab: browsers
+    // keep tab titles in their history (wintitle.ts). The open speaker window
+    // follows, so adding or removing a password retitles both at once.
+    document.title = titleSealed()
+      ? neutralWindowTitle(file ?? null)
+      : named
+        ? `${this.store.doc.title} — ${file}`
+        : `${this.store.doc.title} — ${appConfig().appName}`
+    const sw = speakerWindow()
+    if (sw) sw.document.title = speakerWindowTitle(this.store.doc.title)
     if (!this.fileChip) return
     // out of the bar only until there IS a file; after that the chip keeps its
     // slot and goes quiet when it would repeat the title (styles.css, #546)
