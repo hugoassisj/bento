@@ -122,6 +122,16 @@ const ctx = await chromium.launchPersistentContext(join(work, 'profile'), { exec
 let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker')
 const id = new URL(sw.url()).host
 
+// 0. both gates: with the setting at its default (absent), the host page refuses
+{
+  const off = await ctx.newPage()
+  await off.goto(`chrome-extension://${id}/src/serve/serve.html?path=${encodeURIComponent(docPath)}`).catch(() => {})
+  await off.waitForTimeout(1200)
+  ok(off.url().startsWith('file://') && !off.frames().some((fr) => fr.url().includes('sandbox.html')), 'with the setting at its default (off), even a GENUINE file opens as itself, never in the sandbox')
+  await off.close()
+  await sw.evaluate(() => chrome.storage.local.set({ serveWithIdentity: true }))
+}
+
 // 1. a genuine document, served
 const page = await ctx.newPage()
 const logs = []; page.on('console', (m) => logs.push(m.text()))
@@ -141,6 +151,40 @@ ok(await frame.evaluate(async () => JSON.stringify(await window.__bentoIdentity.
 const crit = await frame.evaluate(PROBE)
 ok(crit.seen.length === 0, `with postMessage/start/addEventListener/the data getter/call/bind all patched, the patches never saw the port (${crit.seen.join(', ') || 'nothing'})`)
 ok(crit.r1 === null && crit.r2?.reason === 'no-identity', 'and the agent still works through the captured functions')
+
+// 2b. security's further probes: Object.prototype accessors that cloning, JSON or
+// promise resolution might consult, and a re-entrant call from a patched then
+const more = await frame.evaluate(async () => {
+  const bad = []
+  const hits = Object.create(null)
+  const suspicious = (v) => v instanceof MessagePort || v instanceof MessageEvent || (typeof Window !== 'undefined' && v instanceof Window && v !== window)
+  const keys = ['id', 'op', 'args', 'result', 'ok', 'reason', 'data', 'ports', 'source', 'then', 'toJSON', 'text', 'kind', 'plan', 'html', 'name', 'payload', 'purpose', 'pub', 'email']
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty(k)) continue
+    Object.defineProperty(Object.prototype, k, {
+      configurable: true,
+      get() { hits[k] = (hits[k] ?? 0) + 1; if (suspicious(this)) bad.push(`get ${k} on ${this?.constructor?.name}`); return undefined },
+      set(v) { if (suspicious(this) || suspicious(v)) bad.push(`set ${k}`); Object.defineProperty(this, k, { value: v, writable: true, enumerable: true, configurable: true }) },
+    })
+  }
+  let thenCalls = 0, reentered = []
+  const oThen = Promise.prototype.then
+  Promise.prototype.then = function (f, r) {
+    thenCalls++
+    if (thenCalls < 4) reentered.push(window.__bentoIdentity.whoami())
+    for (const a of [f, r]) if (suspicious(a)) bad.push('then got a port/event')
+    return oThen.call(this, f, r)
+  }
+  const out = await Promise.all([window.__bentoIdentity.whoami(), window.__bentoIdentity.sign('frame', '2.z'), window.__bentoIdentity.resolve({ pub: null, email: 'a@b.c' })])
+  Promise.resolve(1).then(() => {}) // the page's own use: proves the patch is live
+  const re = await Promise.all(reentered)
+  Promise.prototype.then = oThen
+  for (const k of keys) { const d = Object.getOwnPropertyDescriptor(Object.prototype, k); if (d && d.get) delete Object.prototype[k] }
+  return { bad, hits: Object.entries(hits).map(([k, n]) => `${k}×${n}`).join(' '), thenCalls, out: JSON.stringify(out), re: JSON.stringify(re) }
+})
+ok(more.hits.length > 0, `(live) the patched Object.prototype accessors WERE consulted during the agent calls: ${more.hits}`)
+ok(more.bad.length === 0, `and on 20 keys that cloning, JSON and promise resolution might touch, they never saw a port, an event or another window (${more.bad.join(', ') || 'nothing'})`)
+ok(more.thenCalls > 0 && more.out === '[null,{"ok":false,"reason":"no-identity"},null]' && /^\[(null,?)+\]$/.test(more.re), `re-entrant agent calls from inside a patched Promise.prototype.then (live: ${more.thenCalls} calls) all answer correctly (${more.re})`)
 
 // 3. the agent can't be replaced
 const rep = await frame.evaluate(() => {

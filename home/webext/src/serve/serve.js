@@ -18,6 +18,7 @@ import { heldHistories, refresh, USED_KEY } from './history.js'
 import { parseRequest, answer } from './host.js'
 import { RELEASE_KEY } from '../release.js'
 import { APPS } from '../library.js'
+import { servedOpenEnabled } from './gate.js'
 
 const path = new URLSearchParams(location.search).get('path') ?? ''
 const fileUrl = 'file://' + path.split('/').map(encodeURIComponent).join('/')
@@ -31,6 +32,8 @@ const histDeps = { ...storage, fetch: (u, o) => fetch(u, o), now: () => Date.now
 const apps = APPS.map(({ id, appId }) => ({ id, appId }))
 
 async function main() {
+  // both gates (serve/gate.js), checked HERE too: the page is reachable by URL
+  if (!(await servedOpenEnabled())) return asItself('Open with Bento ID is off')
   if (!path.startsWith('/') || !path.endsWith('.bento.html')) return asItself('not a Bento document path')
   let html
   try {

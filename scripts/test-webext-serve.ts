@@ -197,5 +197,21 @@ console.log('\n— splice: only the planned elements become blob: scripts')
   ok(JSON.stringify(await answer(parseRequest(good[3])!, deps)) === '{"ok":true}' && wrote === '<!doctype html>', 'save.write writes exactly the text, to the path the HOST opened (none is accepted from the frame)')
 }
 
+// --- "Open with Bento ID" exists only behind BOTH gates ------------------------
+{
+  const { servedOpenAllowed, SETTING_KEY } = await import('../home/webext/src/serve/gate.js')
+  ok(servedOpenAllowed('development', true) === true, 'an unpacked install with the setting turned on: offered')
+  ok(servedOpenAllowed('development', undefined) === false && servedOpenAllowed('development', null) === false, 'an unpacked install with the setting ABSENT (the default): not offered')
+  ok(servedOpenAllowed('development', false) === false, 'an unpacked install with the setting off: not offered')
+  for (const it of ['normal', 'sideload', 'admin', 'other', null, undefined])
+    ok(servedOpenAllowed(it, true) === false, `a ${String(it)} install with the setting on: not offered`)
+  for (const v of ['true', 1, {}, [true]]) ok(servedOpenAllowed('development', v) === false, `a setting of ${JSON.stringify(v)} is not true: not offered`)
+  ok(SETTING_KEY === 'serveWithIdentity', 'the setting has one name')
+  const serve = readFileSync(join(root, 'home/webext/src/serve/serve.js'), 'utf8')
+  ok(/if \(!\(await servedOpenEnabled\(\)\)\) return asItself/.test(serve) && serve.indexOf('servedOpenEnabled()') < serve.indexOf('await fetch(fileUrl)'), 'the host page checks both gates itself, before it reads the file (it is reachable by URL)')
+  const home = readFileSync(join(root, 'home/webext/src/home.js'), 'utf8')
+  ok(!/function openDoc[^}]*serve\.html/.test(home), "the library's own Open is untouched: it never routes to the served path")
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
