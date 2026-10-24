@@ -112,4 +112,47 @@ class Gate1Test {
         val files = d.listFiles { f -> f.name.endsWith(".html") }!!.sortedBy { it.name }
         for (f in files) assertTrue("${f.name} must be UNKNOWN", Gate1.verifyServed(f.readText(), history) is Gate1.Verdict.Unknown)
     }
+
+    // ---- #842: every held history, and the frozen REAL 1.2.10 release ----
+
+    @Suppress("UNCHECKED_CAST")
+    private val histories: Map<String, Gate1.History> by lazy {
+        (expected["histories"] as Map<String, Map<String, String>>).mapValues { (name, h) ->
+            val k = Json.read(read(h["key"]!!)) as Map<*, *>
+            val payload = Gate1.verifyEnvelope(read(h["history"]!!), k["x"] as String, k["y"] as String)
+                ?: error("the $name history must verify under its own key")
+            Gate1.historyOf(payload) ?: error("the $name history must be well formed")
+        }
+    }
+
+    @Test fun `the real 1_2_10 history verifies under the key Android pins, and names bento-slides`() {
+        val k = Json.read(read("real/slides-1.2.10/release-public-key.json")) as Map<*, *>
+        assertEquals("Releases.kt pins the real release key", Releases.KEY_X, k["x"])
+        assertEquals(Releases.KEY_Y, k["y"])
+        val real = histories["real"]!!
+        assertEquals("the app id is bento-slides, never the directory name", "bento-slides", real.app)
+        assertNull("and the test key does not verify it", Gate1.verifyEnvelope(read("real/slides-1.2.10/history.json"),
+            "UDNWDLyLVcxJZZ6Kyi0y-eTUEDMB5zB6jVX8NOSjNlk", "YqKJ4y20DcNjMhnPQQj8NuFiI-suqB4eFCs-9n_G3eI"))
+    }
+
+    @Test fun `every held row - try every held history, exactly one must match`() {
+        val rows = rows("held")
+        assertTrue(rows.size >= 6)
+        for (row in rows) {
+            @Suppress("UNCHECKED_CAST")
+            val held = (row["held"] as List<String>).map { histories[it]!! }
+            val v = Gate1.verifyServedHeld(read(row["case"] as String), held)
+            val got = if (v is Gate1.Verdict.Genuine) "genuine ${v.app} ${v.release.version}" else "unknown"
+            val want = if (row["verdict"] == "genuine") "genuine ${row["app"]} ${row["release"]}" else "unknown"
+            assertEquals("${row["name"]}: ${row["why"]}" + if (v is Gate1.Verdict.Unknown) " — ${v.reason}" else "", want, got)
+        }
+    }
+
+    @Test fun `a one-byte change to the real 1_2_10 shell is UNKNOWN (positive control)`() {
+        val real = read("real/slides-1.2.10/Bento_Slides.bento.html")
+        assertTrue(Gate1.verifyServedHeld(real, listOf(histories["real"]!!)) is Gate1.Verdict.Genuine)
+        val at = real.indexOf("<script>") + "<script>".length
+        val flipped = real.substring(0, at) + (if (real[at] == ' ') '\t' else ' ') + real.substring(at + 1)
+        assertTrue(Gate1.verifyServedHeld(flipped, listOf(histories["real"]!!)) is Gate1.Verdict.Unknown)
+    }
 }

@@ -11923,8 +11923,24 @@ whether those bytes are one genuine release's.
   for "<script": in `<meta<style><script>…` a browser sees one tag named
   `meta<style` and then a real script (home-ios's WebKit oracle). Raw-text
   elements are skipped to their real end tag, and a start tag named outside
-  `[a-z][a-z0-9-]*` is UNKNOWN. Planted faults confirm the corpus catches the
-  fold, the separator and the name rule.
+  `[a-z][a-z0-9-]*` is UNKNOWN. End tags are read with the start tag's
+  attribute reader (`</p a="><b c='">` ends at its second ">"), and an end tag
+  carrying attributes or an odd name is UNKNOWN (#834). Every held history is
+  tried, and exactly one must match (`verifyServedHeld`, #842). Planted faults
+  confirm the corpus catches the fold, the separator, the name rule and the
+  end-tag rule.
+- **Measured against the REAL release (slides 1.2.10, its published signed
+  history, the release key).** With that history staged, the release-build
+  check passes and `assembleRelease` bundles it. On the emulator, with ONLY the
+  bundled real history held:
+  - the published fresh shell (empty document block, names no app) is GENUINE;
+  - the same file after a ⌘S save in place is GENUINE;
+  - one byte changed in the loader is UNKNOWN.
+
+  The real history only verifies under the release key, so these can't be the
+  debug test key at work. `Gate1Test` pins the same: the corpus's real release
+  key equals the key `Releases.kt` carries, and the app id is `bento-slides`,
+  never the directory name.
 - **Measured on the emulator.** A history signed with the debug key, pinning a
   slides build and a file that build saved through ⌘S:
   - the genuine file boots normally under the pinned CSP, and an injected
@@ -11941,9 +11957,9 @@ whether those bytes are one genuine release's.
   `test-gate1-oracle.mjs`, so the two can't drift, and runs the same fixed seed
   plus a printed random one. A debug-only Activity gives Gate1.kt's verdict for
   every mutant, and loads every GENUINE one in a WebView with no CSP. With the
-  glued-tag operator (19 glued mutants in the fixed seed alone): 500 mutants,
-  Gate1.kt agreeing with the reference on all of them, and all 58 GENUINE
-  files running only the loader and remover. The controls
+  glued-tag and end-tag operators (50 end-tag mutants in the last run): 500
+  mutants, Gate1.kt agreeing with the reference on all of them, and all 67
+  GENUINE files running only the loader and remover. The controls
   confirm the oracle sees an extra script and an executing data block. It
   needs an emulator, so CI skips it, with the reason recorded in
   `scripts/lib/ci-skips.mjs`.

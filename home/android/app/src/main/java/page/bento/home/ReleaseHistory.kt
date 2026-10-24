@@ -93,11 +93,8 @@ object ReleaseHistory {
      * most one can match; two would be UNKNOWN.
      */
     fun verdict(c: Context, bytes: ByteArray): Gate1.Verdict {
-        val html = String(bytes, Charsets.UTF_8)
         val held = Releases.APPS.mapNotNull { held(c, it) }
         if (held.isEmpty()) return Gate1.Verdict.Unknown("no release history held")
-        val genuine = held.map { Gate1.verifyServed(html, it) }.filterIsInstance<Gate1.Verdict.Genuine>()
-        return genuine.singleOrNull() ?: Gate1.Verdict.Unknown(
-            if (genuine.isEmpty()) "no held release matches every block" else "more than one app's release matches")
+        return Gate1.verifyServedHeld(String(bytes, Charsets.UTF_8), held)
     }
 }

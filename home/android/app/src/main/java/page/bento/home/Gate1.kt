@@ -57,7 +57,7 @@ object Gate1 {
 
     class StartTag(val name: String, val attrs: Map<String, String>, val duplicate: Boolean, val slash: Boolean, val end: Int)
 
-    private val TAG_OPEN = Regex("^<([a-zA-Z][^\t\n\u000c\r />]*)")
+    private val TAG_OPEN = Regex("^([a-zA-Z][^\t\n\u000c\r />]*)")
 
     /**
      * A start tag's attributes, read as the HTML tokenizer reads them: names are
@@ -65,12 +65,24 @@ object Gate1 {
      * no separator after it, a leading "=" is part of a name, names fold ASCII-only,
      * and the FIRST of duplicate names wins. Null if the tag is unterminated.
      */
-    fun parseStartTag(html: String, i: Int): StartTag? {
-        val m = TAG_OPEN.find(html.substring(i, minOf(html.length, i + 256))) ?: return null
+    fun parseStartTag(html: String, i: Int): StartTag? = if (i < html.length && html[i] == '<') readTag(html, i + 1) else null
+
+    /**
+     * An END tag, read exactly like a start tag: the tokenizer parses its
+     * attributes too, quoted values included, and drops them. So `</p a="><b c='">`
+     * ends at its SECOND ">", and skipping to the first ">" would miss a script
+     * after it (#834). Null if `i` isn't "</" and a letter, or it's unterminated.
+     */
+    fun parseEndTag(html: String, i: Int): StartTag? =
+        if (i + 1 < html.length && html[i] == '<' && html[i + 1] == '/') readTag(html, i + 2) else null
+
+    /** A tag's name and attributes, from its name's first character. */
+    private fun readTag(html: String, at: Int): StartTag? {
+        val m = TAG_OPEN.find(html.substring(at, minOf(html.length, at + 256))) ?: return null
         val attrs = LinkedHashMap<String, String>()
         var duplicate = false; var slash = false
-        var j = i + m.value.length
-        val at = { k: Int -> if (k < html.length) html[k] else null }
+        var j = at + m.value.length
+        val ch = { k: Int -> if (k < html.length) html[k] else null }
         while (j < html.length) {
             val c = html[j]
             if (ws(c)) { j++; continue }
@@ -83,11 +95,11 @@ object Gate1 {
             val key = asciiLower(name.toString()).replace('\u0000', '\ufffd')
             var value = ""
             var p = k
-            while (ws(at(p))) p++
-            if (at(p) == '=') {
+            while (ws(ch(p))) p++
+            if (ch(p) == '=') {
                 p++
-                while (ws(at(p))) p++
-                val q = at(p)
+                while (ws(ch(p))) p++
+                val q = ch(p)
                 if (q == '"' || q == '\'') {
                     val close = html.indexOf(q, p + 1)
                     if (close < 0) return null
@@ -152,6 +164,15 @@ object Gate1 {
                 i = end + 3; continue
             }
             val next = if (i + 1 < html.length) html[i + 1] else null
+            if (next == '/' && i + 2 < html.length && html[i + 2].let { it in 'a'..'z' || it in 'A'..'Z' }) {
+                val et = parseEndTag(html, i)
+                if (et == null) { problems += "an unterminated end tag"; break }
+                if (!TAG_NAME_OK.matches(et.name)) problems += "an end tag named ${Json.write(et.name)}"
+                // a browser drops them, but they move where the tag ends: Bento writes none
+                if (et.attrs.isNotEmpty()) problems += "an end tag </${et.name}> carrying attributes"
+                i = et.end; continue
+            }
+            if (html.startsWith("</>", i)) { i += 3; continue }
             if (next == '/' || next == '!' || next == '?') {
                 val end = html.indexOf('>', i + 2)
                 if (end < 0) { problems += "an unterminated tag"; break }
@@ -171,6 +192,7 @@ object Gate1 {
                 val close = rawTextEnd(lower, name, tag.end)
                 if (close < 0) { problems += "an unterminated <$name>"; break }
                 if (name != "script" && lower.substring(tag.end, close).contains("<script")) problems += "a <$name> holds a <script>"
+                if (parseEndTag(html, close) == null) { problems += "an unterminated </$name>"; break }
                 if (name == "textarea" || name == "title") { i = close; continue }
                 blocks += Block(name, html.substring(i, tag.end), html.substring(tag.end, close),
                     tag.attrs["type"], tag.attrs["id"], tag.attrs["src"], tag.attrs.containsKey("data-bento-preview"),
@@ -393,8 +415,20 @@ object Gate1 {
     ).joinToString("; ")
 
     sealed class Verdict {
-        class Genuine(val release: Entry, val csp: String) : Verdict()
+        class Genuine(val release: Entry, val csp: String, val app: String? = null) : Verdict()
         class Unknown(val reason: String) : Verdict()
+    }
+
+    /**
+     * A served file judged against EVERY held history. A fresh shell names no app,
+     * so the history is never picked by a name in the file or a directory: exactly
+     * one app's history must match, and the verdict names it; none or several is
+     * UNKNOWN (#842).
+     */
+    fun verifyServedHeld(html: String, held: List<History>, frameAncestors: String = "'none'"): Verdict {
+        val hits = held.mapNotNull { h -> (verifyServed(html, h, frameAncestors) as? Verdict.Genuine)?.let { h.app to it } }
+        if (hits.size == 1) return Verdict.Genuine(hits[0].second.release, hits[0].second.csp, hits[0].first)
+        return Verdict.Unknown(if (hits.isEmpty()) "no held history matches" else "${hits.size} held histories match (${hits.joinToString(", ") { it.first }})")
     }
 
     /** THE served-path gate. The history must already have passed the signature check and acceptHistory. */
