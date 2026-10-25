@@ -269,6 +269,14 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-slides-fonts.ts
 
+    - name: Slides embedded font weight rig
+      # #850: a font file's own weight — the fvar wght range of a variable
+      # TTF/WOFF (the WOFF's fvar really inflated), the OS/2 weight and
+      # italic bit of a static face; a WOFF2 only says it is variable;
+      # truncated or foreign bytes read as nothing, never a throw.
+      shell: bento-step {0}
+      run: node scripts/test-slides-font-weight.ts
+
     - name: Slides code colours rig
       # theme.codePalette's editor: one row per token scope from one list
       # (code.ts CODE_SCOPES), built-in colour shown when the deck has

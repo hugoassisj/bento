@@ -55,6 +55,11 @@ jobs:
         # surface (canvas, panels, present, speaker, print, the saved file with
         # JS off) the payload origin is never requested; a raw url() is.
         run: node scripts/test-slides-css-egress-browser.mjs
+      - name: The shared svg sanitizer's policy options only tighten
+        # kernel/src/svgsafe.ts, lifted from slides' renderer: slides' lists are
+        # the default, and every option an app adds (type's embed pictures use
+        # all of them) removes what the default keeps and never keeps more.
+        run: node scripts/test-svgsafe-policy-browser.mjs
 
   slides-font-browser:
     runs-on: ubuntu-latest
@@ -120,6 +125,12 @@ jobs:
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-slides-font-lifecycle-browser.mjs
+      - name: An embedded font keeps its weights in Chromium
+        # #850: "Embed font file…" writes the range a variable TTF/WOFF states,
+        # the range a variable WOFF2 renders (ours and Instrument Sans), a
+        # static face's weight and italic; Bold then draws the font's own 700,
+        # 1.55x wider than 400, where the old `normal` drew faux bold at 1x.
+        run: node scripts/test-slides-font-weight-browser.mjs
       - name: Write chrome follows the copy's role in Chromium
         # canWriteDeck is an allowlist that fails closed: an audience, reader or
         # unknown-role copy arriving in a running editor (dropped, loadDoc) gets

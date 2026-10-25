@@ -15,7 +15,7 @@
 // - A document is genuine only if exactly ONE release, across every app's
 //   history, matches every block.
 
-use bento_gate1::{accept_history, verify_served, History, ServedVerdict};
+use bento_gate1::{accept_history, verify_served_held, History, ServedVerdict};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -137,21 +137,13 @@ impl Trust {
     /// Gate 1 across every held history: genuine only if exactly one release
     /// in all of them matches every block.
     pub fn verdict(&self, doc: &[u8]) -> Verdict {
-        let mut genuine = vec![];
-        let mut reason = String::from("no release history is held");
-        for (h, _) in &self.held {
-            match verify_served(doc, h, "'none'") {
-                ServedVerdict::Genuine { release, csp } => genuine.push((h.app().unwrap_or("").to_string(), release.version, csp)),
-                ServedVerdict::Unknown { reason: r } => reason = r,
-            }
-        }
-        match genuine.len() {
-            1 => {
-                let (app, version, csp) = genuine.pop().unwrap();
-                Verdict::Genuine { app, version, csp }
-            }
-            0 => Verdict::Unknown { reason },
-            n => Verdict::Unknown { reason: format!("{n} apps' releases match: ambiguous") },
+        // gate 1's own held-set rule (bento_gate1::verify_served_held, held to the
+        // corpus's `held` rows): every held history tried, exactly one may match.
+        let held: Vec<History> = self.held.iter().map(|(h, _)| h.clone()).collect();
+        if held.is_empty() { return Verdict::Unknown { reason: "no release history is held".into() } }
+        match verify_served_held(doc, &held, "'none'") {
+            (ServedVerdict::Genuine { release, csp }, app) => Verdict::Genuine { app: app.unwrap_or_default(), version: release.version, csp },
+            (ServedVerdict::Unknown { reason }, _) => Verdict::Unknown { reason },
         }
     }
 }
@@ -242,6 +234,25 @@ mod tests {
         // and an unsigned envelope never reaches accept_history at all
         let (t, notes) = Trust::load_with_keys(vec![test_key()], &[envelope_of(&exp["history"][0]["incoming"])], None);
         assert!(t.apps().is_empty() && !notes.is_empty());
+    }
+
+    #[test]
+    fn a_mixed_held_set_puts_each_file_on_its_own_app() {
+        // the corpus history (test key) AND the frozen real 1.2.10 history (release key)
+        let (t, notes) = Trust::load_with_keys(vec![test_key(), RELEASE_KEY], &[corpus("history.json"), corpus("real/slides-1.2.10/history.json")], None);
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(t.apps().len(), 2);
+        match t.verdict(corpus("real/slides-1.2.10/Bento_Slides.bento.html").as_bytes()) {
+            Verdict::Genuine { app, version, .. } => assert_eq!((app.as_str(), version.as_str()), ("bento-slides", "1.2.10")),
+            v => panic!("the real shell: {v:?}"),
+        }
+        match t.verdict(corpus("served/genuine-1.0.0.html").as_bytes()) {
+            Verdict::Genuine { app, .. } => assert_eq!(app, "bento-test"),
+            v => panic!("the synthetic file: {v:?}"),
+        }
+        // the real history alone does not make a synthetic file genuine
+        let (real_only, _) = Trust::load_with_keys(vec![RELEASE_KEY], &[corpus("real/slides-1.2.10/history.json")], None);
+        assert!(matches!(real_only.verdict(corpus("served/genuine-1.0.0.html").as_bytes()), Verdict::Unknown { .. }));
     }
 
     #[test]
