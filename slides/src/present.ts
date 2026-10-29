@@ -476,6 +476,20 @@ export function startPresentation(
     laserSentThisStroke = false
   }
 
+  // Letting go ends the stroke, not the picture: the dot fades and the trail
+  // runs out its own decay, as it does behind a moving pointer — clearing it
+  // on release made the laser vanish mid-sweep. Only leaving the slide, a
+  // blackout or switching the laser off still clear at once (resetLaserPointer).
+  const releaseLaser = () => {
+    hideLaserDot()
+    if (laserFrame) cancelAnimationFrame(laserFrame)
+    laserFrame = 0
+    laserPoint = null
+    overlay.classList.remove('laser-over-slide')
+    laserSentThisStroke = false
+    if (!reduceMotion && laserTrailLength > 1 && !laserTrailFrame) laserTrailFrame = requestAnimationFrame(renderLaserTrail)
+  }
+
   const paintLaser = (now: number) => {
     laserFrame = 0
     const point = laserPoint
@@ -561,8 +575,16 @@ export function startPresentation(
   }
 
   const setRemoteLaser = (p: string | null) => {
-    if (!p || blacked) {
+    if (blacked) {
       clearRemoteLaser()
+      return
+    }
+    if (!p) {
+      // the presenter let go: fade, as their own screen does
+      if (remoteTrailFrame) cancelAnimationFrame(remoteTrailFrame)
+      remoteTrailFrame = 0
+      remoteLaserDot.classList.remove('visible')
+      if (!reduceMotion && laserTrailLength > 1 && !laserTrailFrame) laserTrailFrame = requestAnimationFrame(renderLaserTrail)
       return
     }
     // The laser layer only enters the DOM when the laser was armed locally —
@@ -595,6 +617,7 @@ export function startPresentation(
       // CSS left/top tween would fly it across the gap — the trail sampler
       // traces that ghost glide into a line from the last position. Snap it to
       // the new position first (tween off), then re-enable for the stream.
+      clearLaserTrail() // the last stroke may still be fading: it must not join this one
       remoteLaserDot.style.transition = 'none'
       remoteLaserDot.style.left = `${x}px`
       remoteLaserDot.style.top = `${y}px`
@@ -627,6 +650,7 @@ export function startPresentation(
       ev.clientX < rect.left || ev.clientX > rect.right ||
       ev.clientY < rect.top || ev.clientY > rect.bottom
     ) return
+    clearLaserTrail() // a stroke still fading must not join the new one
     laserDrawing = true
     laserSentThisStroke = false
     laserPoint = { x: ev.clientX, y: ev.clientY }
@@ -643,7 +667,7 @@ export function startPresentation(
     // resetLaserPointer's own off-send guard needs laserDrawing still true, so
     // the off frame fires HERE — before the stroke is cleared.
     if (laserSentThisStroke) sendLaserPoint(null)
-    resetLaserPointer()
+    releaseLaser()
   })
   overlay.addEventListener('pointerleave', resetLaserPointer)
   const onWindowBlur = () => resetLaserPointer()
