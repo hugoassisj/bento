@@ -29,6 +29,9 @@
   --blue: #5b8def;
   --field: #ffffff;          /* form-control surface — CHROME, not the slide */
   --surface: #ffffff;        /* panels, dialogs, menus */
+  --tab-track: #eceff4;      /* a tab strip's track */
+  --tab-on: #ffffff;         /* the selected tab's pill, lifted off its track */
+  --tab-on-line: #d5dbe4;    /* …and its hairline edge */
   --grid-dot: #d5dbe4;       /* the canvas dot grid behind the stage */
   --chip: rgb(255 255 255 / 0.85);   /* translucent label over a thumbnail */
   --slide-shadow: 0 10px 40px rgb(20 30 45 / 0.18), 0 2px 8px rgb(20 30 45 / 0.10);
@@ -53,6 +56,9 @@
   --blue: #7aa5f5;           /* lifted: #5b8def is unreadable on dark chrome */
   --field: #12151a;
   --surface: #21262e;
+  --tab-track: #12151a;      /* sunk below the panel, as Penpot does */
+  --tab-on: #363d49;
+  --tab-on-line: #4b5465;
   --grid-dot: #2b313b;
   --chip: rgb(24 28 34 / 0.85);
   /* deeper: a light slide on a dark canvas needs more separation than the
@@ -3280,3 +3286,16 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize !important; use
 .ed-props .ed-gradstop > .ed-gradstop-at { width: 54px; }
 .ed-props .ed-gradstop .ed-color-alpha { width: 52px; }
 .ed-props .ed-gradstop .ed-color > input[type='color'] { width: 22px; }
+
+/* Tab strips (Slides | Layers, Format | Animate | Interact), Penpot's way: the
+   track sits apart from the panel (sunk, in dark) and the selected tab is a
+   lifted pill with a hairline edge, so the choice reads at a glance in both
+   themes. Text stays ≥4.5:1 in either state; hover brightens the text and
+   tints the slot, but never borders it, so it can't pass for selected. */
+.ed-tabs { background: var(--tab-track); box-shadow: inset 0 0 0 1px var(--line); }
+.ed-tabs button { border: 1px solid transparent; }
+.ed-tabs button:hover:not([aria-selected='true']) { color: var(--ink); background: var(--chrome-2); }
+.ed-tabs button[aria-selected='true'] {
+  color: var(--ink); background: var(--tab-on); border-color: var(--tab-on-line);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .18);
+}
