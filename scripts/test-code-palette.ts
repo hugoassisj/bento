@@ -71,7 +71,7 @@ ok(OPTIONAL_ACCENTS.every((k) => paletteOf(fresh)[k] === '#f7a600'), '…though 
 ok(slotIsSet(authored, 'accent2') && !slotIsSet(authored, 'accent3'), 'a deck carrying accent2 sets that slot and not the next')
 ok(slotIsSet(fresh, 'accent1') && slotIsSet(fresh, 'bg1') && slotIsSet(fresh, 'tx1'), 'the three canonical slots are always set')
 ok(/if \(!slotIsSet\(this\.store\.doc, key\)\) continue/.test(theme), 'the Theme section shows an Accent N row only for a set slot')
-ok(/if \(!slotIsSet\(this\.store\.doc, slot\)\) continue/.test(panels.slice(panels.indexOf('private paletteSwatches('))), 'the quick-pick swatch row skips unset accents, the way it skips unset hlink')
+ok(/if \(!slotIsSet\(this\.store\.doc, slot\)\) continue/.test(panels.slice(panels.indexOf('private themeLink('))), 'the theme-colour list skips unset accents, the way it skips unset hlink')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

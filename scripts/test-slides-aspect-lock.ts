@@ -61,7 +61,7 @@ const rebuild = panels.slice(panels.indexOf('private rebuild(force = false)'), p
 ok(/const scrollTop = force \? 0 : this\.host\.scrollTop/.test(rebuild), 'a doc edit remembers the scroll; a selection/slide switch (force) starts at the top')
 // The Layers list restores its OWN scroll between the two (#507) — a
 // different value; the panel's must still be the last thing set.
-ok(/this\.applyAccordion\(\)\s*\n(?:\s*this\.layers\.restoreScroll\(\)\s*\n)?\s*this\.host\.scrollTop = scrollTop/.test(rebuild), 'the panel scroll is restored after the accordion runs (which can change the height)')
+ok(/this\.applyAccordion\(\)[^]*?this\.host\.scrollTop = scrollTop\s*\n\s*\}/.test(rebuild), 'the panel scroll is restored after the accordion runs (which can change the height)')
 ok(!/this\.host\.scrollTop = scrollTop[\s\S]*this\.applyAccordion\(\)/.test(rebuild), 'and never before it')
 
 console.log('\nwhat was set aside stays out\n')

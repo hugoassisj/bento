@@ -50,7 +50,7 @@ ok(/lineStart: oneOf\(\.\.\.TIP_KINDS\), lineEnd: oneOf\(\.\.\.TIP_KINDS\)/.test
 const panels = read('slides/src/editor/panels.ts')
 const editor = read('slides/src/editor/editor.ts')
 const lineedit = read('slides/src/connectors.ts') // the routing moved here (#493)
-ok(/TIPS\.map\(\(tip\) => \[tip\.kind, t\(tip\.label\)\]\)/.test(panels), 'the panel lists the catalogue — model words as values, translated labels for display')
+ok(/TIPS\.map\(\(tip\) => \[tip\.kind, (?:t|optLabel)\(tip\.label\)\]\)/.test(panels), 'the panel lists the catalogue — model words as values, translated labels for display')
 ok(/el\.shape === 'line' \|\| \(el\.shape === 'path' && !\/z\\s\*\$\/i\.test/.test(panels), 'tips are offered on lines and OPEN paths, never on a polygon')
 const render = read('slides/src/render.ts')
 // shapeSvg + markerRef moved to the kernel (kernel/src/shape.ts) with step 2 of

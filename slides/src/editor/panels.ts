@@ -242,8 +242,9 @@ export class PropsPanel {
     this.mountTabs()
     this.mountContext(els)
     this.stackCrampedRows()
+    // focus first, without scrolling: the restored scroll is the last word
+    if (radioAt >= 0) radios()[radioAt]?.focus({ preventScroll: true })
     this.host.scrollTop = scrollTop
-    if (radioAt >= 0) radios()[radioAt]?.focus()
   }
 
   /** Collapsed by default until the user opens them (persisted per title).

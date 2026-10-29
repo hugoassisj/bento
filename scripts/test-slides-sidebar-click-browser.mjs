@@ -107,12 +107,19 @@ try {
   console.log('\na partly visible thumb\n')
   {
     await setUp('s01', 0)
-    // pick the first thumb that straddles the bottom edge
+    // pick the first thumb that straddles the bottom edge — scrolling the
+    // list a little until one does, so the set-up does not hang on where the
+    // thumbs happen to fall at scroll 0
     const target = await p.evaluate(() => {
       const sb = document.querySelector('.ed-sidebar'), bot = sb.getBoundingClientRect().top + sb.clientHeight
-      const t = [...sb.querySelectorAll('.ed-thumb')].find((n) => { const r = n.getBoundingClientRect(); return r.top < bot - 20 && r.bottom > bot })
-      return t ? window.bento.doc.slides[Number(t.dataset.index)].id : null
+      for (let y = 0; y <= 200; y += 10) {
+        sb.scrollTop = y
+        const t = [...sb.querySelectorAll('.ed-thumb')].find((n) => { const r = n.getBoundingClientRect(); return r.top < bot - 20 && r.bottom > bot + 10 })
+        if (t) return window.bento.doc.slides[Number(t.dataset.index)].id
+      }
+      return null
     })
+    await p.waitForTimeout(150)
     if (!target) ok(false, 'set-up: a thumb straddling the bottom edge')
     else {
       const r = await click(target)
