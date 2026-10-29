@@ -142,9 +142,11 @@ try {
   // --- 3. D8 shortcuts ----------------------------------------------------------
   console.log('\nD8: help shortcuts in the interface face, right-aligned\n')
   const k = await p.evaluate(() => {
-    const kbd = document.querySelector('.ed-help-row kbd'), row = kbd.parentElement
-    const col = parseFloat(getComputedStyle(row).gridTemplateColumns)
-    return { font: getComputedStyle(kbd).fontFamily, ui: getComputedStyle(document.body).fontFamily, right: kbd.getBoundingClientRect().right - row.getBoundingClientRect().left, col }
+    // each section is the grid (rows are display: contents), its key column
+    // sized to its longest key
+    const kbd = document.querySelector('.ed-help-row kbd'), sec = kbd.closest('.ed-help-sec')
+    const col = parseFloat(getComputedStyle(sec).gridTemplateColumns)
+    return { font: getComputedStyle(kbd).fontFamily, ui: getComputedStyle(document.body).fontFamily, right: kbd.getBoundingClientRect().right - sec.getBoundingClientRect().left, col }
   })
   ok(k.font === k.ui && !/mono/i.test(k.font), `shortcut face = interface face (${k.font.split(',')[0]})`)
   ok(Math.abs(k.right - k.col) < 1, `shortcut ends at its column's edge (${k.right.toFixed(1)} of ${k.col}px)`)

@@ -17,6 +17,10 @@ export interface LayersHost {
   select: (ids: string[]) => void
   /** commit a new paint order as one undo step */
   setOrder: (elements: SlideElement[]) => void
+  /** name an element, as one undo step; '' gives it back its default name */
+  rename: (id: string, name: string) => void
+  /** name a group, on all its members, as one undo step */
+  renameGroup: (groupId: string, name: string) => void
 }
 
 /** the element kinds' glyphs, shared with the inspector's context line */
@@ -77,6 +81,49 @@ export class LayersUI {
     this.rebuildRows()
   }
 
+  /** Rename in place, as Penpot and Figma do: the row's label becomes a
+   *  field; Enter or leaving it keeps the name, Escape keeps the old one, an
+   *  empty name gives the default back. Double-click a row, or Rename on its
+   *  right-click menu. */
+  rename(id: string) { this.editLabel(this.rowNode(id), this.host.slide().elements.find((e) => e.id === id)?.name, (name) => this.host.rename(id, name)) }
+
+  /** Rename a group — its row's label, named on every member. */
+  renameGroup(gid: string) {
+    const row = this.list.querySelector<HTMLElement>(`.ed-layer-group[data-group="${CSS.escape(gid)}"]`)
+    this.editLabel(row, this.host.slide().elements.find((e) => e.groupId === gid)?.groupName, (name) => this.host.renameGroup(gid, name))
+  }
+
+  private editLabel(row: HTMLElement | null, current: string | undefined, save: (name: string) => void) {
+    const label = row?.querySelector<HTMLElement>('.ed-layer-label')
+    if (!row || !label) return
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = 'ed-layer-rename'
+    input.value = current ?? label.textContent ?? ''
+    input.setAttribute('aria-label', t('Rename'))
+    row.draggable = false
+    label.replaceWith(input)
+    input.focus()
+    input.select()
+    let done = false
+    const finish = (keep: boolean) => {
+      if (done) return
+      done = true
+      const name = input.value.trim()
+      input.replaceWith(label)
+      row.draggable = true
+      if (keep && name !== (current ?? label.textContent)) save(name)
+      this.list.focus({ preventScroll: true })
+    }
+    input.addEventListener('keydown', (ev) => {
+      ev.stopPropagation() // the list's arrows and Delete are not this field's
+      if (ev.key === 'Enter') finish(true)
+      if (ev.key === 'Escape') finish(false)
+    })
+    input.addEventListener('blur', () => finish(true))
+    input.addEventListener('click', (ev) => ev.stopPropagation())
+  }
+
   private rowNode(id: string): HTMLElement | null {
     for (const n of this.list.children) if ((n as HTMLElement).dataset.id === id) return n as HTMLElement
     return null
@@ -135,6 +182,7 @@ export class LayersUI {
       row.append(glyph, label)
       row.title = r.label
       row.addEventListener('click', (ev) => this.onClick(ev, r))
+      label.addEventListener('dblclick', (ev) => { ev.stopPropagation(); this.rename(r.id) })
       row.addEventListener('dragstart', (ev) => {
         this.dragId = r.id
         ev.dataTransfer?.setData('text/plain', r.id)
@@ -191,7 +239,8 @@ export class LayersUI {
     glyph.innerHTML = ICONS.group
     const label = document.createElement('span')
     label.className = 'ed-layer-label'
-    label.textContent = t('Group of {n}', { n: members.length })
+    label.textContent = this.host.slide().elements.find((e) => e.groupId === gid)?.groupName || t('Group of {n}', { n: members.length })
+    label.addEventListener('dblclick', (ev) => { ev.stopPropagation(); this.renameGroup(gid) })
     row.append(fold, glyph, label)
     const all = this.host.slide().elements.filter((e) => e.groupId === gid).map((e) => e.id)
     row.addEventListener('click', (ev) => {

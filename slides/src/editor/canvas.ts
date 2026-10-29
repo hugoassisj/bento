@@ -800,11 +800,18 @@ export class SlideCanvas {
   }
 
   /** Grow a selection to whole groups: any member pulls in its groupId kin.
-   *  (⌘-click and Alt-click deep select bypass this — that's how you reach a member.) */
+   *  (⌘-click and Alt-click deep select bypass this — that's how you reach a member.)
+   *  Once INSIDE a group — part of it selected, from the layer list or a ⌘-click —
+   *  its other members are picked one at a time, as in Figma: growing them to the
+   *  whole group would throw away the step the author just took. */
   private expandGroups(ids: string[]): string[] {
     const els = this.store.slide.elements
+    const sel = this.store.selection.map((id) => els.find((e) => e.id === id))
+    const inside = sel[0]?.groupId
+    const entered = inside && sel.every((e) => e?.groupId === inside) &&
+      els.filter((e) => e.groupId === inside).length > sel.length ? inside : undefined
     const groups = new Set(
-      ids.map((id) => els.find((e) => e.id === id)?.groupId).filter((g): g is string => !!g),
+      ids.map((id) => els.find((e) => e.id === id)?.groupId).filter((g): g is string => !!g && g !== entered),
     )
     if (!groups.size) return ids
     const out = new Set(ids)

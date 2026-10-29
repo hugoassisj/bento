@@ -16,7 +16,13 @@
 //      Group from a shift-picked pair of rows;
 //   6. a group from a file made before grouping gathered (members interleaved
 //      with other elements) gets one group row per run — the list does not
-//      pretend the stack is other than it is.
+//      pretend the stack is other than it is;
+//   7. once inside a group (a member picked from its row), a click on another
+//      member picks just that member, as in Figma — it used to select the
+//      whole group, which on a big group read as "it selects everything";
+//   8. a row renames in place — double-click or Rename on its right-click —
+//      and so does a group's row; Escape keeps the old name, an empty name
+//      gives the default back, Ungroup drops the group's name; one undo each.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -107,6 +113,43 @@ try {
   await load([box('x1', 100, 100, { groupId: 'old' }), box('y', 400, 100), box('x2', 700, 100, { groupId: 'old' })])
   await p.waitForTimeout(400)
   ok(JSON.stringify(await rows()) === JSON.stringify(['[Group of 2]', '  x2', 'y', '[Group of 2]', '  x1']), `each run gets its own group row (${(await rows()).join(' | ')})`)
+
+  // 7. inside a group, a click stays inside
+  await load([box('back', 40, 40, { w: 1100, h: 600, fill: '#eeeeee' }), box('a', 100, 100, { groupId: 'g' }), box('b', 400, 300, { groupId: 'g' }), box('c', 800, 100)])
+  await p.waitForTimeout(400)
+  await row('a').click(); await p.waitForTimeout(150)
+  await pick('b')
+  ok(await sel() === 'b', `a member picked from its row, a click on another member picks just that one (${await sel()})`)
+  await pick('c')
+  await pick('a')
+  ok(await sel() === 'a,b', `from outside the group, a click still takes the whole group (${await sel()})`)
+
+  // 8. rename
+  const name = (id) => p.evaluate((id) => window.bento.doc.slides[0].elements.find((e) => e.id === id)?.name ?? '', id)
+  const label = (loc) => loc.locator('.ed-layer-label').textContent()
+  await row('c').locator('.ed-layer-label').dblclick(); await p.waitForTimeout(150)
+  const field = p.locator('.ed-side-layers .ed-layer-rename')
+  ok(await field.count() === 1, 'double-clicking a row opens its name for editing')
+  await field.fill('Logo'); await field.press('Enter'); await p.waitForTimeout(250)
+  ok(await name('c') === 'Logo' && await label(row('c')) === 'Logo', `Enter keeps the name (${await label(row('c'))})`)
+  await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250)
+  ok(await name('c') === '', 'one undo takes it back')
+  await p.keyboard.press(`${MOD}+Shift+z`); await p.waitForTimeout(250)
+  await row('c').locator('.ed-layer-label').dblclick(); await p.waitForTimeout(150)
+  await field.fill('Nope'); await field.press('Escape'); await p.waitForTimeout(250)
+  ok(await name('c') === 'Logo', 'Escape keeps the old name')
+  ok(await menu(row('c'), 'Rename'), 'the right-click menu offers Rename')
+  ok(await field.count() === 1, 'and it opens the same field')
+  await field.fill(''); await field.press('Enter'); await p.waitForTimeout(250)
+  ok(await name('c') === '' && await label(row('c')) === 'Rectangle', `an empty name gives the default back (${await label(row('c'))})`)
+  await groupRow().locator('.ed-layer-label').dblclick(); await p.waitForTimeout(150)
+  await field.fill('Header'); await field.press('Enter'); await p.waitForTimeout(250)
+  ok(await label(groupRow()) === 'Header', `a group's row renames the group (${await label(groupRow())})`)
+  ok(await p.evaluate(() => window.bento.doc.slides[0].elements.filter((e) => e.groupId === 'g').every((e) => e.groupName === 'Header')), 'the name is on every member')
+  ok(await menu(groupRow(), 'Rename') && await field.count() === 1, 'a group\'s right-click offers Rename too')
+  await field.press('Escape'); await p.waitForTimeout(150)
+  ok(await menu(row('a'), 'Ungroup'), 'Ungroup')
+  ok(await p.evaluate(() => window.bento.doc.slides[0].elements.every((e) => !e.groupName)), 'and the group\'s name goes with it')
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {

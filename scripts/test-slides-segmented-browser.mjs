@@ -7,9 +7,9 @@
 // WHAT THIS PROVES:
 //   1. text Align and V-align are segmented: every option visible, ONE click
 //      sets it, and the pressed state (aria-checked) follows the model;
-//   2. clicking the row's caption changes nothing — a <label> row would have
-//      handed that click to the first segment and aligned the text left;
-//   3. word segments (Interior) fit their row in the longest bundled
+//   2. Align and V-align share one captionless line (Penpot's text block),
+//      each control named for assistive tech and the hint;
+//   3. word segments (Interior, Solid | Gradient) fit their row in the longest bundled
 //      translation, with no option cut off;
 //   4. the inspector never offers a <select> for these choices again.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -47,17 +47,18 @@ try {
     const tag = `[${locale}]`
 
     if (locale === 'en-US') {
-      ok(await segs.count() === 3, `${tag} Align, V-align and Interior are segmented (${await segs.count()})`)
-      const align = segs.nth(0)
+      ok(await segs.count() === 4, `${tag} Align, V-align, fill kind and Interior are segmented (${await segs.count()})`)
+      const seg = (name) => p.locator(`.ed-props .ed-seg[aria-label="${name}"]`)
+      const align = seg('Align')
       ok(await align.locator('button').count() === 3, `${tag} all three alignments are visible at rest`)
       await align.locator('button').nth(1).click(); await p.waitForTimeout(250)
       ok(await model() === 'center/top/filled', `${tag} one click centres the text (${await model()})`)
-      ok(await p.locator('.ed-props .ed-seg').nth(0).locator('button[aria-checked="true"]').getAttribute('aria-label') === 'center', `${tag} the pressed segment follows the model`)
-      await p.locator('.ed-props .ed-seg').nth(1).locator('button').nth(2).click(); await p.waitForTimeout(250)
+      ok(await seg('Align').locator('button[aria-checked="true"]').getAttribute('aria-label') === 'center', `${tag} the pressed segment follows the model`)
+      await seg('Vertical align').locator('button').nth(2).click(); await p.waitForTimeout(250)
       ok(await model() === 'center/bottom/filled', `${tag} one click sets V-align (${await model()})`)
-      await p.locator('.ed-props .ed-row > span', { hasText: /^Align$/ }).click(); await p.waitForTimeout(250)
-      ok(await model() === 'center/bottom/filled', `${tag} clicking the caption changes nothing`)
-      await p.locator('.ed-props .ed-seg').nth(2).locator('button', { hasText: 'hollow' }).click(); await p.waitForTimeout(250)
+      const line = await p.evaluate(() => { const a = document.querySelector('.ed-props .ed-seg[aria-label="Align"]'), v = document.querySelector('.ed-props .ed-seg[aria-label="Vertical align"]'); return a.parentElement === v.parentElement && a.parentElement.classList.contains('ed-line') })
+      ok(line, `${tag} Align and V-align share one line`)
+      await seg('Interior').locator('button', { hasText: 'hollow' }).click(); await p.waitForTimeout(250)
       ok(await model() === 'center/bottom/none', `${tag} a word segment sets Interior (${await model()})`)
       const selects = await p.$$eval('.ed-props select', (ss) => ss.map((s) => [...s.options].map((o) => o.value).join(',')))
       ok(!selects.some((v) => /^(left,center,right|top,middle,bottom|filled,hollow)$/.test(v)), `${tag} no <select> left for these choices`)

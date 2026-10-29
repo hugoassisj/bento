@@ -23,6 +23,7 @@ import { stepOf } from '../steps'
 import { ICONS } from '../icons'
 import { LayersUI, labelFor, GLYPH as LAYER_GLYPH } from './layers'
 import { isMacOS } from '../screens'
+import { openCtxMenu } from './ctxmenu'
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
@@ -273,9 +274,10 @@ export class PropsPanel {
         lsSet('bento-panel-tab', JSON.stringify(id))
         this.host.dataset.tab = id
         for (const x of bar.children) x.setAttribute('aria-selected', String(x === b))
+        this.stackCrampedRows() // rows on a hidden tab had no width to measure
       })
       bar.appendChild(b)
-      if (!this.host.querySelector(`:scope > .ed-section[data-tab="${id}"]`)) {
+      if (!this.host.querySelector(`:scope > .ed-section[data-tab="${id}"], :scope > .ed-layer-block[data-tab="${id}"]`)) {
         const empty = document.createElement('p')
         empty.className = 'ed-hint ed-tab-empty'
         empty.dataset.tab = id
@@ -283,7 +285,12 @@ export class PropsPanel {
         this.host.appendChild(empty)
       }
     }
-    this.host.prepend(bar)
+    // the pill sits in a full-width band of the panel's own surface: sticky,
+    // it covers what scrolls under it edge to edge instead of floating over it
+    const band = document.createElement('div')
+    band.className = 'ed-tabs-band'
+    band.appendChild(bar)
+    this.host.prepend(band)
     this.host.dataset.tab = this.tab
   }
 
@@ -297,6 +304,19 @@ export class PropsPanel {
     selection: () => this.store.selection,
     select: (ids) => this.store.select(ids),
     setOrder: (elements) => this.store.commit(() => { this.store.slide.elements = elements }),
+    rename: (id, name) => this.store.commit(() => {
+      const el = this.store.element(id)
+      if (!el) return
+      if (name) el.name = name
+      else delete el.name
+    }),
+    renameGroup: (gid, name) => this.store.commit(() => {
+      for (const el of this.store.slide.elements) {
+        if (el.groupId !== gid) continue
+        if (name) el.groupName = name
+        else delete el.groupName
+      }
+    }),
   })
 
   /**
@@ -313,7 +333,7 @@ export class PropsPanel {
     const tabOf = new Map<string, PanelTab>()
     for (const [tab, keys] of Object.entries(PropsPanel.TAB_SECTIONS)) for (const k of keys) tabOf.set(t(k), tab as PanelTab)
     for (const h of headers) {
-      const key = h.textContent ?? ''
+      const key = h.dataset.key ?? h.textContent ?? ''
       const body = document.createElement('div')
       body.className = 'ed-section-body'
       let n: ChildNode | null = h.nextSibling
@@ -327,7 +347,7 @@ export class PropsPanel {
       // design tools keep explanation out of the controls: hover or focus shows
       // it as a hint, a click unfolds it in place (touch has no hover). State
       // messages — .ed-status, the morph warning — are not help, and stay.
-      const help = [...body.querySelectorAll<HTMLElement>(':scope > p.ed-hint:not(.ed-status, .ed-morph-warn, .ed-tab-empty)')]
+      const help = [...body.querySelectorAll<HTMLElement>(':scope > p.ed-hint:not(.ed-status, .ed-morph-warn, .ed-tab-empty, .ed-keep)')]
       if (help.length) {
         const q = document.createElement('button')
         q.type = 'button'
@@ -354,6 +374,7 @@ export class PropsPanel {
         const nowClosed = h.classList.toggle('closed')
         const live = h.nextElementSibling as HTMLElement | null
         if (live?.classList.contains('ed-section-body')) live.style.display = nowClosed ? 'none' : ''
+        if (!nowClosed) this.stackCrampedRows()
         const state = lsJson<Record<string, boolean>>('bento-panel-open', {})
         state[key] = !nowClosed
         lsSet('bento-panel-open', JSON.stringify(state))
@@ -587,27 +608,18 @@ export class PropsPanel {
   }
 
   private buildMultiPanel(els: SlideElement[]) {
-    // Separate singular key rather than plural machinery — same shape as the
-    // 'Pasted 1 item' / 'Pasted {n} items' pair in editor.ts.
-    this.section(t('Arrange'))
-    this.arrangeRows(els)
+    this.layerBlock(els)
     this.section(t('Animation'))
     this.revealRow(els)
   }
 
   private buildElementPanel(el: SlideElement) {
+    // Penpot's order: how it sits (align, order, blend, opacity, measures) with
+    // no header, then what it IS (its type's own controls), then the optional
+    // layers of paint — fill, stroke, shadow, blur — each added from its header.
+    this.layerBlock([el])
     this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video', embed: 'Embed' }[el.type]))
-    // what the element IS in a layout — content, not geometry
-    this.row('Layout role', this.select(
-      ['none', 'title', 'subtitle', 'body', 'kicker'],
-      el.role ?? 'none',
-      (v) => this.mutate(el.id, (e) => {
-        if (v === 'none') delete e.role
-        else e.role = v
-      }, true)))
-
-    // Lead with the element's OWN controls — the reason it was selected —
-    // then geometry, effects, arrange, and finally present-time behaviour.
+    const kindHead = this.host.lastElementChild!
     if (el.type === 'text') this.buildTextProps(el)
     if (el.type === 'shape') this.buildShapeProps(el)
     if (el.type === 'image') this.buildImageProps(el)
@@ -616,58 +628,160 @@ export class PropsPanel {
     if (el.type === 'media') this.buildMediaProps(el)
     if (el.type === 'code') this.buildCodeProps(el)
     if (el.type === 'embed') this.buildEmbedProps(el)
+    // a kind with nothing of its own (an ellipse, a diagram) shows no empty
+    // header, and one whose builder opens its own section (Chart, Source
+    // code) does not get the kind's name twice
+    const next = kindHead.nextElementSibling
+    if (!next || next.classList.contains('ed-section')) kindHead.remove()
+    if (el.type === 'text') { this.buildTextFill(el); this.buildTextStroke(el) }
+    if (el.type === 'shape') { this.buildShapeFill(el); this.buildShapeStroke(el) }
+    this.buildShadow(el)
+    this.buildBlur(el)
+    this.buildLayoutRole(el)
+    this.buildPresentingProps(el)
+    this.buildMorphProps(el)
+  }
 
-    this.section(t('Position & size'))
-    const geo = document.createElement('div')
-    geo.className = 'ed-grid2'
-    geo.append(
-      this.mini(t('X'), el.x, (v, fin) => this.setNum(el.id, 'x', v, fin)),
-      this.mini(t('Y'), el.y, (v, fin) => this.setNum(el.id, 'y', v, fin)),
-      this.mini(t('W'), el.w, (v, fin) => this.setNum(el.id, 'w', Math.max(v, 1), fin)),
-      this.mini(t('H'), el.h, (v, fin) => this.setNum(el.id, 'h', Math.max(v, 1), fin)),
-      this.mini(t('Angle'), el.rotation, (v, fin) => this.setNum(el.id, 'rotation', v, fin)),
-    )
-    this.host.appendChild(geo)
+  private buildLayoutRole(el: SlideElement) {
+    // What the box IS to the slide's layout — its own section, said in
+    // words: a bare 'Layout role' dropdown among the text settings told
+    // nobody what it did.
+    this.section(t('Layout'))
+    const why = document.createElement('p')
+    why.className = 'ed-hint ed-keep' // the section's whole point: shown, not folded behind '?'
+    why.textContent = t('Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.')
+    this.host.appendChild(why)
+    this.row('Layout role', this.labeledSelect(
+      (['none', 'title', 'subtitle', 'body', 'kicker'] as const).map((r): [string, string] => [r, t(r)]),
+      el.role ?? 'none',
+      (v) => this.mutate(el.id, (e) => {
+        if (v === 'none') delete e.role
+        else e.role = v
+      }, true)))
+  }
 
-    this.section(t('Appearance'))
-    // Blur (on the element) / frosted-glass backdrop (behind it) / blend mode —
-    // available on any element. 0 clears blur/backdrop; 'normal' clears blend.
-    const fxGrid = document.createElement('div')
-    fxGrid.className = 'ed-grid2'
-    fxGrid.append(
-      this.mini(t('Opacity'), Math.round(el.opacity * 100), (v, fin) =>
-        this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1), fin)),
-      this.mini(t('Blur'), el.blur ?? 0, (v, fin) => this.mutate(el.id, (e) => {
-        if (v > 0) e.blur = v
-        else delete e.blur
-      }, fin)),
-      this.mini(t('Blur behind'), el.backdropFilter ?? 0, (v, fin) => this.mutate(el.id, (e) => {
-        if (v > 0) e.backdropFilter = v
-        else delete e.backdropFilter
-      }, fin)),
+  /** The block above the sections, as Penpot heads its Design tab: the align
+   *  and order toolbars, blend mode with opacity, then the measures — the
+   *  labels inside the fields. */
+  private layerBlock(els: SlideElement[]) {
+    const block = document.createElement('div')
+    block.className = 'ed-layer-block'
+    block.dataset.tab = 'format'
+    this.host.appendChild(block)
+    const iconBtn = (icon: string, hint: string, onClick: () => void) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-btn ed-tool'
+      b.innerHTML = icon
+      b.title = hint
+      b.setAttribute('aria-label', hint.replace(/\s*\(.*\)$/, ''))
+      b.addEventListener('click', onClick)
+      return b
+    }
+    const bar = (...buttons: HTMLElement[]) => {
+      const row = document.createElement('div')
+      row.className = 'ed-toolbar'
+      row.append(...buttons)
+      block.appendChild(row)
+      return row
+    }
+    // Controls the selection cannot use are left out, not greyed: matching
+    // sizes needs two elements, even gaps three.
+    const mod = isMacOS() ? '⌘' : 'Ctrl+'
+    const grouped = els.some((e) => e.groupId)
+    const allSame = els.length > 1 && els.every((e) => e.groupId && e.groupId === els[0].groupId)
+    const groupBtn = els.length > 1 || grouped
+      ? (allSame || (grouped && els.length === 1)
+        ? iconBtn(ICONS.ungroup, `${t('Ungroup')} (⇧${mod}G)`, () => this.ungroup(els))
+        : iconBtn(ICONS.group, `${t('Group')} (${mod}G)`, () => this.group(els)))
+      : null
+    // One toolbar, Penpot's: align | order | spacing | group, a hairline
+    // between the kinds; it wraps at a kind's edge when the panel is narrow.
+    const kind = (...buttons: HTMLElement[]) => {
+      const k = document.createElement('div')
+      k.className = 'ed-toolbar-kind'
+      k.append(...buttons)
+      return k
+    }
+    bar(
+      kind(
+        iconBtn(ICONS.arrLeft, t('Align left'), () => this.align(els, 'left')),
+        iconBtn(ICONS.arrCenterX, t('Align centers'), () => this.align(els, 'centerX')),
+        iconBtn(ICONS.arrRight, t('Align right'), () => this.align(els, 'right')),
+        iconBtn(ICONS.arrTop, t('Align top'), () => this.align(els, 'top')),
+        iconBtn(ICONS.arrMiddleY, t('Align middles'), () => this.align(els, 'middleY')),
+        iconBtn(ICONS.arrBottom, t('Align bottom'), () => this.align(els, 'bottom')),
+      ),
+      kind(
+        iconBtn(ICONS.toFront, t('Bring to front'), () => this.reorder(els, 'front')),
+        iconBtn(ICONS.forward, t('Bring forward'), () => this.step(els, +1)),
+        iconBtn(ICONS.backward, t('Send backward'), () => this.step(els, -1)),
+        iconBtn(ICONS.toBack, t('Send to back'), () => this.reorder(els, 'back')),
+      ),
+      ...(els.length >= 2 ? [kind(
+        ...(els.length >= 3 ? [
+          iconBtn(ICONS.distX, t('Space evenly across (3 or more)'), () => this.distribute(els, 'x')),
+          iconBtn(ICONS.distY, t('Space evenly down (3 or more)'), () => this.distribute(els, 'y')),
+        ] : []),
+        iconBtn(ICONS.matchW, t('Same width as the first selected (2 or more)'), () => this.matchSize(els, 'w')),
+        iconBtn(ICONS.matchH, t('Same height as the first selected (2 or more)'), () => this.matchSize(els, 'h')),
+      )] : []),
+      ...(groupBtn ? [kind(groupBtn)] : []),
     )
-    this.host.appendChild(fxGrid)
-    this.row('Blend mode', this.labeledSelect(
+    if (els.length !== 1) return
+    const el = els[0]
+
+    const layer = document.createElement('div')
+    layer.className = 'ed-grid2 ed-grid-wide'
+    const blend = this.labeledSelect(
       [['normal', t('Normal')], ['multiply', t('Multiply')], ['screen', t('Screen')], ['overlay', t('Overlay')],
         ['darken', t('Darken')], ['lighten', t('Lighten')], ['difference', t('Difference')], ['exclusion', t('Exclusion')]],
       el.blend || 'normal',
       (v) => this.mutate(el.id, (e) => {
         if (v === 'normal') delete e.blend
         else e.blend = v
-      }, true)))
+      }, true))
+    blend.title = t('Blend mode')
+    blend.setAttribute('aria-label', t('Blend mode'))
+    const opacity = this.mini('%', Math.round(el.opacity * 100), (v, fin) =>
+      this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1), fin))
+    opacity.title = t('Opacity')
+    layer.append(blend, opacity)
+    block.appendChild(layer)
 
-    const current = Object.entries(SHADOW_PRESETS).find(([, p]) => JSON.stringify(p) === JSON.stringify(el.shadow))?.[0]
-      ?? (el.shadow ? 'custom' : 'none')
-    this.row('Shadow', this.select(
-      [...(current === 'custom' ? ['custom'] : []), 'none', ...Object.keys(SHADOW_PRESETS)],
+    const geo = document.createElement('div')
+    geo.className = 'ed-grid2'
+    geo.append(
+      this.mini(t('W'), el.w, (v, fin) => this.setNum(el.id, 'w', Math.max(v, 1), fin)),
+      this.mini(t('H'), el.h, (v, fin) => this.setNum(el.id, 'h', Math.max(v, 1), fin)),
+      this.mini(t('X'), el.x, (v, fin) => this.setNum(el.id, 'x', v, fin)),
+      this.mini(t('Y'), el.y, (v, fin) => this.setNum(el.id, 'y', v, fin)),
+      this.mini(t('Angle'), el.rotation, (v, fin) => this.setNum(el.id, 'rotation', v, fin), ICONS.rotate),
+    )
+    if (el.type === 'shape' && el.shape === 'rect') {
+      geo.append(this.mini(t('Corner radius'), el.radius, (v, fin) =>
+        this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin), ICONS.radius))
+    }
+    block.appendChild(geo)
+  }
+
+  /** Shadow — added and removed from its header; a preset to start from,
+   *  then the concrete values (per layer when stacked). */
+  private buildShadow(el: SlideElement) {
+    const first = Object.keys(SHADOW_PRESETS)[0]
+    this.section(t('Shadow'), el.shadow
+      ? { add: false, hint: t('Remove shadow'), run: () => this.mutate(el.id, (e) => { delete e.shadow }, true) }
+      : { add: true, hint: t('Add shadow'), run: () => this.mutate(el.id, (e) => { e.shadow = { ...SHADOW_PRESETS[first] } }, true) })
+    if (!el.shadow) return
+    const current = Object.entries(SHADOW_PRESETS).find(([, p]) => JSON.stringify(p) === JSON.stringify(el.shadow))?.[0] ?? 'custom'
+    const presets = this.select(
+      [...(current === 'custom' ? ['custom'] : []), ...Object.keys(SHADOW_PRESETS)],
       current,
-      (v) => this.mutate(el.id, (e) => {
-        if (v === 'none') delete e.shadow
-        else if (v !== 'custom') e.shadow = { ...SHADOW_PRESETS[v] }
-      }, true)))
-    // Always show the concrete values (per layer when stacked) — editing any
-    // of them turns a preset into 'custom' on the next rebuild, which is fine.
-    const shadows = Array.isArray(el.shadow) ? el.shadow : el.shadow ? [el.shadow] : []
+      (v) => this.mutate(el.id, (e) => { if (v !== 'custom') e.shadow = { ...SHADOW_PRESETS[v] } }, true))
+    presets.setAttribute('aria-label', t('Shadow'))
+    this.field(presets)
+    // editing any value turns a preset into 'custom' on the next rebuild
+    const shadows = Array.isArray(el.shadow) ? el.shadow : [el.shadow]
     const setShadow = (i: number, patch: Record<string, unknown>, fin = true) =>
       this.mutate(el.id, (e) => {
         const arr = Array.isArray(e.shadow) ? [...e.shadow] : e.shadow ? [e.shadow] : []
@@ -682,21 +796,38 @@ export class PropsPanel {
         this.host.appendChild(cap)
       }
       const grid = document.createElement('div')
-      grid.className = 'ed-grid2'
+      grid.className = 'ed-grid3'
       grid.append(
         this.mini(t('X'), sh.x ?? 0, (v, fin) => setShadow(i, { x: v }, fin)),
         this.mini(t('Y'), sh.y ?? 0, (v, fin) => setShadow(i, { y: v }, fin)),
         this.mini(t('Blur'), sh.blur, (v, fin) => setShadow(i, { blur: Math.max(v, 0) }, fin)),
       )
       this.host.appendChild(grid)
-      this.row('Color', this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
+      this.field(this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
     })
+  }
 
-    this.section(t('Arrange'))
-    this.arrangeRows([el])
-
-    this.buildPresentingProps(el)
-    this.buildMorphProps(el)
+  /** Blur on the element and the frosted glass behind it — one optional layer. */
+  private buildBlur(el: SlideElement) {
+    const on = !!(el.blur || el.backdropFilter)
+    this.section(t('Blur'), on
+      ? { add: false, hint: t('Remove blur'), run: () => this.mutate(el.id, (e) => { delete e.blur; delete e.backdropFilter }, true) }
+      : { add: true, hint: t('Add blur'), run: () => this.mutate(el.id, (e) => { e.blur = 4 }, true) })
+    if (!on) return
+    const grid = document.createElement('div')
+    grid.className = 'ed-grid2'
+    grid.append(
+      this.mini(t('Blur'), el.blur ?? 0, (v, fin) => this.mutate(el.id, (e) => {
+        if (v > 0) e.blur = v
+        else delete e.blur
+      }, fin)),
+      this.mini(t('Behind'), el.backdropFilter ?? 0, (v, fin) => this.mutate(el.id, (e) => {
+        if (v > 0) e.backdropFilter = v
+        else delete e.backdropFilter
+      }, fin)),
+    )
+    grid.lastElementChild!.setAttribute('title', t('Blur behind'))
+    this.host.appendChild(grid)
   }
 
   /**
@@ -1117,23 +1248,28 @@ export class PropsPanel {
    * neither is visible in the numbers. The button reports the delta so it is
    * obvious whether anything was wrong before you press it.
    */
-  private buildFitHeight(el: TextElement) {
-    if (!el.html?.trim()) return // nothing to measure yet
-    const m = measureElement(el, this.store.doc)
-    const delta = m.height - el.h
+  private buildFitHeight(el: TextElement): HTMLElement {
     const fit = document.createElement('button')
-    fit.className = 'ed-btn ed-btn-block'
-    fit.textContent = t('Fit height to text')
-    fit.title = t('The text needs {need}px and the box is {have}px',
-      { need: String(m.height), have: String(el.h) })
-    if (delta === 0) fit.setAttribute('disabled', '')
+    fit.type = 'button'
+    fit.className = 'ed-btn ed-tool'
+    fit.innerHTML = ICONS.fitHeight
+    fit.setAttribute('aria-label', t('Fit height to text'))
+    if (!el.html?.trim()) { // nothing to measure yet
+      fit.disabled = true
+      fit.title = t('Fit height to text')
+      return fit
+    }
+    const m = measureElement(el, this.store.doc)
+    fit.title = `${t('Fit height to text')}\n${t('The text needs {need}px and the box is {have}px',
+      { need: String(m.height), have: String(el.h) })}`
+    if (m.height === el.h) fit.disabled = true
     fit.addEventListener('click', () => {
       // measure again at click time — the text may have been edited since the
       // panel was built, and a stale height is worse than no button
       const fresh = measureElement(this.store.element(el.id) as TextElement, this.store.doc)
       this.mutate(el.id, (e) => { e.h = fresh.height }, true)
     })
-    this.host.appendChild(fit)
+    return fit
   }
 
   /** "Insert field": drops a {{token}} at the end of the text (discussion
@@ -1144,70 +1280,116 @@ export class PropsPanel {
    *  the panel blurs the text box and commits the edit, so there is no caret
    *  to honour — the token lands at the end, inside the last block, and the
    *  author moves it like any other text. */
-  private buildFieldPicker(el: TextElement) {
+  private buildFieldPicker(el: TextElement): HTMLElement {
     const now = new Date()
     const fmt = (token: string) => { const m = /^\{\{(?:date|time):(.*)\}\}$/.exec(token); return m ? formatDate(now, m[1]) : '' }
-    const pairs: Array<[string, string]> = [['', t('Insert field…')]]
+    const pairs: Array<[string, string]> = []
     for (const p of DATE_PRESETS) pairs.push([p.token, p.token === '{{date}}' ? t(p.label) : `${t('Date')} — ${fmt(p.token)}`])
     for (const p of TIME_PRESETS) pairs.push([p.token, p.token === '{{time}}' ? t(p.label) : `${t('Time')} — ${fmt(p.token)}`])
     for (const p of OTHER_FIELDS) pairs.push([p.token, t(p.label)])
-    const sel = this.labeledSelect(pairs, '', (token) => {
-      if (!token) return
-      this.mutate(el.id, (e) => {
-        const tx = e as TextElement
-        const html = tx.html ?? ''
-        // inside the last block if there is one, so the token joins the last
-        // line rather than starting a stray one after </p>
-        const m = /<\/(p|div|li)>\s*$/i.exec(html)
-        const at = m ? m.index : html.length
-        const sep = at > 0 && !/[\s>]$/.test(html.slice(0, at)) ? ' ' : ''
-        tx.html = html.slice(0, at) + sep + token + html.slice(at)
-      }, true)
-      sel.value = ''
+    const insert = (token: string) => this.mutate(el.id, (e) => {
+      const tx = e as TextElement
+      const html = tx.html ?? ''
+      // inside the last block if there is one, so the token joins the last
+      // line rather than starting a stray one after </p>
+      const m = /<\/(p|div|li)>\s*$/i.exec(html)
+      const at = m ? m.index : html.length
+      const sep = at > 0 && !/[\s>]$/.test(html.slice(0, at)) ? ' ' : ''
+      tx.html = html.slice(0, at) + sep + token + html.slice(at)
+    }, true)
+    // a tool among the text tools, its list a menu — a dropdown that reads
+    // 'Insert field…' sat among the settings looking like one of them
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'ed-btn ed-tool'
+    b.innerHTML = ICONS.braces
+    b.title = `${t('Insert field…')}\n${t('Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.')}`
+    b.setAttribute('aria-label', t('Insert field…'))
+    b.setAttribute('aria-haspopup', 'menu')
+    b.addEventListener('click', () => {
+      const r = b.getBoundingClientRect()
+      openCtxMenu(r.left, r.bottom + 4, pairs.map(([token, label]) => ({ label, run: () => insert(token) })))
     })
-    sel.title = t('Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.')
-    this.row('Field', sel)
+    return b
   }
 
   private buildTextProps(el: TextElement) {
-    this.section(t('Typography'))
     const hint = document.createElement('p')
     hint.className = 'ed-hint'
     hint.innerHTML = t('While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.')
     this.host.appendChild(hint)
-    this.buildFitHeight(el)
-    this.buildFieldPicker(el)
-    this.row('Font', this.fontSelect(el))
+    // Penpot's Text block: family; size and weight; line height and tracking;
+    // then the alignments and the list tools as one icon row each.
+    const font = this.fontSelect(el)
+    font.setAttribute('aria-label', t('Font'))
+    font.title = t('Font')
+    const embed = document.createElement('button')
+    embed.type = 'button'
+    embed.className = 'ed-btn ed-tool'
+    embed.innerHTML = ICONS.fontAdd
+    embed.title = t('Bundle a .woff2/.woff/.ttf/.otf into this file and use it here')
+    embed.setAttribute('aria-label', t('＋ Embed font file…').replace(/^＋\s*/, ''))
+    embed.addEventListener('click', () => this.embedFont(el))
+    this.field(font, embed)
+
+    const sizes = document.createElement('div')
+    sizes.className = 'ed-grid2'
     // Shown in POINTS (the unit office users know); the model stores slide-space
     // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.
-    this.row('Size (pt)', this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
+    const size = this.mini('pt', Math.round(el.fontSize * 0.75 * 10) / 10, (v, fin) =>
       this.mutate(el.id, (e) => {
         (e as TextElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
-      }, fin)))
-    this.row('Weight', this.weightSelect(el))
+      }, fin))
+    size.title = t('Size (pt)')
+    const weight = this.weightSelect(el)
+    weight.title = t('Weight')
+    weight.setAttribute('aria-label', t('Weight'))
+    sizes.append(size, weight,
+      this.mini(t('Line height'), el.lineHeight, (v, fin) =>
+        this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(Math.round(v * 100) / 100, 0.5) }, fin), ICONS.lineHeight),
+      this.mini(t('Letter spacing'), el.letterSpacing ?? 0, (v, fin) =>
+        this.mutate(el.id, (e) => {
+          const tx = e as TextElement
+          if (v) tx.letterSpacing = v
+          else delete tx.letterSpacing
+        }, fin), ICONS.letterSpacing))
+    ;(sizes.children[2].querySelector('input') as HTMLInputElement).step = '0.05'
+    this.host.appendChild(sizes)
+
+    const align = this.segmented(['left', 'center', 'right'], el.align, (v) =>
+      this.mutate(el.id, (e) => { (e as TextElement).align = v as TextElement['align'] }, true))
+    align.setAttribute('aria-label', t('Align'))
+    const valign = this.segmented(['top', 'middle', 'bottom'], el.valign, (v) =>
+      this.mutate(el.id, (e) => { (e as TextElement).valign = v as TextElement['valign'] }, true))
+    valign.setAttribute('aria-label', t('Vertical align'))
+    this.field(align, valign).classList.add('ed-line-even')
+
     // Indent / Outdent bullets (#368): the item under the caret while the box
     // is open — a press here must not take the caret away, so mousedown is
     // held — else the whole box. Tab / ⇧Tab do the same while editing.
-    const shift = document.createElement('div')
-    shift.className = 'ed-shift-row'
+    const tools: HTMLElement[] = []
     for (const [dir, icon, label, tip] of [
       [-1, ICONS.outdent, t('Outdent'), t('Move the bullet up a level (⇧Tab while editing)')],
       [1, ICONS.indent, t('Indent'), t('Move the bullet down a level, under the one above (Tab while editing)')],
     ] as const) {
       const b = document.createElement('button')
       b.type = 'button'
-      b.className = 'ed-btn ed-btn-icon'
+      b.className = 'ed-btn ed-tool'
       b.innerHTML = icon
       b.setAttribute('aria-label', label)
       b.title = tip
       b.addEventListener('mousedown', (ev) => ev.preventDefault())
       b.addEventListener('click', (ev) => { ev.preventDefault(); this.onListIndent?.(dir) })
-      shift.appendChild(b)
+      tools.push(b)
     }
-    this.row('Bullets', shift)
-    // Text fill: a solid colour, or a multi-stop gradient painted into the glyphs.
+    this.field(...tools, this.buildFitHeight(el), this.buildFieldPicker(el))
+  }
+
+  /** Text fill: a solid colour, or a multi-stop gradient painted into the glyphs. */
+  private buildTextFill(el: TextElement) {
+    this.section(t('Fill'))
     const tgrad = el.colorGradient
-    this.row('Fill style', this.labeledSelect(fillStyles(), tgrad ? 'gradient' : 'solid', (v) =>
+    this.field(this.fillKind(tgrad ? 'gradient' : 'solid', (v) =>
       this.mutate(el.id, (e) => {
         const tx = e as TextElement
         if (v === 'gradient') {
@@ -1224,92 +1406,94 @@ export class PropsPanel {
         }
       }, true)))
     if (!tgrad) {
-      this.row('Color', this.color(el.color, (v, fin) =>
+      this.field(this.colorAlpha(el.color, (v, fin) =>
         this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin),
         { id: el.id, path: 'color' }))
     } else {
-      this.row('Gradient angle', this.number(tgrad.angle, 1, (v, fin) =>
-        this.mutate(el.id, (e) => {
-          const g = (e as TextElement).colorGradient
-          if (g) g.angle = v
-        }, fin)))
-      tgrad.stops.forEach((stop, i) => {
-        const wrap = document.createElement('div')
-        wrap.className = 'ed-gradstop'
-        const at = this.number(Math.round(stop.at * 100), 1, (v, fin) =>
-          this.mutate(el.id, (e) => {
-            const g = (e as TextElement).colorGradient
-            if (g?.stops[i]) g.stops[i].at = Math.min(Math.max(v / 100, 0), 1)
-          }, fin))
-        at.title = t('Position %')
-        const color = this.colorAlpha(stop.color, (v, fin) =>
-          this.mutate(el.id, (e) => {
-            const g = (e as TextElement).colorGradient
-            if (g?.stops[i]) g.stops[i].color = v
-          }, fin))
-        wrap.append(at, unitHandle('%', at as HTMLInputElement), color)
-        if (tgrad.stops.length > 2) {
-          const del = document.createElement('button')
-          del.className = 'ed-btn ed-btn-icon'
-          del.textContent = '✕'
-          del.title = t('Remove stop')
-          del.addEventListener('click', () =>
-            this.mutate(el.id, (e) => {
-              const g = (e as TextElement).colorGradient
-              if (g && g.stops.length > 2) g.stops.splice(i, 1)
-            }, true))
-          wrap.appendChild(del)
-        }
-        this.row(t('Stop {n}', { n: i + 1 }), wrap)
-      })
-      const addStop = document.createElement('button')
-      addStop.className = 'ed-btn ed-btn-block'
-      addStop.textContent = t('＋ Add stop')
-      addStop.addEventListener('click', () =>
-        this.mutate(el.id, (e) => {
-          const g = (e as TextElement).colorGradient
-          if (!g) return
-          const mid = g.stops[Math.floor(g.stops.length / 2)]
-          g.stops.push({ at: 0.5, color: mid?.color ?? '#808080' })
-          g.stops.sort((a, b) => a.at - b.at)
-        }, true))
-      this.host.appendChild(addStop)
+      this.gradientRows(tgrad, (fn, fin) => this.mutate(el.id, (e) => {
+        const g = (e as TextElement).colorGradient
+        if (g) fn(g)
+      }, fin))
     }
-    this.row('Align', this.segmented(['left', 'center', 'right'], el.align, (v) =>
-      this.mutate(el.id, (e) => { (e as TextElement).align = v as TextElement['align'] }, true)))
-    this.row('Vertical align', this.segmented(['top', 'middle', 'bottom'], el.valign, (v) =>
-      this.mutate(el.id, (e) => { (e as TextElement).valign = v as TextElement['valign'] }, true)))
-    this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(v, 0.5) }, fin)))
+  }
 
-    // Outline / hollow glyphs via -webkit-text-stroke. Width 0 = off; 'hollow'
-    // makes the glyph interior transparent (the classic outlined section word).
+  /** Text outline — hollow or outlined glyphs, an optional layer like a shape's stroke. */
+  private buildTextStroke(el: TextElement) {
     const ts = el.textStroke
-    this.row('Outline', this.number(ts?.width ?? 0, 0.5, (v, fin) =>
+    this.section(t('Stroke'), ts?.width
+      ? { add: false, hint: t('Remove stroke'), run: () => this.mutate(el.id, (e) => { delete (e as TextElement).textStroke }, true) }
+      : { add: true, hint: t('Add stroke'), run: () => this.mutate(el.id, (e) => {
+        const tx = e as TextElement
+        tx.textStroke = { color: '#1E2A3A', ...(tx.textStroke ?? {}), width: 1 }
+      }, true) })
+    if (!ts?.width) return
+    this.field(this.colorAlpha(ts.color, (v, fin) =>
+      this.mutate(el.id, (e) => {
+        const g = (e as TextElement).textStroke
+        if (g) g.color = v
+      }, fin)))
+    const w = this.mini(t('Width'), ts.width, (v, fin) =>
       this.mutate(el.id, (e) => {
         const tx = e as TextElement
         if (v > 0) tx.textStroke = { color: '#1E2A3A', ...(tx.textStroke ?? {}), width: v }
         else delete tx.textStroke
-      }, fin)))
-    if (ts && ts.width) {
-      this.row('Outline color', this.colorAlpha(ts.color, (v, fin) =>
-        this.mutate(el.id, (e) => {
-          const g = (e as TextElement).textStroke
-          if (g) g.color = v
-        }, fin)))
-      this.row('Interior', this.segmented(['filled', 'hollow'], ts.fill === 'none' ? 'hollow' : 'filled', (v) =>
-        this.mutate(el.id, (e) => {
-          const g = (e as TextElement).textStroke
-          if (g) { if (v === 'hollow') g.fill = 'none'; else delete g.fill }
-        }, true)))
-    }
+      }, fin))
+    const interior = this.segmented(['filled', 'hollow'], ts.fill === 'none' ? 'hollow' : 'filled', (v) =>
+      this.mutate(el.id, (e) => {
+        const g = (e as TextElement).textStroke
+        if (g) { if (v === 'hollow') g.fill = 'none'; else delete g.fill }
+      }, true))
+    interior.setAttribute('aria-label', t('Interior'))
+    const grid = document.createElement('div')
+    grid.className = 'ed-grid2'
+    grid.append(w, interior)
+    this.host.appendChild(grid)
+  }
 
-    const embed = document.createElement('button')
-    embed.className = 'ed-btn ed-btn-block'
-    embed.textContent = t('＋ Embed font file…')
-    embed.title = t('Bundle a .woff2/.woff/.ttf/.otf into this file and use it here')
-    embed.addEventListener('click', () => this.embedFont(el))
-    this.host.appendChild(embed)
+  /** Solid | Gradient, one click. */
+  private fillKind(value: 'solid' | 'gradient', onChange: (v: string) => void): HTMLElement {
+    const seg = this.segmented(['solid', 'gradient'], value, onChange, Object.fromEntries(fillStyles()))
+    seg.setAttribute('aria-label', t('Fill style'))
+    return seg
+  }
+
+  /** A gradient's angle and stops, shared by text and shapes. `edit` hands
+   *  the live gradient to change. */
+  private gradientRows(grad: { angle: number; stops: Array<{ at: number; color: string }> }, edit: (fn: (g: typeof grad) => void, final: boolean) => void) {
+    const angle = this.mini(t('Gradient angle'), grad.angle, (v, fin) => edit((g) => { g.angle = v }, fin), ICONS.rotate)
+    const add = document.createElement('button')
+    add.type = 'button'
+    add.className = 'ed-btn ed-tool'
+    add.innerHTML = ICONS.plus
+    add.title = t('＋ Add stop').replace(/^＋\s*/, '')
+    add.setAttribute('aria-label', add.title)
+    add.addEventListener('click', () => edit((g) => {
+      const mid = g.stops[Math.floor(g.stops.length / 2)]
+      g.stops.push({ at: 0.5, color: mid?.color ?? '#808080' })
+      g.stops.sort((a, b) => a.at - b.at)
+    }, true))
+    this.field(angle, add)
+    grad.stops.forEach((stop, i) => {
+      const wrap = document.createElement('div')
+      wrap.className = 'ed-gradstop'
+      const at = this.mini('%', Math.round(stop.at * 100), (v, fin) =>
+        edit((g) => { if (g.stops[i]) g.stops[i].at = Math.min(Math.max(v / 100, 0), 1) }, fin))
+      at.title = t('Stop {n}', { n: i + 1 }) + ' · ' + t('Position %')
+      at.classList.add('ed-gradstop-at')
+      const color = this.colorAlpha(stop.color, (v, fin) => edit((g) => { if (g.stops[i]) g.stops[i].color = v }, fin))
+      wrap.append(at, color)
+      if (grad.stops.length > 2) {
+        const del = document.createElement('button')
+        del.type = 'button'
+        del.className = 'ed-btn ed-tool'
+        del.innerHTML = ICONS.minus
+        del.title = t('Remove stop')
+        del.setAttribute('aria-label', t('Remove stop'))
+        del.addEventListener('click', () => edit((g) => { if (g.stops.length > 2) g.stops.splice(i, 1) }, true))
+        wrap.appendChild(del)
+      }
+      this.host.appendChild(wrap)
+    })
   }
 
   /**
@@ -1379,91 +1563,8 @@ export class PropsPanel {
     input.click()
   }
 
+  /** What only some shapes have: line tips, a second arrow head. */
   private buildShapeProps(el: ShapeElement) {
-    this.section(t('Fill & stroke'))
-    const grad = el.fillGradient
-    this.row('Fill style', this.labeledSelect(fillStyles(), grad ? 'gradient' : 'solid', (v) =>
-      this.mutate(el.id, (e) => {
-        const s = e as ShapeElement
-        if (v === 'gradient') {
-          const base = parseColor(s.fill)
-          s.fillGradient ??= {
-            angle: 180,
-            stops: [
-              { at: 0, color: combineColor(base.hex, Math.max(base.a, 0.85)) },
-              { at: 1, color: combineColor(base.hex, 0) },
-            ],
-          }
-        } else {
-          delete s.fillGradient
-        }
-      }, true)))
-
-    if (!grad) {
-      this.row('Fill', this.colorAlpha(el.fill, (v, fin) =>
-        this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
-        { id: el.id, path: 'fill' }))
-    } else {
-      this.row('Gradient angle', this.number(grad.angle, 1, (v, fin) =>
-        this.mutate(el.id, (e) => {
-          const g = (e as ShapeElement).fillGradient
-          if (g) g.angle = v
-        }, fin)))
-      grad.stops.forEach((stop, i) => {
-        const wrap = document.createElement('div')
-        wrap.className = 'ed-gradstop'
-        const at = this.number(Math.round(stop.at * 100), 1, (v, fin) =>
-          this.mutate(el.id, (e) => {
-            const g = (e as ShapeElement).fillGradient
-            if (g?.stops[i]) g.stops[i].at = Math.min(Math.max(v / 100, 0), 1)
-          }, fin))
-        at.title = t('Position %')
-        const color = this.colorAlpha(stop.color, (v, fin) =>
-          this.mutate(el.id, (e) => {
-            const g = (e as ShapeElement).fillGradient
-            if (g?.stops[i]) g.stops[i].color = v
-          }, fin))
-        wrap.append(at, unitHandle('%', at as HTMLInputElement), color)
-        if (grad.stops.length > 2) {
-          const del = document.createElement('button')
-          del.className = 'ed-btn ed-btn-icon'
-          del.textContent = '✕'
-          del.title = t('Remove stop')
-          del.addEventListener('click', () =>
-            this.mutate(el.id, (e) => {
-              const g = (e as ShapeElement).fillGradient
-              if (g && g.stops.length > 2) g.stops.splice(i, 1)
-            }, true))
-          wrap.appendChild(del)
-        }
-        this.row(t('Stop {n}', { n: i + 1 }), wrap)
-      })
-      const add = document.createElement('button')
-      add.className = 'ed-btn ed-btn-block'
-      add.textContent = t('＋ Add stop')
-      add.addEventListener('click', () =>
-        this.mutate(el.id, (e) => {
-          const g = (e as ShapeElement).fillGradient
-          if (!g) return
-          const mid = g.stops[Math.floor(g.stops.length / 2)]
-          g.stops.push({ at: 0.5, color: mid?.color ?? '#808080' })
-          g.stops.sort((a, b) => a.at - b.at)
-        }, true))
-      this.host.appendChild(add)
-    }
-
-    this.row('Stroke', this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
-    this.row('Stroke width', this.number(el.strokeWidth, 0.5, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin)))
-    this.row('Line style', this.select(
-      ['solid', 'dashed', 'dotted'],
-      el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
-      (v) => this.mutate(el.id, (e) => {
-        const s = e as ShapeElement
-        s.strokeStyle = v === 'solid' ? undefined : (v as 'dashed' | 'dotted')
-        if (v === 'solid') delete s.strokeDash // clear the legacy dash too
-      }, true)))
     // Tips: lines, and open paths (a curved line or connector, #302). The
     // options are tips.ts's catalogue — display labels localized, values the
     // model's words. A closed path (polygon) has no ends to tip.
@@ -1479,10 +1580,69 @@ export class PropsPanel {
       this.row('Double-headed', this.toggle(el.heads === 2, (on) =>
         this.mutate(el.id, (e) => { const s = e as ShapeElement; if (on) s.heads = 2; else delete s.heads }, true)))
     }
-    if (el.shape === 'rect') {
-      this.row('Corner radius', this.number(el.radius, 1, (v, fin) =>
-        this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin)))
+  }
+
+  private buildShapeFill(el: ShapeElement) {
+    this.section(t('Fill'))
+    const grad = el.fillGradient
+    this.field(this.fillKind(grad ? 'gradient' : 'solid', (v) =>
+      this.mutate(el.id, (e) => {
+        const s = e as ShapeElement
+        if (v === 'gradient') {
+          const base = parseColor(s.fill)
+          s.fillGradient ??= {
+            angle: 180,
+            stops: [
+              { at: 0, color: combineColor(base.hex, Math.max(base.a, 0.85)) },
+              { at: 1, color: combineColor(base.hex, 0) },
+            ],
+          }
+        } else {
+          delete s.fillGradient
+        }
+      }, true)))
+    if (!grad) {
+      this.field(this.colorAlpha(el.fill, (v, fin) =>
+        this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
+        { id: el.id, path: 'fill' }))
+    } else {
+      this.gradientRows(grad, (fn, fin) => this.mutate(el.id, (e) => {
+        const g = (e as ShapeElement).fillGradient
+        if (g) fn(g)
+      }, fin))
     }
+  }
+
+  /** Stroke — an optional layer for a closed shape; a line IS its stroke, so
+   *  a line's cannot be removed. */
+  private buildShapeStroke(el: ShapeElement) {
+    const isLine = el.shape === 'line' || el.shape === 'arrow' || (el.shape === 'path' && !/z\s*$/i.test(el.d ?? ''))
+    const on = el.strokeWidth > 0 && parseColor(el.stroke).a > 0
+    this.section(t('Stroke'), isLine ? undefined : on
+      ? { add: false, hint: t('Remove stroke'), run: () => this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = 0 }, true) }
+      : { add: true, hint: t('Add stroke'), run: () => this.mutate(el.id, (e) => {
+        const s = e as ShapeElement
+        s.strokeWidth = 2
+        if (parseColor(s.stroke).a === 0) s.stroke = '#1E2A3A'
+      }, true) })
+    if (!on && !isLine) return
+    this.field(this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
+      this.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
+    const style = this.labeledSelect(
+      [['solid', t('solid')], ['dashed', t('dashed')], ['dotted', t('dotted')]],
+      el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
+      (v) => this.mutate(el.id, (e) => {
+        const s = e as ShapeElement
+        s.strokeStyle = v === 'solid' ? undefined : (v as 'dashed' | 'dotted')
+        if (v === 'solid') delete s.strokeDash // clear the legacy dash too
+      }, true))
+    style.title = t('Line style')
+    style.setAttribute('aria-label', t('Line style'))
+    const grid = document.createElement('div')
+    grid.className = 'ed-grid2'
+    grid.append(this.mini(t('Width'), el.strokeWidth, (v, fin) =>
+      this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin)), style)
+    this.host.appendChild(grid)
   }
 
   /** Edit the live chart option in place; final=false while typing. */
@@ -1525,7 +1685,7 @@ export class PropsPanel {
       linkRow.append(label, unlink)
       this.host.appendChild(linkRow)
     }
-    this.row('Type', this.select(Object.keys(CHART_PRESETS), el.preset ?? 'bar', (v) =>
+    this.row('Type', this.labeledSelect(Object.keys(CHART_PRESETS).map((k): [string, string] => [k, t(({ bar: 'Bar', line: 'Line', pie: 'Pie', scatter: 'Scatter' } as Record<string, string>)[k] ?? k)]), el.preset ?? 'bar', (v) =>
       this.mutate(el.id, (e) => {
         const c = e as ChartElement
         c.preset = v
@@ -2234,18 +2394,16 @@ export class PropsPanel {
    */
   private stackCrampedRows() {
     const host = this.host
-    const cs = getComputedStyle(host)
-    const inner = host.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-    if (inner <= 0) return
     const ctx = (PropsPanel.measure ??= document.createElement('canvas').getContext('2d')!)
+    // measured in the caption | control grid: a value wider than the control
+    // column takes the row to itself, caption above
     for (const sel of host.querySelectorAll<HTMLSelectElement>('.ed-row > select')) {
       const row = sel.parentElement!
-      const caption = row.firstElementChild as HTMLElement
-      ctx.font = getComputedStyle(caption).font
-      const captionW = ctx.measureText(caption.textContent ?? '').width
+      row.classList.remove('ed-row-stack')
+      if (!sel.offsetParent) continue
       ctx.font = getComputedStyle(sel).font
       const valueW = ctx.measureText(sel.options[sel.selectedIndex]?.text ?? '').width + 30 // padding + arrow
-      row.classList.toggle('ed-row-stack', captionW + 8 + valueW > inner)
+      row.classList.toggle('ed-row-stack', valueW > sel.clientWidth)
     }
     if (!this.watchingWidth) {
       this.watchingWidth = true
@@ -2292,75 +2450,7 @@ export class PropsPanel {
         this.opBtn(ICONS.trash, `${t('Delete')} (⌫)`, () => this.deleteEls(els)),
       )
     }
-    this.host.querySelector(':scope > .ed-tabs')!.after(bar, how)
-  }
-
-  /** Align / distribute / size / order / rotate — the arrange kit, in
-   *  captioned, balanced rows. */
-  private arrangeRows(els: SlideElement[]) {
-    // Icon buttons, the hint naming each (editor/hints.ts); a caption per
-    // row says what the row is for. Controls the selection cannot use are
-    // left out, not greyed: spacing needs two elements, even gaps three.
-    const iconBtn = (icon: string, hint: string, onClick: () => void) => {
-      const b = document.createElement('button')
-      b.className = 'ed-btn ed-arrange-btn'
-      b.innerHTML = icon
-      b.title = hint
-      b.addEventListener('click', onClick)
-      return b
-    }
-    const group = (caption: string, buttons: HTMLElement[]) => {
-      const row = document.createElement('div')
-      row.className = 'ed-arrange-row'
-      const cap = document.createElement('span')
-      cap.className = 'ed-arrange-cap'
-      cap.textContent = caption
-      row.appendChild(cap)
-      row.append(...buttons)
-      this.host.appendChild(row)
-    }
-
-    group(t('Align'), [
-      iconBtn(ICONS.arrLeft, t('Align left'), () => this.align(els, 'left')),
-      iconBtn(ICONS.arrCenterX, t('Align centers'), () => this.align(els, 'centerX')),
-      iconBtn(ICONS.arrRight, t('Align right'), () => this.align(els, 'right')),
-      iconBtn(ICONS.arrTop, t('Align top'), () => this.align(els, 'top')),
-      iconBtn(ICONS.arrMiddleY, t('Align middles'), () => this.align(els, 'middleY')),
-      iconBtn(ICONS.arrBottom, t('Align bottom'), () => this.align(els, 'bottom')),
-    ])
-    if (els.length >= 2) {
-      group(t('Spacing'), [
-        ...(els.length >= 3 ? [
-          iconBtn(ICONS.distX, t('Space evenly across (3 or more)'), () => this.distribute(els, 'x')),
-          iconBtn(ICONS.distY, t('Space evenly down (3 or more)'), () => this.distribute(els, 'y')),
-        ] : []),
-        iconBtn(ICONS.matchW, t('Same width as the first selected (2 or more)'), () => this.matchSize(els, 'w')),
-        iconBtn(ICONS.matchH, t('Same height as the first selected (2 or more)'), () => this.matchSize(els, 'h')),
-      ])
-    }
-    group(t('Order'), [
-      iconBtn(ICONS.toFront, t('Bring to front'), () => this.reorder(els, 'front')),
-      iconBtn(ICONS.forward, t('Bring forward'), () => this.step(els, +1)),
-      iconBtn(ICONS.backward, t('Send backward'), () => this.step(els, -1)),
-      iconBtn(ICONS.toBack, t('Send to back'), () => this.reorder(els, 'back')),
-    ])
-
-    const grouped = els.some((e) => e.groupId)
-    if (els.length > 1 || grouped) {
-      const g = document.createElement('button')
-      g.className = 'ed-btn ed-btn-block'
-      const allSame = els.length > 1 && els.every((e) => e.groupId && e.groupId === els[0].groupId)
-      if (allSame || (grouped && els.length === 1)) {
-        g.textContent = t('⛓ Ungroup')
-        g.title = t('Dissolve the group (⇧⌘G)')
-        g.addEventListener('click', () => this.ungroup(els))
-      } else {
-        g.textContent = t('⛓ Group')
-        g.title = t('Elements select and move as one; Alt-click reaches a member (⌘G)')
-        g.addEventListener('click', () => this.group(els))
-      }
-      this.host.appendChild(g)
-    }
+    this.host.querySelector(':scope > .ed-tabs-band')!.after(bar, how)
   }
 
   /** Same width/height for the whole selection — first selected is the reference. */
@@ -2443,7 +2533,7 @@ export class PropsPanel {
       const rest = all.filter((e) => !ids.has(e.id))
       const at = all.slice(0, top + 1).filter((e) => !ids.has(e.id)).length
       this.store.slide.elements = [...rest.slice(0, at), ...members, ...rest.slice(at)]
-      for (const el of members) el.groupId = gid
+      for (const el of members) { el.groupId = gid; delete el.groupName }
     }, true)
   }
 
@@ -2503,7 +2593,7 @@ export class PropsPanel {
     const gids = new Set(els.map((e) => e.groupId).filter(Boolean))
     this.edit(() => {
       for (const el of this.store.slide.elements) {
-        if (el.groupId && gids.has(el.groupId)) delete el.groupId
+        if (el.groupId && gids.has(el.groupId)) { delete el.groupId; delete el.groupName }
       }
     }, true)
   }
@@ -2556,11 +2646,35 @@ export class PropsPanel {
     this.mutate(id, (el) => { (el as any)[key] = v }, final)
   }
 
-  private section(title: string) {
+  /** A section header. `action` puts Penpot's + or − on the header line: an
+   *  optional property (stroke, shadow, blur) is added from its header and
+   *  removed from it, instead of a 'none' in a dropdown. */
+  private section(title: string, action?: { add: boolean; hint: string; run: () => void }) {
     const h = document.createElement('h3')
     h.className = 'ed-section'
+    h.dataset.key = title
     h.textContent = title
+    if (action) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-sec-act'
+      b.innerHTML = action.add ? ICONS.plus : ICONS.minus
+      b.title = action.hint
+      b.setAttribute('aria-label', action.hint)
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); action.run() })
+      h.appendChild(b)
+      if (action.add) h.classList.add('ed-sec-empty')
+    }
     this.host.appendChild(h)
+  }
+
+  /** A control with no caption of its own — its section's title says what it is. */
+  private field(...controls: HTMLElement[]): HTMLElement {
+    const line = document.createElement('div')
+    line.className = 'ed-line'
+    line.append(...controls)
+    this.host.appendChild(line)
+    return line
   }
 
   private row(label: string, input: HTMLElement): HTMLElement {
@@ -2580,15 +2694,25 @@ export class PropsPanel {
     return row
   }
 
-  private mini(label: string, value: number, onChange: (v: number, final: boolean) => void): HTMLElement {
+  /** A numeric field with its label inside it, Penpot's way. `icon` draws an
+   *  icon there instead and makes the label the hint. */
+  private mini(label: string, value: number, onChange: (v: number, final: boolean) => void, icon?: string): HTMLElement {
     const wrap = document.createElement('label')
     wrap.className = 'ed-mini'
     const span = document.createElement('span')
-    span.textContent = label
-    // the label sits inside the field (styles.css .ed-mini): pad the value past it
-    const m = (PropsPanel.measure ??= document.createElement('canvas').getContext('2d')!)
-    m.font = '11px system-ui, sans-serif'
-    wrap.style.setProperty('--lab', `${Math.ceil(m.measureText(label).width)}px`)
+    if (icon) {
+      span.innerHTML = icon
+      span.className = 'ed-mini-icon'
+      wrap.title = label
+      span.setAttribute('aria-label', label)
+      wrap.style.setProperty('--lab', '13px')
+    } else {
+      span.textContent = label
+      // the label sits inside the field (styles.css .ed-mini): pad the value past it
+      const m = (PropsPanel.measure ??= document.createElement('canvas').getContext('2d')!)
+      m.font = '11px system-ui, sans-serif'
+      wrap.style.setProperty('--lab', `${Math.ceil(m.measureText(label).width)}px`)
+    }
     const input = document.createElement('input')
     input.type = 'number'
     input.value = String(Math.round(value * 10) / 10)
@@ -2632,12 +2756,7 @@ export class PropsPanel {
       if (ref) this.setRef(ref, input.value, null)
     })
     const field = this.colorField(input)
-    if (!ref) return field
-    const wrap = document.createElement('div')
-    wrap.className = 'ed-colorref'
-    wrap.appendChild(this.paletteSwatches(ref, input))
-    wrap.appendChild(field)
-    return wrap
+    return ref ? this.themeLink(ref, input, field) : field
   }
 
   /**
@@ -2690,35 +2809,81 @@ export class PropsPanel {
   }
 
   /**
-   * The deck's brand colours as clickable swatches.
+   * The deck's theme colours, Penpot's library way. A palette button at the
+   * end of the colour field opens them, each swatch with its name; a colour
+   * taken from there shows the NAME in the field instead of a hex (it follows
+   * the theme now), with a button to detach it back to a plain colour.
    *
    * Choosing one records WHERE the colour came from, so editing the theme later
    * re-derives it — that is the whole difference between a deck that can be
    * re-branded and one that has 400 hex literals in it.
    */
-  private paletteSwatches(ref: { id: string | null; path: string; slide?: Slide }, input: HTMLInputElement): HTMLElement {
-    const row = document.createElement('div')
-    row.className = 'ed-swatches'
+  private themeLink(ref: { id: string | null; path: string; slide?: Slide }, input: HTMLInputElement, field: HTMLElement): HTMLElement {
     const palette = paletteOf(this.store.doc)
     const holder = (ref.id ? this.store.element(ref.id) : (ref.slide ?? this.store.slide)) as never
-    const current = holder ? refAt(holder, ref.path) : undefined
+    const linked = (holder ? refAt(holder, ref.path) : undefined)?.split(' ')[0] as (typeof PALETTE_SLOTS)[number] | undefined
+    const outer = document.createElement('div')
+    outer.className = 'ed-colorref'
+    const list = document.createElement('div')
+    list.className = 'ed-palette'
+    list.hidden = true
+    const cap = document.createElement('div')
+    cap.className = 'ed-palette-cap'
+    cap.textContent = t('Theme colors')
+    list.appendChild(cap)
     for (const slot of PALETTE_SLOTS) {
       const base = palette[slot]
       if (!base) continue // hlink/folHlink are usually unset — don't show empties
       if (!slotIsSet(this.store.doc, slot)) continue // accent 2–6 unset: a copy of accent 1, not a choice
       const b = document.createElement('button')
       b.type = 'button'
-      b.className = 'ed-swatch'
-      b.style.background = cssColor(base, 'transparent') // a document colour: gated
-      b.title = slotLabel(slot) // the slot's name, not its id (bg1, tx1…)
-      if (current && current.split(' ')[0] === slot) b.classList.add('is-on')
+      b.className = 'ed-palette-item'
+      const chip = document.createElement('span')
+      chip.className = 'ed-swatch'
+      chip.style.background = cssColor(base, 'transparent') // a document colour: gated
+      const name = document.createElement('span')
+      name.textContent = slotLabel(slot) // the slot's name, not its id (bg1, tx1…)
+      b.append(chip, name)
+      if (slot === linked) b.classList.add('is-on')
       b.addEventListener('click', () => {
         input.value = /^#[0-9a-fA-F]{6}$/.test(base) ? base : parseColor(base).hex
         this.setRef(ref, base, slot)
       })
-      row.appendChild(b)
+      list.appendChild(b)
     }
-    return row
+    const open = document.createElement('button')
+    open.type = 'button'
+    open.className = 'ed-btn ed-tool'
+    open.innerHTML = ICONS.palette
+    open.title = t('Theme colors')
+    open.setAttribute('aria-label', t('Theme colors'))
+    open.setAttribute('aria-expanded', 'false')
+    open.addEventListener('click', () => {
+      list.hidden = !list.hidden
+      open.setAttribute('aria-expanded', String(!list.hidden))
+    })
+    if (linked) {
+      const hex = field.querySelector<HTMLElement>('.ed-color-hex')
+      const token = document.createElement('span')
+      token.className = 'ed-color-token'
+      token.textContent = slotLabel(linked)
+      token.title = t('Follows the theme color “{name}”: change it under Theme and this changes with it.', { name: slotLabel(linked) })
+      const detach = document.createElement('button')
+      detach.type = 'button'
+      detach.className = 'ed-color-detach'
+      detach.innerHTML = ICONS.unlink
+      detach.title = t('Detach from the theme')
+      detach.setAttribute('aria-label', t('Detach from the theme'))
+      detach.addEventListener('click', () => {
+        const a = field.querySelector<HTMLInputElement>('.ed-color-alpha input')
+        this.setRef(ref, a ? combineColor(input.value, Math.min(Math.max(parseFloat(a.value) / 100, 0), 1)) : input.value, null)
+      })
+      token.appendChild(detach)
+      hex?.replaceWith(token)
+    }
+    field.appendChild(open)
+    outer.append(field, list)
+    return outer
   }
 
   /**
@@ -2808,12 +2973,7 @@ export class PropsPanel {
     alpha.addEventListener('change', () => emit(true))
     alpha.addEventListener(SCRUB, () => emit(false))
     const wrap = this.colorField(col, alpha)
-    if (!ref) return wrap
-    const outer = document.createElement('div')
-    outer.className = 'ed-colorref'
-    outer.appendChild(this.paletteSwatches(ref, col))
-    outer.appendChild(wrap)
-    return outer
+    return ref ? this.themeLink(ref, col, wrap) : wrap
   }
 
   /** Weight picker with the familiar named weights; stores the numeric value. */
@@ -2861,11 +3021,12 @@ export class PropsPanel {
    *  <select> hid them behind two. Same call shape as select(). Options with a
    *  SEG_ICONS entry show the icon, with the word as its tooltip; otherwise the
    *  words show and the control takes the row's full width. */
-  private segmented(options: string[], value: string, onChange: (v: string) => void): HTMLElement {
+  private segmented(options: string[], value: string, onChange: (v: string) => void, labels?: Record<string, string>): HTMLElement {
+    const say = (o: string) => labels?.[o] ?? t(o)
     const wrap = document.createElement('div')
     wrap.className = 'ed-seg'
     wrap.setAttribute('role', 'radiogroup')
-    const icons = options.every((o) => SEG_ICONS[o])
+    const icons = !labels && options.every((o) => SEG_ICONS[o])
     if (!icons) wrap.classList.add('ed-seg-text')
     for (const opt of options) {
       const b = document.createElement('button')
@@ -2874,9 +3035,9 @@ export class PropsPanel {
       b.setAttribute('aria-checked', String(opt === value))
       if (icons) {
         b.innerHTML = SEG_ICONS[opt]
-        b.title = t(opt)
-        b.setAttribute('aria-label', t(opt))
-      } else b.textContent = t(opt)
+        b.title = say(opt)
+        b.setAttribute('aria-label', say(opt))
+      } else b.textContent = say(opt)
       b.addEventListener('click', () => { if (opt !== value) onChange(opt) })
       wrap.appendChild(b)
     }

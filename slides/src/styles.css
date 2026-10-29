@@ -644,7 +644,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 /* ————— properties panel ————— */
 
 .ed-props {
-  width: var(--panew, 236px);
+  width: var(--panew, 264px);
   flex: none;
   overflow-y: auto;
   background: var(--surface);
@@ -2728,7 +2728,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   line-height: 1;
   cursor: pointer;
 }
-.ed-fmtbar-btn:hover { background: var(--hover, #f2f5f9); }
+.ed-fmtbar-btn:hover { background: var(--chrome-2); }
 /* --blue INVERTS with the theme (#5b8def light, #7aa5f5 dark), so its text has
    to invert with it — main's own `.ed-insertgap-btn` pairs the same token with
    var(--surface) for exactly this reason. A literal white here reads fine in
@@ -2858,7 +2858,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   text-align: start;
   cursor: pointer;
 }
-.ed-ctxmenu-item:hover:not(:disabled) { background: var(--hover, #f2f5f9); }
+.ed-ctxmenu-item:hover:not(:disabled) { background: var(--chrome-2); }
+/* a disabled row never lights, whatever holds it (hover, focus) */
+.ed-ctxmenu-item:disabled { background: transparent; }
 .ed-ctxmenu-item:disabled { opacity: 0.4; cursor: default; }
 .ed-ctxmenu-item kbd {
   font: inherit;
@@ -2867,7 +2869,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   white-space: nowrap;
 }
 .ed-ctxmenu-danger:not(:disabled) { color: #b4232a; }
-.ed-ctxmenu-danger:hover:not(:disabled) { background: #fdeced; }
+.ed-ctxmenu-danger:hover:not(:disabled) { background: rgb(180 35 42 / 0.12); }
+:root[data-theme='dark'] .ed-ctxmenu-danger:not(:disabled) { color: #f08a8f; }
 .ed-ctxmenu-sep { height: 1px; margin: 4px 2px; background: var(--line); }
 
 /* A long press on the canvas or the slide list is the context-menu gesture
@@ -2984,7 +2987,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   background: none; border: 1px solid var(--line); border-radius: 50%; cursor: pointer;
 }
 .ed-help-btn:hover, .ed-help-btn[aria-expanded='true'] { color: var(--ink); border-color: var(--muted); }
-.ed-section-body:not(.ed-help-open) > p.ed-hint:not(.ed-status, .ed-morph-warn) { display: none; }
+.ed-section-body:not(.ed-help-open) > p.ed-hint:not(.ed-status, .ed-morph-warn, .ed-keep) { display: none; }
 .ed-tip { white-space: pre-line; }
 
 /* what the panel is about (panels.ts mountContext): glyph, name, actions,
@@ -3087,3 +3090,193 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-help-row > * { margin: 3px 0; }
 .ed-help-row > span { font-size: 13px; }
 .ed-help-row kbd { white-space: normal; text-align: end; }
+
+/* ————— INSPECTOR DENSITY — Penpot's Design tab, measure for measure ————————
+   One rhythm: 26px fields, 4px between the controls of a line, 6px between
+   lines, sections split by a hairline. A row is a two-column grid — caption |
+   control — so every control in a section starts on the same edge; a caption
+   too long for its column wraps rather than being cut. Controls whose section
+   already names them (Fill, Stroke, Shadow…) take the whole line, no caption. */
+.ed-props { padding: 0 12px 16px; }
+.ed-props .ed-tabs-band {
+  position: sticky; top: 0; z-index: 3; margin: 0 -12px 6px; padding: 10px 12px 8px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.ed-props .ed-tabs { position: static; margin: 0; }
+.ed-props .ed-tabs button {
+  flex: 1 1 auto; text-transform: none; letter-spacing: 0; font-size: 12px; padding: 0 6px;
+  overflow: visible; text-overflow: clip;
+}
+.ed-props .ed-section {
+  display: flex; align-items: center; gap: 6px; min-height: 28px;
+  margin: 10px -12px 4px; padding: 6px 12px 0; border-top: 1px solid var(--line);
+  font-size: 11px; letter-spacing: .05em; color: var(--ink-2);
+}
+.ed-props .ed-section.ed-sec-empty { color: var(--muted); }
+.ed-props .ed-sec-act {
+  margin-inline-start: auto; flex: none; width: 22px; height: 22px; padding: 0; display: grid; place-items: center;
+  color: var(--muted); background: none; border: 0; border-radius: 5px; cursor: pointer;
+}
+.ed-props .ed-sec-act svg { width: 14px; height: 14px; }
+.ed-props .ed-sec-act:hover { color: var(--ink); background: var(--chrome-2); }
+/* the ? sits left of a + / − when a section has both */
+.ed-props .ed-section-body:has(> .ed-help-btn) { --help-end: 0px; }
+.ed-props .ed-section:has(> .ed-sec-act) + .ed-section-body > .ed-help-btn { inset-inline-end: 28px; }
+.ed-props .ed-help-btn { top: -24px; }
+
+.ed-props .ed-row {
+  display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr); align-items: center;
+  gap: 4px 8px; margin-bottom: 6px; font-size: 11.5px; color: var(--muted);
+}
+.ed-props .ed-row > span:first-child { line-height: 1.2; overflow-wrap: anywhere; }
+.ed-props .ed-row > :not(span:first-child) { width: 100%; min-width: 0; max-width: none; justify-self: stretch; }
+.ed-props .ed-row > .ed-toggle { width: auto; justify-self: start; }
+.ed-props .ed-row.ed-row-stack,
+.ed-props .ed-row:has(> .ed-color), .ed-props .ed-row:has(> .ed-colorref),
+.ed-props .ed-row:has(> .ed-gradstop) { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+.ed-props .ed-row > select, .ed-props .ed-row.ed-row-stack > select { flex: none; height: 26px; }
+
+/* a captionless line: controls side by side, the first one takes the room */
+.ed-props .ed-line { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; min-width: 0; }
+.ed-props .ed-line > * { min-width: 0; }
+.ed-props .ed-line > select, .ed-props .ed-line > .ed-color, .ed-props .ed-line > .ed-colorref,
+.ed-props .ed-line > .ed-seg, .ed-props .ed-line > .ed-mini { flex: 1 1 0; width: auto; }
+.ed-props .ed-line-even > * { flex: 1 1 0; }
+.ed-props .ed-line > .ed-seg-text { width: auto; }
+.ed-props .ed-grid2, .ed-props .ed-grid3 { display: grid; gap: 4px; margin-bottom: 6px; }
+.ed-props .ed-grid2 { grid-template-columns: 1fr 1fr; }
+.ed-props .ed-grid3 { grid-template-columns: 1fr 1fr 1fr; }
+.ed-props .ed-grid3 > *, .ed-props .ed-grid2 > * { min-width: 0; width: 100%; }
+.ed-props .ed-grid-wide { grid-template-columns: minmax(0, 1fr) 72px; }
+.ed-props .ed-grid2 > .ed-seg { width: 100%; }
+
+/* an icon inside a numeric field, where a word would be (rotation, radius, line height…) */
+.ed-mini > .ed-mini-icon { display: grid; place-items: center; max-width: none; }
+.ed-mini > .ed-mini-icon svg { width: 13px; height: 13px; }
+
+/* the block above the sections: toolbars, blend · opacity, measures */
+.ed-layer-block { margin-bottom: 2px; }
+.ed-toolbar { display: flex; align-items: center; gap: 2px; margin-bottom: 6px; flex-wrap: wrap; }
+.ed-toolbar-sep { width: 1px; height: 16px; margin: 0 3px; background: var(--line); }
+.ed-props .ed-tool {
+  flex: none; width: 26px; height: 26px; padding: 0; display: grid; place-items: center;
+  color: var(--ink-2); background: none; border: 1px solid transparent; border-radius: 6px;
+}
+.ed-props .ed-tool:hover:not(:disabled) { color: var(--ink); background: var(--chrome-2); }
+.ed-props .ed-tool:disabled { opacity: .35; cursor: default; }
+.ed-props .ed-tool svg { width: 15px; height: 15px; }
+
+/* a gradient stop: position · colour · remove, on one line */
+.ed-props .ed-gradstop { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; margin-bottom: 6px; }
+.ed-props .ed-gradstop > .ed-gradstop-at { flex: none; width: 60px; }
+.ed-props .ed-gradstop .ed-color-alpha { width: 52px; }
+.ed-props .ed-gradstop > .ed-color { order: 0; flex: 1 1 0; }
+.ed-props .ed-color-alpha { width: 58px; }
+.ed-props .ed-colorref { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.ed-props .ed-context { margin-top: 4px; }
+/* Penpot's chevron: inside the header's own padding, before the title */
+.ed-props .ed-section.ed-sec-toggle { padding-inline-start: 26px; }
+.ed-props .ed-section.ed-sec-toggle::before { inset-inline-start: 12px; top: calc(50% + 3px); }
+/* the native arrow keeps its own lane: a long value stops short of it */
+.ed-props select { padding-inline-end: 22px; text-overflow: ellipsis; }
+/* no spinner arrows: they ate a third of a narrow field, and the caption
+   scrubs (panels.ts scrub()) — arrows keys still step, as in Penpot */
+.ed-props input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+.ed-props input[type='number']::-webkit-inner-spin-button,
+.ed-props input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* speaker notes: edge to edge under the canvas — under the two 5px resize
+   strips too, so the pane meets both side panels — and resized from its top
+   edge as the side panels are from theirs, with their chevron laid on its
+   side (notespane.ts). The text box keeps THE FIELD's look and fills the pane. */
+.ed-centre { position: relative; }
+.ed-notespane { position: relative; padding: 0 12px 10px; margin-inline: -5px; padding-inline: 17px; }
+.ed-notespane.closed { padding-bottom: 0; }
+.ed-resizer { z-index: 4; }
+.ed-notespane-head { padding: 8px 0 6px 14px; margin: 0; border: 0; }
+.ed-notespane-head.ed-sec-toggle::before { inset-inline-start: 1px; }
+.ed-notespane-text { display: block; width: 100%; margin: 0; resize: none; }
+.ed-notes-grip { position: absolute; inset-inline: 0; top: -3px; height: 6px; cursor: ns-resize; z-index: 5; transition: background .12s ease .08s; }
+.ed-notes-grip:hover, body.ed-row-resizing .ed-notes-grip { background: rgb(91 141 239 / 0.45); }
+.ed-notespane.closed .ed-notes-grip { cursor: default; background: none; }
+body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize !important; user-select: none; }
+.ed-notes-toggle { width: 44px; height: 16px; font-size: 13px; }
+.ed-notes-toggle { transform: translate(-50%, -50%) rotate(0deg); }
+.ed-notespane .ed-notes-toggle { writing-mode: vertical-lr; }
+
+/* the side column's tabs are the inspector's: one look, one sticky band */
+.ed-sidebar { padding-top: 0; }
+.ed-sidebar > .ed-side-band {
+  position: sticky; top: 0; z-index: 3; flex: none; align-self: stretch; margin: 0 -12px; padding: 10px 12px 8px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.ed-side-tabs { margin: 0; }
+.ed-side-tabs button {
+  flex: 1 1 auto; height: 26px; text-transform: none; letter-spacing: 0; font-size: 12px; padding: 0 6px;
+  overflow: visible; text-overflow: clip;
+}
+
+/* theme colours (panels.ts themeLink) — Penpot's library: named, behind a button */
+.ed-props .ed-color > .ed-tool { width: 26px; }
+.ed-props .ed-tool[aria-expanded='true'] { color: var(--ink); background: var(--chrome-2); }
+.ed-color-token {
+  flex: 1 1 0; min-width: 0; height: 26px; box-sizing: border-box; display: flex; align-items: center; gap: 4px;
+  padding: 0 4px 0 8px; font-size: 12px; color: var(--ink); background: var(--chrome-2);
+  border: 1px solid var(--line); border-radius: 6px; overflow: hidden; white-space: nowrap;
+}
+.ed-color-token::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.ed-color-detach { margin-inline-start: auto; flex: none; width: 20px; height: 20px; padding: 0; display: grid; place-items: center; color: var(--muted); background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.ed-color-detach:hover { color: var(--ink); background: var(--chrome); }
+.ed-color-detach svg { width: 13px; height: 13px; }
+.ed-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 6px; background: var(--chrome); border: 1px solid var(--line); border-radius: 6px; }
+.ed-palette[hidden] { display: none; }
+.ed-palette-cap { grid-column: 1 / -1; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: var(--muted); padding: 0 2px 2px; }
+.ed-palette-item { display: flex; align-items: center; gap: 6px; min-width: 0; height: 24px; padding: 0 4px; font: inherit; font-size: 11.5px; color: var(--ink-2); background: none; border: 0; border-radius: 4px; cursor: pointer; text-align: start; }
+.ed-palette-item > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-palette-item:hover { color: var(--ink); background: var(--chrome-2); }
+.ed-palette-item.is-on { color: var(--ink); box-shadow: inset 0 0 0 1px var(--blue); }
+.ed-palette-item .ed-swatch { flex: none; }
+
+/* the one toolbar: kinds side by side, a hairline between, wrapping at a kind */
+.ed-toolbar { gap: 4px 0; }
+.ed-toolbar-kind { display: flex; align-items: center; gap: 0; }
+.ed-toolbar-kind + .ed-toolbar-kind { border-inline-start: 1px solid var(--line); padding-inline-start: 3px; margin-inline-start: 3px; }
+.ed-props .ed-toolbar .ed-tool { width: 21px; height: 26px; }
+.ed-props .ed-toolbar .ed-tool svg { width: 14px; height: 14px; }
+/* the layer list takes focus on every row click (keyboard order works from
+   there), and a 2px orange frame round the whole list on each click read as
+   "everything is selected". Focus shows on the selected row instead. */
+.ed-layers:focus-visible { box-shadow: none; }
+.ed-layers:focus-visible .ed-layer.sel { border-color: var(--blue); }
+.ed-layer-rename { flex: 1; min-width: 0; height: 20px; padding: 0 4px; font: inherit; font-size: 12px; }
+
+/* ————— review pass: every panel, both themes ———————————————————————————— */
+/* gradient stops: room for the whole hex */
+.ed-props .ed-gradstop > .ed-gradstop-at { width: 50px; }
+.ed-props .ed-gradstop .ed-color-alpha { width: 50px; }
+.ed-props .ed-color-hex { padding-inline: 6px; }
+/* a colour row with only swatch and hex (the theme's slots) stays on one
+   line beside its caption; with opacity or theme colours it takes the row */
+.ed-props .ed-row:has(> .ed-color) { grid-template-columns: minmax(0, 40%) minmax(0, 1fr); gap: 4px 8px; }
+.ed-props .ed-row:has(> .ed-color .ed-color-alpha), .ed-props .ed-row:has(> .ed-colorref) { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+/* a full-width action: wraps inside the panel instead of running past it */
+.ed-props .ed-btn-block { box-sizing: border-box; width: 100%; max-width: 100%; min-height: 26px; height: auto; padding: 4px 8px; margin: 2px 0 6px; white-space: normal; line-height: 1.3; text-align: center; }
+/* chart axis range: caption above, min and max side by side */
+.ed-props .ed-row:has(> .ed-axis-range) { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+.ed-props .ed-axis-range { display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: center; gap: 4px 6px; }
+/* Reveal: three buttons with a button's look, sharing the row */
+.ed-props .ed-reveal-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-bottom: 6px; }
+.ed-props .ed-reveal-row .ed-arrange-cap { grid-column: 1 / -1; }
+.ed-props .ed-reveal-row .ed-btn {
+  height: 26px; padding: 0 4px; justify-content: center; font-size: 12px; color: var(--ink-2);
+  background: var(--field); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ed-props .ed-reveal-row .ed-btn:hover:not(:disabled) { color: var(--ink); background: var(--chrome-2); }
+.ed-props .ed-axis-range input { width: 100%; min-width: 0; }
+.ed-props .ed-gradstop > .ed-gradstop-at { width: 56px; }
+.ed-props .ed-gradstop .ed-color-alpha { width: 48px; }
+.ed-props .ed-gradstop .ed-color-hex { padding-inline: 4px; }
+.ed-props .ed-gradstop > .ed-tool { width: 22px; }
+.ed-props .ed-gradstop > .ed-gradstop-at { width: 54px; }
+.ed-props .ed-gradstop .ed-color-alpha { width: 52px; }
+.ed-props .ed-gradstop .ed-color > input[type='color'] { width: 22px; }

@@ -52,6 +52,8 @@ export type LayerRow = {
   /** the element belongs to a group (indented one level) */
   grouped: boolean
   groupId?: string
+  /** the group's name, when the author gave it one */
+  groupName?: string
 }
 
 const LABEL_MAX = 24
@@ -72,6 +74,7 @@ export function excerpt(html: string, max = LABEL_MAX): string {
 /** What a row says about its element. Kind names go through t() at build
  *  time (never at module level). */
 export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s): string {
+  if (el.name) return el.name
   switch (el.type) {
     case 'text': return excerpt(el.html) || tr('Text')
     case 'shape': return tr({ rect: 'Rectangle', ellipse: 'Ellipse', triangle: 'Triangle', arrow: 'Arrow', line: 'Line', path: 'Curve' }[el.shape] ?? 'Shape')
@@ -89,7 +92,7 @@ export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s)
 /** Rows top-first. */
 export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): LayerRow[] {
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
-    id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId,
+    id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
   }))
   return rows.reverse()
 }
@@ -129,7 +132,7 @@ export function highlighted(rows: readonly LayerRow[], selection: readonly strin
 export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): { order: string; labels: string } {
   const rows = layerRows(slide, tr)
   return {
-    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}`).join('\u001e'),
+    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}`).join('\u001e'),
     labels: rows.map((r) => r.label).join('\u001e'),
   }
 }

@@ -4,7 +4,7 @@
 //
 //   npm run build:single --prefix slides && node scripts/test-slides-inspector-look-browser.mjs
 //
-// WHAT THIS PROVES, at the panel's default width (236px), in en, pt and de,
+// WHAT THIS PROVES, at the panel's default width (264px), in en, pt and de,
 // for every element of every showcase slide and each slide itself, on all
 // three tabs:
 //   1. no visible control reaches past the panel's edge (the first audit
@@ -12,9 +12,13 @@
 //   2. no dropdown cuts off its chosen value while a wider layout was there:
 //      a row too narrow for it gives the dropdown the full width, caption
 //      above (a value longer than the whole panel may then ellipsise);
-//   3. the Arrange kit is icon buttons, each with a hint; Spacing appears only
-//      for two or more elements, even gaps only for three;
-//   4. a numeric pair carries its label inside the field (X 96), Penpot-style.
+//   3. align and order are ONE toolbar of icon buttons on top, each with a
+//      hint; match-size and group join for two or more, even gaps for three;
+//   4. a numeric pair carries its label inside the field (X 96), Penpot-style;
+//   5. colours: swatch · hex · %, a typed hex is the colour; Stroke comes and
+//      goes from its header's + and −; the theme's colours sit behind a
+//      palette button, NAMED, and a colour taken from them shows its name in
+//      the field (it follows the theme) until it is detached.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -72,7 +76,7 @@ try {
         }
       }
     }
-    ok(width <= 240, `${tag} measured at the default width (${width}px)`)
+    ok(width <= 270, `${tag} measured at the default width (${width}px)`)
     ok(over.size === 0, `${tag} nothing reaches past the panel's edge${over.size ? ': ' + [...over].join(' | ') : ''}`)
     ok(cut.size === 0, `${tag} no dropdown cuts off its value${cut.size ? ': ' + [...cut].join(' | ') : ''}`)
     ok(lap.size === 0, `${tag} no in-field label runs into its value${lap.size ? ': ' + [...lap].join(' | ') : ''}`)
@@ -88,17 +92,20 @@ try {
       await p.waitForTimeout(400)
       const pick = (ids) => p.evaluate((ids) => { for (const [i, id] of ids.entries()) document.querySelector(`.ed-layer[data-id="${id}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: i > 0 })) }, ids)
       await p.locator('.ed-props .ed-tabs [role=tab]').first().click()
-      const kit = () => p.$$eval('.ed-props .ed-arrange-row', (rows) => rows.map((r) => ({ cap: r.querySelector('.ed-arrange-cap')?.textContent, n: r.querySelectorAll('.ed-btn').length, icons: [...r.querySelectorAll('.ed-btn')].every((b) => b.querySelector('svg') && !b.textContent.trim() && (b.title || b.dataset.hint)) })))
+      const kit = () => p.$$eval('.ed-props .ed-layer-block .ed-toolbar .ed-tool', (bs) => ({
+        n: bs.length, icons: bs.every((b) => b.querySelector('svg') && !b.textContent.trim() && b.title && b.getAttribute('aria-label')),
+        rows: new Set(bs.map((b) => Math.round(b.getBoundingClientRect().top))).size,
+      }))
       await pick(['a']); await p.waitForTimeout(200)
       let k = await kit()
-      ok(k.every((r) => r.icons), 'every Arrange button is an icon with a hint')
-      ok(JSON.stringify(k.map((r) => r.cap)) === '["Align","Order"]', `one element: Align and Order only (${k.map((r) => r.cap).join(', ')})`)
+      ok(k.icons, 'every toolbar button is an icon with a hint and a name')
+      ok(k.n === 10 && k.rows === 1, `one element: align and order, on one line (${k.n} tools, ${k.rows} line)`)
       await pick(['a', 'b']); await p.waitForTimeout(200)
       k = await kit()
-      ok(k.find((r) => r.cap === 'Spacing')?.n === 2, 'two: Spacing appears, with the two match-size buttons')
+      ok(k.n === 13, `two: match width/height and Group join (${k.n})`)
       await pick(['a', 'b', 'c']); await p.waitForTimeout(200)
       k = await kit()
-      ok(k.find((r) => r.cap === 'Spacing')?.n === 4, 'three: even gaps join them')
+      ok(k.n === 15, `three: even gaps join them (${k.n})`)
       await pick(['a']); await p.waitForTimeout(200)
       const inside = await p.evaluate(() => {
         const m = [...document.querySelectorAll('.ed-props .ed-mini')].find((x) => x.querySelector('span')?.textContent === 'X')
@@ -114,25 +121,43 @@ try {
       // the colour field: swatch · hex · % — a typed hex is the colour
       await p.locator('.ed-props .ed-tabs [role=tab]').first().click()
       const fill = () => p.evaluate(() => window.bento.doc.slides[0].elements[0].fill)
-      const row = p.locator('.ed-props .ed-row', { has: p.locator(':scope > span', { hasText: /^Fill$/ }) }).first()
+      const row = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body')
       const hex = row.locator('.ed-color-hex')
-      ok(await hex.count() === 1 && /^[0-9a-f]{6}$/.test(await hex.inputValue()), `the Fill row shows its hex value (${await hex.inputValue()})`)
+      ok(await hex.count() === 1 && /^[0-9a-f]{6}$/.test(await hex.inputValue()), `the Fill section shows its hex value (${await hex.inputValue()})`)
       await hex.fill('ff0000'); await hex.press('Enter'); await p.waitForTimeout(200)
       ok((await fill()).toLowerCase() === '#ff0000', `typing a hex sets the colour (${await fill()})`)
       await hex.fill('0f0'); await hex.press('Enter'); await p.waitForTimeout(200)
       ok((await fill()).toLowerCase() === '#00ff00', 'a three-digit hex is understood')
       await hex.fill('nope'); await hex.press('Enter'); await p.waitForTimeout(200)
       ok((await fill()).toLowerCase() === '#00ff00' && await row.locator('.ed-color-hex').inputValue() === '00ff00', 'nonsense is refused and the field shows the colour again')
-      const stroke = p.locator('.ed-props .ed-row', { has: p.locator(':scope > span', { hasText: /^Stroke$/ }) }).first()
-      if (await stroke.locator('.ed-color-alpha').count()) {
-        const pct = stroke.locator('.ed-color-alpha .ed-unit')
-        const before = await stroke.locator('.ed-color-alpha input').inputValue()
-        const b = await pct.boundingBox()
-        await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.mouse.down(); await p.mouse.move(b.x + 40, b.y + b.height / 2, { steps: 6 }); await p.mouse.up()
-        await p.waitForTimeout(250)
-        const after = await p.locator('.ed-props .ed-row', { has: p.locator(':scope > span', { hasText: /^Stroke$/ }) }).first().locator('.ed-color-alpha input').inputValue()
-        ok(+after > +before, `the % inside the field scrubs the opacity (${before} → ${after})`)
-      }
+      // Stroke is added from its header's +, and removed from its −
+      const strokeHead = p.locator('.ed-props .ed-section[data-key="Stroke"]')
+      ok(await strokeHead.locator('.ed-sec-act').getAttribute('aria-label') === 'Add stroke', 'a box with no stroke offers + Add stroke on the header')
+      await strokeHead.locator('.ed-sec-act').click(); await p.waitForTimeout(250)
+      ok((await p.evaluate(() => window.bento.doc.slides[0].elements[0].strokeWidth)) > 0, 'and + adds one')
+      const stroke = p.locator('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body')
+      const pct = stroke.locator('.ed-color-alpha .ed-unit')
+      const before = await stroke.locator('.ed-color-alpha input').inputValue()
+      const b = await pct.boundingBox()
+      await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.mouse.down(); await p.mouse.move(b.x - 40, b.y + b.height / 2, { steps: 6 }); await p.mouse.up()
+      await p.waitForTimeout(250)
+      const after = await p.locator('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-color-alpha input').inputValue()
+      ok(+after < +before, `the % inside the field scrubs the opacity (${before} → ${after})`)
+      await p.locator('.ed-props .ed-section[data-key="Stroke"] .ed-sec-act').click(); await p.waitForTimeout(250)
+      ok((await p.evaluate(() => window.bento.doc.slides[0].elements[0].strokeWidth)) === 0, '− takes the stroke away')
+
+      // theme colours
+      const fillBody = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body')
+      ok(await fillBody.locator('.ed-swatch').count() === 0 || !(await fillBody.locator('.ed-palette').isVisible()), 'the theme colours are not strewn above the field')
+      await fillBody.locator('.ed-color .ed-tool').click(); await p.waitForTimeout(150)
+      const items = fillBody.locator('.ed-palette-item')
+      ok(await items.count() >= 3 && (await items.first().textContent()).trim().length > 0, `the palette button opens the theme's colours, named (${await items.count()})`)
+      await items.nth(2).click(); await p.waitForTimeout(250)
+      const linked = await p.evaluate(() => JSON.stringify(window.bento.doc.slides[0].elements[0].themeRefs ?? null))
+      const token = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-color-token')
+      ok(linked !== 'null' && await token.count() === 1, `a theme colour is recorded as one, and the field shows its name (${await token.textContent().catch(() => '')})`)
+      await token.locator('.ed-color-detach').click(); await p.waitForTimeout(250)
+      ok(await p.evaluate(() => !window.bento.doc.slides[0].elements[0].themeRefs?.fill) && await p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-color-hex').count() === 1, 'detaching makes it a plain colour again, hex and all')
     }
     ok(errors.length === 0, `${tag} no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
     await ctx.close()

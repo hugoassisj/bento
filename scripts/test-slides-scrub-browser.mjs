@@ -92,16 +92,16 @@ try {
   await p.waitForTimeout(250)
   ok((await el('box')).x === 333, 'typing still sets the value')
 
-  // 5. A row field.
+  // 5. The font size: its 'pt' inside the field, Penpot-style.
   await select('txt')
-  const size = p.locator('.ed-props .ed-row > span', { hasText: /^Size \(pt\)$/ })
-  ok(await size.count() === 1, 'the text panel has its Size row')
+  const size = mini('pt')
+  ok(await size.count() === 1, 'the text panel has its size field')
   const before = (await el('txt')).fontSize
   await drag(size, 20)
   ok((await el('txt')).fontSize > before, `the Size label scrubs the font size (${before} → ${(await el('txt')).fontSize}px)`)
 
   // 6. A unit chip.
-  const chip = p.locator('.ed-props .ed-row', { has: p.locator('> span', { hasText: /^Outline color$/ }) }).locator('.ed-unit')
+  const chip = p.locator('.ed-props .ed-section[data-key="Stroke"] + .ed-section-body .ed-color-alpha .ed-unit')
   ok(await chip.count() === 1, 'the outline colour has a % chip')
   await drag(chip, -40)
   const stroke = await p.evaluate(() => window.bento.doc.slides[0].elements.find((e) => e.id === 'txt').textStroke.color)

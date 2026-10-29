@@ -12,7 +12,11 @@
 //   3. typing writes the slide's notes, and one undo takes the whole burst back;
 //   4. a slide switch while the field holds the caret does not carry the text
 //      onto the next slide, and the pane catches up once the caret leaves;
-//   5. folding the pane holds across a reload.
+//   5. folding the pane holds across a reload;
+//   6. the pane meets both side panels, edge to edge; its text box keeps THE
+//      FIELD's look and has no resize corner of its own; the PANE resizes from
+//      its top edge (the height holds across a reload, a double-click resets
+//      it), and the side panels' chevron, laid on its side, folds it.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -73,9 +77,34 @@ try {
   ok(await notes(0) === 'First slide notes', 'and does not land on the next one')
   ok(await area.inputValue() === 'First slide notes', 'once the caret leaves, the pane shows the new slide')
 
+  // 6. Edges, the field, the grip.
+  const geo = await p.evaluate(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect()
+    const pane = r('.ed-notespane'), side = r('.ed-sidebar'), props = r('.ed-props'), a = document.querySelector('.ed-notespane-text'), cs = getComputedStyle(a)
+    return { left: pane.left - side.right, right: props.left - pane.right, resize: cs.resize, border: cs.borderTopWidth, bg: cs.backgroundColor }
+  })
+  ok(Math.abs(geo.left) < 1 && Math.abs(geo.right) < 1, `the pane meets both side panels (gaps ${geo.left.toFixed(1)} / ${geo.right.toFixed(1)}px)`)
+  ok(geo.resize === 'none' && geo.border === '1px' && geo.bg !== 'rgba(0, 0, 0, 0)', `the text box is a field, with no resize corner (${geo.resize}, ${geo.border}, ${geo.bg})`)
+  const h0 = (await area.boundingBox()).height
+  const grip = await p.locator('.ed-notes-grip').boundingBox()
+  await p.mouse.move(grip.x + 40, grip.y + grip.height / 2); await p.mouse.down()
+  await p.mouse.move(grip.x + 40, grip.y - 80, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(150)
+  const h1 = (await area.boundingBox()).height
+  ok(h1 > h0 + 60, `dragging the pane's top edge up makes the notes taller (${h0} → ${h1}px)`)
+  await p.reload()
+  await p.waitForFunction(() => document.querySelector('.ed-notespane-text'))
+  ok(Math.abs((await p.locator('.ed-notespane-text').boundingBox()).height - h1) < 2, 'the height holds across a reload')
+  await p.locator('.ed-notes-grip').dblclick({ position: { x: 20, y: 3 } }); await p.waitForTimeout(150)
+  ok(Math.abs((await p.locator('.ed-notespane-text').boundingBox()).height - h0) < 2, 'a double-click on the edge resets it')
+  await p.locator('.ed-notes-toggle').click(); await p.waitForTimeout(150)
+  ok(!(await p.locator('.ed-notespane-text').isVisible()), 'the chevron folds the pane')
+  await p.locator('.ed-notes-toggle').click(); await p.waitForTimeout(150)
+  ok(await p.locator('.ed-notespane-text').isVisible(), 'and opens it again')
+  const area2 = p.locator('.ed-notespane-text')
+
   // 5. Fold, reload.
   await p.locator('.ed-notespane-head').click(); await p.waitForTimeout(150)
-  ok(!(await area.isVisible()), 'the header folds the pane')
+  ok(!(await area2.isVisible()), 'the header folds the pane')
   await p.reload()
   await p.waitForFunction(() => document.querySelector('.ed-notespane'))
   ok(!(await p.locator('.ed-notespane-text').isVisible()), 'folded holds across a reload')

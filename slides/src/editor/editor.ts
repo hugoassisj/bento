@@ -174,7 +174,7 @@ export class Editor {
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
-  private panelW = { left: 188, right: 236 }
+  private panelW = { left: 188, right: 264 }
 
   constructor(
     private root: HTMLElement,
@@ -637,7 +637,7 @@ export class Editor {
   // --- resizable side panels ------------------------------------------------
 
   private static PANEL_BOUNDS = { left: [110, 400], right: [190, 520] } as const
-  private static PANEL_DEFAULTS = { left: 188, right: 236 } as const
+  private static PANEL_DEFAULTS = { left: 188, right: 264 } as const
 
   private restorePanelWidths() {
     try {
@@ -1944,7 +1944,10 @@ export class Editor {
       bar.appendChild(b)
     }
     show(lsGet('bento-side-view') === 'layers' ? 'layers' : 'slides')
-    return bar
+    // the inspector's band (panels.ts mountTabs): sticky, edge to edge
+    const band = div('ed-tabs-band ed-side-band')
+    band.appendChild(bar)
+    return band
   }
 
   private rebuildSidebar() {
@@ -3661,8 +3664,18 @@ export class Editor {
     const one = els.length === 1 ? els[0] : null
     const openable = !!one && (one.type === 'text' || one.type === 'table')
     const grouped = els.some((e) => e.groupId)
+    const gid = els[0]?.groupId
+    const wholeGroup = els.length > 1 && gid && els.every((e) => e.groupId === gid) &&
+      this.store.slide.elements.filter((e) => e.groupId === gid).length === els.length ? gid : undefined
     return [
       { label: t('Edit text'), disabled: !openable, run: () => one && this.canvas.editElement(one.id) },
+      // naming happens in the layer list, so Rename shows it first; a whole
+      // group selected renames the group
+      { label: t('Rename'), disabled: !one && !wholeGroup, run: () => {
+        this.sidebar.querySelector<HTMLElement>('.ed-side-tabs [data-view="layers"]')?.click()
+        if (one) this.panel.layers.rename(one.id)
+        else if (wholeGroup) this.panel.layers.renameGroup(wholeGroup)
+      } },
       'sep',
       { label: t('Cut'), hint: '⌘X', run: () => { this.copySelection(); this.deleteSelection() } },
       { label: t('Copy'), hint: '⌘C', run: () => this.copySelection() },

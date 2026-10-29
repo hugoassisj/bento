@@ -121,10 +121,10 @@ try {
   // 8. folded help
   await p.keyboard.press('Escape'); await p.waitForTimeout(200)
   await pick('a')
-  const typo = p.locator('.ed-props > .ed-section:text-is("Typography")')
-  const body = p.locator('.ed-props > .ed-section:text-is("Typography") + .ed-section-body')
+  const typo = p.locator('.ed-props > .ed-section[data-key="Text"]')
+  const body = p.locator('.ed-props > .ed-section[data-key="Text"] + .ed-section-body')
   const q = body.locator(':scope > .ed-help-btn')
-  ok(await q.count() === 1, 'Typography has a ? on its header line')
+  ok(await q.count() === 1, 'Text has a ? on its header line')
   ok(!(await body.locator(':scope > p.ed-hint').first().isVisible()), 'its help is folded away')
   const qb = await q.boundingBox(), hb = await typo.boundingBox()
   ok(Math.abs((qb.y + qb.height / 2) - (hb.y + hb.height / 2)) < 6, 'the ? sits on the header line')

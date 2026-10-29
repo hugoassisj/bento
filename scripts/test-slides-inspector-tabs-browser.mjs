@@ -5,9 +5,10 @@
 //   npm run build:single --prefix slides && node scripts/test-slides-inspector-tabs-browser.mjs
 //
 // WHAT THIS PROVES — every control has ONE home, decided by what it is about:
-//   1. Format (how it looks): the element's own section — which carries Role,
-//      what it IS in a layout — Typography, Position & size (geometry only),
-//      Appearance (Opacity with blend, blur and shadow), Arrange;
+//   1. Format (how it looks), in Penpot's order: a header-less block on top —
+//      the align/order toolbar, blend mode with opacity, the measures — then
+//      the element's own section, Fill, Stroke, Shadow, Blur, and Layout,
+//      which carries Role (what the box IS to the slide's layout);
 //   2. Animate (how it moves): Animation and Morph — and, for a slide, its
 //      Transition, which used to sit on the look side beside Background;
 //   3. Interact (what it does when pointed at): Interactivity — links and hover,
@@ -30,12 +31,12 @@ function ok(cond, msg) {
   if (!cond) { failures++; console.log(`  FAIL  ${msg}`) } else console.log(`  ok    ${msg}`)
 }
 const EN = {
-  format: 'Format', animate: 'Animate', interact: 'Interact', text: 'Text', typo: 'Typography', pos: 'Position & size', look: 'Appearance', arrange: 'Arrange',
+  format: 'Format', animate: 'Animate', interact: 'Interact', text: 'Text', fill: 'Fill', stroke: 'Stroke', shadow: 'Shadow', blur: 'Blur',
   anim: 'Animation', morph: 'Morph', inter: 'Interactivity', slide: 'Slide', layout: 'Layout', theme: 'Theme', deck: 'Deck', trans: 'Transition',
   role: 'Layout role', opacity: 'Opacity', pageSize: 'Page size', link: 'Link to', empty: 'Nothing to set here for this selection.',
 }
 const PT = {
-  format: 'Formato', animate: 'Animar', interact: 'Interação', text: 'Texto', typo: 'Tipografia', pos: 'Posição e tamanho', look: 'Aparência', arrange: 'Organizar',
+  format: 'Formato', animate: 'Animar', interact: 'Interação', text: 'Texto', fill: 'Preenchimento', stroke: 'Contorno', shadow: 'Sombra', blur: 'Desfoque',
   anim: 'Animação', morph: 'Morph', inter: 'Interatividade', slide: 'Slide', layout: 'Layout', theme: 'Tema', deck: 'Documento', trans: 'Transição',
   role: 'Função no layout', opacity: 'Opacidade', pageSize: 'Tamanho da página', link: 'Vincular a', empty: 'Nada a ajustar aqui para esta seleção.',
 }
@@ -77,15 +78,22 @@ try {
     ok(await tab(L.animate).getAttribute('aria-selected') === 'true', `${tag} a stored 'show' tab opens on Animate`)
     await pick('a')
     ok(await p.locator('.ed-props .ed-tabs [role="tab"]').count() === 3, `${tag} three tabs`)
-    ok(await p.$eval('.ed-props', (h) => h.firstElementChild?.classList.contains('ed-tabs')), `${tag} the tabs head the panel`)
+    ok(await p.$eval('.ed-props', (h) => !!h.firstElementChild?.querySelector(':scope > .ed-tabs')), `${tag} the tabs head the panel`)
     const field = await p.locator('.ed-props input[type="number"]').first().elementHandle()
 
     let v = await on(L.format)
-    ok(JSON.stringify(v) === JSON.stringify([L.text, L.typo, L.pos, L.look, L.arrange]), `${tag} Format: the look, in order (${v.join(', ')})`)
-    ok((await rowsIn(L.text)).includes(L.role), `${tag} Role sits with the element's own section`)
-    const pos = await rowsIn(L.pos)
-    ok(!pos.includes(L.opacity) && !pos.includes(L.role), `${tag} Position & size is geometry only (${pos.join(', ')})`)
-    ok((await rowsIn(L.look))[0] === L.opacity, `${tag} Appearance leads with Opacity`)
+    ok(JSON.stringify(v) === JSON.stringify([L.text, L.fill, L.stroke, L.shadow, L.blur, L.layout]), `${tag} Format: the look, in order (${v.join(', ')})`)
+    ok((await rowsIn(L.layout)).includes(L.role), `${tag} Role sits in Layout, which says what it does`)
+    const block = await p.evaluate(() => {
+      const b = document.querySelector('.ed-props > .ed-layer-block')
+      const first = [...document.querySelectorAll('.ed-props > .ed-section')][0]
+      return { before: !!b && !!first && !!(b.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING),
+        minis: [...(b?.querySelectorAll('.ed-mini > span') ?? [])].map((n) => n.textContent).filter(Boolean),
+        opacity: !!b?.querySelector('.ed-mini[title]'), blend: !!b?.querySelector('select'), tools: b?.querySelectorAll('.ed-toolbar .ed-tool').length ?? 0 }
+    })
+    ok(block.before && ['W', 'H', 'X', 'Y'].every((x) => block.minis.includes(L === EN ? x : { W: 'L', H: 'A', X: 'X', Y: 'Y' }[x])), `${tag} the measures head the panel, above every section (${block.minis.join(' ')})`)
+    ok(block.opacity && block.blend, `${tag} blend mode and opacity share the line above them`)
+    ok(block.tools >= 10, `${tag} align and order are one toolbar on top (${block.tools} tools)`)
     v = await on(L.animate)
     ok(JSON.stringify(v) === JSON.stringify([L.anim, L.morph]), `${tag} Animate: motion only (${v.join(', ')})`)
     v = await on(L.interact)

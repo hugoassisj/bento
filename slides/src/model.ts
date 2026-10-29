@@ -15,6 +15,9 @@ export interface ElementBase {
    *  duplicate-a-slide idiom). Never mutate it to re-pair a morph; set
    *  `morphId` instead so identity stays stable. */
   id: string
+  /** The author's name for it in the layer list (renamed there). Unset, the
+   *  list names it by kind or by its text. Display only — never a key. */
+  name?: string
   /** Optional morph-key override. When set, this element morphs with elements
    *  whose effective morph key (`morphId ?? id`) matches — letting two
    *  independently-created elements on different slides be paired without
@@ -110,6 +113,9 @@ export interface ElementBase {
    * Distinct from `group`, which carries presentation semantics.
    */
   groupId?: string
+  /** The group's name in the layer list, carried by every member (a group is
+   *  no object of its own, only a shared groupId). Ungrouping drops it. */
+  groupName?: string
   /**
    * In-slide hover reveal: this element is only visible while an element
    * whose `group` equals this value is hovered (slide.hover type 'reveal').

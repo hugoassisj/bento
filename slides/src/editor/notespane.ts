@@ -26,20 +26,60 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
   area.placeholder = t('Notes for the speaker view (press S while presenting)…')
   area.title = t('Shown in the speaker view (Slideshow menu, or S while presenting).') +
     (isMacOS() ? ' ' + t('On macOS, open the speaker view before going fullscreen.') : '')
-  pane.append(head, area)
+  // The PANE resizes, from its top edge, as the side panels do from theirs;
+  // the text fills it. (A resize corner on the text box itself resized the
+  // box inside a pane that stayed the same size.)
+  const grip = document.createElement('div')
+  grip.className = 'ed-notes-grip'
+  grip.title = t('Drag to resize · double-click to reset')
+  const toggle = document.createElement('button')
+  toggle.type = 'button'
+  toggle.className = 'ed-panel-toggle ed-notes-toggle'
+  toggle.setAttribute('aria-label', t('Speaker notes'))
+  grip.appendChild(toggle)
+  const DEFAULT_H = 84
+  const setH = (h: number) => area.style.setProperty('height', `${Math.round(Math.min(Math.max(h, 40), window.innerHeight * 0.5))}px`)
+  setH(Number(lsGet('bento-notes-h')) || DEFAULT_H)
+  grip.addEventListener('pointerdown', (down) => {
+    if (pane.classList.contains('closed')) return
+    down.preventDefault()
+    grip.setPointerCapture(down.pointerId)
+    const startY = down.clientY
+    const startH = area.getBoundingClientRect().height
+    document.body.classList.add('ed-row-resizing')
+    const move = (ev: PointerEvent) => setH(startH + startY - ev.clientY)
+    const up = () => {
+      grip.removeEventListener('pointermove', move)
+      grip.removeEventListener('pointerup', up)
+      grip.removeEventListener('pointercancel', up)
+      document.body.classList.remove('ed-row-resizing')
+      lsSet('bento-notes-h', String(Math.round(area.getBoundingClientRect().height)))
+    }
+    grip.addEventListener('pointermove', move)
+    grip.addEventListener('pointerup', up)
+    grip.addEventListener('pointercancel', up)
+  })
+  grip.addEventListener('dblclick', () => { setH(DEFAULT_H); lsSet('bento-notes-h', String(DEFAULT_H)) })
+  pane.append(grip, head, area)
   into.appendChild(pane)
 
   const setOpen = (open: boolean) => {
     pane.classList.toggle('closed', !open)
     head.classList.toggle('closed', !open)
     head.setAttribute('aria-expanded', String(open))
+    toggle.textContent = open ? '›' : '‹' // turned a quarter by CSS: down folds, up opens
+    toggle.title = open ? t('Hide speaker notes') : t('Show speaker notes')
   }
   setOpen(lsGet('bento-notes-open') !== '0')
-  head.addEventListener('click', () => {
+  const flip = () => {
     const open = pane.classList.contains('closed')
     setOpen(open)
     lsSet('bento-notes-open', open ? '1' : '0')
-  })
+  }
+  head.addEventListener('click', flip)
+  // the side panels' chevron, laid on its side: one click folds the pane
+  toggle.addEventListener('click', (ev) => { ev.stopPropagation(); flip() })
+  toggle.addEventListener('pointerdown', (ev) => ev.stopPropagation()) // a click, not a drag
 
   // the slide being typed into, fixed for the length of one burst
   let editing: string | null = null
