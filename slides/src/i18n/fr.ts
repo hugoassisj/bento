@@ -965,4 +965,5 @@ export const fr: Catalog = {
   "{n} pictures still uploading…": "{n} images en cours d’envoi…",
   "Not rendered: {what}": "Non rendu : {what}",
   "no space just inside the $ signs": "pas d’espace juste à l’intérieur des signes $",
+  "Design": "Design",
 }

@@ -965,4 +965,5 @@ export const ja: Catalog = {
   "{n} pictures still uploading…": "画像{n}枚をアップロード中…",
   "Not rendered: {what}": "表示できません: {what}",
   "no space just inside the $ signs": "$ 記号のすぐ内側に空白を入れないでください",
+  "Design": "デザイン",
 }

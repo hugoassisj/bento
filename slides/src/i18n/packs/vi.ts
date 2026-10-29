@@ -951,4 +951,5 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} hình đang tải lên…",
   "Not rendered: {what}": "Không hiển thị được: {what}",
   "no space just inside the $ signs": "không có dấu cách ngay bên trong cặp dấu $",
+  "Design": "Thiết kế",
 }

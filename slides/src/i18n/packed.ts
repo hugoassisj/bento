@@ -971,4 +971,5 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "{n} pictures still uploading…": ["画像{n}枚をアップロード中…","{n} 张图片上传中…","{n} 張圖片上傳中…","{n} imágenes subiéndose…","{n} images en cours d’envoi…","{n} Bilder werden noch hochgeladen…","{n} immagini in caricamento…","{n} imagens sendo enviadas…"],
   "Not rendered: {what}": ["表示できません: {what}","未能渲染：{what}","未能呈現：{what}","Sin representar: {what}","Non rendu : {what}","Nicht gerendert: {what}","Non visualizzata: {what}","Não renderizada: {what}"],
   "no space just inside the $ signs": ["$ 記号のすぐ内側に空白を入れないでください","$ 符号内侧不要紧挨空格","$ 符號內側不要緊貼空格","sin espacio justo dentro de los signos $","pas d’espace juste à l’intérieur des signes $","kein Leerzeichen direkt innerhalb der $-Zeichen","nessuno spazio subito dentro i segni $","sem espaço logo dentro dos sinais $"],
+  "Design": ["デザイン","设计","設計","Diseño","Design","Design","Design","Design"],
 }

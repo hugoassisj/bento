@@ -227,12 +227,46 @@ export class PropsPanel {
     else if (els.length === 1) this.buildElementPanel(els[0])
     else this.buildMultiPanel(els)
     this.applyAccordion()
+    this.mountTabs()
     this.layers.restoreScroll()
     this.host.scrollTop = scrollTop
   }
 
-  /** Collapsed by default until the user opens them (persisted per title). */
-  private static CLOSED_BY_DEFAULT = new Set(['Slideshow', 'Presenting', 'Interactivity', 'Layout', 'Advanced (JSON)', 'Layers'])
+  /** Collapsed by default until the user opens them (persisted per title).
+   *  English keys, matched against the TRANSLATED header like SHOW_SECTIONS. */
+  private static CLOSED_BY_DEFAULT = ['Layout', 'Advanced (JSON)', 'Layers']
+
+  /** Sections about the SHOW rather than the look: they live on the
+   *  Presenting tab. Everything else is Design; Layers shows on both, under the tabs. */
+  private static SHOW_SECTIONS = ['Presenting', 'Morph', 'Slideshow', 'Interactivity', 'Speaker notes']
+
+  private tab: 'design' | 'show' = lsJson<string>('bento-panel-tab', 'design') === 'show' ? 'show' : 'design'
+
+  /** Design | Presenting — the split design tools make between what a thing
+   *  looks like and what it does, heading the panel as theirs does. A tab
+   *  hides the other tab's sections with CSS (data-tab), so switching never
+   *  rebuilds or loses a field's state. */
+  private mountTabs() {
+    const bar = document.createElement('div')
+    bar.className = 'ed-tabs'
+    bar.setAttribute('role', 'tablist')
+    for (const [id, label] of [['design', t('Design')], ['show', t('Presenting')]] as const) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.setAttribute('role', 'tab')
+      b.setAttribute('aria-selected', String(this.tab === id))
+      b.textContent = label
+      b.addEventListener('click', () => {
+        this.tab = id
+        lsSet('bento-panel-tab', JSON.stringify(id))
+        this.host.dataset.tab = id
+        for (const x of bar.children) x.setAttribute('aria-selected', String(x === b))
+      })
+      bar.appendChild(b)
+    }
+    this.host.prepend(bar)
+    this.host.dataset.tab = this.tab
+  }
 
   /** The layer list: one instance, the SAME header and list nodes re-appended
    *  on every rebuild (a drag emits a doc event per frame; the rows are only
@@ -254,6 +288,9 @@ export class PropsPanel {
     let openState: Record<string, boolean> = {}
     openState = lsJson<Record<string, boolean>>('bento-panel-open', {})
     const headers = [...this.host.querySelectorAll<HTMLElement>('.ed-section')]
+    const closed = new Set(PropsPanel.CLOSED_BY_DEFAULT.map((k) => t(k)))
+    const show = new Set(PropsPanel.SHOW_SECTIONS.map((k) => t(k)))
+    const layers = t('Layers')
     for (const h of headers) {
       const key = h.textContent ?? ''
       const body = document.createElement('div')
@@ -265,7 +302,8 @@ export class PropsPanel {
         n = next
       }
       h.after(body)
-      const isOpen = openState[key] ?? !PropsPanel.CLOSED_BY_DEFAULT.has(key)
+      h.dataset.tab = body.dataset.tab = key === layers ? 'both' : show.has(key) ? 'show' : 'design'
+      const isOpen = openState[key] ?? !closed.has(key)
       h.classList.add('ed-sec-toggle')
       h.classList.toggle('closed', !isOpen)
       if (!isOpen) body.style.display = 'none'

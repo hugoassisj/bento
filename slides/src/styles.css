@@ -695,6 +695,19 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   color: var(--ink-2);
 }
 .ed-row > span { flex: none; }
+/* Design | Presenting (panels.ts mountTabs). A tab hides the other's sections. */
+.ed-props[data-tab='design'] [data-tab='show'], .ed-props[data-tab='show'] [data-tab='design'] { display: none !important; }
+.ed-tabs {
+  position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; padding: 3px; margin: 0 0 10px;
+  background: var(--chrome-2); border-radius: 8px;
+}
+.ed-tabs button {
+  flex: 1; height: 26px; font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); background: none; border: 0; border-radius: 6px; cursor: pointer;
+}
+.ed-tabs button:hover { color: var(--ink); }
+.ed-tabs button[aria-selected='true'] { color: var(--ink); background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.ed-tabs button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
 .ed-row input[type='number'], .ed-row select, .ed-row input[type='color'] { width: 110px; }
 
 .ed-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
