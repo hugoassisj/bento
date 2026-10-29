@@ -15,8 +15,11 @@
 //   5. a row's numeric field (text Size) scrubs the same way;
 //   6. a field with no label of its own (a colour's opacity) scrubs from its
 //      unit chip.
-//   7. a drag never takes a field past its limits: opacity stays within
-//      0–100, a width never under 1, however far the pointer goes.
+//   7. a drag never takes a field past its limits — measured MID-DRAG, in the
+//      field, not only in the model (whose setter clamps anyway): opacity stays
+//      within 0–100 however far the pointer goes, and turning back moves the
+//      value at once (no dead zone the length of the overshoot); a width never
+//      goes under 1.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -113,10 +116,19 @@ try {
   await select('box')
   const opacity = () => p.evaluate(() => window.bento.doc.slides[0].elements.find((e) => e.id === 'box').opacity)
   const op = p.locator('.ed-props .ed-layer-block .ed-mini[title="Opacity"]')
-  await drag(op.locator('span'), 900)
-  ok(await opacity() === 1 && await op.locator('input').inputValue() === '100', `dragging opacity far right stops at 100 (${await opacity()})`)
-  await drag(op.locator('span'), -900)
-  ok(await opacity() === 0, `and far left stops at 0 (${await opacity()})`)
+  const opIn = op.locator('input')
+  const hb = await op.locator('span').boundingBox()
+  await p.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2); await p.mouse.down()
+  await p.mouse.move(hb.x + 900, hb.y + hb.height / 2, { steps: 30 })
+  const held = +(await opIn.inputValue())
+  ok(held === 100, `held far past the end, the field reads 100, not more (${held})`)
+  await p.mouse.move(hb.x + 860, hb.y + hb.height / 2, { steps: 8 })
+  const back = +(await opIn.inputValue())
+  ok(back < 100 && back >= 75, `turning back 40px takes the value down at once (${back})`)
+  await p.mouse.move(hb.x - 1200, hb.y + hb.height / 2, { steps: 40 })
+  ok(+(await opIn.inputValue()) === 0, `and far left it stops at 0 (${await opIn.inputValue()})`)
+  await p.mouse.up(); await p.waitForTimeout(250)
+  ok(await opacity() === 0, `the model agrees (${await opacity()})`)
   await drag(mini('W'), -2000)
   ok((await el('box')).w === 1, `a width never goes under 1 (${(await el('box')).w})`)
 

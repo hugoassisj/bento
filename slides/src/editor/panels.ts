@@ -3136,18 +3136,25 @@ function scrub(handle: HTMLElement, input: HTMLInputElement) {
   handle.classList.add('ed-scrub')
   handle.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0 || input.disabled) return
-    const start = parseFloat(input.value) || 0
+    let cur = parseFloat(input.value) || 0
     const step = parseFloat(input.step) || 1
     const x0 = ev.clientX
+    let last = x0 // where the value was last stepped from
     let moved = false
     const move = (e: PointerEvent) => {
-      const dx = e.clientX - x0
-      if (!moved && Math.abs(dx) < 3) return
+      if (!moved && Math.abs(e.clientX - x0) < 3) return
       if (!moved) { moved = true; input.focus(); document.body.classList.add('ed-scrubbing') }
+      // Stepped from the LAST position, not the press: held at a limit, the
+      // drag does not bank the overshoot, so turning back moves the value at
+      // once instead of after a dead zone as long as the overshoot was.
+      const steps = Math.trunc((e.clientX - last) / 2)
+      if (!steps) return
+      last += steps * 2
       const k = step * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1)
       const digits = Math.max(0, Math.ceil(-Math.log10(k) - 1e-9))
-      // never past the field's own limits (min/max), however far the drag goes
-      const v = bound(input, start + Math.round(dx / 2) * k).toFixed(digits)
+      cur = bound(input, cur + steps * k) // never past the field's own min/max
+      const v = cur.toFixed(digits)
+      cur = parseFloat(v) // no float drift across a long drag
       if (v === input.value) return
       input.value = v
       input.dispatchEvent(new Event(SCRUB))
