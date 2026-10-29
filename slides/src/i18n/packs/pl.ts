@@ -1071,4 +1071,5 @@ export const strings: Catalog = {
   "Soft": "Miękki",
   "Elevated": "Uniesiony",
   "Glow": "Poświata",
+  "Rename a layer or a group in the Layers list": "Zmień nazwę warstwy lub grupy na liście warstw",
 }

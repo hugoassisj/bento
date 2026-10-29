@@ -124,7 +124,8 @@ names provisional.
   and Bento payloads (insert elements on the current slide / slides after it, fresh
   ids). Pasted slides drop `stateOf`. Guarded to skip when a text field is focused.
   Also v0.9.9: a `?` help overlay (editor.openHelp — shortcuts + tips, topbar ?
-  button) and richer toolbar tooltips.
+  button) and one shared hint for the chrome (editor/hints.ts: on pointer
+  only, the title handed back, shortcut chips).
 - `src/anim.ts` — in-house animation engine (no GSAP): to/fromTo tweens with
   channels opacity/y/scale/color/strokeDashoffset/attr{}/motionPath, delay/
   repeat/yoyo/ease, per-channel overwrite, killTweensOf/getTweensOf, manual
@@ -381,7 +382,7 @@ names provisional.
   are two SEPARATE gestures and neither steals the other's activation. That is
   the whole fix for the macOS bug where a popup opened *after* fullscreen got
   trapped in the slides' exclusive fullscreen Space on the wrong monitor — open
-  it FIRST, drag it to the second screen, then present (the Slide-panel notes
+  it FIRST, drag it to the second screen, then present (the speaker-notes pane's
   hint says this, and warns on macOS via `isMacOS()`). Present closes a window it
   opened itself on exit; an ADOPTED (editor-owned) window is left open and reset
   to an idle placeholder (`speakerIdleBody`). A 1s poll (`watchSpeaker`) clears
@@ -575,14 +576,33 @@ names provisional.
   collaborator list (click follows), join/leave toasts. Deck buttons use
   ONE invisible hit-rect above button+label (hard-won #7) — never put
   `link` on both a rect and its label text (two mismatched hover pills).
-  Alt/Option-click digs through overlapping elements (capture-phase, beats
-  Moveable's control box). Fill/stroke colors carry alpha (color input + % pair,
-  rgba round-trip); shapes support `fillGradient` (linear, CSS-convention angle,
-  multi-stop) — rendered as per-instance svg `<defs>` gradients (unique ids:
-  url(#…) refs are document-global across canvas/thumbs/present). Arrange kit in
-  the panel: align/distribute/z-step + Group (⌘G/⇧⌘G — `groupId`, distinct from
-  presentation `group`; click selects the group, Alt-click reaches a member;
-  duplicate remaps groupIds). Text editing supports ⌘B/I/U plus markdown
+  Picking (canvas.ts): Alt/Option-click digs through overlapping elements
+  (decided in Moveable's end handlers, so a press on a handle of a small label
+  that does not move still digs); ⌘/Ctrl-click selects exactly the element
+  under the pointer, inside a group (one 3px dead zone shared with the ⌘-drag
+  duplicate, so a wobble is a click, never a hidden copy); Shift-click inside a
+  multi-selection's box toggles the element under it; the right-click menu
+  lists every element under the pointer ("Select …"). A group is ENTERED by
+  ⌘-click, Alt-dig or a member's layer row (`enteredGroup`): clicks and
+  Shift-clicks then pick members until the selection leaves the group.
+  Alt-HOVER measures from the selection to the element under the pointer
+  (measure-geom.ts; an overlay in .ed-stage-scale, pointer-events none,
+  inspection only). Fill/stroke colors carry alpha (swatch · hex · % field,
+  rgba round-trip; theme colours behind a palette button, a linked colour
+  shows its slot name until detached); shapes support `fillGradient` (linear,
+  CSS-convention angle, multi-stop) — rendered as per-instance svg `<defs>`
+  gradients (unique ids: url(#…) refs are document-global across
+  canvas/thumbs/present). Inspector (panels.ts): Format | Animate | Interact
+  tabs; Format opens with a header-less block (align/order toolbar, blend ·
+  opacity, W H X Y, rotation, radius), then the kind's section, Fill, Stroke,
+  Shadow, Blur (optional layers added/removed from their header's + / −) and
+  Layout (layout role, explained). Numeric fields scrub from their label,
+  held to their min/max. The side column is Slides | Layers; layer rows and
+  group rows rename in place (double-click or Rename) — `name` / `groupName`,
+  display only. Group (⌘G/⇧⌘G — `groupId`, distinct from presentation
+  `group`; click selects the group, Alt-click reaches a member; duplicate,
+  paste and ⌘-drag remap groupIds; ungroup drops groupName). Speaker notes
+  live in a pane under the canvas (notespane.ts), resized from its top edge. Text editing supports ⌘B/I/U plus markdown
   autoformat (editor/markdown.ts: **bold** *italic* `code` ~~strike~~ and "- "
   bullets collapse as typed — mind contentEditable NBSPs and stale
   Selection offsets after DOM surgery; pasted plain text converts too).

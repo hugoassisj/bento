@@ -1083,4 +1083,5 @@ export const ja: Catalog = {
   "Soft": "ソフト",
   "Elevated": "浮き上がり",
   "Glow": "グロー",
+  "Rename a layer or a group in the Layers list": "レイヤーリストでレイヤーやグループの名前を変更",
 }

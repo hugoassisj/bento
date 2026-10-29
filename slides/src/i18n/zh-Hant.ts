@@ -1083,4 +1083,5 @@ export const zhHant: Catalog = {
   "Soft": "柔和",
   "Elevated": "懸浮",
   "Glow": "光暈",
+  "Rename a layer or a group in the Layers list": "在圖層清單中重新命名圖層或群組",
 }

@@ -3148,6 +3148,7 @@ export class Editor {
       [`${t('Alt')}-${t('click')}`, t('Select the element behind it; click again to go deeper')],
       [`${t('Alt')}-${t('hover')}`, t('Measure from the selection to the element under the pointer')],
       [t('Right-click'), t('Lists every element under the pointer, to select one that is covered')],
+      [t('Double-click'), t('Rename a layer or a group in the Layers list')],
       [t('Space-drag'), t('Pan the canvas, including past the edges of the slide')],
       [t('Middle-drag'), t('Pan as well, if your mouse has a middle button')],
       [`${mod}-${t('scroll')}`, t('Zoom in and out')],

@@ -1089,4 +1089,5 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Soft": ["ソフト","柔和","柔和","Suave","Douce","Weich","Morbida","Suave"],
   "Elevated": ["浮き上がり","悬浮","懸浮","Elevada","Élevée","Erhöht","Rialzata","Elevada"],
   "Glow": ["グロー","光晕","光暈","Resplandor","Halo","Leuchten","Bagliore","Brilho"],
+  "Rename a layer or a group in the Layers list": ["レイヤーリストでレイヤーやグループの名前を変更","在图层列表中重命名图层或组","在圖層清單中重新命名圖層或群組","Cambiar el nombre de una capa o un grupo en la lista de capas","Renommer un calque ou un groupe dans la liste des calques","Eine Ebene oder Gruppe in der Ebenenliste umbenennen","Rinominare un livello o un gruppo nell’elenco dei livelli","Renomear uma camada ou um grupo na lista de camadas"],
 }

@@ -1064,4 +1064,5 @@ export const strings: Catalog = {
   "Soft": "부드럽게",
   "Elevated": "떠 있게",
   "Glow": "광채",
+  "Rename a layer or a group in the Layers list": "레이어 목록에서 레이어나 그룹 이름 바꾸기",
 }

@@ -1080,4 +1080,5 @@ export const strings: Catalog = {
   "Soft": "ناعم",
   "Elevated": "مرتفع",
   "Glow": "توهج",
+  "Rename a layer or a group in the Layers list": "إعادة تسمية طبقة أو مجموعة في قائمة الطبقات",
 }

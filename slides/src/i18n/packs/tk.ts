@@ -1097,4 +1097,5 @@ export const strings: Catalog = {
   "Soft": "Ýumşak",
   "Elevated": "Galdyrylan",
   "Glow": "Şöhle",
+  "Rename a layer or a group in the Layers list": "Gatlaryň sanawynda gatlagyň ýa-da toparyň adyny üýtget",
 }

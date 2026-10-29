@@ -11911,3 +11911,31 @@ couplings below.
 - **render.ts re-exports** SVG_TAGS, svgAttrAllowed, svgHrefAllowed,
   svgUrlRefsAllowed and sanitizeSvgCss, so callers and rigs keep importing them
   from the renderer.
+
+## 2026-10-29 — slides: the inspector in Penpot's order; layers beside slides; notes under the canvas
+
+Proposed in a contributor branch (to be split into issues before upstreaming).
+The inspector had grown section by section; its information architecture was
+checked against Keynote (Format | Animate), Google Slides, PowerPoint's
+Selection Pane and Penpot (Design | Prototype, layers on the left).
+
+- **Three tabs, one home per control.** Format (how it looks), Animate (how it
+  moves — Animation, Morph, the slide's Transition), Interact (what it does
+  when pointed at — links, hover). A tab with nothing for the selection says so.
+- **Format opens with a header-less block**, as Penpot's Design tab: one
+  align/order toolbar, blend mode with opacity, then W H X Y, rotation and
+  radius with their labels inside the fields. Then the element's own section,
+  Fill, Stroke, Shadow, Blur — optional layers added and removed from their
+  header's + / − instead of a 'none' in a dropdown — and Layout, which says
+  what a layout role does.
+- **Layers live in the side column** (Slides | Layers), not in the inspector.
+  Group rows; rows and groups rename in place. Names are new optional element
+  keys, display only: `name`, and `groupName` carried by every member because
+  a group is no object of its own (docs/format.md).
+- **Speaker notes moved under the canvas**, where PowerPoint, Keynote and
+  Google Slides keep them; in the slide panel they were invisible while an
+  element was selected.
+- **Numbers scrub from their label** and are held to the field's limits.
+- **D8's help layout** moved from a fixed 128px key column to a per-section
+  `fit-content` grid: long keys (and their translations) spilled over the
+  other column. chrome-rulings checks the right edge against the section grid.

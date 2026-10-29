@@ -1083,4 +1083,5 @@ export const es: Catalog = {
   "Soft": "Suave",
   "Elevated": "Elevada",
   "Glow": "Resplandor",
+  "Rename a layer or a group in the Layers list": "Cambiar el nombre de una capa o un grupo en la lista de capas",
 }

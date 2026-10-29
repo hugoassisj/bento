@@ -1077,4 +1077,5 @@ export const strings: Catalog = {
   "Soft": "Pehmeä",
   "Elevated": "Kohotettu",
   "Glow": "Hehku",
+  "Rename a layer or a group in the Layers list": "Nimeä taso tai ryhmä uudelleen tasoluettelossa",
 }

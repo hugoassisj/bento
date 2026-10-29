@@ -1080,4 +1080,5 @@ export const strings: Catalog = {
   "Soft": "М’яка",
   "Elevated": "Піднята",
   "Glow": "Світіння",
+  "Rename a layer or a group in the Layers list": "Перейменувати шар або групу в списку шарів",
 }

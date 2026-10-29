@@ -1069,4 +1069,5 @@ export const strings: Catalog = {
   "Soft": "Mjuk",
   "Elevated": "Upphöjd",
   "Glow": "Glöd",
+  "Rename a layer or a group in the Layers list": "Byt namn på ett lager eller en grupp i lagerlistan",
 }

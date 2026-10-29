@@ -1081,4 +1081,5 @@ export const pt: Catalog = {
   "Soft": "Suave",
   "Elevated": "Elevada",
   "Glow": "Brilho",
+  "Rename a layer or a group in the Layers list": "Renomear uma camada ou um grupo na lista de camadas",
 }

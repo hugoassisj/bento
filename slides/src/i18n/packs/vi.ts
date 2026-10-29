@@ -1070,4 +1070,5 @@ export const strings: Catalog = {
   "Soft": "Mềm",
   "Elevated": "Nổi",
   "Glow": "Phát sáng",
+  "Rename a layer or a group in the Layers list": "Đổi tên lớp hoặc nhóm trong danh sách Lớp",
 }

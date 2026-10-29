@@ -1083,4 +1083,5 @@ export const fr: Catalog = {
   "Soft": "Douce",
   "Elevated": "Élevée",
   "Glow": "Halo",
+  "Rename a layer or a group in the Layers list": "Renommer un calque ou un groupe dans la liste des calques",
 }

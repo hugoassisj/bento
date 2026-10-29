@@ -272,3 +272,53 @@ jobs:
         # leftover lines are hidden for the edit, and a screenshot of the strip
         # beside the caret has no ring-blue in it; the text does not move.
         run: node scripts/test-slides-caret-ring-browser.mjs
+      - name: Shift-click inside a selection in Chromium
+        # A Shift-click inside a multi-selection's box adds or removes the
+        # element under the pointer (the box used to swallow it), touch too.
+        run: node scripts/test-slides-shift-select-browser.mjs
+      - name: Reaching the element under the pointer in Chromium
+        # ⌘-click selects exactly, inside a group; Alt-click digs, also through
+        # a handle on a small label; a 1–3px wobble is a click, not a duplicate;
+        # the right-click menu lists every element under the pointer.
+        run: node scripts/test-slides-pick-layer-browser.mjs
+      - name: Alt-hover measures in Chromium
+        # Distances from the selection to the element under the pointer, at two
+        # zooms; inspection only — no doc change, no undo step; clears cleanly.
+        run: node scripts/test-slides-measure-browser.mjs
+      - name: Layer groups and names in Chromium
+        # Group rows, fold, select; inside a group a click picks a member; rows
+        # and groups rename in place without stealing focus or losing typing.
+        run: node scripts/test-slides-layer-groups-browser.mjs
+      - name: Inspector tabs in Chromium
+        # Format | Animate | Interact: every control has one home; Layers lives
+        # in the side column; tabs and side view hold across reloads.
+        run: node scripts/test-slides-inspector-tabs-browser.mjs
+      - name: Inspector fits its column in Chromium
+        # In en, pt and de across the showcase: nothing past the panel's edge,
+        # no cut dropdown values, the toolbar, colour fields, theme colours and
+        # page-size tiles behave.
+        run: node scripts/test-slides-inspector-look-browser.mjs
+      - name: Inspector copy in Chromium
+        # No stored model value shows as a label; retired wording stays gone.
+        run: node scripts/test-slides-copy-browser.mjs
+      - name: Segmented controls in Chromium
+        run: node scripts/test-slides-segmented-browser.mjs
+      - name: Scrubbing numeric fields in Chromium
+        # Drag a label to change a value: live, one undo step, ×10 with Shift,
+        # never past the field's limits, no dead zone after one.
+        run: node scripts/test-slides-scrub-browser.mjs
+      - name: Every numeric field scrubs in Chromium
+        run: node scripts/test-slides-scrub-coverage-browser.mjs
+      - name: Hints in Chromium
+        # One tooltip for the chrome: on pointer only, title handed back,
+        # shortcut chips; section help folded behind a '?'.
+        run: node scripts/test-slides-hints-browser.mjs
+      - name: Speaker notes pane in Chromium
+        # Under the canvas, following the slide, one undo per burst; meets both
+        # side panels; resized from its top edge; folds.
+        run: node scripts/test-slides-notes-pane-browser.mjs
+      - name: Shortcuts sheet fits in Chromium
+        # No key overlaps a description, in en, pt and de, at two widths.
+        run: node scripts/test-slides-help-sheet-browser.mjs
+      - name: Laser fades when released in Chromium
+        run: node scripts/test-slides-laser-release-browser.mjs

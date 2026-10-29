@@ -1083,4 +1083,5 @@ export const de: Catalog = {
   "Soft": "Weich",
   "Elevated": "Erhöht",
   "Glow": "Leuchten",
+  "Rename a layer or a group in the Layers list": "Eine Ebene oder Gruppe in der Ebenenliste umbenennen",
 }

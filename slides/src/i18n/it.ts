@@ -1083,4 +1083,5 @@ export const it: Catalog = {
   "Soft": "Morbida",
   "Elevated": "Rialzata",
   "Glow": "Bagliore",
+  "Rename a layer or a group in the Layers list": "Rinominare un livello o un gruppo nell’elenco dei livelli",
 }

@@ -1083,4 +1083,5 @@ export const zhHans: Catalog = {
   "Soft": "柔和",
   "Elevated": "悬浮",
   "Glow": "光晕",
+  "Rename a layer or a group in the Layers list": "在图层列表中重命名图层或组",
 }
