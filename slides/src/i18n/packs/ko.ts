@@ -1075,4 +1075,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "슬라이드 레이아웃에서 이것이 어느 상자인지 나타냅니다. 슬라이드를 다른 레이아웃으로 바꾸면 내용이 새 레이아웃에서 역할이 같은 상자로 옮겨집니다. PowerPoint의 개체 틀과 같습니다.",
   "Pie": "원형",
   "Scatter": "분산형",
+  "Subtle": "은은하게",
+  "Soft": "부드럽게",
+  "Elevated": "떠 있게",
+  "Glow": "빛 번짐",
 }

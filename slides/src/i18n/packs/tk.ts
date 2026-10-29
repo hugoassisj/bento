@@ -1108,4 +1108,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Bu slaýdyň ýerleşişiniň haýsy gutusydygyny görkezýär. Slaýdy başga ýerleşişe geçireniňizde, mazmun täze ýerleşişiň şol bir roly bolan gutusyna geçýär — PowerPoint-daky ýer saklaýjy ýaly.",
   "Pie": "Tegelek",
   "Scatter": "Nokatly",
+  "Subtle": "Ýeňil",
+  "Soft": "Ýumşak",
+  "Elevated": "Galdyrylan",
+  "Glow": "Ýalkym",
 }

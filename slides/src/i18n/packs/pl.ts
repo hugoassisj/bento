@@ -1082,4 +1082,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Który obszar układu slajdu to jest. Gdy zmienisz układ slajdu, zawartość przejdzie do obszaru o tej samej roli w nowym układzie — jak symbol zastępczy w PowerPoincie.",
   "Pie": "Kołowy",
   "Scatter": "Punktowy",
+  "Subtle": "Delikatny",
+  "Soft": "Miękki",
+  "Elevated": "Uniesiony",
+  "Glow": "Poświata",
 }

@@ -1094,4 +1094,8 @@ export const fr: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Le cadre de la disposition de la diapositive auquel correspond cet élément. Si vous passez la diapositive à une autre disposition, le contenu va dans le cadre de même rôle de la nouvelle disposition, comme un espace réservé dans PowerPoint.",
   "Pie": "Secteurs",
   "Scatter": "Nuage de points",
+  "Subtle": "Subtile",
+  "Soft": "Douce",
+  "Elevated": "Surélevée",
+  "Glow": "Halo",
 }

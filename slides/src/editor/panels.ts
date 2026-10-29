@@ -760,7 +760,7 @@ export class PropsPanel {
       this.mini(t('Angle'), el.rotation, (v, fin) => this.setNum(el.id, 'rotation', v, fin), ICONS.rotate),
     )
     if (el.type === 'shape' && el.shape === 'rect') {
-      geo.append(this.mini(t('Corner radius'), el.radius, (v, fin) =>
+      geo.append(this.mini(t('Corner radius'), el.radius ?? 0, (v, fin) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin), ICONS.radius, { min: 0 }))
     }
     block.appendChild(geo)
@@ -792,7 +792,7 @@ export class PropsPanel {
       // the preset drawn at a quarter of its size, so all four fit a tile
       swatch.style.boxShadow = `${(sh.x ?? 0) / 4}px ${(sh.y ?? 0) / 4}px ${sh.blur / 4}px ${sh.color}`
       const name = document.createElement('span')
-      name.textContent = t(key)
+      name.textContent = t(SHADOW_NAMES[key] ?? key)
       b.append(swatch, name)
       b.addEventListener('click', () => { if (key !== current) this.mutate(el.id, (e) => { e.shadow = { ...SHADOW_PRESETS[key] } }, true) })
       tiles.appendChild(b)
@@ -818,7 +818,7 @@ export class PropsPanel {
       grid.append(
         this.mini(t('X'), sh.x ?? 0, (v, fin) => setShadow(i, { x: v }, fin)),
         this.mini(t('Y'), sh.y ?? 0, (v, fin) => setShadow(i, { y: v }, fin)),
-        this.mini(t('Blur'), sh.blur, (v, fin) => setShadow(i, { blur: Math.max(v, 0) }, fin), undefined, { min: 0 }),
+        this.mini(t('Blur'), sh.blur, (v, fin) => setShadow(i, { blur: Math.max(v, 0) }, fin), ICONS.blur, { min: 0 }),
       )
       this.host.appendChild(grid)
       this.field(this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
@@ -3225,6 +3225,9 @@ export function combineColor(hex: string, a: number): string {
 }
 
 /** Aesthetic shadow presets offered in the panel (custom values stay 'custom'). */
+/** the presets' names on screen (the keys are stored in no file, but read as words) */
+const SHADOW_NAMES: Record<string, string> = { subtle: 'Subtle', soft: 'Soft', elevated: 'Elevated', glow: 'Glow' }
+
 const SHADOW_PRESETS: Record<string, { x?: number; y?: number; blur: number; color: string }> = {
   subtle: { y: 2, blur: 10, color: 'rgba(10,16,28,0.25)' },
   soft: { y: 10, blur: 28, color: 'rgba(10,16,28,0.32)' },

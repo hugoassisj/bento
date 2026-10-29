@@ -1091,4 +1091,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "أيّ مربع في تخطيط الشريحة هذا. عند تبديل الشريحة إلى تخطيط آخر، ينتقل المحتوى إلى مربع التخطيط الجديد الذي له الدور نفسه — كما يفعل العنصر النائب في PowerPoint.",
   "Pie": "دائري",
   "Scatter": "مبعثر",
+  "Subtle": "خفيف",
+  "Soft": "ناعم",
+  "Elevated": "مرتفع",
+  "Glow": "توهج",
 }

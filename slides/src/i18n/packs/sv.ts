@@ -1080,4 +1080,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Vilken ruta i bildens layout detta är. När du byter bilden till en annan layout flyttas innehållet till rutan med samma roll i den nya layouten — precis som en platshållare i PowerPoint.",
   "Pie": "Cirkel",
   "Scatter": "Punkt",
+  "Subtle": "Diskret",
+  "Soft": "Mjuk",
+  "Elevated": "Upphöjd",
+  "Glow": "Glöd",
 }

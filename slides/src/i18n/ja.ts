@@ -1094,4 +1094,8 @@ export const ja: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "スライドのレイアウトの中で、これがどの枠かを示します。スライドを別のレイアウトに切り替えると、内容は新しいレイアウトの同じ役割の枠に移動します（PowerPoint のプレースホルダーと同じです）。",
   "Pie": "円",
   "Scatter": "散布図",
+  "Subtle": "控えめ",
+  "Soft": "ソフト",
+  "Elevated": "浮き上がり",
+  "Glow": "グロー",
 }

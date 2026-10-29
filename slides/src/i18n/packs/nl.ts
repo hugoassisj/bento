@@ -1079,4 +1079,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Welk vak van de dia-indeling dit is. Als je de dia een andere indeling geeft, verhuist de inhoud naar het vak met dezelfde rol in de nieuwe indeling — zoals een tijdelijke aanduiding in PowerPoint.",
   "Pie": "Cirkel",
   "Scatter": "Spreiding",
+  "Subtle": "Subtiel",
+  "Soft": "Zacht",
+  "Elevated": "Verhoogd",
+  "Glow": "Gloed",
 }

@@ -1091,4 +1091,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "यह स्लाइड के लेआउट का कौन-सा बॉक्स है। स्लाइड को दूसरे लेआउट में बदलने पर कंटेंट नए लेआउट के उसी भूमिका वाले बॉक्स में चला जाता है — जैसे PowerPoint में प्लेसहोल्डर।",
   "Pie": "पाई",
   "Scatter": "स्कैटर",
+  "Subtle": "हल्की",
+  "Soft": "मुलायम",
+  "Elevated": "उभरी",
+  "Glow": "चमक",
 }

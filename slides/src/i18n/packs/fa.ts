@@ -1087,4 +1087,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "این کدام کادر از طرح‌بندی اسلاید است. وقتی اسلاید را به طرح‌بندی دیگری تغییر می‌دهید، محتوا به کادری با همان نقش در طرح‌بندی جدید منتقل می‌شود — مانند جانگهدار در PowerPoint.",
   "Pie": "دایره‌ای",
   "Scatter": "پراکندگی",
+  "Subtle": "ملایم",
+  "Soft": "نرم",
+  "Elevated": "برجسته",
+  "Glow": "درخشش",
 }

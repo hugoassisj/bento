@@ -1084,4 +1084,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "איזו תיבה בפריסת השקופית זו. כשמחליפים את השקופית לפריסה אחרת, התוכן עובר לתיבה בעלת אותו תפקיד בפריסה החדשה — כמו מציין מיקום ב-PowerPoint.",
   "Pie": "עוגה",
   "Scatter": "פיזור",
+  "Subtle": "עדין",
+  "Soft": "רך",
+  "Elevated": "מוגבה",
+  "Glow": "זוהר",
 }

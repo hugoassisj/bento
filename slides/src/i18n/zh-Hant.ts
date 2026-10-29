@@ -1094,4 +1094,8 @@ export const zhHant: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "表示這是投影片版面配置中的哪個方塊。將投影片切換為其他版面配置時，內容會移到新版面配置中角色相同的方塊，就像 PowerPoint 中的版面配置區一樣。",
   "Pie": "圓形圖",
   "Scatter": "散佈圖",
+  "Subtle": "輕微",
+  "Soft": "柔和",
+  "Elevated": "懸浮",
+  "Glow": "發光",
 }

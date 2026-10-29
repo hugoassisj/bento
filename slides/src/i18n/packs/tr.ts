@@ -1082,4 +1082,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Bunun slayt düzenindeki hangi kutu olduğu. Slaytı başka bir düzene geçirdiğinizde içerik, yeni düzende aynı role sahip kutuya taşınır — PowerPoint’teki yer tutucu gibi.",
   "Pie": "Pasta",
   "Scatter": "Dağılım",
+  "Subtle": "Hafif",
+  "Soft": "Yumuşak",
+  "Elevated": "Yükseltilmiş",
+  "Glow": "Parıltı",
 }

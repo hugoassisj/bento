@@ -1100,4 +1100,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Kung aling kahon ito sa layout ng slide. Kapag inilipat mo ang slide sa ibang layout, lilipat ang nilalaman sa kahon ng bagong layout na may parehong role — gaya ng placeholder sa PowerPoint.",
   "Pie": "Pie",
   "Scatter": "Scatter",
+  "Subtle": "Banayad",
+  "Soft": "Malambot",
+  "Elevated": "Nakaangat",
+  "Glow": "Liwanag",
 }

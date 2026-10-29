@@ -1083,4 +1083,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Какой блок макета слайда это. При смене макета слайда содержимое переходит в блок нового макета с той же ролью — как заполнитель в PowerPoint.",
   "Pie": "Круговая",
   "Scatter": "Точечная",
+  "Subtle": "Лёгкая",
+  "Soft": "Мягкая",
+  "Elevated": "Приподнятая",
+  "Glow": "Свечение",
 }

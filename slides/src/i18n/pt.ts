@@ -1092,4 +1092,8 @@ export const pt: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Qual caixa do layout do slide é esta. Ao trocar o slide para outro layout, o conteúdo vai para a caixa do novo layout com a mesma função — como um espaço reservado no PowerPoint.",
   "Pie": "Pizza",
   "Scatter": "Dispersão",
+  "Subtle": "Sutil",
+  "Soft": "Suave",
+  "Elevated": "Elevada",
+  "Glow": "Brilho",
 }

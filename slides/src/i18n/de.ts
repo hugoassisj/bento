@@ -1094,4 +1094,8 @@ export const de: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Welcher Bereich des Folienlayouts dies ist. Wenn Sie der Folie ein anderes Layout zuweisen, wandert der Inhalt in den Bereich des neuen Layouts mit derselben Rolle — wie ein Platzhalter in PowerPoint.",
   "Pie": "Kreis",
   "Scatter": "Punkte",
+  "Subtle": "Dezent",
+  "Soft": "Weich",
+  "Elevated": "Erhöht",
+  "Glow": "Leuchten",
 }

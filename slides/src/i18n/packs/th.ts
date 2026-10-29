@@ -1085,4 +1085,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "นี่คือกล่องใดในเลย์เอาต์ของสไลด์ เมื่อคุณเปลี่ยนสไลด์เป็นเลย์เอาต์อื่น เนื้อหาจะย้ายไปยังกล่องที่มีบทบาทเดียวกันในเลย์เอาต์ใหม่ — เหมือนตัวยึดตำแหน่งใน PowerPoint",
   "Pie": "วงกลม",
   "Scatter": "กระจาย",
+  "Subtle": "บางเบา",
+  "Soft": "นุ่มนวล",
+  "Elevated": "ลอยขึ้น",
+  "Glow": "เรืองแสง",
 }

@@ -1088,4 +1088,8 @@ export const strings: Catalog = {
   "Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.": "Mikä dian asettelun ruutu tämä on. Kun vaihdat dialle toisen asettelun, sisältö siirtyy uuden asettelun ruutuun, jolla on sama rooli — kuten paikkamerkki PowerPointissa.",
   "Pie": "Ympyrä",
   "Scatter": "Piste",
+  "Subtle": "Hienovarainen",
+  "Soft": "Pehmeä",
+  "Elevated": "Kohotettu",
+  "Glow": "Hehku",
 }
