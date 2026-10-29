@@ -18,7 +18,9 @@
 //   5. colours: swatch · hex · %, a typed hex is the colour; Stroke comes and
 //      goes from its header's + and −; the theme's colours sit behind a
 //      palette button, NAMED, and a colour taken from them shows its name in
-//      the field (it follows the theme) until it is detached.
+//      the field (it follows the theme) until it is detached;
+//   6. page sizes are tiles drawn at their proportions, one click each;
+//      Custom opens W and H, held to 320–4000.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -158,6 +160,23 @@ try {
       ok(linked !== 'null' && await token.count() === 1, `a theme colour is recorded as one, and the field shows its name (${await token.textContent().catch(() => '')})`)
       await token.locator('.ed-color-detach').click(); await p.waitForTimeout(250)
       ok(await p.evaluate(() => !window.bento.doc.slides[0].elements[0].themeRefs?.fill) && await p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body .ed-color-hex').count() === 1, 'detaching makes it a plain colour again, hex and all')
+
+      // page sizes
+      await p.keyboard.press('Escape'); await p.mouse.click(5, 500); await p.waitForTimeout(250)
+      const tiles = p.locator('.ed-props .ed-page-tile')
+      const shapes = await tiles.evaluateAll((bs) => bs.map((b) => { const r = b.querySelector('.ed-page-shape').getBoundingClientRect(); return Math.round(r.width / r.height * 100) / 100 }))
+      ok(await tiles.count() === 7 && shapes[0] > 1.7 && shapes[3] < 0.6, `seven tiles, each drawn at its proportions (${shapes.join(' ')})`)
+      await tiles.nth(1).click(); await p.waitForTimeout(250)
+      ok(await p.evaluate(() => `${window.bento.doc.size.width}x${window.bento.doc.size.height}`) === '960x720', 'one click sets 4:3')
+      ok(await p.locator('.ed-props .ed-page-tile[aria-checked="true"]').getAttribute('aria-label') === 'Classic 4:3', 'and the tile shows it is chosen')
+      await tiles.last().click(); await p.waitForTimeout(150)
+      const wField = p.locator('.ed-props .ed-page-tiles + .ed-grid2 .ed-mini').first()
+      ok(await wField.isVisible(), 'Custom opens W and H')
+      const wb = await wField.locator('span').boundingBox()
+      await p.mouse.move(wb.x + 3, wb.y + wb.height / 2); await p.mouse.down(); await p.mouse.move(wb.x - 2000, wb.y + wb.height / 2, { steps: 40 })
+      ok(+(await wField.locator('input').inputValue()) === 320, `a width drag stops at 320 (${await wField.locator('input').inputValue()})`)
+      await p.mouse.up(); await p.waitForTimeout(250)
+      ok(await p.evaluate(() => window.bento.doc.size.width) === 320, 'and the deck agrees')
     }
     ok(errors.length === 0, `${tag} no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
     await ctx.close()

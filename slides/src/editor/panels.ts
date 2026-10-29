@@ -465,30 +465,57 @@ export class PropsPanel {
     const { width: dw, height: dh } = this.store.doc.size
     const presetKey =
       Object.entries(PropsPanel.PAGE_PRESETS).find(([, s]) => s.w === dw && s.h === dh)?.[0] ?? 'Custom…'
-    let widthRow: HTMLElement
-    let heightRow: HTMLElement
-    const showCustomSize = (show: boolean) => {
-      widthRow.style.display = show ? '' : 'none'
-      heightRow.style.display = show ? '' : 'none'
+    // The sizes as tiles, each DRAWN at its proportions, its ratio under it —
+    // a page size is a shape before it is a name, and every option is one
+    // click. Custom opens W and H below.
+    const tiles = document.createElement('div')
+    tiles.className = 'ed-page-tiles'
+    tiles.setAttribute('role', 'radiogroup')
+    tiles.setAttribute('aria-label', t('Page size'))
+    tiles.title = t(ROW_TIPS['Page size'])
+    let size: HTMLElement
+    const tile = (key: string, w: number, h: number, caption: string) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-page-tile'
+      b.setAttribute('role', 'radio')
+      b.setAttribute('aria-checked', String(key === presetKey))
+      b.title = t(key)
+      b.setAttribute('aria-label', t(key))
+      const shape = document.createElement('span')
+      shape.className = 'ed-page-shape'
+      // the longer side 22px, the shorter in proportion
+      const k = 22 / Math.max(w, h)
+      shape.style.width = `${Math.round(w * k)}px`
+      shape.style.height = `${Math.round(h * k)}px`
+      const cap = document.createElement('span')
+      cap.textContent = caption
+      b.append(shape, cap)
+      b.addEventListener('click', () => {
+        const s = PropsPanel.PAGE_PRESETS[key]
+        if (s) this.edit(() => { this.store.doc.size = { width: s.w, height: s.h } }, true)
+        else { size.hidden = false; for (const x of tiles.children) x.setAttribute('aria-checked', String(x === b)) }
+      })
+      tiles.appendChild(b)
     }
-    this.row('Page size', this.select(
-      [...Object.keys(PropsPanel.PAGE_PRESETS), 'Custom…'],
-      presetKey,
-      (v) => {
-        const s = PropsPanel.PAGE_PRESETS[v]
-        if (s) {
-          showCustomSize(false)
-          this.edit(() => { this.store.doc.size = { width: s.w, height: s.h } }, true)
-        } else {
-          showCustomSize(true)
-        }
-      },
-    ))
-    widthRow = this.row('Width', this.number(dw, 10, (v, fin) =>
-      this.edit(() => { this.store.doc.size.width = Math.max(320, Math.min(4000, Math.round(v))) }, fin)))
-    heightRow = this.row('Height', this.number(dh, 10, (v, fin) =>
-      this.edit(() => { this.store.doc.size.height = Math.max(320, Math.min(4000, Math.round(v))) }, fin)))
-    showCustomSize(presetKey === 'Custom…')
+    for (const [key, s] of Object.entries(PropsPanel.PAGE_PRESETS)) {
+      // 'Widescreen 16:9' → '16:9'; 'A4 landscape' → 'A4'
+      tile(key, s.w, s.h, /\d+:\d+/.exec(key)?.[0] ?? key.split(' ')[0])
+    }
+    tile('Custom…', presetKey === 'Custom…' ? dw : 4, presetKey === 'Custom…' ? dh : 3, t('Custom…').replace(/…$/, ''))
+    this.host.appendChild(tiles)
+    size = document.createElement('div')
+    size.className = 'ed-grid2'
+    size.append(
+      this.mini(t('W'), dw, (v, fin) =>
+        this.edit(() => { this.store.doc.size.width = Math.round(v) }, fin), undefined, { min: 320, max: 4000 }),
+      this.mini(t('H'), dh, (v, fin) =>
+        this.edit(() => { this.store.doc.size.height = Math.round(v) }, fin), undefined, { min: 320, max: 4000 }),
+    )
+    size.firstElementChild!.setAttribute('title', t('Width'))
+    size.lastElementChild!.setAttribute('title', t('Height'))
+    size.hidden = presetKey !== 'Custom…'
+    this.host.appendChild(size)
     // These live in doc.present because they are AUDIENCE-facing: what the
     // author designs is what a recipient's audience sees. Contrast reduce-motion
     // and locale, which are viewer preferences and deliberately never enter the

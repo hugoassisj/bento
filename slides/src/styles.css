@@ -3355,3 +3355,16 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize !important; use
 .ed-topbar .ed-insert { padding-inline: 10px; border-inline: 1px solid var(--line); }
 .ed-topbar.ed-bar-fold .ed-insert { border-inline: 0; padding-inline: 0; }
 .bento-laser-dot.bento-remote:not(.visible) { transition: left 0.045s linear, top 0.045s linear, opacity 0.3s ease-out; }
+
+/* page sizes as tiles (panels.ts, Deck): each drawn at its proportions */
+.ed-page-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-bottom: 6px; }
+.ed-page-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; height: 52px; padding: 4px 2px 5px;
+  font: inherit; font-size: 11px; color: var(--muted); background-color: var(--field); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.ed-page-tile > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-page-tile:hover { color: var(--ink); background-color: var(--chrome-2); }
+.ed-page-tile:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
+.ed-page-tile[aria-checked='true'] { color: var(--ink); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.ed-page-shape { flex: none; border: 1.5px solid currentColor; border-radius: 2px; box-sizing: border-box; }
+.ed-page-tile[aria-checked='true'] .ed-page-shape { background: color-mix(in srgb, var(--blue) 25%, transparent); border-color: var(--blue); }
