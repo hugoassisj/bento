@@ -949,4 +949,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} afbeeldingen worden geüpload…",
   "Not rendered: {what}": "Niet weergegeven: {what}",
   "no space just inside the $ signs": "geen spatie direct binnen de $-tekens",
+  "Select {name}": "{name} selecteren",
+  "Add an element to the selection, or take it out": "Een element aan de selectie toevoegen, of eruit halen",
+  "Select the element under the pointer, even inside a group": "Het element onder de aanwijzer selecteren, ook binnen een groep",
+  "Select the element behind it; click again to go deeper": "Het element erachter selecteren; klik opnieuw om dieper te gaan",
+  "Right-click": "Rechtsklik",
+  "Lists every element under the pointer, to select one that is covered": "Toont alle elementen onder de aanwijzer, om een bedekt element te selecteren",
 }

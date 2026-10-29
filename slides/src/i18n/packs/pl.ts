@@ -952,4 +952,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} obrazów przesyłanych…",
   "Not rendered: {what}": "Nie wyrenderowano: {what}",
   "no space just inside the $ signs": "bez spacji tuż wewnątrz znaków $",
+  "Select {name}": "Zaznacz {name}",
+  "Add an element to the selection, or take it out": "Dodaj element do zaznaczenia lub go z niego usuń",
+  "Select the element under the pointer, even inside a group": "Zaznacz element pod wskaźnikiem, nawet wewnątrz grupy",
+  "Select the element behind it; click again to go deeper": "Zaznacz element znajdujący się pod spodem; kliknij ponownie, aby zejść głębiej",
+  "Right-click": "Kliknięcie prawym przyciskiem",
+  "Lists every element under the pointer, to select one that is covered": "Wyświetla wszystkie elementy pod wskaźnikiem, aby zaznaczyć zasłonięty",
 }

@@ -954,4 +954,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} תמונות מועלות…",
   "Not rendered: {what}": "לא הוצג: {what}",
   "no space just inside the $ signs": "ללא רווח מיד בתוך סימני ה־$",
+  "Select {name}": "בחירת {name}",
+  "Add an element to the selection, or take it out": "הוספת רכיב לבחירה, או הוצאתו ממנה",
+  "Select the element under the pointer, even inside a group": "בחירת הרכיב שמתחת לסמן, גם בתוך קבוצה",
+  "Select the element behind it; click again to go deeper": "בחירת הרכיב שמאחור; לחיצה נוספת יורדת עמוק יותר",
+  "Right-click": "לחיצה ימנית",
+  "Lists every element under the pointer, to select one that is covered": "מציג את כל הרכיבים שמתחת לסמן, כדי לבחור רכיב מוסתר",
 }

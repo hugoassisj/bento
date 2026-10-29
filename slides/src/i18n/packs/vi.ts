@@ -951,4 +951,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} hình đang tải lên…",
   "Not rendered: {what}": "Không hiển thị được: {what}",
   "no space just inside the $ signs": "không có dấu cách ngay bên trong cặp dấu $",
+  "Select {name}": "Chọn {name}",
+  "Add an element to the selection, or take it out": "Thêm một phần tử vào vùng chọn, hoặc bỏ nó ra",
+  "Select the element under the pointer, even inside a group": "Chọn phần tử dưới con trỏ, kể cả trong một nhóm",
+  "Select the element behind it; click again to go deeper": "Chọn phần tử phía sau; nhấp lần nữa để đi sâu hơn",
+  "Right-click": "Nhấp chuột phải",
+  "Lists every element under the pointer, to select one that is covered": "Liệt kê mọi phần tử dưới con trỏ, để chọn một phần tử bị che",
 }

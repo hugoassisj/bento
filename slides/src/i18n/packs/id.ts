@@ -951,4 +951,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} gambar diunggah…",
   "Not rendered: {what}": "Tidak dirender: {what}",
   "no space just inside the $ signs": "tanpa spasi tepat di dalam tanda $",
+  "Select {name}": "Pilih {name}",
+  "Add an element to the selection, or take it out": "Tambahkan elemen ke pilihan, atau keluarkan",
+  "Select the element under the pointer, even inside a group": "Pilih elemen di bawah penunjuk, bahkan di dalam grup",
+  "Select the element behind it; click again to go deeper": "Pilih elemen di belakangnya; klik lagi untuk masuk lebih dalam",
+  "Right-click": "Klik kanan",
+  "Lists every element under the pointer, to select one that is covered": "Menampilkan semua elemen di bawah penunjuk, untuk memilih yang tertutup",
 }

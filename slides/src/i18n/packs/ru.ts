@@ -953,4 +953,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} изображений загружаются…",
   "Not rendered: {what}": "Не отображено: {what}",
   "no space just inside the $ signs": "без пробела сразу внутри знаков $",
+  "Select {name}": "Выбрать {name}",
+  "Add an element to the selection, or take it out": "Добавить элемент в выделение или убрать его",
+  "Select the element under the pointer, even inside a group": "Выбрать элемент под указателем, даже внутри группы",
+  "Select the element behind it; click again to go deeper": "Выбрать элемент позади; щёлкните ещё раз, чтобы пойти глубже",
+  "Right-click": "Щелчок правой кнопкой",
+  "Lists every element under the pointer, to select one that is covered": "Показывает все элементы под указателем, чтобы выбрать перекрытый",
 }

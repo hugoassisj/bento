@@ -961,4 +961,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} صور قيد الرفع…",
   "Not rendered: {what}": "لم يُعرَض: {what}",
   "no space just inside the $ signs": "بدون مسافة مباشرة داخل علامتي $",
+  "Select {name}": "تحديد {name}",
+  "Add an element to the selection, or take it out": "إضافة عنصر إلى التحديد أو إزالته منه",
+  "Select the element under the pointer, even inside a group": "تحديد العنصر الموجود تحت المؤشر، حتى داخل مجموعة",
+  "Select the element behind it; click again to go deeper": "تحديد العنصر الموجود خلفه؛ انقر مجددًا للتعمق أكثر",
+  "Right-click": "النقر بزر الماوس الأيمن",
+  "Lists every element under the pointer, to select one that is covered": "يسرد كل العناصر تحت المؤشر لتحديد عنصر مغطّى",
 }

@@ -964,4 +964,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n}টি ছবি আপলোড হচ্ছে…",
   "Not rendered: {what}": "রেন্ডার হয়নি: {what}",
   "no space just inside the $ signs": "$ চিহ্নের ঠিক ভিতরে কোনো স্পেস নয়",
+  "Select {name}": "{name} নির্বাচন করুন",
+  "Add an element to the selection, or take it out": "নির্বাচনে একটি উপাদান যোগ করুন, অথবা সরিয়ে দিন",
+  "Select the element under the pointer, even inside a group": "পয়েন্টারের নিচের উপাদানটি নির্বাচন করুন, গ্রুপের ভেতরে থাকলেও",
+  "Select the element behind it; click again to go deeper": "পেছনের উপাদানটি নির্বাচন করুন; আরও গভীরে যেতে আবার ক্লিক করুন",
+  "Right-click": "রাইট-ক্লিক",
+  "Lists every element under the pointer, to select one that is covered": "পয়েন্টারের নিচের সব উপাদান দেখায়, যাতে ঢাকা পড়া একটি নির্বাচন করা যায়",
 }

@@ -963,4 +963,10 @@ export const pt: Catalog = {
   "{n} pictures still uploading…": "{n} imagens sendo enviadas…",
   "Not rendered: {what}": "Não renderizada: {what}",
   "no space just inside the $ signs": "sem espaço logo dentro dos sinais $",
+  "Select {name}": "Selecionar {name}",
+  "Add an element to the selection, or take it out": "Adicionar um elemento à seleção, ou retirá-lo",
+  "Select the element under the pointer, even inside a group": "Selecionar o elemento sob o ponteiro, mesmo dentro de um grupo",
+  "Select the element behind it; click again to go deeper": "Selecionar o elemento de trás; clique de novo para ir mais fundo",
+  "Right-click": "Clique direito",
+  "Lists every element under the pointer, to select one that is covered": "Lista todos os elementos sob o ponteiro, para selecionar um que esteja coberto",
 }

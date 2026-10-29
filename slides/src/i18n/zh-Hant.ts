@@ -965,4 +965,10 @@ export const zhHant: Catalog = {
   "{n} pictures still uploading…": "{n} 張圖片上傳中…",
   "Not rendered: {what}": "未能呈現：{what}",
   "no space just inside the $ signs": "$ 符號內側不要緊貼空格",
+  "Select {name}": "選取 {name}",
+  "Add an element to the selection, or take it out": "將元素加入選取範圍，或從中移除",
+  "Select the element under the pointer, even inside a group": "選取指標下的元素，即使它在群組內",
+  "Select the element behind it; click again to go deeper": "選取後方的元素；再按一次可繼續往下",
+  "Right-click": "按右鍵",
+  "Lists every element under the pointer, to select one that is covered": "列出指標下的所有元素，以便選取被遮住的元素",
 }

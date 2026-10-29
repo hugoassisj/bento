@@ -27,6 +27,7 @@ type DrawKind = 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'po
 import { CommentsUI } from './comments'
 import { StepBadges } from './stepbadges'
 import type { Peer } from '../sync/session'
+import { isMacOS } from '../screens'
 
 /** How far a finger may travel and still count as a tap rather than a drag.
  *  10px matches what a thumb does on glass while trying to hold still. */
@@ -354,14 +355,42 @@ export class SlideCanvas {
     // which otherwise swallows clicks over the current selection.
     document.addEventListener('mousedown', (ev) => {
       if (!ev.altKey || ev.button !== 0 || this.pathEditor.active || this.bezierEditor.active) return
-      // Alt on a resize/rotate handle means center-scale, not deep-select
-      if (ev.target instanceof Element && ev.target.closest('.moveable-control-box')) return
       const r = this.scaleHost.getBoundingClientRect()
       if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return
       if (ev.target instanceof Element && ev.target.closest('.ed-sidebar, .ed-props, .ed-topbar')) return
+      // Alt-DRAG on a resize/rotate handle means center-scale, not deep-select.
+      // But below ~100% zoom a small element's edge handles cover its middle,
+      // so aiming at a selected label lands on a handle: an Alt-press there
+      // that is released without moving was a click, and digs on release.
+      if (ev.target instanceof Element && ev.target.closest('.moveable-control-box')) {
+        const x0 = ev.clientX, y0 = ev.clientY
+        window.addEventListener('mouseup', (up) => {
+          if (Math.hypot(up.clientX - x0, up.clientY - y0) <= 3) this.deepSelect(x0, y0)
+        }, { capture: true, once: true })
+        return
+      }
       ev.preventDefault()
       ev.stopPropagation()
-      this.deepSelect((ev.clientX - r.left) / this.scale, (ev.clientY - r.top) / this.scale)
+      this.deepSelect(ev.clientX, ev.clientY)
+    }, true)
+
+    // ⌘-click (Ctrl elsewhere) selects exactly the element under the pointer,
+    // even a member of a group — the Figma rule. Decided on the click, not the
+    // press, because a ⌘-press that moves is a duplicate-drag; the press has
+    // already selected the whole group by then, and this narrows it. (Ctrl on
+    // a Mac is the right-click, which has its own way in: the menu lists every
+    // element under the pointer.)
+    let modPress: { x: number; y: number } | null = null
+    const isMod = (ev: MouseEvent) => (isMacOS() ? ev.metaKey : ev.ctrlKey)
+    this.scroller.addEventListener('mousedown', (ev) => {
+      modPress = ev.button === 0 && isMod(ev) ? { x: ev.clientX, y: ev.clientY } : null
+    }, true)
+    this.scroller.addEventListener('click', (ev) => {
+      const p = modPress
+      modPress = null
+      if (!p || !isMod(ev) || this.editing || Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > 3) return
+      const id = this.topElementAt(ev.clientX, ev.clientY)
+      if (id && !this.isGhost(id)) this.store.select([id])
     }, true)
 
     this.stage.addEventListener('dblclick', (ev) => {
@@ -771,7 +800,7 @@ export class SlideCanvas {
   }
 
   /** Grow a selection to whole groups: any member pulls in its groupId kin.
-   *  (Alt-click deep select bypasses this — that's how you reach a member.) */
+   *  (⌘-click and Alt-click deep select bypass this — that's how you reach a member.) */
   private expandGroups(ids: string[]): string[] {
     const els = this.store.slide.elements
     const groups = new Set(
@@ -801,25 +830,28 @@ export class SlideCanvas {
    *  on screen.) Walking the whole stack rather than taking elementFromPoint is
    *  what steps over Moveable's control box, which covers whatever is selected. */
   private topElementAt(clientX: number, clientY: number): string | null {
-    for (const n of document.elementsFromPoint(clientX, clientY)) {
-      const el = n.closest<HTMLElement>('.bento-el')
-      if (el && this.scaleHost.contains(el) && el.dataset.elId) return el.dataset.elId
-    }
-    return null
+    return this.elementsAt(clientX, clientY)[0] ?? null
   }
 
-  /** Alt-click: select the element under (px, py), digging one step deeper
-   *  below the current selection on each repeat. Coordinates in slide px. */
-  private deepSelect(px: number, py: number) {
-    const stack: string[] = []
-    for (const el of this.store.slide.elements) {
-      if (px < el.x || px > el.x + el.w || py < el.y || py > el.y + el.h) continue
-      const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
-      if (!node || node.style.display === 'none') continue // hidden hover set
-      stack.push(el.id)
+  /** Every element painted under a client point, topmost first: what a click
+   *  reaches, then everything behind it. Rotation and the hidden hover set are
+   *  already accounted for, because the browser answers from what it drew. */
+  elementsAt(clientX: number, clientY: number): string[] {
+    const ids: string[] = []
+    for (const n of document.elementsFromPoint(clientX, clientY)) {
+      const el = n.closest<HTMLElement>('.bento-el')
+      const id = el?.dataset.elId
+      if (id && !ids.includes(id) && this.scaleHost.contains(el)) ids.push(id)
     }
-    if (!stack.length) return
-    const topFirst = stack.reverse() // model order is z-order; topmost last
+    return ids
+  }
+
+  /** Alt-click: select the element under the point, digging one step deeper
+   *  below the current selection on each repeat. Walks the painted stack, not
+   *  model boxes, for the reason topElementAt gives. */
+  private deepSelect(clientX: number, clientY: number) {
+    const topFirst = this.elementsAt(clientX, clientY)
+    if (!topFirst.length) return
     let pick = topFirst[0]
     if (this.store.selection.length === 1) {
       const i = topFirst.indexOf(this.store.selection[0])

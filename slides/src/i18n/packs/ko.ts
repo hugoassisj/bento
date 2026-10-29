@@ -945,4 +945,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "그림 {n}개 업로드 중…",
   "Not rendered: {what}": "렌더링되지 않음: {what}",
   "no space just inside the $ signs": "$ 기호 바로 안쪽에 공백을 두지 마세요",
+  "Select {name}": "{name} 선택",
+  "Add an element to the selection, or take it out": "요소를 선택에 추가하거나 선택에서 빼기",
+  "Select the element under the pointer, even inside a group": "그룹 안에 있더라도 포인터 아래의 요소 선택",
+  "Select the element behind it; click again to go deeper": "뒤에 있는 요소 선택; 다시 클릭하면 더 안쪽으로",
+  "Right-click": "오른쪽 클릭",
+  "Lists every element under the pointer, to select one that is covered": "포인터 아래의 모든 요소를 나열하여 가려진 요소를 선택할 수 있습니다",
 }

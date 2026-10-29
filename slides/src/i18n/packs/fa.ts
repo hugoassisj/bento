@@ -957,4 +957,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} تصویر در حال بارگذاری…",
   "Not rendered: {what}": "نمایش داده نشد: {what}",
   "no space just inside the $ signs": "بدون فاصله درست داخل علامت‌های $",
+  "Select {name}": "انتخاب {name}",
+  "Add an element to the selection, or take it out": "افزودن یک عنصر به انتخاب، یا برداشتن آن",
+  "Select the element under the pointer, even inside a group": "انتخاب عنصر زیر نشانگر، حتی درون یک گروه",
+  "Select the element behind it; click again to go deeper": "انتخاب عنصر پشت آن؛ برای رفتن به عمق بیشتر دوباره کلیک کنید",
+  "Right-click": "کلیک راست",
+  "Lists every element under the pointer, to select one that is covered": "همهٔ عناصر زیر نشانگر را فهرست می‌کند تا عنصر پوشیده‌شده را انتخاب کنید",
 }

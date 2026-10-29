@@ -978,4 +978,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} surat ýüklenýär…",
   "Not rendered: {what}": "Görkezilmedi: {what}",
   "no space just inside the $ signs": "$ belgileriň edil içinde boşluk bolmaly däl",
+  "Select {name}": "{name} saýla",
+  "Add an element to the selection, or take it out": "Saýlawa element goş ýa-da ondan aýyr",
+  "Select the element under the pointer, even inside a group": "Görkezijiniň aşagyndaky elementi saýla, topar içinde bolsa-da",
+  "Select the element behind it; click again to go deeper": "Arkadaky elementi saýla; has çuňňur gitmek üçin ýene basyň",
+  "Right-click": "Sag basmak",
+  "Lists every element under the pointer, to select one that is covered": "Görkezijiniň aşagyndaky ähli elementleri sanap görkezýär, ýapylanyny saýlamak üçin",
 }

@@ -21,6 +21,7 @@ import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
+import { labelFor } from './layerrows'
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
@@ -3094,6 +3095,10 @@ export class Editor {
       ['?', t('This help')],
     ])
     section(colL, t('Canvas'), [
+      [`⇧-${t('click')}`, t('Add an element to the selection, or take it out')],
+      [`${mod}-${t('click')}`, t('Select the element under the pointer, even inside a group')],
+      [`${t('Alt')}-${t('click')}`, t('Select the element behind it; click again to go deeper')],
+      [t('Right-click'), t('Lists every element under the pointer, to select one that is covered')],
       [t('Space-drag'), t('Pan the canvas, including past the edges of the slide')],
       [t('Middle-drag'), t('Pan as well, if your mouse has a middle button')],
       [`${mod}-${t('scroll')}`, t('Zoom in and out')],
@@ -3466,16 +3471,6 @@ export class Editor {
 
   // --- context menu -------------------------------------------------------
 
-  /** The element id under a viewport point on the canvas, or null.
-   *  Walks the stack rather than taking the topmost node, because once
-   *  something is selected Moveable's control box covers it. */
-  private elementIdAtPoint(x: number, y: number): string | null {
-    for (const n of document.elementsFromPoint(x, y)) {
-      const el = n.closest<HTMLElement>('.bento-el')
-      if (el?.dataset.elId && el.closest('.ed-stage-scale')) return el.dataset.elId
-    }
-    return null
-  }
 
   private wireContextMenu() {
     // A right-click COMMITS a live text edit — the press blurs the caret —
@@ -3522,7 +3517,8 @@ export class Editor {
       return true
     }
     if (!target.closest('.ed-scroll')) return false // not the canvas — leave it alone
-    const id = this.elementIdAtPoint(x, y)
+    const stack = this.canvas.elementsAt(x, y)
+    const id = stack[0]
     if (!id) {
       openCtxMenu(x, y, this.canvasMenuItems())
       return true
@@ -3531,8 +3527,23 @@ export class Editor {
     // follows, and the only way the menu's verbs can be honest about what they
     // will act on.
     if (!this.store.selection.includes(id)) this.store.select([id])
-    openCtxMenu(x, y, this.elementMenuItems())
+    openCtxMenu(x, y, [...this.layerPickItems(stack), ...this.elementMenuItems()])
     return true
+  }
+
+  /** With more than one element under the pointer, the menu opens with the
+   *  whole stack, topmost first — the way to reach something buried, without
+   *  knowing a modifier. Labels are the layers panel's own. */
+  private layerPickItems(stack: string[]): CtxItem[] {
+    if (stack.length < 2) return []
+    const rows: CtxItem[] = []
+    for (const id of stack.slice(0, 8)) { // ponytail: capped; a deeper stack is the layers panel's job
+      const el = this.store.element(id)
+      if (!el) continue
+      const on = this.store.selection.length === 1 && this.store.selection[0] === id
+      rows.push({ label: t('Select {name}', { name: labelFor(el, t) }), hint: on ? '✓' : undefined, run: () => this.store.select([id]) })
+    }
+    return [...rows, 'sep']
   }
 
   /**

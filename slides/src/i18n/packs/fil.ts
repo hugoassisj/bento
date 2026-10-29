@@ -970,4 +970,10 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} larawan ina-upload…",
   "Not rendered: {what}": "Hindi na-render: {what}",
   "no space just inside the $ signs": "walang espasyo agad sa loob ng mga $",
+  "Select {name}": "Piliin ang {name}",
+  "Add an element to the selection, or take it out": "Magdagdag ng element sa selection, o alisin ito",
+  "Select the element under the pointer, even inside a group": "Piliin ang element sa ilalim ng pointer, kahit nasa loob ng grupo",
+  "Select the element behind it; click again to go deeper": "Piliin ang element sa likod nito; mag-click ulit para lumalim pa",
+  "Right-click": "Right-click",
+  "Lists every element under the pointer, to select one that is covered": "Inililista ang bawat element sa ilalim ng pointer, para mapili ang natatakpan",
 }
