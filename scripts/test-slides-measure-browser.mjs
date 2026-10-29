@@ -17,7 +17,14 @@
 //      the undo stack is still the load;
 //   6. Alt-click still digs (selects the hovered element), and a plain drag
 //      still moves;
-//   7. the overlay never takes a pointer event.
+//   7. the overlay never takes a pointer event;
+//   8. a full-bleed element is measured AS an element (its outline is drawn),
+//      not mistaken for the slide because its box matches the slide's;
+//   9. measuring survives a native drag-and-drop (a layer row dragged in the
+//      layer list) — that ends without a mouseup, which left the canvas
+//      believing a button was still down;
+//  10. releasing Alt over the canvas is swallowed (on Windows a lone Alt
+//      press opens the browser's menu bar); elsewhere it is left alone.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -153,6 +160,43 @@ try {
   await p.mouse.up(); await p.keyboard.up('Alt'); await p.waitForTimeout(250)
   const x1 = await p.evaluate(() => window.bento.doc.slides[0].elements.find((e) => e.id === 'b').x)
   ok(x1 > x0 + 30, `a plain drag still moves the element (${x0} → ${x1})`)
+
+  // 8. full-bleed element
+  await p.evaluate(() => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    const { width, height } = d.size
+    const r = (id, x, y, w, h, fill) => ({ id, type: 'shape', shape: 'rect', x, y, w, h, rotation: 0, opacity: 1, fill })
+    d.slides = [{ id: 's1', background: '#ffffff', elements: [r('bleed', 0, 0, width, height, '#eeeeee'), r('a', 100, 100, 200, 100, '#5E7699'), r('b', 400, 130, 100, 50, '#E8A87C')] }]
+    window.bento.loadDoc(JSON.stringify(d))
+  })
+  await p.waitForTimeout(400)
+  await p.keyboard.press('Escape')
+  await p.mouse.click((await centre('a')).x, (await centre('a')).y); await p.waitForTimeout(200)
+  await p.keyboard.down('Alt')
+  await hover({ x: sb.x + sb.width * 0.6, y: sb.y + sb.height * 0.6 })
+  ok(await shown() && await p.locator('.ed-measure-target').count() === 1, 'a full-bleed element is outlined as the target, not taken for the slide')
+  await p.keyboard.up('Alt'); await settle()
+
+  // 9. after a native drag-and-drop in the layer list
+  await p.locator('.ed-side-tabs [data-view="layers"]').click(); await p.waitForTimeout(200)
+  await p.mouse.click((await centre('a')).x, (await centre('a')).y); await p.waitForTimeout(200)
+  const layerRows = p.locator('.ed-side-layers .ed-layer')
+  await layerRows.nth(2).dragTo(layerRows.nth(1)); await p.waitForTimeout(250)
+  ok(await selected() === 'a', 'precondition: a layer row was dragged, a still selected')
+  await hover(await centre('b'))
+  await p.keyboard.down('Alt')
+  await p.mouse.move((await centre('b')).x + 2, (await centre('b')).y); await settle()
+  ok(await shown(), 'Alt-hover still measures after a native drag-and-drop')
+
+  // 10. the Alt release
+  await p.evaluate(() => {
+    window.__altUp = []
+    window.addEventListener('keyup', (e) => { if (e.key === 'Alt') window.__altUp.push(e.defaultPrevented) })
+  })
+  await p.keyboard.up('Alt'); await settle()
+  await hover({ x: top.x + top.width / 2, y: top.y + top.height / 2 })
+  await p.keyboard.down('Alt'); await p.keyboard.up('Alt'); await settle()
+  ok(JSON.stringify(await p.evaluate(() => window.__altUp)) === '[true,false]', `Alt released over the canvas is swallowed, over the topbar it is not (${JSON.stringify(await p.evaluate(() => window.__altUp))})`)
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {

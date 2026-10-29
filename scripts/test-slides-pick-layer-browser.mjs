@@ -16,7 +16,16 @@
 //      selected; a plain click still takes the whole group, and ⌘-DRAG still
 //      duplicates;
 //   4. right-click over a stack lists every element under the pointer, top
-//      first, and picking one selects it.
+//      first, and picking one selects it;
+//   5. ⌘-click and ⌘-drag share one dead zone: a ⌘-press that wobbles 2px
+//      (on an unselected group member, or inside the selected group) is a
+//      ⌘-click — it selects the member and leaves no copy behind and nothing
+//      moved — while a real ⌘-drag of a group leaves copies that form a group
+//      of their OWN, not six members of the original;
+//   6. an Alt-press on the selection's box that wobbles 2px is still a click:
+//      it digs, and leaves no empty undo step behind;
+//   7. ⌘-click stands down while the motion-path editor owns the canvas, as
+//      Alt-click's dig does.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -133,6 +142,75 @@ try {
   const lone = await p.$$eval('.ed-ctxmenu .ed-ctxmenu-item', (bs) => bs.some((b) => b.textContent.startsWith('Select ')))
   ok(!lone, 'over a single element the menu has no pick rows')
   await p.keyboard.press('Escape')
+
+  // 5. ⌘ dead zone, and ⌘-drag copies get their own group.
+  const loadRow = (bg = '#ffffff') => p.evaluate((bg) => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    const box = (id, x, y, extra = {}) => ({ id, type: 'shape', shape: 'rect', x, y, w: 160, h: 100, rotation: 0, opacity: 1, fill: '#5E7699', ...extra })
+    d.slides = [{ id: 's1', background: bg, elements: [
+      box('a', 100, 120), box('b', 560, 120), box('c', 1020, 120),
+      box('g1', 470, 440, { groupId: 'g' }), box('g2', 650, 440, { groupId: 'g' }), box('g3', 830, 440, { groupId: 'g' }),
+    ] }]
+    window.bento.loadDoc(JSON.stringify(d))
+  }, bg).then(() => p.waitForTimeout(400))
+  const doc = () => p.evaluate(() => JSON.stringify(window.bento.doc))
+  const wobble = async (pt, key, dx = 2) => {
+    await p.keyboard.down(key)
+    await p.mouse.move(pt.x, pt.y); await p.mouse.down(); await p.mouse.move(pt.x + dx, pt.y, { steps: 2 }); await p.mouse.up()
+    await p.keyboard.up(key)
+    await p.waitForTimeout(300)
+  }
+  await loadRow()
+  let loaded = await doc()
+  await wobble(await centre('g2'), MOD)
+  ok(await doc() === loaded, '⌘-press with 2px of wobble on an unselected group member copies and moves nothing')
+  ok(await selected() === 'g2', `...and selects just that member (${await selected()})`)
+  await deselect()
+  await clickAt(await centre('g1'))
+  ok(await selected() === 'g1,g2,g3', 'precondition: a plain click selects the whole group')
+  await wobble(await centre('g2'), MOD)
+  ok(await doc() === loaded, '⌘-press with 2px of wobble inside the selected group copies and moves nothing')
+  ok(await selected() === 'g2', `...and narrows to the member under the pointer (${await selected()})`)
+  await deselect()
+  await clickAt(await centre('g1'))
+  await wobble(await centre('g2'), MOD, 80)
+  const groups = await p.evaluate(() => window.bento.doc.slides[0].elements.filter((e) => e.groupId).map((e) => `${e.id}:${e.groupId}`))
+  const copies = groups.filter((g) => !/^g\d:/.test(g)).map((g) => g.split(':')[1])
+  ok(copies.length === 3, `a real ⌘-drag of the group leaves three copies (${groups.join(' ')})`)
+  ok(new Set(copies).size === 1 && copies[0] !== 'g', `...which form one group of their own (${copies.join(',')})`)
+  ok(groups.filter((g) => g.endsWith(':g')).length === 3, '...and the original group keeps its three members')
+  await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250)
+
+  // 6. Alt wobble on the selection's box digs, with no empty undo step.
+  const beforeLoad = await doc()
+  await loadRow('#fafafa')
+  loaded = await doc()
+  await clickAt(await centre('a')); await clickAt(await centre('c'), ['Shift'])
+  ok(await selected() === 'a,c', 'precondition: a and c are selected, b sits under their box')
+  await wobble(await centre('b'), 'Alt')
+  ok(await selected() === 'b', `an Alt-press with 2px of wobble on the box digs to b (${await selected()})`)
+  ok(await doc() === loaded, '...and changes nothing')
+  await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
+  ok(await doc() === beforeLoad, '...and records no undo step: one undo takes back the load itself')
+  await p.evaluate(() => window.bento.redo()); await p.waitForTimeout(250)
+
+  // 7. ⌘-click stands down while the motion-path editor is open.
+  await p.evaluate(() => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    d.slides[0].elements.find((e) => e.id === 'a').fx = { loop: { type: 'motion-path', path: 'M0,0 L300,0', duration: 6 } }
+    window.bento.loadDoc(JSON.stringify(d))
+  })
+  await p.waitForTimeout(400)
+  await clickAt(await centre('a'))
+  const editPath = p.locator('button', { hasText: 'Edit path on canvas' })
+  for (const tab of await p.locator('.ed-props .ed-tabs button').all()) {
+    if (await editPath.isVisible()) break
+    await tab.click(); await p.waitForTimeout(150)
+  }
+  await editPath.click(); await p.waitForTimeout(250)
+  ok(await p.locator('.ed-pathedit').count() === 1, 'precondition: the motion-path editor is open')
+  await clickAt(await centre('b'), [MOD])
+  ok(await selected() === 'a', `⌘-click on another element leaves the selection alone while editing the path (${await selected()})`)
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {

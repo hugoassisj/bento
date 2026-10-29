@@ -11,7 +11,11 @@
 //   2. Shift-click takes a selected element back out;
 //   3. a grouped element comes in, and goes out, with its whole group;
 //   4. Shift-DRAG on the selection is still an axis-locked move, and leaves
-//      the selection alone.
+//      the selection alone;
+//   5. a Shift-TAP (touch, with a keyboard's Shift held — an iPad with a
+//      keyboard) inside the selection's box toggles too: the toggle reads the
+//      point from Moveable's event, not from a TouchEvent's absent clientX/Y,
+//      which used to throw out of elementsFromPoint.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -90,6 +94,37 @@ try {
   const after = await frame('b')
   ok(after.x !== before.x && after.y === before.y, `Shift-drag moves the selection on one axis (${before.x},${before.y} → ${after.x},${after.y})`)
   ok(await selected() === 'a,b,c', 'and leaves the selection as it was')
+
+  // 5. Shift-tap, on a touch screen.
+  {
+    const tctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, hasTouch: true })
+    await tctx.route(/^https?:/, (r) => r.abort())
+    const t = await tctx.newPage()
+    t.on('pageerror', (e) => errors.push(e.message))
+    await t.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+    await t.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale [data-el-id]'))
+    await t.evaluate(() => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      const box = (id, x) => ({ id, type: 'shape', shape: 'rect', x, y: 120, w: 160, h: 100, rotation: 0, opacity: 1, fill: '#5E7699' })
+      d.slides = [{ id: 's1', background: '#ffffff', elements: [box('a', 100), box('b', 560), box('c', 1020)] }]
+      window.bento.loadDoc(JSON.stringify(d))
+    })
+    await t.waitForTimeout(400)
+    const at = async (id) => { const b = await t.locator(`.ed-stage-scale [data-el-id="${id}"]`).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
+    const sel = () => t.evaluate(() => window.bento.selection.slice().sort().join(','))
+    const press = async (id, how) => {
+      const pt = await at(id)
+      await t.keyboard.down('Shift')
+      await (how === 'tap' ? t.touchscreen.tap(pt.x, pt.y) : t.mouse.click(pt.x, pt.y))
+      await t.keyboard.up('Shift')
+      await t.waitForTimeout(250)
+    }
+    await press('a', 'click'); await press('c', 'click')
+    ok(await sel() === 'a,c', `touch: precondition, a and c selected (${await sel()})`)
+    await press('b', 'tap')
+    ok(await sel() === 'a,b,c', `touch: Shift-tap inside the selection box adds the element there (${await sel()})`)
+    await tctx.close()
+  }
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
