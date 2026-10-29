@@ -32,12 +32,12 @@ function ok(cond, msg) {
 const EN = {
   format: 'Format', animate: 'Animate', interact: 'Interact', text: 'Text', typo: 'Typography', pos: 'Position & size', look: 'Appearance', arrange: 'Arrange',
   anim: 'Animation', morph: 'Morph', inter: 'Interactivity', slide: 'Slide', layout: 'Layout', theme: 'Theme', deck: 'Deck', trans: 'Transition',
-  role: 'Role', opacity: 'Opacity', pageSize: 'Page size', link: 'Link to', empty: 'Nothing to set here for this selection.',
+  role: 'Layout role', opacity: 'Opacity', pageSize: 'Page size', link: 'Link to', empty: 'Nothing to set here for this selection.',
 }
 const PT = {
   format: 'Formato', animate: 'Animar', interact: 'Interação', text: 'Texto', typo: 'Tipografia', pos: 'Posição e tamanho', look: 'Aparência', arrange: 'Organizar',
   anim: 'Animação', morph: 'Morph', inter: 'Interatividade', slide: 'Slide', layout: 'Layout', theme: 'Tema', deck: 'Documento', trans: 'Transição',
-  role: 'Função', opacity: 'Opacidade', pageSize: 'Tamanho da página', link: 'Vincular a', empty: 'Nada a ajustar aqui para esta seleção.',
+  role: 'Função no layout', opacity: 'Opacidade', pageSize: 'Tamanho da página', link: 'Vincular a', empty: 'Nada a ajustar aqui para esta seleção.',
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })

@@ -468,7 +468,7 @@ export class Editor {
     this.closeOnOutsidePress(moreD)
     const slidesB = btn(ICONS.panelLeft, t('Slides'), () => this.togglePanel('left'), t('Slides — show or hide the slide list'))
     slidesB.classList.add('ed-phone-only')
-    const formatB = btn(ICONS.panelRight, t('Format'), () => this.togglePanel('right'), t('Format — show or hide the properties panel'))
+    const formatB = btn(ICONS.panelRight, t('Format'), () => this.togglePanel('right'), t('Show or hide the Format, Animate and Interact panel (])'))
     formatB.classList.add('ed-phone-only')
     const phoneTools = div('ed-phone-tools')
     phoneTools.append(slidesB, insertD, history)
@@ -1868,7 +1868,7 @@ export class Editor {
     if (isState) {
       const parentIdx = this.store.doc.slides.findIndex((s) => s.id === slide.stateOf)
       num.textContent = slide.name ?? `⤷ ${parentIdx + 1}`
-      num.title = `Interactive state of slide ${parentIdx + 1} — reached via links while presenting`
+      num.title = t('Variant of slide {n} — opens when a linked element is clicked while presenting', { n: parentIdx + 1 })
     } else if (slide.hidden) {
       // The sidebar shows what the AUDIENCE would count. With the default
       // numbering a hidden slide has no number at all, so show the marker
@@ -1892,7 +1892,7 @@ export class Editor {
     const surface = renderThumbnail(slide, this.store.doc, isState ? Math.round(base * 0.84) : base)
     if (slide.comments?.some((c) => !c.resolved)) {
       const badge = div('ed-thumb-cmt')
-      badge.title = `${slide.comments.filter((c) => !c.resolved).length} open comment(s)`
+      badge.title = t('Open comments: {n}', { n: slide.comments.filter((c) => !c.resolved).length })
       item.appendChild(badge)
     }
     const tools = div('ed-thumb-tools')
@@ -3124,7 +3124,7 @@ export class Editor {
       [`${mod}S`, t('Save')],
       [`${mod}Z · ${mod}⇧Z`, t('Undo · redo')],
       [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
-      [`${mod}⇧X`, t('Ghost cut — the selection fades until you paste to move it; Esc cancels')],
+      [`${mod}⇧X`, t('Cut to move — the selection fades until you paste it in its new place; Esc cancels')],
       [`${mod}D`, t('Duplicate selection')],
       [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
       [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
@@ -3149,7 +3149,7 @@ export class Editor {
       [t('Double-click'), t('Add a point on the line; double-click a point to remove it')],
     ])
     section(colR, t('Motion paths'), [
-      [t('Presenting ▸ Loop'), t('Give an element a motion-path loop, then Edit path on canvas')],
+      [t('Animate ▸ Loop animation'), t('Choose Follow a path, then Edit path on canvas')],
       [t('Drag points'), t('Shape the trajectory — the first point is the element’s rest spot')],
       [t('Click a point'), t('Reveal bézier handles; Alt-drag one for a sharp corner')],
       [t('Double-click'), t('Add a point on the path; double-click a point to remove it')],

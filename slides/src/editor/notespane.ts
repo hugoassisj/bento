@@ -23,7 +23,7 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
   head.textContent = t('Speaker notes')
   const area = document.createElement('textarea')
   area.className = 'ed-notespane-text'
-  area.placeholder = t('Notes for presenter view (press S while presenting)…')
+  area.placeholder = t('Notes for the speaker view (press S while presenting)…')
   area.title = t('Shown in the speaker view (Slideshow menu, or S while presenting).') +
     (isMacOS() ? ' ' + t('On macOS, open the speaker view before going fullscreen.') : '')
   pane.append(head, area)

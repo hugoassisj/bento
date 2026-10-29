@@ -44,51 +44,52 @@ const ROW_TIPS: Record<string, string> = {
   'Height': 'Custom slide height in pixels',
   'Slide number': 'Deck-wide. Show the slide counter to the audience while presenting.',
   'Progress bar': 'Deck-wide. Show the thin progress bar along the bottom while presenting.',
-  'Corner arrows': 'Deck-wide. Reveal’s own navigation arrows. Off by default — links and keys already navigate.',
+  'Corner arrows': 'Deck-wide. Show clickable ‹ › arrows in the corner while presenting. Off by default — clicks and arrow keys already move between slides.',
   'Background': 'This slide’s background colour',
-  'Transition': 'How this slide enters. Morph animates elements that share ids with the previous slide.',
-  'Name': 'A friendly name for this slide — shown in link pickers and state badges',
-  'Hover': 'What hovering does while presenting: reveal swaps content sets; focus-group dims the other groups',
-  'Hover dim': 'How strongly the non-hovered groups fade (focus-group mode)',
-  'Default set': 'The hover set everyone sees before any hover happens',
-  'Preview set': 'Which hover set to show on the canvas while you edit',
-  'Role': 'What this text IS in a layout (title, body…) — applying a layout matches elements by role',
+  'Transition': 'How this slide comes in. Morph moves matching elements from the previous slide into place.',
+  'Slide name': 'Optional. Shown in the Link to and Variant of lists and on variant thumbnails, so this slide is easy to pick.',
+  'On hover': 'While presenting, what happens when the pointer rests on an element that has a Hover group: dim the other groups, or switch which content shows.',
+  'Fade others to': 'How visible the other groups stay while one is pointed at: 0 = hidden, 1 = no fading. 0.15 is a soft fade.',
+  'Shown at rest': 'The Hover group whose content shows before the pointer is on anything. Empty = nothing extra.',
+  'Preview on canvas': 'Which Hover group’s content the canvas shows while you edit. Doesn’t change the show.',
+  'Layout role': 'What this text is in the layout (title, body…). Apply layout uses it to put content in the matching place.',
   'Shadow': 'Drop-shadow presets — the shadow follows the element’s real shape, corners and transparency',
   'Color': 'Colour with opacity — pick with the swatch, the % field is how opaque it is',
-  'Enter': 'Entrance animation when the slide appears (plays on non-morph entries; equal order = together)',
-  'Enter secs': 'How long the entrance takes, in seconds',
-  'Reveal step': 'Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)',
-  'Count up': 'Numbers in this text count up from zero when the slide enters',
+  'Entrance': 'How the element appears when the slide comes in. Skipped when it morphs in from the previous slide.',
+  'Entrance (s)': 'How long the entrance takes, in seconds',
+  'Appears on click': '0 = shown with the slide. 1 = appears on the first click or → press, 2 = on the second, and so on. Elements with the same number appear together.',
+  'Count up numbers': 'Numbers in this text count up from zero when the slide enters',
   'Typewriter': 'Code types in a character at a time, behind a cursor, when it appears',
-  'Ambient': 'Continuous motion while the slide is on screen — Ken Burns drift or zoom',
-  'Zoom': 'Ken Burns direction — drift, settle out, or settle in',
-  'Zoom %': 'How far the Ken Burns zoom travels',
-  'Zoom secs': 'How long one Ken Burns pass takes',
+  'Pan & zoom': 'Slow, continuous Ken Burns motion while the slide is on screen — made for full-bleed photos.',
+  'Motion': 'Drift: an endless slow pan and zoom. Zoom out / Zoom in: one smooth zoom each time the slide appears.',
+  'Zoom': 'How far the picture is zoomed inside its frame',
+  'Zoom amount %': 'How far the Ken Burns zoom travels',
+  'Pan & zoom (s)': 'How long one pan-and-zoom pass takes, in seconds',
   // 'Loop animation' — NOT 'Loop': the media panel's playback toggle owns that
   // word, and one key cannot mean both (a language must pick one and be wrong
   // in the other place).
   'Loop animation': 'A repeating animation: marching dashes along strokes, or motion along a drawn path',
-  'Loop secs': 'Seconds per lap of the loop',
-  'Path': 'The motion path — edit it as draggable points on the canvas',
-  'Lap easing': 'Tempo across one lap — ease-in-out dwells at the ends, linear is constant',
-  'Show on hover': 'Puts this element in a hover set — visible only while that set is active',
-  'Group': 'Presentation group — with focus-group hover, the other groups dim',
+  'Seconds per lap': 'How long one lap takes — lower is faster',
+  'Motion path': 'The motion path — edit it as draggable points on the canvas',
+  'Lap speed': 'How the speed changes during one lap — constant, or easing in and out at the ends',
+  'Show on hover of': 'Type a Hover group name: this element stays hidden until the pointer is on an element of that group (slide’s On hover: Switch content). Empty = always visible.',
+  'Hover group': 'A name shared by elements that react to the pointer together while presenting (see On hover on the slide). Not the same as ⌘G grouping.',
   'Link to': 'Clicking this element during the show jumps to the chosen slide',
   'Web link': 'Clicking this element during the show opens this web page in a new tab (https:// only)',
   'Font': 'Typeface for this text',
   'Size (pt)': 'Font size in points',
   'Weight': 'Font weight — 400 regular, 700 bold',
   'Align': 'Horizontal text alignment',
-  'V-align': 'Vertical alignment inside the box',
+  'Vertical align': 'Vertical alignment inside the box',
   'Line height': 'Line spacing as a multiple of the font size',
   'Fill style': 'Solid colour or a linear gradient',
   'Fill': 'Fill colour with opacity — for lines this IS the line colour',
-  'Grad. angle': 'Gradient direction in degrees (CSS convention: 0° points up)',
+  'Gradient angle': 'Gradient direction in degrees (CSS convention: 0° points up)',
   'Stroke': 'Outline colour',
   'Stroke width': 'Outline thickness in pixels',
   'Line style': 'Solid, dashed or dotted stroke',
-  'Start tip': 'Decoration at the line’s start — arrow, dot or bar',
-  'End tip': 'Decoration at the line’s end — arrow, dot or bar',
+  'Line start': 'Decoration at the line’s start — arrow, dot or bar',
+  'Line end': 'Decoration at the line’s end — arrow, dot or bar',
   'Corner radius': 'How rounded the corners are, in pixels',
   'Keep aspect ratio': 'On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches',
   'Type': 'Chart type — switching bar⇄pie animates the data across',
@@ -105,7 +106,12 @@ const ROW_TIPS: Record<string, string> = {
   'Poster': 'Preview image shown before the video plays',
   'Page URL': 'The web page the live frame loads while online (http or https)',
   'Live': 'Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.',
-  'State of': 'Makes this slide a hidden state of another — reached by clicked links, skipped by arrow keys',
+  'Variant of': 'Make this slide a variant of another slide: arrow keys skip it, the audience opens it by clicking a linked element, and matching elements morph between the two.',
+  'Skip numbering': 'This slide stays in the show but gets no number of its own; its page-number field shows the previous slide’s.',
+  'Number hidden slides': 'On: hidden slides keep their number, so the others don’t renumber when you hide one (as in PowerPoint). Off: the audience sees no gaps in the numbering.',
+  'Blend mode': 'How this element mixes with what is underneath — Multiply darkens, Screen lightens.',
+  'Morph name': 'Elements with the same morph name on neighbouring slides morph into each other. Until you change it, it is the element’s own name.',
+  'Morph with': 'Pick an element on another slide; this one takes its morph name and morphs into it.',
 }
 
 /** An embed view from a raster: one <svg> around a data:image, sized to the
@@ -387,7 +393,7 @@ export class PropsPanel {
       // The third answer to "does it take a number": stays in the walk, counts
       // for nothing, and {{page}} on it continues the slide before. Builds
       // (one element revealed per morph step) and interstitials.
-      this.row('Unnumbered', this.toggle(!!slide.unnumbered, (v) =>
+      this.row('Skip numbering', this.toggle(!!slide.unnumbered, (v) =>
         this.editSlideAttrs(slideId, (slide: Slide) => {
           if (v) slide.unnumbered = true
           else delete slide.unnumbered
@@ -395,7 +401,7 @@ export class PropsPanel {
       if (slide.unnumbered) {
         const hint = document.createElement('p')
         hint.className = 'ed-hint'
-        hint.textContent = t('Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.')
+        hint.textContent = t('Stays in the show without a number of its own — its page-number field shows the previous slide’s. Use it for build-up steps or a divider that shouldn’t count.')
         this.host.appendChild(hint)
       }
     }
@@ -412,9 +418,9 @@ export class PropsPanel {
     const saveLy = document.createElement('button')
     saveLy.className = 'ed-btn ed-btn-block'
     saveLy.textContent = t('＋ Save slide as layout…')
-    saveLy.title = "Add this slide to the document's layout picker (New slide button)"
+    saveLy.title = t('Adds this slide to the layouts offered by New slide in this deck')
     saveLy.addEventListener('click', () => {
-      const name = window.prompt('Layout name', slide.name ?? 'My layout')
+      const name = window.prompt(t('Layout name'), slide.name ?? t('My layout'))
       if (!name) return
       this.edit(() => {
         const doc = this.store.doc
@@ -512,12 +518,12 @@ export class PropsPanel {
     name.value = slide.name ?? ''
     name.addEventListener('change', () =>
        this.editSlideAttrs(slideId, (slide: Slide) => { slide.name = name.value || undefined }, true))
-    this.row('Name', name)
+    this.row('Slide name', name)
 
     const stateSel = document.createElement('select')
     const optNone = document.createElement('option')
     optNone.value = ''
-    optNone.textContent = t('no — normal slide')
+    optNone.textContent = t('None — a normal slide')
     stateSel.appendChild(optNone)
     this.store.doc.slides.forEach((s, i) => {
       if (s.stateOf || s.id === slide.id) return
@@ -532,20 +538,20 @@ export class PropsPanel {
         slide.stateOf = stateSel.value || undefined
         this.store.emit('slides')
       }, true))
-    stateSel.title = t('A state is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.')
-    this.row('State of', stateSel)
+    stateSel.title = t('Make this slide a variant of another slide: arrow keys skip it, the audience opens it by clicking a linked element, and matching elements morph between the two.')
+    this.row('Variant of', stateSel)
 
     if (slide.stateOf) {
       const sync = document.createElement('button')
       sync.className = 'ed-btn ed-btn-block'
-      sync.innerHTML = `${ICONS.sync}<span>${t('Sync from parent slide')}</span>`
-      sync.title = t('Pull elements added to the parent into this state and adopt its ordering — your changes to shared elements are kept')
+      sync.innerHTML = `${ICONS.sync}<span>${t('Update from main slide')}</span>`
+      sync.title = t('Copies in elements added to the main slide since, and follows its layer order. Your changes in this variant are kept.')
       sync.addEventListener('click', () => this.syncStateFromParent())
       this.host.appendChild(sync)
     }
 
-    this.row('Hover', this.select(
-      ['none', 'focus-group', 'reveal'],
+    this.row('On hover', this.labeledSelect(
+      [['none', t('none')], ['focus-group', t('Dim other groups')], ['reveal', t('Switch content')]],
       slide.hover?.type ?? 'none',
       (v) => this.editSlideAttrs(slideId, (slide: Slide) => {
         slide.hover = v === 'none'
@@ -553,26 +559,26 @@ export class PropsPanel {
           : { ...(slide.hover ?? {}), type: v as 'focus-group' | 'reveal' }
       }, true)))
     if (slide.hover?.type === 'focus-group') {
-      this.row('Hover dim', this.number(slide.hover.dim ?? 0.15, 0.01, (v, fin) =>
+      this.row('Fade others to', this.number(slide.hover.dim ?? 0.15, 0.01, (v, fin) =>
         this.editSlideAttrs(slideId, (slide: Slide) => { if (slide.hover) slide.hover.dim = Math.min(Math.max(v, 0), 1) }, fin)))
     }
     if (slide.hover?.type === 'reveal') {
       const sets = [...new Set(slide.elements.map((e) => e.showOnHover).filter(Boolean))] as string[]
       const defIn = document.createElement('input')
       defIn.type = 'text'
-      defIn.placeholder = sets[0] ?? 'set name'
+      defIn.placeholder = sets[0] ?? t('group name')
       defIn.value = slide.hover.default ?? ''
       defIn.addEventListener('change', () =>
         this.editSlideAttrs(slideId, (slide: Slide) => { if (slide.hover) slide.hover.default = defIn.value || undefined }, true))
-      this.row('Default set', defIn)
+      this.row('Shown at rest', defIn)
       if (sets.length) {
-        this.row('Preview set', this.select(sets, this.store.hoverPreview ?? slide.hover.default ?? sets[0], (v) => {
+        this.row('Preview on canvas', this.select(sets, this.store.hoverPreview ?? slide.hover.default ?? sets[0], (v) => {
           this.store.hoverPreview = v
           this.store.emit('current') // re-render canvas without touching the doc
         }))
         const revealHint = document.createElement('p')
         revealHint.className = 'ed-hint'
-        revealHint.innerHTML = t('While presenting, hovering an element whose <b>group</b> matches a set name shows that set. Use Preview to edit each set.')
+        revealHint.innerHTML = t('While presenting, pointing at an element shows the content whose <b>Show on hover of</b> matches its <b>Hover group</b>. Pick a group in <b>Preview on canvas</b> to edit its content.')
         this.host.appendChild(revealHint)
       }
     }
@@ -591,7 +597,7 @@ export class PropsPanel {
   private buildElementPanel(el: SlideElement) {
     this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video', embed: 'Embed' }[el.type]))
     // what the element IS in a layout — content, not geometry
-    this.row('Role', this.select(
+    this.row('Layout role', this.select(
       ['none', 'title', 'subtitle', 'body', 'kicker'],
       el.role ?? 'none',
       (v) => this.mutate(el.id, (e) => {
@@ -634,14 +640,15 @@ export class PropsPanel {
         if (v > 0) e.blur = v
         else delete e.blur
       }, true)),
-      this.mini(t('Backdrop'), el.backdropFilter ?? 0, (v) => this.mutate(el.id, (e) => {
+      this.mini(t('Blur behind'), el.backdropFilter ?? 0, (v) => this.mutate(el.id, (e) => {
         if (v > 0) e.backdropFilter = v
         else delete e.backdropFilter
       }, true)),
     )
     this.host.appendChild(fxGrid)
-    this.row('Blend', this.select(
-      ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'difference', 'exclusion'],
+    this.row('Blend mode', this.labeledSelect(
+      [['normal', t('Normal')], ['multiply', t('Multiply')], ['screen', t('Screen')], ['overlay', t('Overlay')],
+        ['darken', t('Darken')], ['lighten', t('Lighten')], ['difference', t('Difference')], ['exclusion', t('Exclusion')]],
       el.blend || 'normal',
       (v) => this.mutate(el.id, (e) => {
         if (v === 'normal') delete e.blend
@@ -670,7 +677,7 @@ export class PropsPanel {
       if (shadows.length > 1) {
         const cap = document.createElement('div')
         cap.className = 'ed-shadow-cap'
-        cap.textContent = `Layer ${i + 1}`
+        cap.textContent = t('Shadow {n}', { n: i + 1 })
         this.host.appendChild(cap)
       }
       const grid = document.createElement('div')
@@ -716,7 +723,7 @@ export class PropsPanel {
       const err = this.setMorphId(el, input.value)
       if (err) { warn.textContent = err; warn.style.display = ''; input.value = effective }
     })
-    this.row('Morph id', input)
+    this.row('Morph name', input)
 
     const targets = this.morphTargets(el)
     // `|| el.morphId`: a paired element with no OTHER slide to pair with still
@@ -733,7 +740,7 @@ export class PropsPanel {
       if (el.morphId) {
         const un = document.createElement('option')
         un.value = UNPAIR
-        un.textContent = t('Don’t pair — use its own id')
+        un.textContent = t('Don’t pair — use its own name')
         sel.appendChild(un)
       }
       for (const tgt of targets) {
@@ -749,7 +756,7 @@ export class PropsPanel {
         const err = this.setMorphId(el, sel.value === UNPAIR ? el.id : sel.value)
         if (err) { warn.textContent = err; warn.style.display = '' }
       })
-      this.row('Pair with', sel)
+      this.row('Morph with', sel)
     }
 
     this.host.appendChild(warn)
@@ -758,8 +765,8 @@ export class PropsPanel {
     // an override in force is STATE, and stays in view; otherwise it is help
     hint.className = el.morphId ? 'ed-hint ed-status' : 'ed-hint'
     hint.innerHTML = el.morphId
-      ? t('Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.', { id: effective, own: el.id })
-      : t('Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.')
+      ? t('Morphs as <code>{id}</code> instead of its own name, <code>{own}</code>. Choose “Don’t pair” below to undo.', { id: effective, own: el.id })
+      : t('Elements with the same morph name morph into each other between slides. Rename it, or pick below, to pair it with an element on another slide.')
     this.host.appendChild(hint)
   }
 
@@ -767,12 +774,12 @@ export class PropsPanel {
    *  id clears it. Returns an inline error message, or null on success. */
   private setMorphId(el: SlideElement, raw: string): string | null {
     const clean = raw.trim().replace(/[^A-Za-z0-9._-]/g, '')
-    if (!clean) return t('Morph id can’t be empty.')
+    if (!clean) return t('Morph name can’t be empty.')
     const next = clean === el.id ? undefined : clean
     const effective = next ?? el.id
     const clash = this.store.slide.elements.some(
       (e) => e.id !== el.id && morphKey(e) === effective)
-    if (clash) return t('Another element on this slide already uses that morph id.')
+    if (clash) return t('Another element on this slide already uses that morph name.')
     this.mutate(el.id, (e) => {
       if (next === undefined) delete e.morphId
       else e.morphId = next
@@ -818,15 +825,19 @@ export class PropsPanel {
         else e.fx = fx
       }, true)
 
-    this.row('Enter', this.select(
-      ['none', 'fade', 'fade-up', 'fade-down', 'slide-left', 'slide-right', 'slide-up', 'slide-down'],
+    // labelled by where the element comes FROM: slide-left starts on the right
+    // and travels left (present.ts enterSpec)
+    this.row('Entrance', this.labeledSelect(
+      [['none', t('none')], ['fade', t('fade')], ['fade-up', t('Fade up')], ['fade-down', t('Fade down')],
+        ['slide-left', t('Fly in from right')], ['slide-right', t('Fly in from left')],
+        ['slide-up', t('Fly in from below')], ['slide-down', t('Fly in from above')]],
       el.fx?.enter ?? 'none',
       (v) => setFx(v === 'none'
         ? { enter: undefined, enterDur: undefined }
         : { enter: v as NonNullable<typeof el.fx>['enter'] })))
     if (el.fx?.enter) {
       // per-kind default (slide-* 0.75s, fade-* 0.55s); lower = snappier
-      this.row('Enter secs', this.number(
+      this.row('Entrance (s)', this.number(
         el.fx.enterDur ?? (el.fx.enter.startsWith('slide-') ? 0.75 : 0.55), 0.05,
         (v, fin) => { if (fin) setFx({ enterDur: Math.max(v, 0.05) }) }))
     }
@@ -835,7 +846,7 @@ export class PropsPanel {
     // The verbs come first (one click, no number to think about); the number
     // row underneath is the precise control, and the canvas badge cycles it.
     this.revealRow([el])
-    this.row('Reveal step', this.number(el.fx?.step ?? 0, 1,
+    this.row('Appears on click', this.number(el.fx?.step ?? 0, 1,
       (v, fin) => { if (fin) setFx({ step: v >= 1 ? Math.floor(v) : undefined }) }))
     if (el.fx?.step) {
       const hint = document.createElement('p')
@@ -843,40 +854,40 @@ export class PropsPanel {
       hint.textContent = t('Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.')
       this.host.appendChild(hint)
     }
-    this.row('Count up', this.select(
+    this.row('Count up numbers', this.select(
       ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
       (v) => setFx({ countUp: v === 'on' ? true : undefined })))
     if (el.type === 'code') this.row('Typewriter', this.select(
       ['off', 'on'], el.fx?.typeWriter ? 'on' : 'off',
       (v) => setFx({ typeWriter: v === 'on' ? true : undefined })))
-    this.row('Ambient', this.select(
-      ['none', 'kenburns'], el.fx?.ambient ?? 'none',
+    this.row('Pan & zoom', this.labeledSelect(
+      [['none', t('none')], ['kenburns', t('Ken Burns')]], el.fx?.ambient ?? 'none',
       (v) => setFx(v === 'none' ? { ambient: undefined, ken: undefined } : { ambient: 'kenburns' })))
     if (el.fx?.ambient === 'kenburns') {
       const ken = el.fx.ken ?? {}
       const dir = ken.dir ?? 'drift'
       const setKen = (patch: Partial<NonNullable<NonNullable<SlideElement['fx']>['ken']>>) =>
         setFx({ ken: { ...ken, ...patch } })
-      this.row('Zoom', this.select(
-        ['drift', 'zoom-out', 'zoom-in'],
+      this.row('Motion', this.labeledSelect(
+        [['drift', t('Drift')], ['zoom-out', t('Zoom out')], ['zoom-in', t('Zoom in')]],
         dir === 'out' ? 'zoom-out' : dir === 'in' ? 'zoom-in' : 'drift',
         (v) => {
           const d = v === 'zoom-out' ? 'out' : v === 'zoom-in' ? 'in' : 'drift'
           // give each style its natural pace when switching
           setFx({ ken: d === 'drift' ? undefined : { dir: d, scale: 1.06, duration: 2.5 } })
         }))
-      this.row('Zoom %', this.number(
+      this.row('Zoom amount %', this.number(
         Math.round(((ken.scale ?? (dir === 'drift' ? 1.1 : 1.06)) - 1) * 100), 1,
         (v, fin) => { if (fin) setKen({ scale: 1 + Math.min(Math.max(v, 0), 100) / 100 }) }))
-      this.row('Zoom secs', this.number(
+      this.row('Pan & zoom (s)', this.number(
         ken.duration ?? (dir === 'drift' ? 26 : 2.5), 0.1,
         (v, fin) => { if (fin) setKen({ duration: Math.max(v, 0.1) }) }))
     }
 
     // continuous loop animation
     const loop = el.fx?.loop
-    this.row('Loop animation', this.select(
-      ['none', 'dash-march', 'motion-path'],
+    this.row('Loop animation', this.labeledSelect(
+      [['none', t('none')], ['dash-march', t('Marching dashes')], ['motion-path', t('Follow a path')]],
       loop?.type ?? 'none',
       (v) => setFx({
         loop: v === 'none' ? undefined
@@ -884,7 +895,7 @@ export class PropsPanel {
           : { type: 'motion-path', path: (loop as any)?.path ?? 'M 0 0 L 100 0', duration: (loop as any)?.duration ?? 3 },
       })))
     if (loop) {
-      this.row('Loop secs', this.number(loop.duration ?? 2, 0.1, (v, fin) =>
+      this.row('Seconds per lap', this.number(loop.duration ?? 2, 0.1, (v, fin) =>
         this.mutate(el.id, (e) => { if (e.fx?.loop) e.fx.loop.duration = Math.max(v, 0.1) }, fin)))
       if (loop.type === 'motion-path') {
         const path = document.createElement('input')
@@ -893,10 +904,10 @@ export class PropsPanel {
         path.title = t('SVG path the element travels along, relative to its position')
         path.addEventListener('change', () =>
           this.mutate(el.id, (e) => { if (e.fx?.loop?.type === 'motion-path') e.fx.loop.path = path.value }, true))
-        this.row('Path', path)
+        this.row('Motion path', path)
 
         // lap easing — the tempo of a whole lap (per-anchor speed is edited on canvas)
-        this.row('Lap easing', this.labeledSelect(
+        this.row('Lap speed', this.labeledSelect(
           [['none', t('Constant')], ['sine.inOut', t('Ease in-out')], ['power2.in', t('Ease in')], ['power2.out', t('Ease out')]],
           (loop as { ease?: string }).ease ?? 'none',
           (v) => this.mutate(el.id, (e) => {
@@ -928,7 +939,6 @@ export class PropsPanel {
     soh.type = 'text'
     soh.placeholder = t('always visible')
     soh.value = el.showOnHover ?? ''
-    soh.title = "Only visible while an element with this group is hovered (slide hover: 'reveal')"
     soh.addEventListener('change', () => {
       this.mutate(el.id, (e) => {
         if (soh.value) e.showOnHover = soh.value
@@ -938,7 +948,7 @@ export class PropsPanel {
       this.store.hoverPreview = soh.value || null
       this.store.emit('current')
     })
-    this.row('Show on hover', soh)
+    this.row('Show on hover of', soh)
 
     // group tag (hover focus & interaction targeting)
     const group = document.createElement('input')
@@ -950,7 +960,7 @@ export class PropsPanel {
         if (group.value) e.group = group.value
         else delete e.group
       }, true))
-    this.row('Group', group)
+    this.row('Hover group', group)
 
     // link → slide picker
     const sel = document.createElement('select')
@@ -1001,8 +1011,8 @@ export class PropsPanel {
     // (element ids preserved ⇒ it morphs) and link this element to it
     const makeState = document.createElement('button')
     makeState.className = 'ed-btn ed-btn-block'
-    makeState.textContent = t('＋ New state linked from this element')
-    makeState.title = t('Duplicates this slide as a hidden interactive state and links the selected element to it')
+    makeState.textContent = t('＋ Link to a new variant of this slide')
+    makeState.title = t('Copies this slide as a variant and links this element to it: while presenting, clicking the element opens the copy. Edit the copy to show what changes.')
     makeState.addEventListener('click', () => this.createLinkedState(el))
     this.host.appendChild(makeState)
   }
@@ -1022,7 +1032,7 @@ export class PropsPanel {
     // otherwise "merging" would just stack two full copies of everything
     const shared = parent.elements.filter((pe) => own.has(pe.id)).length
     if (state.elements.length && !shared) {
-      this.toast('This state shares no element ids with its parent — nothing to sync against')
+      this.toast(t('This variant shares no elements with its main slide — nothing to update.'))
       return
     }
     let added = 0
@@ -1040,9 +1050,8 @@ export class PropsPanel {
       this.store.slide.elements = [...merged, ...extras]
     })
     this.store.select([])
-    const bits = [added ? `${added} new element${added > 1 ? 's' : ''} pulled in` : 'nothing new in the parent']
-    if (extras.length) bits.push(`${extras.length} state-only element${extras.length > 1 ? 's' : ''} kept`)
-    this.toast(`Synced — ${bits.join('; ')}`)
+    // numbers rather than hand-made plurals, which no catalog can follow
+    this.toast(t('Updated from the main slide — new: {added} · only in this variant: {kept}', { added, kept: extras.length }))
   }
 
   private toast(message: string) {
@@ -1064,7 +1073,7 @@ export class PropsPanel {
     const clone = JSON.parse(JSON.stringify(src)) as typeof src
     clone.id = uid('slide')
     clone.stateOf = src.stateOf ?? src.id // states of a state share one parent
-    clone.name = `${src.name ?? 'state'} ${this.store.doc.slides.filter((s) => s.stateOf === clone.stateOf).length + 2}`
+    clone.name = `${src.name ?? t('variant')} ${this.store.doc.slides.filter((s) => s.stateOf === clone.stateOf).length + 2}`
     clone.transition = 'morph'
     delete (clone as any).hover // inherit nothing implicit; user can re-enable
     if (src.hover) clone.hover = { ...src.hover }
@@ -1093,10 +1102,10 @@ export class PropsPanel {
     const pageAt = (idx: number) => doc.slides.slice(0, idx + 1).filter((x) => paginates(x, doc)).length
     if (s.stateOf) {
       const p = doc.slides.findIndex((x) => x.id === s.stateOf)
-      return `state of ${pageAt(p)}${s.name ? ` — ${s.name}` : ''}`
+      return `${t('variant of slide {n}', { n: pageAt(p) })}${s.name ? ` — ${s.name}` : ''}`
     }
     const mark = s.hidden ? ` (${t('hidden')})` : s.unnumbered ? ` (${t('unnumbered')})` : ''
-    return `slide ${pageAt(i)}${mark}${s.name ? ` — ${s.name}` : ''}`
+    return `${t('slide {n}', { n: pageAt(i) })}${mark}${s.name ? ` — ${s.name}` : ''}`
   }
 
   /**
@@ -1217,7 +1226,7 @@ export class PropsPanel {
         this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin),
         { id: el.id, path: 'color' }))
     } else {
-      this.row('Grad. angle', this.number(tgrad.angle, 1, (v, fin) =>
+      this.row('Gradient angle', this.number(tgrad.angle, 1, (v, fin) =>
         this.mutate(el.id, (e) => {
           const g = (e as TextElement).colorGradient
           if (g) g.angle = v
@@ -1249,7 +1258,7 @@ export class PropsPanel {
             }, true))
           wrap.appendChild(del)
         }
-        this.row(`Stop ${i + 1}`, wrap)
+        this.row(t('Stop {n}', { n: i + 1 }), wrap)
       })
       const addStop = document.createElement('button')
       addStop.className = 'ed-btn ed-btn-block'
@@ -1266,7 +1275,7 @@ export class PropsPanel {
     }
     this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).align = v as TextElement['align'] }, true)))
-    this.row('V-align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
+    this.row('Vertical align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).valign = v as TextElement['valign'] }, true)))
     this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(v, 0.5) }, fin)))
@@ -1320,18 +1329,18 @@ export class PropsPanel {
     }
     const curFirst = firstFamily(current)
     let matched = false
-    add('theme default', '', current === '')
+    add(t('Theme font'), '', current === '')
     for (const f of this.store.doc.fonts ?? []) {
       const hit = !matched && (current === f.family || curFirst === firstFamily(f.family))
       if (hit) matched = true
-      add(`${f.family} (embedded)`, f.family, hit)
+      add(t('{name} (embedded)', { name: f.family }), f.family, hit)
     }
     for (const c of FONT_CHOICES) {
       const hit = !matched && current !== '' && curFirst === firstFamily(c.stack)
       if (hit) matched = true
       add(c.label, c.stack, hit)
     }
-    if (current && !matched) add(curFirst || 'custom', current, true)
+    if (current && !matched) add(curFirst || t('custom'), current, true)
     sel.addEventListener('change', () =>
       this.mutate(el.id, (e) => { (e as TextElement).fontFamily = sel.value }, true))
     return sel
@@ -1361,7 +1370,7 @@ export class PropsPanel {
           if (live && live.type === 'text') live.fontFamily = family
         })
         injectFonts(this.store.doc)
-        this.toast(`"${family}" embedded into this file`)
+        this.toast(t('“{name}” embedded in this file', { name: family }))
       }
       reader.readAsDataURL(file)
     })
@@ -1393,7 +1402,7 @@ export class PropsPanel {
         this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
         { id: el.id, path: 'fill' }))
     } else {
-      this.row('Grad. angle', this.number(grad.angle, 1, (v, fin) =>
+      this.row('Gradient angle', this.number(grad.angle, 1, (v, fin) =>
         this.mutate(el.id, (e) => {
           const g = (e as ShapeElement).fillGradient
           if (g) g.angle = v
@@ -1425,7 +1434,7 @@ export class PropsPanel {
             }, true))
           wrap.appendChild(del)
         }
-        this.row(`Stop ${i + 1}`, wrap)
+        this.row(t('Stop {n}', { n: i + 1 }), wrap)
       })
       const add = document.createElement('button')
       add.className = 'ed-btn ed-btn-block'
@@ -1458,9 +1467,9 @@ export class PropsPanel {
     // model's words. A closed path (polygon) has no ends to tip.
     if (el.shape === 'line' || (el.shape === 'path' && !/z\s*$/i.test(el.d ?? ''))) {
       const ENDINGS: Array<[string, string]> = TIPS.map((tip) => [tip.kind, t(tip.label)])
-      this.row('Start tip', this.labeledSelect(ENDINGS, el.lineStart ?? 'none', (v) =>
+      this.row('Line start', this.labeledSelect(ENDINGS, el.lineStart ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineStart = v === 'none' ? undefined : (v as LineEnding) }, true)))
-      this.row('End tip', this.labeledSelect(ENDINGS, el.lineEnd ?? 'none', (v) =>
+      this.row('Line end', this.labeledSelect(ENDINGS, el.lineEnd ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineEnd = v === 'none' ? undefined : (v as LineEnding) }, true)))
     }
     if (el.shape === 'arrow') {
@@ -1804,7 +1813,7 @@ export class PropsPanel {
       : 'Minimal'
     const themed = tableStyleFor(this.store.doc.theme)
     this.section(t('Style'))
-    this.row('Preset', this.select(['Lined', 'Zebra', 'Boxed', 'Minimal'], preset, (v) =>
+    this.row('Preset', this.labeledSelect([['Lined', t('Lined')], ['Zebra', t('Striped')], ['Boxed', t('Boxed')], ['Minimal', t('Minimal')]], preset, (v) =>
       this.mutate(el.id, (e) => {
         const s = (e as TableElement).style
         s.borderWidth = v === 'Lined' || v === 'Boxed' ? Math.max(themed.borderWidth, 1) : 0
@@ -2192,7 +2201,7 @@ export class PropsPanel {
     this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
       this.mutate(el.id, (e) => { (e as CodeElement).align = v as CodeElement['align'] }, true)))
     // V-Alignment
-    this.row('V-align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
+    this.row('Vertical align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
       this.mutate(el.id, (e) => { (e as CodeElement).valign = v as CodeElement['valign'] }, true)))
     // Line height
     this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
@@ -2605,7 +2614,7 @@ export class PropsPanel {
       b.type = 'button'
       b.className = 'ed-swatch'
       b.style.background = cssColor(base, 'transparent') // a document colour: gated
-      b.title = slot
+      b.title = slotLabel(slot) // the slot's name, not its id (bg1, tx1…)
       if (current && current.split(' ')[0] === slot) b.classList.add('is-on')
       b.addEventListener('click', () => {
         input.value = /^#[0-9a-fA-F]{6}$/.test(base) ? base : parseColor(base).hex
@@ -2773,6 +2782,19 @@ export class PropsPanel {
 }
 
 type PanelTab = 'format' | 'animate' | 'interact'
+
+/** A palette slot as the author knows it. */
+function slotLabel(slot: string): string {
+  switch (slot) {
+    case 'bg1': return t('Background')
+    case 'tx1': return t('Text')
+    case 'bg2': return t('Background 2')
+    case 'tx2': return t('Text 2')
+    case 'hlink': return t('Link')
+    case 'folHlink': return t('Visited link')
+    default: return t('Accent {n}', { n: slot.replace('accent', '') })
+  }
+}
 
 /** Any CSS color → {hex, a}. Handles #rgb/#rrggbb/#rrggbbaa/rgb()/rgba()/transparent. */
 export function parseColor(v: string): { hex: string; a: number } {
