@@ -330,6 +330,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "groupName": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -361,6 +365,10 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
@@ -563,6 +571,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "groupName": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -617,6 +629,10 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
@@ -790,6 +806,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "groupName": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -810,6 +830,10 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
@@ -914,6 +938,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "groupName": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -935,6 +963,10 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
@@ -1037,6 +1069,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "groupName": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -1054,6 +1090,10 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
@@ -1279,6 +1319,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "groupName": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -1299,6 +1343,10 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
@@ -1405,6 +1453,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "groupName": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -1435,6 +1487,10 @@
         },
         "muted": {
           "type": "boolean"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
@@ -1555,6 +1611,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "groupName": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -1575,6 +1635,10 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
         },
         "opacity": {
           "type": "number",
@@ -1704,6 +1768,10 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "groupName": {
+          "type": "string",
+          "maxLength": 4000
+        },
         "h": {
           "type": "number",
           "minimum": 0,
@@ -1726,6 +1794,10 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
         },
         "opacity": {
           "type": "number",

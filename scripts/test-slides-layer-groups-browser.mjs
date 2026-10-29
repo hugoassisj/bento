@@ -22,7 +22,11 @@
 //      whole group, which on a big group read as "it selects everything";
 //   8. a row renames in place — double-click or Rename on its right-click —
 //      and so does a group's row; Escape keeps the old name, an empty name
-//      gives the default back, Ungroup drops the group's name; one undo each.
+//      gives the default back, Ungroup drops the group's name; one undo each;
+//   9. leaving a rename by clicking elsewhere leaves the focus THERE — taking it
+//      back to the list sent the next Backspace to the list, which deleted the
+//      element; a rename survives the rows being rebuilt under it (an undo);
+//      Rename reaches a member of a folded group.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -150,6 +154,33 @@ try {
   await field.press('Escape'); await p.waitForTimeout(150)
   ok(await menu(row('a'), 'Ungroup'), 'Ungroup')
   ok(await p.evaluate(() => window.bento.doc.slides[0].elements.every((e) => !e.groupName)), 'and the group\'s name goes with it')
+
+  // 9. focus, rebuilds, folded groups
+  const count = () => p.evaluate(() => window.bento.doc.slides[0].elements.length)
+  const n0 = await count()
+  await row('c').click(); await p.waitForTimeout(100)
+  await row('c').locator('.ed-layer-label').dblclick(); await p.waitForTimeout(150)
+  await field.fill('Badge')
+  await p.locator('.ed-notespane-text').click(); await p.waitForTimeout(150)
+  ok(await name('c') === 'Badge', 'clicking away keeps the name')
+  ok(await p.evaluate(() => document.activeElement?.classList.contains('ed-notespane-text')), 'and the focus stays where the click put it')
+  await p.keyboard.press('Backspace'); await p.waitForTimeout(150)
+  ok(await count() === n0, `a Backspace there deletes no element (${await count()} of ${n0})`)
+  await row('c').locator('.ed-layer-label').dblclick(); await p.waitForTimeout(150)
+  await field.fill('Half typed')
+  await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
+  ok(await field.count() === 1 && await field.inputValue() === 'Half typed', `a rebuild under the field keeps it open, typing kept (${await field.count() ? await field.inputValue() : 'gone'})`)
+  await field.press('Escape'); await p.waitForTimeout(150)
+  await load([box('back', 40, 40, { w: 1100, h: 600, fill: '#eeeeee' }), box('a', 100, 100, { groupId: 'g' }), box('b', 400, 300, { groupId: 'g' })])
+  await p.waitForTimeout(400)
+  await groupRow().locator('.ed-layer-fold').click(); await p.waitForTimeout(150)
+  await p.evaluate(() => window.bento.select?.(['a']) ?? null)
+  const ba = await p.locator('.ed-stage-scale [data-el-id="a"]').boundingBox()
+  await p.keyboard.down(MOD); await p.mouse.click(ba.x + 20, ba.y + 20); await p.keyboard.up(MOD); await p.waitForTimeout(200)
+  await p.mouse.click(ba.x + 20, ba.y + 20, { button: 'right' }); await p.waitForTimeout(200)
+  await p.locator('.ed-ctxmenu .ed-ctxmenu-item', { hasText: /^Rename/ }).click(); await p.waitForTimeout(200)
+  ok(await field.count() === 1, 'Rename on a member of a folded group opens the group and the field')
+  await field.press('Escape')
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {

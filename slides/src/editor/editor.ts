@@ -3677,7 +3677,7 @@ export class Editor {
       { label: t('Edit text'), disabled: !openable, run: () => one && this.canvas.editElement(one.id) },
       // naming happens in the layer list, so Rename shows it first; a whole
       // group selected renames the group
-      { label: t('Rename'), disabled: !one && !wholeGroup, run: () => {
+      { label: t('Rename'), disabled: this.store.readOnly || (!one && !wholeGroup), run: () => {
         this.sidebar.querySelector<HTMLElement>('.ed-side-tabs [data-view="layers"]')?.click()
         if (one) this.panel.layers.rename(one.id)
         else if (wholeGroup) this.panel.layers.renameGroup(wholeGroup)

@@ -310,6 +310,7 @@ export class PropsPanel {
       if (name) el.name = name
       else delete el.name
     }),
+    readOnly: () => this.store.readOnly,
     renameGroup: (gid, name) => this.store.commit(() => {
       for (const el of this.store.slide.elements) {
         if (el.groupId !== gid) continue

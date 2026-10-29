@@ -21,6 +21,8 @@ export interface LayersHost {
   rename: (id: string, name: string) => void
   /** name a group, on all its members, as one undo step */
   renameGroup: (groupId: string, name: string) => void
+  /** a read-only document offers no renaming */
+  readOnly?: () => boolean
 }
 
 /** the element kinds' glyphs, shared with the inspector's context line */
@@ -85,42 +87,59 @@ export class LayersUI {
    *  field; Enter or leaving it keeps the name, Escape keeps the old one, an
    *  empty name gives the default back. Double-click a row, or Rename on its
    *  right-click menu. */
-  rename(id: string) { this.editLabel(this.rowNode(id), this.host.slide().elements.find((e) => e.id === id)?.name, (name) => this.host.rename(id, name)) }
-
-  /** Rename a group — its row's label, named on every member. */
-  renameGroup(gid: string) {
-    const row = this.list.querySelector<HTMLElement>(`.ed-layer-group[data-group="${CSS.escape(gid)}"]`)
-    this.editLabel(row, this.host.slide().elements.find((e) => e.groupId === gid)?.groupName, (name) => this.host.renameGroup(gid, name))
+  rename(id: string, typed?: string) {
+    if (this.host.readOnly?.()) return
+    const el = this.host.slide().elements.find((e) => e.id === id)
+    // a member of a folded group has no row to edit until the group opens
+    if (el?.groupId && this.folded.delete(el.groupId)) this.rebuildRows()
+    this.editLabel({ id }, this.rowNode(id), el?.name, (name) => this.host.rename(id, name), typed)
   }
 
-  private editLabel(row: HTMLElement | null, current: string | undefined, save: (name: string) => void) {
+  /** Rename a group — its row's label, named on every member. */
+  renameGroup(gid: string, typed?: string) {
+    if (this.host.readOnly?.()) return
+    const row = this.list.querySelector<HTMLElement>(`.ed-layer-group[data-group="${CSS.escape(gid)}"]`)
+    this.editLabel({ gid }, row, this.host.slide().elements.find((e) => e.groupId === gid)?.groupName, (name) => this.host.renameGroup(gid, name), typed)
+  }
+
+  /** The rename in progress, if any: what it edits and what has been typed —
+   *  so a rebuild of the rows (an undo, a collaborator's edit) can put the
+   *  field back on the new row instead of throwing the typing away. */
+  private renaming: { target: { id?: string; gid?: string }; input: HTMLInputElement; drop: () => void } | null = null
+
+  private editLabel(target: { id?: string; gid?: string }, row: HTMLElement | null, current: string | undefined, save: (name: string) => void, typed?: string) {
     const label = row?.querySelector<HTMLElement>('.ed-layer-label')
     if (!row || !label) return
     const input = document.createElement('input')
     input.type = 'text'
     input.className = 'ed-layer-rename'
-    input.value = current ?? label.textContent ?? ''
+    input.value = typed ?? current ?? label.textContent ?? ''
     input.setAttribute('aria-label', t('Rename'))
     row.draggable = false
     label.replaceWith(input)
     input.focus()
-    input.select()
+    if (typed === undefined) input.select()
     let done = false
-    const finish = (keep: boolean) => {
+    const finish = (keep: boolean, refocus: boolean) => {
       if (done) return
       done = true
+      this.renaming = null
       const name = input.value.trim()
       input.replaceWith(label)
       row.draggable = true
       if (keep && name !== (current ?? label.textContent)) save(name)
-      this.list.focus({ preventScroll: true })
+      // back to the list only when the field was left with a key: a click
+      // elsewhere put the focus where the author wants it — taking it back
+      // sent the next Backspace to the list, which deletes the element
+      if (refocus) this.list.focus({ preventScroll: true })
     }
+    this.renaming = { target, input, drop: () => { done = true; this.renaming = null } }
     input.addEventListener('keydown', (ev) => {
       ev.stopPropagation() // the list's arrows and Delete are not this field's
-      if (ev.key === 'Enter') finish(true)
-      if (ev.key === 'Escape') finish(false)
+      if (ev.key === 'Enter') finish(true, true)
+      if (ev.key === 'Escape') finish(false, true)
     })
-    input.addEventListener('blur', () => finish(true))
+    input.addEventListener('blur', () => finish(true, false))
     input.addEventListener('click', (ev) => ev.stopPropagation())
   }
 
@@ -149,6 +168,9 @@ export class LayersUI {
   private rebuildRows() {
     const scroll = this.list.scrollTop
     const had = document.activeElement === this.list
+    // a rename open on a row about to be replaced moves to the new row, typing kept
+    const pending = this.renaming
+    pending?.drop()
     this.list.innerHTML = ''
     const rows = layerRows(this.host.slide(), t)
     const lit = highlighted(rows, this.host.selection())
@@ -207,6 +229,12 @@ export class LayersUI {
       this.list.appendChild(row)
     }
     this.list.scrollTop = scroll
+    if (pending) {
+      const { target, input } = pending
+      if (target.id && this.rowNode(target.id)) this.rename(target.id, input.value)
+      else if (target.gid) this.renameGroup(target.gid, input.value)
+      return
+    }
     if (had) this.list.focus({ preventScroll: true })
   }
 

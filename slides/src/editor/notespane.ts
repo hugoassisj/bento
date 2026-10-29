@@ -60,6 +60,9 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
     grip.addEventListener('pointercancel', up)
   })
   grip.addEventListener('dblclick', () => { setH(DEFAULT_H); lsSet('bento-notes-h', String(DEFAULT_H)) })
+  // the cap is half the window, so a window made shorter must not leave the
+  // canvas squeezed to nothing under a pane sized for a taller one
+  window.addEventListener('resize', () => setH(Number(lsGet('bento-notes-h')) || DEFAULT_H), { signal })
   pane.append(grip, head, area)
   into.appendChild(pane)
 
@@ -70,7 +73,10 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
     toggle.textContent = open ? '›' : '‹' // turned a quarter by CSS: down folds, up opens
     toggle.title = open ? t('Hide speaker notes') : t('Show speaker notes')
   }
-  setOpen(lsGet('bento-notes-open') !== '0')
+  // Open by default where there is room; on a phone or a short window the
+  // canvas comes first (the 700px drawer breakpoint), until the author opens it.
+  const saved = lsGet('bento-notes-open')
+  setOpen(saved ? saved !== '0' : window.innerWidth > 700 && window.innerHeight > 600)
   const flip = () => {
     const open = pane.classList.contains('closed')
     setOpen(open)
@@ -101,6 +107,7 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
     if (area.value !== v) area.value = v
   }
   area.addEventListener('blur', sync) // a slide may have changed while it held the caret
+  area.addEventListener('focus', () => { area.readOnly = store.readOnly }) // reader mode may have begun after mount
   const offs = [store.on('current', sync), store.on('doc', sync)]
   signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
   sync()

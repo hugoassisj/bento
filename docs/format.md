@@ -126,6 +126,8 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `link?` | `string` | While presenting, clicking jumps to this slide id. |
 | `group?` | `string` | Semantic group tag — hover focus + multi-element present behaviours target it. |
 | `groupId?` | `string` | *Editor* grouping (select/move as one). Distinct from `group`. |
+| `groupName?` | `string` | The group's name in the editor's layer list, carried by every member (a group is no object of its own). Display only; ungrouping or regrouping drops it. |
+| `name?` | `string` | The author's name for the element in the editor's layer list. Display only — never a key; unset, the list names it by kind or by its text. |
 | `showOnHover?` | `string` | In-slide hover reveal: visible only while an element whose `group` equals this value is hovered (with `slide.hover.type='reveal'`). |
 | `role?` | `string` | Layout role (`title`/`subtitle`/`body`/`kicker` by convention) — drives cross-layout content moves. Free-form. |
 
