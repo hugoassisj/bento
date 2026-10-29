@@ -27,6 +27,10 @@
 //      back to the list sent the next Backspace to the list, which deleted the
 //      element; a rename survives the rows being rebuilt under it (an undo);
 //      Rename reaches a member of a folded group.
+//  10. inside a group, Shift-click toggles single members even once every
+//      member has been shift-picked back in: entering the group is state the
+//      editor keeps, not something read off the selection's shape — which
+//      made the whole group drop out on the next Shift-click.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -181,6 +185,24 @@ try {
   await p.locator('.ed-ctxmenu .ed-ctxmenu-item', { hasText: /^Rename/ }).click(); await p.waitForTimeout(200)
   ok(await field.count() === 1, 'Rename on a member of a folded group opens the group and the field')
   await field.press('Escape')
+  // 10. Shift inside an entered group
+  await load([box('g1', 100, 300, { groupId: 'h' }), box('g2', 400, 300, { groupId: 'h' }), box('g3', 700, 300, { groupId: 'h' }), box('out', 1000, 300)])
+  await p.waitForTimeout(400)
+  const modPick = async (id) => { await p.keyboard.down(MOD); await pick(id); await p.keyboard.up(MOD) }
+  await modPick('g1')
+  ok(await sel() === 'g1', '⌘-click enters the group at g1')
+  await pick('g2', true); await pick('g3', true)
+  ok(await sel() === 'g1,g2,g3', `Shift-click picks the other members one by one (${await sel()})`)
+  await pick('g2', true)
+  ok(await sel() === 'g1,g3', `and a further Shift-click takes out just that member (${await sel()})`)
+  await row('g3').click(); await p.waitForTimeout(150)
+  await pick('g1', true); await pick('g2', true); await pick('g1', true)
+  ok(await sel() === 'g2,g3', `the same from a member's row in the layer list (${await sel()})`)
+  await pick('out')
+  await pick('g1')
+  ok(await sel() === 'g1,g2,g3', `leaving the group leaves it: a click back on a member takes the whole group (${await sel()})`)
+  await pick('g2', true)
+  ok(await sel() === '', `and Shift-click then takes the whole group out (${await sel()})`)
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {

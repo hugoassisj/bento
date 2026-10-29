@@ -15,6 +15,7 @@ import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes,
 import { inList, shiftList, shiftListHtml, undoIndent } from './listindent'
 import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
+import { freshGroups } from './clipboard'
 import { execFormat, hideFormatBar, syncFormatBar } from './richtext'
 import { PathEditor } from './patheditor'
 import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors, boxAnchors, nearestAnchor, boxContains } from './lineedit'
@@ -35,6 +36,13 @@ import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 const TAP_SLOP = 10
 /** …and how long it may rest. Past this it is a press, not a tap. */
 const TAP_HOLD_MS = 700
+/** How far a mouse press may travel and still be a click: a ⌘-click (select
+ *  exact) rather than a ⌘-drag (duplicate). One number for both, so the two
+ *  gestures cannot both claim — or both refuse — the same press. */
+const CLICK_SLOP = 3
+/** Floating controls inside the scroller: a press there is never aimed at the
+ *  slide, so neither a marquee nor a ⌘-click starts from one. */
+const FLOATING_CONTROLS = '.ed-present-fabs, .ed-zoombar, .ed-panel-toggle, .ed-resizer'
 
 /** The title on an unrendered formula (render.ts mathHint): what went wrong,
  *  translated at call time — `\\foo` is shown as typed. */
@@ -355,6 +363,7 @@ export class SlideCanvas {
     // Capture phase so it wins over Selecto AND Moveable's control-box area,
     // which otherwise swallows clicks over the current selection.
     document.addEventListener('mousedown', (ev) => {
+      this.altPress = null
       if (!ev.altKey || ev.button !== 0 || this.pathEditor.active || this.bezierEditor.active) return
       const r = this.scaleHost.getBoundingClientRect()
       if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return
@@ -362,12 +371,12 @@ export class SlideCanvas {
       // Alt-DRAG on a resize/rotate handle means center-scale, not deep-select.
       // But below ~100% zoom a small element's edge handles cover its middle,
       // so aiming at a selected label lands on a handle: an Alt-press there
-      // that is released without moving was a click, and digs on release.
+      // that Moveable did not turn into a drag was a click, and digs in
+      // Moveable's own end handler (wireMoveable) — Moveable alone knows
+      // whether the press was a drag, and deciding before it does let a jittery
+      // click both dig AND commit the gesture as an (empty) undo step.
       if (ev.target instanceof Element && ev.target.closest('.moveable-control-box')) {
-        const x0 = ev.clientX, y0 = ev.clientY
-        window.addEventListener('mouseup', (up) => {
-          if (Math.hypot(up.clientX - x0, up.clientY - y0) <= 3) this.deepSelect(x0, y0)
-        }, { capture: true, once: true })
+        this.altPress = { x: ev.clientX, y: ev.clientY }
         return
       }
       ev.preventDefault()
@@ -381,17 +390,18 @@ export class SlideCanvas {
     // already selected the whole group by then, and this narrows it. (Ctrl on
     // a Mac is the right-click, which has its own way in: the menu lists every
     // element under the pointer.)
-    let modPress: { x: number; y: number } | null = null
+    // A ⌘-press Moveable took as a drag never reaches this click (Gesto eats
+    // the click after a drag); its dead zone is settled in the drag end handler.
+    let modPress: { x: number; y: number; target: EventTarget | null } | null = null
     const isMod = (ev: MouseEvent) => (isMacOS() ? ev.metaKey : ev.ctrlKey)
     this.scroller.addEventListener('mousedown', (ev) => {
-      modPress = ev.button === 0 && isMod(ev) ? { x: ev.clientX, y: ev.clientY } : null
+      modPress = ev.button === 0 && isMod(ev) ? { x: ev.clientX, y: ev.clientY, target: ev.target } : null
     }, true)
     this.scroller.addEventListener('click', (ev) => {
       const p = modPress
       modPress = null
-      if (!p || !isMod(ev) || this.editing || Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > 3) return
-      const id = this.topElementAt(ev.clientX, ev.clientY)
-      if (id && !this.isGhost(id)) this.store.select([id])
+      if (!p || !isMod(ev) || Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > CLICK_SLOP) return
+      this.selectExactAt(ev.clientX, ev.clientY, p.target)
     }, true)
 
     this.stage.addEventListener('dblclick', (ev) => {
@@ -498,7 +508,7 @@ export class SlideCanvas {
 
     store.on('current', () => this.render())
     store.on('doc', () => this.render())
-    store.on('selection', () => this.syncTargets())
+    store.on('selection', () => { this.trackEnteredGroup(); this.syncTargets() })
 
     this.render()
   }
@@ -803,19 +813,34 @@ export class SlideCanvas {
     this.onCommentModeChange?.(true)
   }
 
-  /** Grow a selection to whole groups: any member pulls in its groupId kin.
-   *  (⌘-click and Alt-click deep select bypass this — that's how you reach a member.)
-   *  Once INSIDE a group — part of it selected, from the layer list or a ⌘-click —
-   *  its other members are picked one at a time, as in Figma: growing them to the
-   *  whole group would throw away the step the author just took. */
+  /** The group the author has stepped inside — by ⌘-click, Alt-click or a
+   *  member's row in the layer list — or null. Inside it, members are picked
+   *  one at a time, as in Figma. Kept as state rather than read off the
+   *  selection's shape: shift-picking the rest of the members one by one makes
+   *  the selection LOOK like a whole-group click, but the author is still
+   *  inside, and a further shift-click must drop one member, not all. */
+  private enteredGroup: string | null = null
+
+  /** Runs on every selection change. A selection that is part of one group
+   *  (only ⌘-click, Alt-click and the layer list can make one — every canvas
+   *  click grows to whole groups outside an entered one) enters that group;
+   *  one that strays outside the entered group, or empties, leaves it. */
+  private trackEnteredGroup() {
+    const els = this.store.slide?.elements ?? []
+    const sel = this.store.selection.map((id) => els.find((e) => e.id === id))
+    const g = sel[0]?.groupId
+    const inOne = !!g && sel.every((e) => e?.groupId === g)
+    if (inOne && els.filter((e) => e.groupId === g).length > sel.length) this.enteredGroup = g
+    else if (!inOne || g !== this.enteredGroup) this.enteredGroup = null
+  }
+
+  /** Grow a selection to whole groups: any member pulls in its groupId kin —
+   *  except the members of the group the author has entered (enteredGroup).
+   *  (⌘-click and Alt-click deep select bypass this — that's how you reach a member.) */
   private expandGroups(ids: string[]): string[] {
     const els = this.store.slide.elements
-    const sel = this.store.selection.map((id) => els.find((e) => e.id === id))
-    const inside = sel[0]?.groupId
-    const entered = inside && sel.every((e) => e?.groupId === inside) &&
-      els.filter((e) => e.groupId === inside).length > sel.length ? inside : undefined
     const groups = new Set(
-      ids.map((id) => els.find((e) => e.id === id)?.groupId).filter((g): g is string => !!g && g !== entered),
+      ids.map((id) => els.find((e) => e.id === id)?.groupId).filter((g): g is string => !!g && g !== this.enteredGroup),
     )
     if (!groups.size) return ids
     const out = new Set(ids)
@@ -857,6 +882,20 @@ export class SlideCanvas {
     return ids
   }
 
+  /** ⌘-click: select exactly the element under the point, a group member
+   *  included. Stands down where Alt-click's dig does (an editor owns the
+   *  pointer) and over the floating controls Selecto also ignores. */
+  private selectExactAt(clientX: number, clientY: number, target: EventTarget | null) {
+    if (this.editing || this.pathEditor.active || this.bezierEditor.active || this.cropEditor.active) return
+    if (target instanceof Element && target.closest(FLOATING_CONTROLS)) return
+    const id = this.topElementAt(clientX, clientY)
+    if (id && !this.isGhost(id)) this.store.select([id])
+  }
+
+  /** An Alt-press on Moveable's control box, waiting for Moveable to say
+   *  whether it was a drag (centre-scale) or a click (dig). */
+  private altPress: { x: number; y: number } | null = null
+
   /** Alt-click: select the element under the point, digging one step deeper
    *  below the current selection on each repeat. Walks the painted stack, not
    *  model boxes, for the reason topElementAt gives. */
@@ -890,12 +929,22 @@ export class SlideCanvas {
   private wireMeasure() {
     const setAlt = (on: boolean) => { if (on !== this.altHeld) { this.altHeld = on; this.scheduleMeasure() } }
     window.addEventListener('keydown', (ev) => { if (ev.key === 'Alt') setAlt(true) })
-    window.addEventListener('keyup', (ev) => { if (ev.key === 'Alt') setAlt(false) })
+    window.addEventListener('keyup', (ev) => {
+      if (ev.key !== 'Alt') return
+      // Windows: Alt pressed and released alone opens the browser's menu bar.
+      // Over the canvas that Alt was a measure, not a trip to the menu.
+      if (this.hoverAt) ev.preventDefault()
+      setAlt(false)
+    })
     window.addEventListener('blur', () => setAlt(false))
     this.scroller.addEventListener('mousemove', (ev) => {
       this.hoverAt = { x: ev.clientX, y: ev.clientY }
-      // the event's own flag catches an Alt pressed while the window was unfocused
+      // the event's own flags catch an Alt pressed while the window was
+      // unfocused, and a release the window never heard: a native drag-and-drop
+      // (a layer row, a file) ends without a mouseup, which left `pressing`
+      // stuck on and the measure off for good
       this.altHeld = ev.altKey
+      this.pressing = ev.buttons !== 0
       this.scheduleMeasure()
     })
     this.scroller.addEventListener('mouseleave', () => { this.hoverAt = null; this.scheduleMeasure() })
@@ -911,15 +960,15 @@ export class SlideCanvas {
 
   /** What Alt-hover measures to: the element Alt-click would select first, the
    *  slide itself over empty canvas, or nothing over the selection. */
-  private measureTarget(): Box | null {
+  private measureTarget(): { box: Box; isSlide: boolean } | null {
     const p = this.hoverAt
     const slide = this.store.slide
     if (!p || !slide) return null
     const id = this.elementsAt(p.x, p.y).find((i) => !this.isGhost(i))
-    if (!id) return { x: 0, y: 0, w: this.store.doc.size.width, h: this.store.doc.size.height }
+    if (!id) return { box: { x: 0, y: 0, w: this.store.doc.size.width, h: this.store.doc.size.height }, isSlide: true }
     if (this.store.selection.includes(id)) return null
     const el = slide.elements.find((e) => e.id === id)
-    return el ? aabb(el) : null
+    return el ? { box: aabb(el), isSlide: false } : null
   }
 
   private drawMeasure() {
@@ -929,8 +978,9 @@ export class SlideCanvas {
     const busy = this.pressing || !!this.editing || !!this.editingCell || this.pathEditor.active
       || this.cropEditor.active || this.bezierEditor.active
     const ref = !busy && this.altHeld ? union(this.store.selectedElements.map(aabb)) : null
-    const tgt = ref && this.measureTarget()
-    if (!ref || !tgt) { layer.remove(); return }
+    const hit = ref && this.measureTarget()
+    if (!ref || !hit) { layer.remove(); return }
+    const tgt = hit.box
     // last in the scaled host so it paints above the slide (as drawRemote does)
     if (layer.parentNode !== this.scaleHost || layer.nextSibling) this.scaleHost.appendChild(layer)
     const inv = 1 / (this.scale || 1)
@@ -945,8 +995,7 @@ export class SlideCanvas {
       d.style[h ? 'borderTopWidth' : 'borderLeftWidth'] = `${inv}px` // the dash; solid lines are background
       layer.appendChild(d)
     }
-    const isSlide = tgt.x === 0 && tgt.y === 0 && tgt.w === this.store.doc.size.width && tgt.h === this.store.doc.size.height
-    if (!isSlide) {
+    if (!hit.isSlide) {
       const box = document.createElement('div')
       box.className = 'ed-measure-target'
       Object.assign(box.style, { left: `${tgt.x}px`, top: `${tgt.y}px`, width: `${tgt.w}px`, height: `${tgt.h}px`, borderWidth: `${inv}px` })
@@ -1288,6 +1337,8 @@ export class SlideCanvas {
     // start positions per target — Shift axis-locks against these
     const dragStarts = new Map<HTMLElement, { left: number; top: number }>()
 
+    /** where the press that started this gesture landed (client px) */
+    let pressAt = { x: 0, y: 0 }
     const noteDragStart = (target: HTMLElement, inputEvent: MouseEvent | undefined) => {
       dragStarts.set(target, {
         left: parseFloat(target.style.left) || 0,
@@ -1309,10 +1360,14 @@ export class SlideCanvas {
         : { left: start.left, top }
     }
 
-    mv.on('dragStart', (e) => noteDragStart(e.target as HTMLElement, e.inputEvent as MouseEvent))
-    mv.on('dragGroupStart', (e) =>
-      e.events.forEach((ev) => noteDragStart(ev.target as HTMLElement, e.inputEvent as MouseEvent)),
-    )
+    mv.on('dragStart', (e) => {
+      pressAt = { x: e.clientX, y: e.clientY }
+      noteDragStart(e.target as HTMLElement, e.inputEvent as MouseEvent)
+    })
+    mv.on('dragGroupStart', (e) => {
+      pressAt = { x: e.clientX, y: e.clientY }
+      e.events.forEach((ev) => noteDragStart(ev.target as HTMLElement, e.inputEvent as MouseEvent))
+    })
     mv.on('drag', (e) => {
       const p = axisLock(e.target as HTMLElement, e.left, e.top, e)
       e.target.style.left = `${p.left}px`
@@ -1378,11 +1433,11 @@ export class SlideCanvas {
     // sitting inside that box could not be added, and a selected one could not
     // be removed. Toggled here, on Moveable's click (a press that did not become
     // a drag), because Shift-DRAG on the selection is an axis-locked move.
-    const onClick = (e: { inputEvent: Event }) => {
+    // The event's own clientX/Y, not inputEvent's: a TouchEvent has none.
+    const onClick = (e: { clientX: number; clientY: number }) => {
       if (!this.shiftPressOnSelection) return
       this.shiftPressOnSelection = false
-      const ev = e.inputEvent as MouseEvent
-      this.toggleAt(ev.clientX, ev.clientY)
+      this.toggleAt(e.clientX, e.clientY)
     }
     mv.on('click', onClick)
     mv.on('clickGroup', onClick)
@@ -1396,7 +1451,8 @@ export class SlideCanvas {
       ev.target.style.transform = ev.transform
     }))
 
-    const commitFrames = () => {
+    /** Commit the gesture; reports whether the document changed. */
+    const commitFrames = (): boolean => {
       const copies = this.pendingCopy
       this.pendingCopy = null
       if (copies?.length) {
@@ -1408,7 +1464,7 @@ export class SlideCanvas {
           y: parseFloat(node.style.top) || 0,
         }))
         this.store.commit(() => {
-          const dupes = copies.map((el) => ({ ...el, id: uid(el.type[0]) }))
+          const dupes = freshGroups(copies.map((el) => ({ ...el, id: uid(el.type[0]) })))
           this.store.slide.elements.push(...dupes)
           for (const f of frames) {
             const el = this.store.element(f.id)
@@ -1417,33 +1473,45 @@ export class SlideCanvas {
             el.y = Math.round(f.y * 10) / 10
           }
         })
+        return true
+      }
+      return this.commitDomFrames(this.selectedNodes())
+    }
+    // Every gesture ends here. An Alt-press on the control box (see the dig
+    // handler) that Moveable did not take as a drag — or whose drag changed
+    // nothing, e.g. a jitter that snapped straight back — was a click: it digs.
+    const end = ({ isDrag }: { isDrag: boolean }) => {
+      const alt = this.altPress
+      this.altPress = null
+      const changed = isDrag && commitFrames()
+      if (alt && !changed) this.deepSelect(alt.x, alt.y)
+    }
+    // A ⌘-press is a duplicate-drag only past CLICK_SLOP — the ⌘-click's own
+    // dead zone. Inside it the press was a ⌘-click: the copies are dropped,
+    // the nudged originals put back, and the click selects exactly.
+    const endDrag = (e: { isDrag: boolean; clientX: number; clientY: number }) => {
+      if (this.pendingCopy && Math.hypot(e.clientX - pressAt.x, e.clientY - pressAt.y) <= CLICK_SLOP) {
+        this.pendingCopy = null
+        this.altPress = null
+        if (e.isDrag) this.render()
+        this.selectExactAt(pressAt.x, pressAt.y, null)
         return
       }
-      this.commitDomFrames(this.selectedNodes())
+      if (!e.isDrag) this.pendingCopy = null
+      end(e)
     }
-    mv.on('dragEnd', ({ isDrag }) => {
-      if (isDrag) commitFrames()
-      else this.pendingCopy = null
-    })
-    mv.on('dragGroupEnd', ({ isDrag }) => {
-      if (isDrag) commitFrames()
-      else this.pendingCopy = null
-    })
-    mv.on('resizeEnd', ({ isDrag }) => {
-      mv.keepRatio = false
-      if (isDrag) commitFrames()
-    })
-    mv.on('resizeGroupEnd', ({ isDrag }) => isDrag && commitFrames())
-    mv.on('rotateEnd', ({ isDrag }) => {
-      mv.throttleRotate = 1
-      if (isDrag) commitFrames()
-    })
-    mv.on('rotateGroupEnd', ({ isDrag }) => isDrag && commitFrames())
+    mv.on('dragEnd', endDrag)
+    mv.on('dragGroupEnd', endDrag)
+    mv.on('resizeEnd', (e) => { mv.keepRatio = false; end(e) })
+    mv.on('resizeGroupEnd', end)
+    mv.on('rotateEnd', (e) => { mv.throttleRotate = 1; end(e) })
+    mv.on('rotateGroupEnd', end)
   }
 
-  /** Read live DOM styles back into the model in one undo step. */
-  private commitDomFrames(nodes: HTMLElement[]) {
-    if (!nodes.length) return
+  /** Read live DOM styles back into the model in one undo step. Reports
+   *  whether anything changed. */
+  private commitDomFrames(nodes: HTMLElement[]): boolean {
+    if (!nodes.length) return false
     const frames = nodes.map((node) => {
       const rotation = /rotate\((-?[\d.]+)deg\)/.exec(node.style.transform)
       return {
@@ -1455,17 +1523,26 @@ export class SlideCanvas {
         rotation: rotation ? Math.round(parseFloat(rotation[1]) * 10) / 10 : 0,
       }
     })
+    const r = (v: number) => Math.round(v * 10) / 10
+    // a gesture that ends where it began (a jittery click, a drag out and
+    // back) changes nothing, and store.commit would still record an undo step
+    const changed = frames.some((f) => {
+      const el = this.store.element(f.id)
+      return el && (el.x !== r(f.x) || el.y !== r(f.y) || el.w !== r(f.w) || el.h !== r(f.h) || (el.rotation ?? 0) !== f.rotation)
+    })
+    if (!changed) return false
     this.store.commit(() => {
       for (const f of frames) {
         const el = this.store.element(f.id)
         if (!el) continue
-        el.x = Math.round(f.x * 10) / 10
-        el.y = Math.round(f.y * 10) / 10
-        el.w = Math.round(f.w * 10) / 10
-        el.h = Math.round(f.h * 10) / 10
+        el.x = r(f.x)
+        el.y = r(f.y)
+        el.w = r(f.w)
+        el.h = r(f.h)
         el.rotation = f.rotation
       }
     })
+    return true
   }
 
   // --- selecto ----------------------------------------------------------------
@@ -1474,7 +1551,7 @@ export class SlideCanvas {
     this.selecto.on('dragStart', (e) => {
       const target = e.inputEvent.target as HTMLElement
       // floating controls over the canvas are not marquee territory
-      if (target.closest('.ed-present-fabs, .ed-zoombar, .ed-panel-toggle, .ed-resizer')) {
+      if (target.closest(FLOATING_CONTROLS)) {
         e.stop()
         return
       }

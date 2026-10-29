@@ -33,7 +33,7 @@ import { createSaveQueue, saveRevision } from '../saving'
 import type { SaveQueue } from '../../../kernel/src/savequeue.ts'
 import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, onRecoveryOff, pruneOld, putRecovery, recoveryLooksOlder, type Snapshot } from '../autosave'
-import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
+import { freshGroups, insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { estimatedFrames, fencedElements, splitFences } from './codefence'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
@@ -3473,7 +3473,7 @@ export class Editor {
   private duplicateSelection() {
     const els = this.store.selectedElements
     if (!els.length) return
-    const clones = els.map((el) => cloneElement(el))
+    const clones = freshGroups(els.map((el) => cloneElement(el)))
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))
   }

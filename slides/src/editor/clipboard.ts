@@ -199,17 +199,28 @@ function pasteOffset(els: SlideElement[], slide: Slide): number {
   return d
 }
 
+/** Copies of grouped elements form groups of their own: one fresh group id per
+ *  original group in the batch, so a duplicated group does not join the one it
+ *  came from. The group's name travels with the copy, as panels.duplicate does. */
+export function freshGroups<T extends SlideElement>(els: T[]): T[] {
+  const ids = new Map<string, string>()
+  for (const el of els) {
+    if (el.groupId) el.groupId = ids.get(el.groupId) ?? ids.set(el.groupId, `grp-${uid()}`).get(el.groupId)!
+  }
+  return els
+}
+
 /** Insert pasted elements onto a slide with fresh ids — at their copied
  *  position, nudged only where they would cover what they duplicate. */
 export function insertElements(payload: ClipPayload, doc: BentoDoc, slide: Slide): SlideElement[] {
   const remap = mergeAssets(payload, doc)
   mergeFonts(payload, doc, remap)
   const d = pasteOffset(payload.elements ?? [], slide)
-  const els: SlideElement[] = (payload.elements ?? []).map((e) => ({
+  const els: SlideElement[] = freshGroups((payload.elements ?? []).map((e) => ({
     ...(JSON.parse(JSON.stringify(e)) as SlideElement),
     id: uid(e.type[0]),
     x: (e.x ?? 0) + d, y: (e.y ?? 0) + d,
-  }))
+  })))
   rewriteRefs(els, remap)
   slide.elements.push(...els)
   return els
