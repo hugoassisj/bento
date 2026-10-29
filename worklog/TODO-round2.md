@@ -24,7 +24,7 @@
 - [x] 22. Renomear GRUPOS também (duplo clique / botão direito na linha do grupo)
 - [x] 23. Sombras: presets como seletor visual (ícone/prévia + texto) em vez de dropdown
 - [x] 24. Barra de ferramentas pequena e apertada → usar a largura toda (botões maiores, distribuídos)
-- [ ] 25. Internacionalização: MUITOS problemas → auditoria completa (subagente) — strings sem tradução, valores crus em minúsculas ("cor sólida", "nenhum", "bar"), cortes
+- [x] 25. Internacionalização: MUITOS problemas → auditoria completa (subagente) — strings sem tradução, valores crus em minúsculas ("cor sólida", "nenhum", "bar"), cortes
 - [x] 26. Feature: overlay de medição (Alt/Option + hover mede distância do selecionado ao alvo) — spec colada pelo usuário (subagente)
 - [x] 27. Corrigir checks: segmented pt "preenchido" cortado; select de fonte cortado (pt/de)
 - [x] 28. Traduções round 2 aplicadas (18 chaves × 30 idiomas, rascunho de máquina)
@@ -32,7 +32,7 @@
 - [x] 30. Abas superiores (Slides|Camadas, Formato|Animar|Interação) no tema escuro: selecionada/não selecionada com mais contraste (subagente)
 - [x] 31. Topbar: dividir esquerda (logo+nome+desfazer) | centro (inserir) | direita (ações); nome longo com reticências sem quebrar o layout
 - [x] 32. Laser pointer no modo apresentação: ao soltar o mouse, sumir com a animação (hoje para de repente)
-- [ ] 33. Tamanho da página (Documento) como ícones de proporção em vez de dropdown
+- [x] 33. Tamanho da página (Documento) como ícones de proporção em vez de dropdown
 
 ## Revisão final — achados (corrigir)
 - [x] R1 BLOQ: name/groupName sem verificação no portão untrusted → somem ao colar/loadDoc/restaurar; CI test-clipboard vermelho; schema; docs/format.md
@@ -40,8 +40,13 @@
 - [x] R3 renomear perdido quando a lista reconstrói (undo/CRDT)
 - [ ] R4 notas: altura não re-limitada ao encolher a janela (canvas vai a 0px); touch-action; telefone
 - [x] R5 renomear membro de grupo dobrado; renomear em doc somente leitura; codefence BASE_KEYS perde name/groupName
-- [ ] R6 (agente A) canvas: ⌘-click com 1–3px duplica; Alt-dig passo de undo vazio; medição trava após drag nativo; Alt no Windows abre menu; shift-toggle toque; entered-group com shift; guardas do ⌘-click; duplicar grupo mantém groupId
+- [x] R6 (agente A) canvas: ⌘-click com 1–3px duplica; Alt-dig passo de undo vazio; medição trava após drag nativo; Alt no Windows abre menu; shift-toggle toque; entered-group com shift; guardas do ⌘-click; duplicar grupo mantém groupId
 - [ ] R7 (agente B) inspetor: opacidade em cor vinculada ao tema se perde; linhas de status escondidas atrás do ?; + em seção recolhida; contorno de seta/linha errado; cor = 2 passos de undo e 0%→100%; rótulo de cor abre seletor; a11y (aria-label nos campos, radiogroups); scrub pointercancel/undo vazio; código morto (ROW_TIPS, CSS, chaves i18n)
 - [ ] R8 CSS/docs (aguardando revisor 4)
 - [ ] R9 Rodar o gate completo de CI do repo (.github), não só os rigs do navegador
 - [ ] 34. Fork nyblnet/bento na conta GitHub do usuário (hugoassisj) e enviar TODOS os branches/commits (backup; separar em issues coesas fica pra depois) — quando as integrações estiverem prontas
+- [ ] 35. (relatado pelo agente de i18n como pedido do usuário — CONFIRMAR) indicadores de tamanho/rotação no canvas grandes demais; overlay de medição "ruim" → repensar
+- [ ] 36. (idem — CONFIRMAR) seleção "click-through" estilo Figma/Penpot: clicar de novo seleciona o próximo elemento atrás do ponteiro
+- [ ] 37. (idem — CONFIRMAR) remover travessões (—) de toda a copy em todos os idiomas, pontuação natural
+- [ ] 38. Seletor de linguagem do código mostra ids crus (js, cpp, py); "▶ No video source" sem tradução em render.ts
+- [ ] R10 Regressões do gate de CI (passam no main, falham no branch): pt "numa"; theme token gate (superfície pinada em branco); code colours (linha de swatches rápidos); connectors (catálogo de pontas no painel); aspect-ratio lock (scroll do painel); fonte embutida mantém pesos; copiar vários slides; clicar slide não move a lista; recuo de marcadores; shell loader (ENOTEMPTY — verificar se é intermitente). "Gate 1 oracle" falha no main também (ambiente).

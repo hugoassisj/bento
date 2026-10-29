@@ -1,0 +1,121 @@
+PASS  0s  i18n packed table is current
+PASS  0s  Slides Portuguese is pt-BR; the theme picker has its own words
+PASS  2s  Typecheck
+PASS  0s  Slides save revisions
+PASS  0s  Slides count-up number rig
+PASS  7s  Build single-file shell
+PASS  0s  Splice conformance gate
+PASS  7s  The gate refuses a sealed TEST shell
+PASS  0s  Code-morph identity engine
+PASS  0s  sidebar multi-select — a block move keeps order and carries states
+PASS  0s  presence toasts — said once per real arrival and departure
+PASS  1s  Media autoplay rig
+PASS  2s  Embed element rig
+PASS  2s  File-open / boot document gate rig
+PASS  4s  Untrusted-markup sanitizer rig
+PASS  2s  Replace-from-JSON document gate rig
+PASS  0s  Export-secrets rig
+PASS  11s  bento check rig (browser)
+PASS  0s  Model key tables match the format
+PASS  0s  Schema is current
+PASS  0s  Document schema rig
+PASS  0s  Document validation rig
+PASS  0s  Theme token gate
+PASS  0s  Brand palette rig
+PASS  0s  Built-in layout geometry rig
+PASS  0s  slides asset-pruning rig
+PASS  0s  Slides built-in fonts rig
+PASS  0s  Slides embedded font weight rig
+PASS  0s  Slides code colours rig
+PASS  0s  Slides pagination rig
+PASS  0s  Slides reveal-steps rig
+PASS  0s  Maths engine rig
+PASS  0s  Reveal authoring rig
+PASS  0s  Date/time field patterns rig
+PASS  0s  Typed bullets become lists rig
+PASS  0s  Inline-edit listeners rig
+PASS  0s  Live-session notice wording rig
+PASS  3s  Shell loader and carrier rig
+PASS  0s  Maths in links rig
+PASS  0s  Maths delimiters rig
+PASS  0s  Code fence rig
+PASS  0s  Maths coverage rig
+PASS  0s  Accent contrast rig
+PASS  0s  Compact document rig
+PASS  0s  Agent-deck corpus rig
+PASS  0s  Compact layouts and roles rig
+PASS  1s  Gate parity rig (the load-report collector changes no decision)
+PASS  0s  Layers panel rig
+PASS  0s  Measure overlay geometry rig
+PASS  0s  Export slides as images rig
+PASS  0s  Connectors rig
+PASS  0s  Image crop rig
+PASS  0s  Photos shrink at insert rig
+PASS  0s  Compress pictures in this deck rig
+PASS  0s  Image aspect-ratio lock rig
+PASS  0s  Web links and bullets rig
+PASS  0s  Audience projection rig
+PASS  0s  Audience embed rig
+PASS  0s  Broadcast follow-mode rig
+PASS  0s  slides store rig
+PASS  0s  Slides share-copy rig
+PASS  0s  Clipboard embedded-font rig
+PASS  0s  Restore gate rig
+PASS  0s  Slides sync allowlist rig
+PASS  224s  slides-egress-browser: No document string makes slides fetch anything in Chromium
+PASS  1s  slides-egress-browser: The shared svg sanitizer's policy options only tighten
+PASS  24s  slides-font-browser: The sealed TEST document in Chromium
+PASS  11s  slides-font-browser: Release pins in Chromium
+PASS  44s  slides-font-browser: The pinned-CSP boot check refuses doctored copies in Chromium
+FAIL  0s  slides-font-browser: Gate 1 against a browser oracle in Chromium
+          at /private/tmp/claude-501/-Users-hjusti/b4061c79-e2ea-4c8c-bd82-cf3c0aa33e1d/scratchpad/bento/scripts/test-gate1-oracle.mjs:131:68 {
+        log: [],
+        name: 'Error'
+      }
+      
+      Node.js v24.11.1
+PASS  26s  slides-font-browser: A sealed slides deck keeps its content out of IndexedDB in Chromium
+PASS  2s  slides-font-browser: A sealed deck's title stays out of window titles in Chromium
+PASS  2s  slides-font-browser: Exercise the packaged documents in Chromium
+PASS  4s  slides-font-browser: An embedded font keeps its weights in Chromium
+PASS  7s  slides-font-browser: Write chrome follows the copy's role in Chromium
+PASS  1s  slides-font-browser: PowerPoint converter links in Chromium
+PASS  1s  slides-font-browser: The unsupported-browser notice names the app in Chromium
+PASS  22s  slides-font-browser: Under-specified documents boot in Chromium
+PASS  18s  slides-font-browser: A table with no style opens in Chromium
+PASS  3s  slides-font-browser: Top bar in Chromium
+PASS  29s  slides-font-browser: One field look in Chromium
+PASS  6s  slides-font-browser: A password-protected deck opens in Chromium
+PASS  2s  slides-font-browser: The saved preview keeps pictures that fit in Chromium
+PASS  8s  slides-font-browser: Saving never costs an edit its recovery copy in Chromium
+PASS  5s  slides-font-browser: The loader reads what the app published in Chromium
+PASS  14s  slides-font-browser: Top bar holds still in Chromium
+PASS  1s  slides-font-browser: Chrome rulings in Chromium
+PASS  8s  slides-font-browser: Code in a text box in Chromium
+PASS  3s  slides-font-browser: Copy several slides in Chromium
+PASS  9s  slides-font-browser: Clicking a slide never moves the list under the pointer in Chromium
+PASS  1s  slides-font-browser: Rounded tables in Chromium
+PASS  5s  slides-font-browser: Paste position in Chromium
+PASS  4s  slides-font-browser: Save queue in Chromium
+PASS  19s  slides-font-browser: Recovery-off notice in Chromium
+PASS  4s  slides-font-browser: Save a copy and the older-snapshot banner in Chromium
+PASS  6s  slides-font-browser: Ghost Cut in Chromium
+PASS  4s  slides-font-browser: Bullet indent in Chromium
+PASS  6s  slides-font-browser: Leaving an inline code run in Chromium
+PASS  4s  slides-font-browser: The code typewriter types in the show and nowhere else in Chromium
+PASS  2s  slides-font-browser: Connectors route on every slide in Chromium
+PASS  4s  slides-font-browser: Caret at the start of a line in Chromium
+PASS  6s  slides-font-browser: Shift-click inside a selection in Chromium
+PASS  12s  slides-font-browser: Reaching the element under the pointer in Chromium
+PASS  8s  slides-font-browser: Alt-hover measures in Chromium
+PASS  16s  slides-font-browser: Layer groups and names in Chromium
+PASS  6s  slides-font-browser: Inspector tabs in Chromium
+PASS  128s  slides-font-browser: Inspector fits its column in Chromium
+PASS  106s  slides-font-browser: Inspector copy in Chromium
+PASS  4s  slides-font-browser: Segmented controls in Chromium
+PASS  6s  slides-font-browser: Scrubbing numeric fields in Chromium
+PASS  65s  slides-font-browser: Every numeric field scrubs in Chromium
+PASS  6s  slides-font-browser: Hints in Chromium
+PASS  4s  slides-font-browser: Speaker notes pane in Chromium
+PASS  3s  slides-font-browser: Shortcuts sheet fits in Chromium
+PASS  5s  slides-font-browser: Laser fades when released in Chromium
