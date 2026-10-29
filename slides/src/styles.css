@@ -2973,3 +2973,59 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-context .ed-btn-icon { flex: none; padding: 3px; color: var(--muted); }
 .ed-context .ed-btn-icon:hover { color: var(--ink); }
 .ed-context-how { margin: 0 0 6px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+
+/* ————— INSPECTOR LOOK — Penpot/Figma conventions, kept light ————————————————
+   Arrange and Reveal rows put their caption ABOVE the buttons: no language
+   has to fit a 46px column (pt 'REVELAR' ran into its own buttons). Arrange
+   is a toolbar of icon buttons, quiet until hovered. */
+.ed-arrange-row { grid-template-columns: repeat(6, 30px); gap: 4px; margin: 2px 0 10px; }
+.ed-arrange-row .ed-arrange-cap, .ed-reveal-row .ed-arrange-cap { grid-column: 1 / -1; width: auto; font-size: 10px; opacity: 1; margin-bottom: 1px; }
+.ed-arrange-row .ed-btn {
+  width: 30px; height: 28px; padding: 0; display: grid; place-items: center;
+  color: var(--ink-2); background: var(--chrome-2); border: 1px solid transparent; border-radius: 6px;
+}
+.ed-arrange-row .ed-btn:hover { color: var(--ink); background: var(--chrome); border-color: var(--line); }
+.ed-arrange-row .ed-btn svg { width: 16px; height: 16px; }
+.ed-reveal-row { flex-wrap: wrap; }
+.ed-reveal-row .ed-arrange-cap { flex-basis: 100%; }
+
+/* Numeric pairs (X/Y, W/H…) as Penpot draws them: the label INSIDE the
+   field. The input keeps THE FIELD's own box (#729 — border, fill, radius,
+   height are the input's); the label sits over its start padding, which
+   panels.ts mini() sizes to the label (--lab). Still the scrub handle. */
+.ed-grid2 { gap: 6px 8px; }
+.ed-mini { position: relative; gap: 0; }
+.ed-mini > span {
+  position: absolute; z-index: 1; inset-inline-start: 8px; top: 50%; transform: translateY(-50%);
+  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; color: var(--muted);
+}
+.ed-mini input { padding-inline-start: calc(var(--lab, 12px) + 13px); }
+
+/* Typography → Bullets: two icon buttons, not two words wider than the panel */
+.ed-shift-row { flex: none; }
+.ed-shift-row .ed-btn { flex: none; width: 30px; height: 28px; padding: 0; display: grid; place-items: center; }
+.ed-shift-row .ed-btn svg { width: 16px; height: 16px; }
+
+/* a dropdown whose value would be cut off gets the row to itself (panels.ts stackCrampedRows) */
+.ed-props .ed-row.ed-row-stack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 4px; }
+.ed-props .ed-row.ed-row-stack > select { width: 100%; }
+/* three tabs fit the narrowest panel in every language: quieter tracking, and an ellipsis before an overflow */
+.ed-tabs button { min-width: 0; padding: 0 4px; letter-spacing: .02em; font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* gradient stops and axis ranges share their row instead of pushing past it */
+.ed-gradstop { flex: 1; min-width: 0; }
+.ed-gradstop input[type='color'] { flex: 1; min-width: 0; }
+.ed-row > .ed-axis-range { flex: 1; min-width: 0; }
+.ed-axis-range input { min-width: 0; }
+/* numeric pairs shrink with the column (a long label — de 'Weichzeichnung' — ellipsises instead of pushing) */
+.ed-grid2 > * { min-width: 0; }
+/* a gradient stop (position, colour, opacity, remove) always takes the full row, caption above */
+.ed-props .ed-row:has(> .ed-gradstop) { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 4px; }
+.ed-row > .ed-gradstop { width: 100%; }
+/* a chart series / slice row: the fields give way, the remove button stays in */
+.ed-series-row > * { min-width: 0; }
+.ed-series-row > .ed-btn { flex: none; }
+/* a dropdown fills what its caption leaves — what stackCrampedRows measures against */
+.ed-props .ed-row > select { width: auto; flex: 1 1 110px; min-width: 0; max-width: 100%; }
+/* a series / slice row wraps rather than squeezing its controls past the edge */
+.ed-series-row { flex-wrap: wrap; }

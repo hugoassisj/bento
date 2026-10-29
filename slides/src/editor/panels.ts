@@ -230,6 +230,7 @@ export class PropsPanel {
     this.applyAccordion()
     this.mountTabs()
     this.mountContext(els)
+    this.stackCrampedRows()
     this.host.scrollTop = scrollTop
   }
 
@@ -1189,14 +1190,15 @@ export class PropsPanel {
     // held — else the whole box. Tab / ⇧Tab do the same while editing.
     const shift = document.createElement('div')
     shift.className = 'ed-shift-row'
-    for (const [dir, label, tip] of [
-      [-1, t('Outdent'), t('Move the bullet up a level (⇧Tab while editing)')],
-      [1, t('Indent'), t('Move the bullet down a level, under the one above (Tab while editing)')],
+    for (const [dir, icon, label, tip] of [
+      [-1, ICONS.outdent, t('Outdent'), t('Move the bullet up a level (⇧Tab while editing)')],
+      [1, ICONS.indent, t('Indent'), t('Move the bullet down a level, under the one above (Tab while editing)')],
     ] as const) {
       const b = document.createElement('button')
       b.type = 'button'
-      b.className = 'ed-btn'
-      b.textContent = label
+      b.className = 'ed-btn ed-btn-icon'
+      b.innerHTML = icon
+      b.setAttribute('aria-label', label)
       b.title = tip
       b.addEventListener('mousedown', (ev) => ev.preventDefault())
       b.addEventListener('click', (ev) => { ev.preventDefault(); this.onListIndent?.(dir) })
@@ -2220,6 +2222,37 @@ export class PropsPanel {
   // --- element ops --------------------------------------------------------------
 
   /**
+   * A dropdown whose chosen option does not fit beside its caption gets the
+   * row to itself — caption above, field full width — rather than cutting
+   * the value off, in whichever language made it long. Measured with text
+   * metrics, not layout, so sections on a hidden tab are sized too; a resize
+   * of the panel measures again.
+   */
+  private stackCrampedRows() {
+    const host = this.host
+    const cs = getComputedStyle(host)
+    const inner = host.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+    if (inner <= 0) return
+    const ctx = (PropsPanel.measure ??= document.createElement('canvas').getContext('2d')!)
+    for (const sel of host.querySelectorAll<HTMLSelectElement>('.ed-row > select')) {
+      const row = sel.parentElement!
+      const caption = row.firstElementChild as HTMLElement
+      ctx.font = getComputedStyle(caption).font
+      const captionW = ctx.measureText(caption.textContent ?? '').width
+      ctx.font = getComputedStyle(sel).font
+      const valueW = ctx.measureText(sel.options[sel.selectedIndex]?.text ?? '').width + 30 // padding + arrow
+      row.classList.toggle('ed-row-stack', captionW + 8 + valueW > inner)
+    }
+    if (!this.watchingWidth) {
+      this.watchingWidth = true
+      let last = host.clientWidth
+      new ResizeObserver(() => { if (host.clientWidth !== last) { last = host.clientWidth; this.stackCrampedRows() } }).observe(host)
+    }
+  }
+  private static measure: CanvasRenderingContext2D | undefined
+  private watchingWidth = false
+
+  /**
    * What the panel is about, under the tabs, on every tab: the selection's
    * glyph and name, its two everyday actions, and one quiet line on how to
    * change it. The panel follows the selection — select something and its
@@ -2261,12 +2294,14 @@ export class PropsPanel {
   /** Align / distribute / size / order / rotate — the arrange kit, in
    *  captioned, balanced rows. */
   private arrangeRows(els: SlideElement[]) {
-    const textBtn = (label: string, title: string, onClick: () => void, enabled = true) => {
+    // Icon buttons, the hint naming each (editor/hints.ts); a caption per
+    // row says what the row is for. Controls the selection cannot use are
+    // left out, not greyed: spacing needs two elements, even gaps three.
+    const iconBtn = (icon: string, hint: string, onClick: () => void) => {
       const b = document.createElement('button')
       b.className = 'ed-btn ed-arrange-btn'
-      b.textContent = label
-      b.title = title
-      b.disabled = !enabled
+      b.innerHTML = icon
+      b.title = hint
       b.addEventListener('click', onClick)
       return b
     }
@@ -2281,25 +2316,29 @@ export class PropsPanel {
       this.host.appendChild(row)
     }
 
-    group('Align', [
-      textBtn('⇤', 'Align left', () => this.align(els, 'left')),
-      textBtn('⇹', 'Align horizontal centers', () => this.align(els, 'centerX')),
-      textBtn('⇥', 'Align right', () => this.align(els, 'right')),
-      textBtn('⤒', 'Align top', () => this.align(els, 'top')),
-      textBtn('⇳', 'Align vertical middles', () => this.align(els, 'middleY')),
-      textBtn('⤓', 'Align bottom', () => this.align(els, 'bottom')),
+    group(t('Align'), [
+      iconBtn(ICONS.arrLeft, t('Align left'), () => this.align(els, 'left')),
+      iconBtn(ICONS.arrCenterX, t('Align centers'), () => this.align(els, 'centerX')),
+      iconBtn(ICONS.arrRight, t('Align right'), () => this.align(els, 'right')),
+      iconBtn(ICONS.arrTop, t('Align top'), () => this.align(els, 'top')),
+      iconBtn(ICONS.arrMiddleY, t('Align middles'), () => this.align(els, 'middleY')),
+      iconBtn(ICONS.arrBottom, t('Align bottom'), () => this.align(els, 'bottom')),
     ])
-    group('Space', [
-      textBtn('⋯', 'Equal horizontal gaps (3+)', () => this.distribute(els, 'x'), els.length >= 3),
-      textBtn('⋮', 'Equal vertical gaps (3+)', () => this.distribute(els, 'y'), els.length >= 3),
-      textBtn('↔', 'Match widths — first selected sets the size (2+)', () => this.matchSize(els, 'w'), els.length >= 2),
-      textBtn('↕', 'Match heights — first selected sets the size (2+)', () => this.matchSize(els, 'h'), els.length >= 2),
-    ])
-    group('Order', [
-      textBtn('⇈', 'Bring to front', () => this.reorder(els, 'front')),
-      textBtn('↑', 'Bring forward one step', () => this.step(els, +1)),
-      textBtn('↓', 'Send backward one step', () => this.step(els, -1)),
-      textBtn('⇊', 'Send to back', () => this.reorder(els, 'back')),
+    if (els.length >= 2) {
+      group(t('Spacing'), [
+        ...(els.length >= 3 ? [
+          iconBtn(ICONS.distX, t('Space evenly across (3 or more)'), () => this.distribute(els, 'x')),
+          iconBtn(ICONS.distY, t('Space evenly down (3 or more)'), () => this.distribute(els, 'y')),
+        ] : []),
+        iconBtn(ICONS.matchW, t('Same width as the first selected (2 or more)'), () => this.matchSize(els, 'w')),
+        iconBtn(ICONS.matchH, t('Same height as the first selected (2 or more)'), () => this.matchSize(els, 'h')),
+      ])
+    }
+    group(t('Order'), [
+      iconBtn(ICONS.toFront, t('Bring to front'), () => this.reorder(els, 'front')),
+      iconBtn(ICONS.forward, t('Bring forward'), () => this.step(els, +1)),
+      iconBtn(ICONS.backward, t('Send backward'), () => this.step(els, -1)),
+      iconBtn(ICONS.toBack, t('Send to back'), () => this.reorder(els, 'back')),
     ])
 
     const grouped = els.some((e) => e.groupId)
@@ -2539,6 +2578,10 @@ export class PropsPanel {
     wrap.className = 'ed-mini'
     const span = document.createElement('span')
     span.textContent = label
+    // the label sits inside the field (styles.css .ed-mini): pad the value past it
+    const m = (PropsPanel.measure ??= document.createElement('canvas').getContext('2d')!)
+    m.font = '11px system-ui, sans-serif'
+    wrap.style.setProperty('--lab', `${Math.ceil(Math.min(m.measureText(label).width, 70))}px`)
     const input = document.createElement('input')
     input.type = 'number'
     input.value = String(Math.round(value * 10) / 10)

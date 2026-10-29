@@ -58,6 +58,23 @@ export const ICONS = {
   line: svg('<line x1="4" y1="19" x2="20" y2="5"/>'),
   // a group in the layer list: two shapes inside a dashed frame
   group: svg('<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect width="7" height="5" x="7" y="7" rx="1"/><rect width="7" height="5" x="10" y="12" rx="1"/>'),
+  // the Arrange kit (panels.ts arrangeRows): an edge or axis, and the blocks against it
+  arrLeft: svg('<path d="M4 3v18"/><rect x="7" y="6" width="12" height="4" rx="1"/><rect x="7" y="14" width="7" height="4" rx="1"/>'),
+  arrCenterX: svg('<path d="M12 3v18"/><rect x="5" y="6" width="14" height="4" rx="1"/><rect x="8" y="14" width="8" height="4" rx="1"/>'),
+  arrRight: svg('<path d="M20 3v18"/><rect x="5" y="6" width="12" height="4" rx="1"/><rect x="10" y="14" width="7" height="4" rx="1"/>'),
+  arrTop: svg('<path d="M3 4h18"/><rect x="6" y="7" width="4" height="12" rx="1"/><rect x="14" y="7" width="4" height="7" rx="1"/>'),
+  arrMiddleY: svg('<path d="M3 12h18"/><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="8" width="4" height="8" rx="1"/>'),
+  arrBottom: svg('<path d="M3 20h18"/><rect x="6" y="5" width="4" height="12" rx="1"/><rect x="14" y="10" width="4" height="7" rx="1"/>'),
+  distX: svg('<path d="M3 4v16"/><path d="M21 4v16"/><rect x="9" y="7" width="6" height="10" rx="1"/>'),
+  distY: svg('<path d="M4 3h16"/><path d="M4 21h16"/><rect x="7" y="9" width="10" height="6" rx="1"/>'),
+  matchW: svg('<path d="M4 8h16"/><path d="M7 5 4 8l3 3"/><path d="m17 5 3 3-3 3"/><rect x="5" y="14" width="14" height="6" rx="1"/>'),
+  matchH: svg('<path d="M8 4v16"/><path d="M5 7l3-3 3 3"/><path d="m5 17 3 3 3-3"/><rect x="14" y="5" width="6" height="14" rx="1"/>'),
+  toFront: svg('<rect x="8" y="8" width="12" height="12" rx="1.5" fill="currentColor" fill-opacity=".25"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/>'),
+  forward: svg('<path d="M12 19V5"/><path d="m6 11 6-6 6 6"/>'),
+  backward: svg('<path d="M12 5v14"/><path d="m6 13 6 6 6-6"/>'),
+  toBack: svg('<rect x="4" y="4" width="12" height="12" rx="1.5"/><path d="M20 8v11a1 1 0 0 1-1 1H8" stroke-opacity=".55"/>'),
+  indent: svg('<path d="M21 6H11"/><path d="M21 12H11"/><path d="M21 18H11"/><path d="m3 8 4 4-4 4"/>'),
+  outdent: svg('<path d="M21 6H11"/><path d="M21 12H11"/><path d="M21 18H11"/><path d="m7 8-4 4 4 4"/>'),
 } as const
 
 export type IconName = keyof typeof ICONS

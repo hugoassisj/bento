@@ -118,4 +118,5 @@ export function mountHints(root: HTMLElement, signal: AbortSignal) {
 }
 
 /** "Group (⌘G)" → "⌘G"; "Undo · redo (⌘Z · ⌘⇧Z)" → "⌘Z · ⌘⇧Z". */
-const SHORTCUT = /\s*\(((?:[⌘⇧⌥⌃⌫]|Ctrl|Alt|Shift|Esc|Tab|Del|F\d)[^()]*)\)\s*$/
+// keys only — '(⇧Tab while editing)' is a sentence and stays text
+const SHORTCUT = /\s*\(((?:[⌘⇧⌥⌃⌫]|Ctrl|Alt|Shift|Esc|Tab|Del|F\d)[^()\s]*(?:\s*·\s*[^()\s]+)*)\)\s*$/
