@@ -1049,4 +1049,10 @@ export const strings: Catalog = {
   "Order": "순서",
   "Bring forward": "앞으로",
   "Send backward": "뒤로",
+  "Select {name}": "{name} 선택",
+  "Add an element to the selection, or take it out": "요소를 선택에 추가하거나 선택에서 빼기",
+  "Select the element under the pointer, even inside a group": "그룹 안에 있더라도 포인터 아래의 요소 선택",
+  "Select the element behind it; click again to go deeper": "뒤에 있는 요소 선택; 다시 클릭하면 더 안쪽으로",
+  "Right-click": "오른쪽 클릭",
+  "Lists every element under the pointer, to select one that is covered": "포인터 아래의 모든 요소를 나열하여 가려진 요소를 선택할 수 있습니다",
 }

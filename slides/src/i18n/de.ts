@@ -1068,4 +1068,10 @@ export const de: Catalog = {
   "Order": "Reihenfolge",
   "Bring forward": "Eine Ebene nach vorne",
   "Send backward": "Eine Ebene nach hinten",
+  "Select {name}": "{name} auswählen",
+  "Add an element to the selection, or take it out": "Ein Element zur Auswahl hinzufügen oder daraus entfernen",
+  "Select the element under the pointer, even inside a group": "Das Element unter dem Zeiger auswählen, auch innerhalb einer Gruppe",
+  "Select the element behind it; click again to go deeper": "Das Element dahinter auswählen; erneut klicken, um tiefer zu gehen",
+  "Right-click": "Rechtsklick",
+  "Lists every element under the pointer, to select one that is covered": "Listet alle Elemente unter dem Zeiger auf, um ein verdecktes auszuwählen",
 }

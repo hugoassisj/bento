@@ -1075,4 +1075,10 @@ export const strings: Catalog = {
   "Order": "ترتیب",
   "Bring forward": "ایک قدم آگے لائیں",
   "Send backward": "ایک قدم پیچھے بھیجیں",
+  "Select {name}": "{name} منتخب کریں",
+  "Add an element to the selection, or take it out": "انتخاب میں کوئی عنصر شامل کریں، یا اسے نکال دیں",
+  "Select the element under the pointer, even inside a group": "پوائنٹر کے نیچے والا عنصر منتخب کریں، گروپ کے اندر بھی",
+  "Select the element behind it; click again to go deeper": "پیچھے والا عنصر منتخب کریں؛ مزید گہرائی کے لیے دوبارہ کلک کریں",
+  "Right-click": "رائٹ کلک",
+  "Lists every element under the pointer, to select one that is covered": "پوائنٹر کے نیچے تمام عناصر دکھاتا ہے، تاکہ ڈھکا ہوا عنصر منتخب کیا جا سکے",
 }

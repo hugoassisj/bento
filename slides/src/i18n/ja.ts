@@ -1068,4 +1068,10 @@ export const ja: Catalog = {
   "Order": "順序",
   "Bring forward": "前面へ移動",
   "Send backward": "背面へ移動",
+  "Select {name}": "{name} を選択",
+  "Add an element to the selection, or take it out": "要素を選択に追加、または選択から外す",
+  "Select the element under the pointer, even inside a group": "グループ内でも、ポインターの下の要素を選択",
+  "Select the element behind it; click again to go deeper": "背面の要素を選択。もう一度クリックするとさらに奥へ",
+  "Right-click": "右クリック",
+  "Lists every element under the pointer, to select one that is covered": "ポインターの下にあるすべての要素を一覧表示し、隠れた要素を選択できます",
 }

@@ -1058,4 +1058,10 @@ export const strings: Catalog = {
   "Order": "Susunan",
   "Bring forward": "Bawa ke hadapan selapis",
   "Send backward": "Hantar ke belakang selapis",
+  "Select {name}": "Pilih {name}",
+  "Add an element to the selection, or take it out": "Tambah elemen pada pilihan, atau keluarkannya",
+  "Select the element under the pointer, even inside a group": "Pilih elemen di bawah penuding, walaupun di dalam kumpulan",
+  "Select the element behind it; click again to go deeper": "Pilih elemen di belakangnya; klik lagi untuk pergi lebih dalam",
+  "Right-click": "Klik kanan",
+  "Lists every element under the pointer, to select one that is covered": "Menyenaraikan setiap elemen di bawah penuding, untuk memilih yang terlindung",
 }

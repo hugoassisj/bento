@@ -1056,4 +1056,10 @@ export const strings: Catalog = {
   "Order": "Sıra",
   "Bring forward": "Öne getir",
   "Send backward": "Geriye gönder",
+  "Select {name}": "{name} öğesini seç",
+  "Add an element to the selection, or take it out": "Seçime bir öğe ekle veya seçimden çıkar",
+  "Select the element under the pointer, even inside a group": "İşaretçinin altındaki öğeyi seç, grup içinde olsa bile",
+  "Select the element behind it; click again to go deeper": "Arkadaki öğeyi seç; daha derine inmek için yeniden tıkla",
+  "Right-click": "Sağ tıklama",
+  "Lists every element under the pointer, to select one that is covered": "İşaretçinin altındaki tüm öğeleri listeler, böylece örtülü olanı seçebilirsiniz",
 }

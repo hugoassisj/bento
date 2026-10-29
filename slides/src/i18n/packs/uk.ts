@@ -1065,4 +1065,10 @@ export const strings: Catalog = {
   "Order": "Порядок",
   "Bring forward": "Перемістити вперед",
   "Send backward": "Перемістити назад",
+  "Select {name}": "Вибрати {name}",
+  "Add an element to the selection, or take it out": "Додати елемент до виділення або прибрати його",
+  "Select the element under the pointer, even inside a group": "Вибрати елемент під вказівником, навіть усередині групи",
+  "Select the element behind it; click again to go deeper": "Вибрати елемент позаду; клацніть ще раз, щоб піти глибше",
+  "Right-click": "Клацання правою кнопкою",
+  "Lists every element under the pointer, to select one that is covered": "Показує всі елементи під вказівником, щоб вибрати перекритий",
 }

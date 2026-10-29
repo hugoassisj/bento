@@ -1062,4 +1062,10 @@ export const strings: Catalog = {
   "Order": "Järjestys",
   "Bring forward": "Tuo eteenpäin",
   "Send backward": "Vie taaksepäin",
+  "Select {name}": "Valitse {name}",
+  "Add an element to the selection, or take it out": "Lisää elementti valintaan tai poista se",
+  "Select the element under the pointer, even inside a group": "Valitse osoittimen alla oleva elementti, myös ryhmän sisältä",
+  "Select the element behind it; click again to go deeper": "Valitse takana oleva elementti; napsauta uudelleen mennäksesi syvemmälle",
+  "Right-click": "Napsautus hiiren oikealla",
+  "Lists every element under the pointer, to select one that is covered": "Luettelee kaikki osoittimen alla olevat elementit, jotta voit valita peittyneen",
 }

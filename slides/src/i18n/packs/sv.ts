@@ -1054,4 +1054,10 @@ export const strings: Catalog = {
   "Order": "Ordning",
   "Bring forward": "Flytta framåt",
   "Send backward": "Flytta bakåt",
+  "Select {name}": "Välj {name}",
+  "Add an element to the selection, or take it out": "Lägg till ett element i markeringen, eller ta bort det",
+  "Select the element under the pointer, even inside a group": "Välj elementet under pekaren, även inuti en grupp",
+  "Select the element behind it; click again to go deeper": "Välj elementet bakom; klicka igen för att gå djupare",
+  "Right-click": "Högerklick",
+  "Lists every element under the pointer, to select one that is covered": "Listar alla element under pekaren, så att du kan välja ett som är täckt",
 }

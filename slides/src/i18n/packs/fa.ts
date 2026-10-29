@@ -1061,4 +1061,10 @@ export const strings: Catalog = {
   "Order": "ترتیب",
   "Bring forward": "یک لایه جلوتر",
   "Send backward": "یک لایه عقب‌تر",
+  "Select {name}": "انتخاب {name}",
+  "Add an element to the selection, or take it out": "افزودن یک عنصر به انتخاب، یا برداشتن آن",
+  "Select the element under the pointer, even inside a group": "انتخاب عنصر زیر نشانگر، حتی درون یک گروه",
+  "Select the element behind it; click again to go deeper": "انتخاب عنصر پشت آن؛ برای رفتن به عمق بیشتر دوباره کلیک کنید",
+  "Right-click": "کلیک راست",
+  "Lists every element under the pointer, to select one that is covered": "همهٔ عناصر زیر نشانگر را فهرست می‌کند تا عنصر پوشیده‌شده را انتخاب کنید",
 }
