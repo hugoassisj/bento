@@ -1086,6 +1086,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "Saýlawa element goş ýa-da ondan aýyr",
   "Select the element under the pointer, even inside a group": "Görkezijiniň aşagyndaky elementi saýla, topar içinde bolsa-da",
   "Select the element behind it; click again to go deeper": "Arkadaky elementi saýla; has çuňňur gitmek üçin ýene basyň",
+  "hover": "üstünde sakla",
+  "Measure from the selection to the element under the pointer": "Saýlanandan görkezijiniň aşagyndaky elemente çenli ölçe",
   "Right-click": "Sag basmak",
   "Lists every element under the pointer, to select one that is covered": "Görkezijiniň aşagyndaky ähli elementleri sanap görkezýär, ýapylanyny saýlamak üçin",
   "Add blur": "Bulanyklyk goş",

@@ -1061,6 +1061,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "Добавить элемент в выделение или убрать его",
   "Select the element under the pointer, even inside a group": "Выбрать элемент под указателем, даже внутри группы",
   "Select the element behind it; click again to go deeper": "Выбрать элемент позади; щёлкните ещё раз, чтобы пойти глубже",
+  "hover": "наведение",
+  "Measure from the selection to the element under the pointer": "Измерить расстояние от выделения до элемента под указателем",
   "Right-click": "Щелчок правой кнопкой",
   "Lists every element under the pointer, to select one that is covered": "Показывает все элементы под указателем, чтобы выбрать перекрытый",
   "Add blur": "Добавить размытие",

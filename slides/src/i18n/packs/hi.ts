@@ -1069,6 +1069,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "चयन में कोई तत्व जोड़ें, या उसे हटाएँ",
   "Select the element under the pointer, even inside a group": "पॉइंटर के नीचे का तत्व चुनें, समूह के भीतर भी",
   "Select the element behind it; click again to go deeper": "पीछे वाला तत्व चुनें; और गहराई में जाने के लिए फिर से क्लिक करें",
+  "hover": "होवर",
+  "Measure from the selection to the element under the pointer": "चयन से पॉइंटर के नीचे वाले तत्व तक की दूरी मापें",
   "Right-click": "राइट-क्लिक",
   "Lists every element under the pointer, to select one that is covered": "पॉइंटर के नीचे के सभी तत्व दिखाता है, ताकि ढका हुआ तत्व चुना जा सके",
   "Add blur": "ब्लर जोड़ें",

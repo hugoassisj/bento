@@ -1062,6 +1062,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "הוספת רכיב לבחירה, או הוצאתו ממנה",
   "Select the element under the pointer, even inside a group": "בחירת הרכיב שמתחת לסמן, גם בתוך קבוצה",
   "Select the element behind it; click again to go deeper": "בחירת הרכיב שמאחור; לחיצה נוספת יורדת עמוק יותר",
+  "hover": "ריחוף",
+  "Measure from the selection to the element under the pointer": "מדידה מהבחירה עד הרכיב שמתחת לסמן",
   "Right-click": "לחיצה ימנית",
   "Lists every element under the pointer, to select one that is covered": "מציג את כל הרכיבים שמתחת לסמן, כדי לבחור רכיב מוסתר",
   "Add blur": "הוספת טשטוש",

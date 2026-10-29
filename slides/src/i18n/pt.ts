@@ -1070,6 +1070,8 @@ export const pt: Catalog = {
   "Add an element to the selection, or take it out": "Adicionar um elemento à seleção, ou retirá-lo",
   "Select the element under the pointer, even inside a group": "Selecionar o elemento sob o ponteiro, mesmo dentro de um grupo",
   "Select the element behind it; click again to go deeper": "Selecionar o elemento de trás; clique de novo para ir mais fundo",
+  "hover": "passar o cursor",
+  "Measure from the selection to the element under the pointer": "Medir da seleção até o elemento sob o ponteiro",
   "Right-click": "Clique direito",
   "Lists every element under the pointer, to select one that is covered": "Lista todos os elementos sob o ponteiro, para selecionar um que esteja coberto",
   "Add blur": "Adicionar desfoque",

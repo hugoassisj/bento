@@ -1072,6 +1072,8 @@ export const zhHans: Catalog = {
   "Add an element to the selection, or take it out": "将元素加入选择，或从选择中移除",
   "Select the element under the pointer, even inside a group": "选择指针下的元素，即使它在组内",
   "Select the element behind it; click again to go deeper": "选择后面的元素；再次点击可继续向下",
+  "hover": "悬停",
+  "Measure from the selection to the element under the pointer": "测量所选内容到指针下元素的距离",
   "Right-click": "右键单击",
   "Lists every element under the pointer, to select one that is covered": "列出指针下的所有元素，以便选择被遮住的元素",
   "Add blur": "添加模糊",

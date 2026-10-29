@@ -1063,6 +1063,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "เพิ่มองค์ประกอบในส่วนที่เลือก หรือนำออก",
   "Select the element under the pointer, even inside a group": "เลือกองค์ประกอบใต้ตัวชี้ แม้จะอยู่ในกลุ่ม",
   "Select the element behind it; click again to go deeper": "เลือกองค์ประกอบที่อยู่ด้านหลัง คลิกอีกครั้งเพื่อลงลึกขึ้น",
+  "hover": "วางเมาส์",
+  "Measure from the selection to the element under the pointer": "วัดระยะจากสิ่งที่เลือกถึงองค์ประกอบใต้ตัวชี้",
   "Right-click": "คลิกขวา",
   "Lists every element under the pointer, to select one that is covered": "แสดงองค์ประกอบทั้งหมดใต้ตัวชี้ เพื่อเลือกอันที่ถูกบัง",
   "Add blur": "เพิ่มเบลอ",

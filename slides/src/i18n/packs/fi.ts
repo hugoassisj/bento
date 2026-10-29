@@ -1066,6 +1066,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "Lisää elementti valintaan tai poista se",
   "Select the element under the pointer, even inside a group": "Valitse osoittimen alla oleva elementti, myös ryhmän sisältä",
   "Select the element behind it; click again to go deeper": "Valitse takana oleva elementti; napsauta uudelleen mennäksesi syvemmälle",
+  "hover": "osoita",
+  "Measure from the selection to the element under the pointer": "Mittaa etäisyys valinnasta osoittimen alla olevaan elementtiin",
   "Right-click": "Napsautus hiiren oikealla",
   "Lists every element under the pointer, to select one that is covered": "Luettelee kaikki osoittimen alla olevat elementit, jotta voit valita peittyneen",
   "Add blur": "Lisää sumennus",

@@ -448,6 +448,12 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-slides-layers.ts
 
+    - name: Measure overlay geometry rig
+      # editor/measure-geom.ts, DOM-free: Alt-hover gaps per axis — separated,
+      # diagonal, overlapping, contained, aligned within 0.5px, zero-size.
+      shell: bento-step {0}
+      run: node scripts/test-slides-measure-geom.ts
+
     - name: Export slides as images rig
       # exportimages.ts decisions (DOM-free): the page set is the print set
       # (hidden/state out, deck order), names pad NN and use the kernel's
