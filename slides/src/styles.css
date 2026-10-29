@@ -696,6 +696,24 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-row > span { flex: none; }
 .ed-row input[type='number'], .ed-row select, .ed-row input[type='color'] { width: 110px; }
+/* Segmented control (panels.ts segmented()): a few options, all visible, one
+   click. Wears THE FIELD's box so it sits in a row like any other field. Icon
+   segments are field-width; word segments take the row's full width, on a
+   line of their own under the caption, so no translation has to squeeze. */
+.ed-seg {
+  box-sizing: border-box; display: flex; width: 110px; height: 26px; padding: 2px; gap: 2px;
+  background: var(--field); border: 1px solid var(--line); border-radius: 6px;
+}
+.ed-seg-text { width: 100%; }
+.ed-seg button {
+  flex: 1 1 0; min-width: 0; display: grid; place-items: center; padding: 0 4px;
+  font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; border-radius: 4px;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ed-seg button svg { width: 14px; height: 14px; }
+.ed-seg button:hover { color: var(--ink); background: var(--chrome); }
+.ed-seg button[aria-checked='true'] { color: var(--ink); background: var(--chrome-2); box-shadow: inset 0 0 0 1px var(--line); }
+.ed-seg button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
 
 .ed-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
 .ed-mini { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink-2); }

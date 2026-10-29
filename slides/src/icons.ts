@@ -56,6 +56,13 @@ export const ICONS = {
   arrow: svg('<line x1="3" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/>'),
   arrow2: svg('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/><polyline points="11 6 5 12 11 18"/>'),
   line: svg('<line x1="4" y1="19" x2="20" y2="5"/>'),
+  // text alignment in its box (inspector segmented controls)
+  alignLeft: svg('<path d="M21 6H3"/><path d="M15 12H3"/><path d="M17 18H3"/>'),
+  alignCenter: svg('<path d="M21 6H3"/><path d="M17 12H7"/><path d="M19 18H5"/>'),
+  alignRight: svg('<path d="M21 6H3"/><path d="M21 12H9"/><path d="M21 18H7"/>'),
+  valignTop: svg('<path d="M3 3h18"/><rect x="6" y="7" width="12" height="6" rx="1.5"/>'),
+  valignMiddle: svg('<path d="M3 12h3"/><path d="M18 12h3"/><rect x="6" y="9" width="12" height="6" rx="1.5"/>'),
+  valignBottom: svg('<path d="M3 21h18"/><rect x="6" y="11" width="12" height="6" rx="1.5"/>'),
 } as const
 
 export type IconName = keyof typeof ICONS
