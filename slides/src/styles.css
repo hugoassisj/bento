@@ -3005,7 +3005,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 11px; color: var(--muted);
 }
-.ed-mini input { padding-inline-start: calc(var(--lab, 12px) + 13px); }
+/* the value starts after the label — and the label never takes more than 55%, so neither does this */
+.ed-mini input { padding-inline-start: calc(min(var(--lab, 12px), 55%) + 13px); }
 
 /* Typography → Bullets: two icon buttons, not two words wider than the panel */
 .ed-shift-row { flex: none; }
@@ -3034,3 +3035,20 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-props .ed-row > select { width: auto; flex: 1 1 110px; min-width: 0; max-width: 100%; }
 /* a series / slice row wraps rather than squeezing its controls past the edge */
 .ed-series-row { flex-wrap: wrap; }
+
+/* the colour field (panels.ts colorField), Penpot's: swatch · hex · % opacity.
+   Each part is its own FIELD box; the row gives the field the full width. */
+.ed-props .ed-row:has(> .ed-color), .ed-props .ed-row:has(> .ed-colorref) { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 4px; }
+.ed-colorref { align-items: stretch; }
+.ed-colorref > .ed-swatches { align-self: flex-start; }
+.ed-color { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1 1 auto; }
+.ed-color > input[type='color'] { flex: none; width: 26px; padding: 3px; cursor: pointer; }
+.ed-color > input[type='color']::-webkit-color-swatch-wrapper { padding: 0; }
+.ed-color > input[type='color']::-webkit-color-swatch { border: 0; border-radius: 3px; }
+.ed-color > input[type='color']::-moz-color-swatch { border: 0; border-radius: 3px; }
+.ed-color-hex { flex: 1 1 0; width: 0; min-width: 0; font-variant-numeric: tabular-nums; text-transform: lowercase; }
+.ed-color-alpha { flex: none; width: 62px; }
+.ed-color-alpha input { width: 100%; }
+/* a gradient stop: position and remove on one line, its colour on the next */
+.ed-gradstop { flex-wrap: wrap; }
+.ed-gradstop > .ed-color { order: 2; flex: 1 1 100%; }

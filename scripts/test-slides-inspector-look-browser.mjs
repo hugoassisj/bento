@@ -37,7 +37,7 @@ try {
     await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-props .ed-tabs'))
     const width = await p.evaluate(() => Math.round(document.querySelector('.ed-props').getBoundingClientRect().width))
 
-    const over = new Set(), cut = new Set()
+    const over = new Set(), cut = new Set(), lap = new Set()
     const measure = () => p.evaluate(() => {
       const h = document.querySelector('.ed-props'), pr = h.getBoundingClientRect()
       const name = (c) => (c.closest('.ed-row')?.firstElementChild?.textContent || c.textContent || c.tagName).trim().slice(0, 32)
@@ -48,7 +48,14 @@ try {
         m.font = getComputedStyle(s).font
         return m.measureText(s.options[s.selectedIndex]?.text ?? '').width > s.clientWidth - 20
       }).map((s) => `${name(s)}: ${s.options[s.selectedIndex]?.text}`)
-      return { o, t }
+      // an in-field label must end before its value starts (pt 'Desfoque atrás' once ran into its 0)
+      const lap = [...h.querySelectorAll('.ed-mini')].filter((x) => x.offsetParent).filter((x) => {
+        const sp = x.querySelector(':scope > span'), inp = x.querySelector('input')
+        if (!sp || !inp) return false
+        const l = sp.getBoundingClientRect(), f = inp.getBoundingClientRect()
+        return l.right > f.left + parseFloat(getComputedStyle(inp).paddingLeft) + 0.5
+      }).map((x) => x.querySelector(':scope > span').textContent)
+      return { o, t, lap }
     })
     const n = await p.evaluate(() => window.bento.doc.slides.length)
     for (let s = 0; s < n; s++) {
@@ -61,13 +68,14 @@ try {
         for (const t of await p.locator('.ed-props .ed-tabs [role=tab]').all()) {
           await t.click()
           const r = await measure()
-          r.o.forEach((x) => over.add(x)); r.t.forEach((x) => cut.add(x))
+          r.o.forEach((x) => over.add(x)); r.t.forEach((x) => cut.add(x)); r.lap.forEach((x) => lap.add(x))
         }
       }
     }
     ok(width <= 240, `${tag} measured at the default width (${width}px)`)
     ok(over.size === 0, `${tag} nothing reaches past the panel's edge${over.size ? ': ' + [...over].join(' | ') : ''}`)
     ok(cut.size === 0, `${tag} no dropdown cuts off its value${cut.size ? ': ' + [...cut].join(' | ') : ''}`)
+    ok(lap.size === 0, `${tag} no in-field label runs into its value${lap.size ? ': ' + [...lap].join(' | ') : ''}`)
 
     if (locale === 'en-US') {
       // a fresh slide with three boxes, for the Arrange kit and the numeric fields
@@ -102,6 +110,29 @@ try {
           parseFloat(getComputedStyle(inp).paddingLeft) >= l.right - f.left
       })
       ok(inside, 'a numeric pair carries its label inside the field')
+
+      // the colour field: swatch · hex · % — a typed hex is the colour
+      await p.locator('.ed-props .ed-tabs [role=tab]').first().click()
+      const fill = () => p.evaluate(() => window.bento.doc.slides[0].elements[0].fill)
+      const row = p.locator('.ed-props .ed-row', { has: p.locator(':scope > span', { hasText: /^Fill$/ }) }).first()
+      const hex = row.locator('.ed-color-hex')
+      ok(await hex.count() === 1 && /^[0-9a-f]{6}$/.test(await hex.inputValue()), `the Fill row shows its hex value (${await hex.inputValue()})`)
+      await hex.fill('ff0000'); await hex.press('Enter'); await p.waitForTimeout(200)
+      ok((await fill()).toLowerCase() === '#ff0000', `typing a hex sets the colour (${await fill()})`)
+      await hex.fill('0f0'); await hex.press('Enter'); await p.waitForTimeout(200)
+      ok((await fill()).toLowerCase() === '#00ff00', 'a three-digit hex is understood')
+      await hex.fill('nope'); await hex.press('Enter'); await p.waitForTimeout(200)
+      ok((await fill()).toLowerCase() === '#00ff00' && await row.locator('.ed-color-hex').inputValue() === '00ff00', 'nonsense is refused and the field shows the colour again')
+      const stroke = p.locator('.ed-props .ed-row', { has: p.locator(':scope > span', { hasText: /^Stroke$/ }) }).first()
+      if (await stroke.locator('.ed-color-alpha').count()) {
+        const pct = stroke.locator('.ed-color-alpha .ed-unit')
+        const before = await stroke.locator('.ed-color-alpha input').inputValue()
+        const b = await pct.boundingBox()
+        await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.mouse.down(); await p.mouse.move(b.x + 40, b.y + b.height / 2, { steps: 6 }); await p.mouse.up()
+        await p.waitForTimeout(250)
+        const after = await p.locator('.ed-props .ed-row', { has: p.locator(':scope > span', { hasText: /^Stroke$/ }) }).first().locator('.ed-color-alpha input').inputValue()
+        ok(+after > +before, `the % inside the field scrubs the opacity (${before} → ${after})`)
+      }
     }
     ok(errors.length === 0, `${tag} no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
     await ctx.close()

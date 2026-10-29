@@ -2586,7 +2586,7 @@ export class PropsPanel {
     // the label sits inside the field (styles.css .ed-mini): pad the value past it
     const m = (PropsPanel.measure ??= document.createElement('canvas').getContext('2d')!)
     m.font = '11px system-ui, sans-serif'
-    wrap.style.setProperty('--lab', `${Math.ceil(Math.min(m.measureText(label).width, 70))}px`)
+    wrap.style.setProperty('--lab', `${Math.ceil(m.measureText(label).width)}px`)
     const input = document.createElement('input')
     input.type = 'number'
     input.value = String(Math.round(value * 10) / 10)
@@ -2629,12 +2629,54 @@ export class PropsPanel {
       onEdit(input.value, true)
       if (ref) this.setRef(ref, input.value, null)
     })
-    if (!ref) return input
+    const field = this.colorField(input)
+    if (!ref) return field
     const wrap = document.createElement('div')
     wrap.className = 'ed-colorref'
     wrap.appendChild(this.paletteSwatches(ref, input))
-    wrap.appendChild(input)
+    wrap.appendChild(field)
     return wrap
+  }
+
+  /**
+   * The colour field as Penpot draws it: the swatch (the native picker), the
+   * hex value to read and to type, and — when the colour has one — its
+   * opacity, with '%' inside the field and scrubbable. Each part keeps THE
+   * FIELD's own box (#729). A typed hex goes through the picker's own
+   * 'change', so everything a picked colour does — the edit, clearing a
+   * palette reference — a typed one does too.
+   */
+  private colorField(col: HTMLInputElement, alpha?: HTMLInputElement): HTMLElement {
+    const box = document.createElement('div')
+    box.className = 'ed-color'
+    const hex = document.createElement('input')
+    hex.type = 'text'
+    hex.className = 'ed-color-hex'
+    hex.spellcheck = false
+    hex.maxLength = 7
+    hex.setAttribute('aria-label', `${t('Color')} (hex)`)
+    const show = () => { hex.value = col.value.slice(1) }
+    show()
+    col.addEventListener('input', show)
+    hex.addEventListener('change', () => {
+      const v = hex.value.trim().replace(/^#/, '')
+      const full = /^[0-9a-f]{3}$/i.test(v) ? [...v].map((c) => c + c).join('') : v
+      if (/^[0-9a-f]{6}$/i.test(full) && '#' + full.toLowerCase() !== col.value) {
+        col.value = '#' + full.toLowerCase()
+        col.dispatchEvent(new Event('input'))
+        col.dispatchEvent(new Event('change'))
+      }
+      show()
+    })
+    box.append(col, hex)
+    if (alpha) {
+      const a = document.createElement('label')
+      a.className = 'ed-mini ed-color-alpha'
+      a.style.setProperty('--lab', '9px')
+      a.append(unitHandle('%', alpha), alpha)
+      box.append(a)
+    }
+    return box
   }
 
   /** Write a colour and its palette reference together, as one undoable edit. */
@@ -2739,8 +2781,6 @@ export class PropsPanel {
     onEdit: (v: string, final: boolean) => void,
     ref?: { id: string | null; path: string; slide?: Slide },
   ): HTMLElement {
-    const wrap = document.createElement('div')
-    wrap.className = 'ed-coloralpha'
     const parsed = parseColor(value)
     const col = document.createElement('input')
     col.type = 'color'
@@ -2765,7 +2805,7 @@ export class PropsPanel {
     })
     alpha.addEventListener('change', () => emit(true))
     alpha.addEventListener(SCRUB, () => emit(false))
-    wrap.append(col, alpha, unitHandle('%', alpha))
+    const wrap = this.colorField(col, alpha)
     if (!ref) return wrap
     const outer = document.createElement('div')
     outer.className = 'ed-colorref'
