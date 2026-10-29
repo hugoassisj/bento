@@ -1,0 +1,265 @@
+{
+ "changes": {
+  "Unnumbered": {
+   "en": "Tanpa penomboran",
+   "tip": "Slaid ini kekal dalam persembahan tetapi tidak mendapat nombor sendiri; medan nombor halamannya menunjukkan nombor slaid sebelumnya."
+  },
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": {
+   "en": "Kekal dalam persembahan tanpa nombor sendiri — medan nombor halamannya menunjukkan nombor slaid sebelumnya. Gunakan untuk langkah binaan atau slaid pemisah yang tidak perlu dikira."
+  },
+  "Number hidden slides": {
+   "tip": "Hidup: slaid tersembunyi mengekalkan nombornya, jadi slaid lain tidak bertukar nombor apabila anda menyembunyikan satu (seperti dalam PowerPoint). Mati: penonton tidak nampak nombor yang tertinggal."
+  },
+  "Corner arrows": {
+   "tip": "Untuk seluruh persembahan. Tunjukkan anak panah ‹ › yang boleh diklik di sudut semasa membentangkan. Mati secara lalai — klik dan kekunci anak panah sudah beralih antara slaid."
+  },
+  "Transition": {
+   "tip": "Cara slaid ini masuk. Morph menggerakkan elemen yang sepadan dari slaid sebelumnya ke tempatnya."
+  },
+  "Name": {
+   "en": "Nama slaid",
+   "tip": "Pilihan. Dipaparkan dalam senarai Pautkan ke dan Varian bagi serta pada lakaran kecil varian, supaya slaid ini mudah dipilih."
+  },
+  "State of": {
+   "en": "Varian bagi",
+   "tip": "Jadikan slaid ini varian bagi slaid lain: kekunci anak panah melangkauinya, penonton membukanya dengan mengklik elemen yang dipautkan, dan elemen yang sepadan ber-morph antara kedua-duanya."
+  },
+  "A state is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.": {
+   "en": "Jadikan slaid ini varian bagi slaid lain: kekunci anak panah melangkauinya, penonton membukanya dengan mengklik elemen yang dipautkan, dan elemen yang sepadan ber-morph antara kedua-duanya."
+  },
+  "no — normal slide": {
+   "en": "Tiada — slaid biasa"
+  },
+  "Sync from parent slide": {
+   "en": "Kemas kini dari slaid utama"
+  },
+  "Pull elements added to the parent into this state and adopt its ordering — your changes to shared elements are kept": {
+   "en": "Menyalin masuk elemen yang ditambah pada slaid utama sejak itu, dan mengikut susunan lapisannya. Perubahan anda dalam varian ini dikekalkan."
+  },
+  "Hover": {
+   "en": "Semasa hover",
+   "tip": "Semasa membentangkan, apa yang berlaku apabila penuding berada pada elemen yang mempunyai Kumpulan hover: malapkan kumpulan lain, atau tukar kandungan yang dipaparkan."
+  },
+  "focus-group": {
+   "en": "Malapkan kumpulan lain"
+  },
+  "reveal": {
+   "en": "Tukar kandungan"
+  },
+  "Hover dim": {
+   "en": "Malapkan lain ke",
+   "tip": "Sejauh mana kumpulan lain kekal kelihatan semasa satu dituding: 0 = tersembunyi, 1 = tiada pemalapan. 0.15 ialah pemalapan lembut."
+  },
+  "Default set": {
+   "en": "Dipapar mula-mula",
+   "tip": "Kumpulan hover yang kandungannya dipaparkan sebelum penuding berada pada apa-apa. Kosong = tiada tambahan."
+  },
+  "Preview set": {
+   "en": "Pratonton kanvas",
+   "tip": "Kandungan Kumpulan hover mana yang dipaparkan kanvas semasa anda menyunting. Tidak mengubah persembahan."
+  },
+  "While presenting, hovering an element whose <b>group</b> matches a set name shows that set. Use Preview to edit each set.": {
+   "en": "Semasa membentangkan, menuding pada elemen memaparkan kandungan yang <b>Tunjuk semasa hover</b>-nya sepadan dengan <b>Kumpulan hover</b> elemen itu. Pilih kumpulan dalam <b>Pratonton kanvas</b> untuk menyunting kandungannya."
+  },
+  "Show on hover": {
+   "en": "Tunjuk semasa hover",
+   "tip": "Taip nama Kumpulan hover: elemen ini kekal tersembunyi sehingga penuding berada pada elemen dalam kumpulan itu (Semasa hover pada slaid: Tukar kandungan). Kosong = sentiasa kelihatan."
+  },
+  "Group": {
+   "en": "Kumpulan hover",
+   "tip": "Nama yang dikongsi oleh elemen yang bertindak balas terhadap penuding bersama-sama semasa membentangkan (lihat Semasa hover pada slaid). Tidak sama dengan pengumpulan ⌘G."
+  },
+  "＋ New state linked from this element": {
+   "en": "＋ Pautkan ke varian baharu slaid ini"
+  },
+  "Duplicates this slide as a hidden interactive state and links the selected element to it": {
+   "en": "Menyalin slaid ini sebagai varian dan memautkan elemen ini kepadanya: semasa membentangkan, mengklik elemen membuka salinan itu. Sunting salinan untuk menunjukkan apa yang berubah."
+  },
+  "Role": {
+   "en": "Peranan susun atur",
+   "tip": "Fungsi teks ini dalam susun atur (tajuk, isi…). Terapkan susun atur menggunakannya untuk meletakkan kandungan di tempat yang sepadan."
+  },
+  "Backdrop": {
+   "en": "Kabur di belakang"
+  },
+  "Blend": {
+   "en": "Mod adunan",
+   "tip": "Cara elemen ini bercampur dengan apa yang di bawahnya — Darab menggelapkan, Skrin mencerahkan."
+  },
+  "Morph id": {
+   "en": "Nama morph",
+   "tip": "Elemen dengan nama morph yang sama pada slaid bersebelahan ber-morph antara satu sama lain. Pada mulanya ia ialah nama elemen itu sendiri."
+  },
+  "Pair with": {
+   "en": "Morph dengan",
+   "tip": "Pilih elemen pada slaid lain; elemen ini mengambil nama morph-nya dan ber-morph menjadi elemen itu."
+  },
+  "Don’t pair — use its own id": {
+   "en": "Jangan pasangkan — guna namanya sendiri"
+  },
+  "Morph id can’t be empty.": {
+   "en": "Nama morph tidak boleh kosong."
+  },
+  "Another element on this slide already uses that morph id.": {
+   "en": "Elemen lain pada slaid ini sudah menggunakan nama morph itu."
+  },
+  "Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.": {
+   "en": "Ber-morph sebagai <code>{id}</code> dan bukan namanya sendiri, <code>{own}</code>. Pilih “Jangan pasangkan” di bawah untuk buat asal."
+  },
+  "Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.": {
+   "en": "Elemen dengan nama morph yang sama ber-morph antara satu sama lain merentas slaid. Namakan semula, atau pilih di bawah, untuk memasangkannya dengan elemen pada slaid lain."
+  },
+  "Enter": {
+   "en": "Masuk",
+   "tip": "Cara elemen muncul apabila slaid masuk. Dilangkau apabila ia ber-morph masuk dari slaid sebelumnya."
+  },
+  "fade-up": {
+   "en": "Pudar naik"
+  },
+  "fade-down": {
+   "en": "Pudar turun"
+  },
+  "slide-left": {
+   "en": "Terbang dari kanan"
+  },
+  "slide-right": {
+   "en": "Terbang dari kiri"
+  },
+  "slide-up": {
+   "en": "Terbang dari bawah"
+  },
+  "slide-down": {
+   "en": "Terbang dari atas"
+  },
+  "Enter secs": {
+   "en": "Masuk (s)"
+  },
+  "Reveal step": {
+   "en": "Muncul bila diklik",
+   "tip": "0 = dipaparkan bersama slaid. 1 = muncul pada klik pertama atau tekanan →, 2 = pada yang kedua, dan seterusnya. Elemen dengan nombor yang sama muncul serentak."
+  },
+  "Count up": {
+   "en": "Kira naik nombor"
+  },
+  "Ambient": {
+   "en": "Sorot & zum",
+   "tip": "Gerakan Ken Burns yang perlahan dan berterusan semasa slaid dipaparkan — dibuat untuk foto skrin penuh."
+  },
+  "kenburns": {
+   "en": "Ken Burns"
+  },
+  "Zoom": {
+   "en": "Gerakan",
+   "tip": "Hanyut: sorot dan zum perlahan tanpa henti. Zum keluar / Zum masuk: satu zum lancar setiap kali slaid muncul."
+  },
+  "Zoom %": {
+   "en": "Kadar zum %"
+  },
+  "Zoom secs": {
+   "en": "Sorot & zum (s)",
+   "tip": "Berapa lama satu laluan sorot dan zum berlangsung, dalam saat"
+  },
+  "dash-march": {
+   "en": "Sengkang berarak"
+  },
+  "motion-path": {
+   "en": "Ikut laluan"
+  },
+  "Loop secs": {
+   "en": "Saat setiap pusingan",
+   "tip": "Berapa lama satu pusingan berlangsung — lebih rendah lebih laju"
+  },
+  "Path": {
+   "en": "Laluan gerakan"
+  },
+  "Lap easing": {
+   "en": "Kelajuan pusingan",
+   "tip": "Cara kelajuan berubah dalam satu pusingan — malar, atau perlahan di permulaan dan pengakhiran"
+  },
+  "V-align": {
+   "en": "Jajaran menegak"
+  },
+  "Grad. angle": {
+   "en": "Sudut gradien"
+  },
+  "Start tip": {
+   "en": "Hujung mula garis"
+  },
+  "End tip": {
+   "en": "Hujung akhir garis"
+  },
+  "Ghost cut — the selection fades until you paste to move it; Esc cancels": {
+   "en": "Potong untuk alih — pilihan memudar sehingga anda menampalnya di tempat baharu; Esc membatalkan"
+  },
+  "Presenting ▸ Loop": {
+   "en": "Animasi ▸ Animasi berulang"
+  },
+  "Give an element a motion-path loop, then Edit path on canvas": {
+   "en": "Pilih Ikut laluan, kemudian Sunting laluan pada kanvas"
+  },
+  "Format — show or hide the properties panel": {
+   "en": "Tunjukkan atau sembunyikan panel Format, Animasi dan Interaksi (])"
+  },
+  "Notes for presenter view (press S while presenting)…": {
+   "en": "Nota untuk paparan pembentang (tekan S semasa membentangkan)…"
+  }
+ },
+ "untranslated": {
+  "slides/src/editor/panels.ts:397": "Menambah slaid ini pada susun atur yang ditawarkan oleh Slaid baharu dalam persembahan ini",
+  "slides/src/editor/panels.ts:399": "Nama susun atur",
+  "slides/src/editor/panels.ts:399#default": "Susun atur saya",
+  "slides/src/editor/panels.ts:545": "nama kumpulan",
+  "slides/src/editor/panels.ts:658": "Bayang {n}",
+  "slides/src/editor/panels.ts:915": "Taip nama Kumpulan hover: elemen ini kekal tersembunyi sehingga penuding berada pada elemen dalam kumpulan itu (Semasa hover pada slaid: Tukar kandungan). Kosong = sentiasa kelihatan.",
+  "slides/src/editor/panels.ts:1009": "Varian ini tidak berkongsi sebarang elemen dengan slaid utamanya — tiada apa untuk dikemas kini",
+  "slides/src/editor/panels.ts:1029": "Dikemas kini dari slaid utama — baharu: {added} · hanya dalam varian ini: {kept}",
+  "slides/src/editor/panels.ts:1051": "varian",
+  "slides/src/editor/panels.ts:1080": "varian bagi slaid {n}",
+  "slides/src/editor/panels.ts:1083": "slaid {n}",
+  "slides/src/editor/panels.ts:1236": "Titik warna {n}",
+  "slides/src/editor/panels.ts:1307": "Fon tema",
+  "slides/src/editor/panels.ts:1311": "{name} (terbenam)",
+  "slides/src/editor/panels.ts:1318": "tersuai",
+  "slides/src/editor/panels.ts:1348": "“{name}” dibenamkan dalam fail ini",
+  "slides/src/editor/panels.ts:2230": "Jajarkan",
+  "slides/src/editor/panels.ts:2231": "Jajar kiri",
+  "slides/src/editor/panels.ts:2232": "Jajar tengah",
+  "slides/src/editor/panels.ts:2233": "Jajar kanan",
+  "slides/src/editor/panels.ts:2234": "Jajar atas",
+  "slides/src/editor/panels.ts:2235": "Jajar tengah menegak",
+  "slides/src/editor/panels.ts:2236": "Jajar bawah",
+  "slides/src/editor/panels.ts:2238": "Jarak",
+  "slides/src/editor/panels.ts:2239": "Jarakkan sama rata melintang (3 atau lebih)",
+  "slides/src/editor/panels.ts:2240": "Jarakkan sama rata menegak (3 atau lebih)",
+  "slides/src/editor/panels.ts:2241": "Lebar sama dengan yang dipilih dahulu (2 atau lebih)",
+  "slides/src/editor/panels.ts:2242": "Tinggi sama dengan yang dipilih dahulu (2 atau lebih)",
+  "slides/src/editor/panels.ts:2244": "Susunan",
+  "slides/src/editor/panels.ts:2245": "Bawa ke depan",
+  "slides/src/editor/panels.ts:2246": "Bawa ke hadapan selapis",
+  "slides/src/editor/panels.ts:2247": "Hantar ke belakang selapis",
+  "slides/src/editor/panels.ts:2248": "Hantar ke belakang",
+  "slides/src/editor/panels.ts:2549#bg2": "Latar belakang 2",
+  "slides/src/editor/panels.ts:2549#tx2": "Teks 2",
+  "slides/src/editor/panels.ts:2549#hlink": "Pautan",
+  "slides/src/editor/panels.ts:2549#folHlink": "Pautan dilawati",
+  "slides/src/editor/panels.ts:2576": "Aksen",
+  "slides/src/editor/panels.ts:63": "Sejauh mana gambar dizum di dalam bingkainya",
+  "slides/src/editor/panels.ts:44": "Untuk seluruh persembahan. Tunjukkan pembilang slaid kepada penonton semasa membentangkan.",
+  "slides/src/editor/panels.ts:45": "Untuk seluruh persembahan. Tunjukkan bar kemajuan nipis di sepanjang bahagian bawah semasa membentangkan.",
+  "slides/src/editor/panels.ts:629#normal": "Normal",
+  "slides/src/editor/panels.ts:629#multiply": "Darab",
+  "slides/src/editor/panels.ts:629#screen": "Skrin",
+  "slides/src/editor/panels.ts:629#overlay": "Tindih",
+  "slides/src/editor/panels.ts:629#darken": "Gelapkan",
+  "slides/src/editor/panels.ts:629#lighten": "Cerahkan",
+  "slides/src/editor/panels.ts:629#difference": "Perbezaan",
+  "slides/src/editor/panels.ts:629#exclusion": "Pengecualian",
+  "slides/src/editor/panels.ts:1791#Lined": "Bergaris",
+  "slides/src/editor/panels.ts:1791#Zebra": "Berjalur",
+  "slides/src/editor/panels.ts:1791#Boxed": "Berkotak",
+  "slides/src/editor/panels.ts:1791#Minimal": "Minimal",
+  "slides/src/editor/panels.ts:2191": "{n} bahasa terbina dalam",
+  "slides/src/editor/editor.ts:1871": "Varian bagi slaid {n} — dibuka apabila elemen yang dipautkan diklik semasa membentangkan",
+  "slides/src/editor/editor.ts:1895": "Komen terbuka: {n}"
+ }
+}

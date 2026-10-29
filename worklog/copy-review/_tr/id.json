@@ -1,0 +1,265 @@
+{
+ "changes": {
+  "Unnumbered": {
+   "en": "Tanpa penomoran",
+   "tip": "Slide ini tetap ada dalam tayangan tetapi tidak mendapat nomor sendiri; kolom nomor halamannya menampilkan nomor slide sebelumnya."
+  },
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": {
+   "en": "Tetap ada dalam tayangan tanpa nomor sendiri — kolom nomor halamannya menampilkan nomor slide sebelumnya. Gunakan untuk langkah bertahap atau slide pemisah yang tidak perlu dihitung."
+  },
+  "Number hidden slides": {
+   "tip": "Aktif: slide tersembunyi tetap memiliki nomornya, jadi slide lain tidak berganti nomor saat Anda menyembunyikan satu slide (seperti di PowerPoint). Nonaktif: audiens tidak melihat nomor yang terlewat."
+  },
+  "Corner arrows": {
+   "tip": "Berlaku untuk seluruh presentasi. Tampilkan panah ‹ › yang bisa diklik di sudut saat berpresentasi. Nonaktif secara default — klik dan tombol panah sudah berpindah antar-slide."
+  },
+  "Transition": {
+   "tip": "Cara slide ini masuk. Morph memindahkan elemen yang cocok dari slide sebelumnya ke tempatnya."
+  },
+  "Name": {
+   "en": "Nama slide",
+   "tip": "Opsional. Ditampilkan di daftar Tautkan ke dan Varian dari serta pada thumbnail varian, sehingga slide ini mudah dipilih."
+  },
+  "State of": {
+   "en": "Varian dari",
+   "tip": "Jadikan slide ini varian dari slide lain: tombol panah melewatinya, audiens membukanya dengan mengeklik elemen bertaut, dan elemen yang cocok ber-morph di antara keduanya."
+  },
+  "A state is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.": {
+   "en": "Jadikan slide ini varian dari slide lain: tombol panah melewatinya, audiens membukanya dengan mengeklik elemen bertaut, dan elemen yang cocok ber-morph di antara keduanya."
+  },
+  "no — normal slide": {
+   "en": "Tidak ada — slide biasa"
+  },
+  "Sync from parent slide": {
+   "en": "Perbarui dari slide utama"
+  },
+  "Pull elements added to the parent into this state and adopt its ordering — your changes to shared elements are kept": {
+   "en": "Menyalin elemen yang ditambahkan ke slide utama sejak itu, dan mengikuti urutan lapisannya. Perubahan Anda di varian ini tetap dipertahankan."
+  },
+  "Hover": {
+   "en": "Saat hover",
+   "tip": "Saat berpresentasi, apa yang terjadi ketika penunjuk berada di atas elemen yang memiliki Grup hover: redupkan grup lain, atau ganti konten yang ditampilkan."
+  },
+  "focus-group": {
+   "en": "Redupkan grup lain"
+  },
+  "reveal": {
+   "en": "Ganti konten"
+  },
+  "Hover dim": {
+   "en": "Redupkan lain ke",
+   "tip": "Seberapa terlihat grup lain saat satu grup ditunjuk: 0 = tersembunyi, 1 = tanpa peredupan. 0,15 adalah peredupan lembut."
+  },
+  "Default set": {
+   "en": "Tampil di awal",
+   "tip": "Grup hover yang kontennya tampil sebelum penunjuk berada di atas apa pun. Kosong = tidak ada tambahan."
+  },
+  "Preview set": {
+   "en": "Pratinjau kanvas",
+   "tip": "Konten Grup hover mana yang ditampilkan kanvas saat Anda mengedit. Tidak mengubah tayangan."
+  },
+  "While presenting, hovering an element whose <b>group</b> matches a set name shows that set. Use Preview to edit each set.": {
+   "en": "Saat berpresentasi, menunjuk sebuah elemen menampilkan konten yang <b>Tampil saat hover</b>-nya cocok dengan <b>Grup hover</b> elemen itu. Pilih grup di <b>Pratinjau kanvas</b> untuk mengedit kontennya."
+  },
+  "Show on hover": {
+   "en": "Tampil saat hover",
+   "tip": "Ketik nama Grup hover: elemen ini tetap tersembunyi sampai penunjuk berada di atas elemen dari grup itu (Saat hover pada slide: Ganti konten). Kosong = selalu terlihat."
+  },
+  "Group": {
+   "en": "Grup hover",
+   "tip": "Nama yang sama untuk elemen-elemen yang bereaksi bersama terhadap penunjuk saat berpresentasi (lihat Saat hover pada slide). Berbeda dengan pengelompokan ⌘G."
+  },
+  "＋ New state linked from this element": {
+   "en": "＋ Tautkan ke varian baru slide ini"
+  },
+  "Duplicates this slide as a hidden interactive state and links the selected element to it": {
+   "en": "Menyalin slide ini sebagai varian dan menautkan elemen ini ke sana: saat berpresentasi, mengeklik elemen membuka salinannya. Edit salinan untuk menunjukkan apa yang berubah."
+  },
+  "Role": {
+   "en": "Peran tata letak",
+   "tip": "Fungsi teks ini dalam tata letak (judul, isi…). Terapkan tata letak memakainya untuk menempatkan konten di posisi yang sesuai."
+  },
+  "Backdrop": {
+   "en": "Buram di belakang"
+  },
+  "Blend": {
+   "en": "Mode campuran",
+   "tip": "Cara elemen ini bercampur dengan yang ada di bawahnya — Kalikan menggelapkan, Layar mencerahkan."
+  },
+  "Morph id": {
+   "en": "Nama morph",
+   "tip": "Elemen dengan nama morph yang sama di slide yang bersebelahan akan ber-morph satu sama lain. Awalnya sama dengan nama elemen itu sendiri."
+  },
+  "Pair with": {
+   "en": "Morph dengan",
+   "tip": "Pilih elemen di slide lain; elemen ini mengambil nama morph-nya dan ber-morph menjadi elemen itu."
+  },
+  "Don’t pair — use its own id": {
+   "en": "Jangan dipasangkan — pakai namanya sendiri"
+  },
+  "Morph id can’t be empty.": {
+   "en": "Nama morph tidak boleh kosong."
+  },
+  "Another element on this slide already uses that morph id.": {
+   "en": "Elemen lain di slide ini sudah memakai nama morph tersebut."
+  },
+  "Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.": {
+   "en": "Ber-morph sebagai <code>{id}</code>, bukan dengan namanya sendiri, <code>{own}</code>. Pilih “Jangan dipasangkan” di bawah untuk membatalkan."
+  },
+  "Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.": {
+   "en": "Elemen dengan nama morph yang sama akan ber-morph satu sama lain antar-slide. Ganti namanya, atau pilih di bawah, untuk memasangkannya dengan elemen di slide lain."
+  },
+  "Enter": {
+   "en": "Masuk",
+   "tip": "Cara elemen muncul saat slide masuk. Dilewati jika elemen ber-morph masuk dari slide sebelumnya."
+  },
+  "fade-up": {
+   "en": "Memudar naik"
+  },
+  "fade-down": {
+   "en": "Memudar turun"
+  },
+  "slide-left": {
+   "en": "Terbang dari kanan"
+  },
+  "slide-right": {
+   "en": "Terbang dari kiri"
+  },
+  "slide-up": {
+   "en": "Terbang dari bawah"
+  },
+  "slide-down": {
+   "en": "Terbang dari atas"
+  },
+  "Enter secs": {
+   "en": "Masuk (dtk)"
+  },
+  "Reveal step": {
+   "en": "Muncul saat klik",
+   "tip": "0 = tampil bersama slide. 1 = muncul pada klik pertama atau tekan →, 2 = pada yang kedua, dan seterusnya. Elemen dengan nomor yang sama muncul bersamaan."
+  },
+  "Count up": {
+   "en": "Hitung naik angka"
+  },
+  "Ambient": {
+   "en": "Geser & zoom",
+   "tip": "Gerakan Ken Burns yang lambat dan terus-menerus selama slide tampil — dibuat untuk foto layar penuh."
+  },
+  "kenburns": {
+   "en": "Ken Burns"
+  },
+  "Zoom": {
+   "en": "Gerakan",
+   "tip": "Melayang: geser dan zoom lambat tanpa henti. Perkecil / Perbesar: satu zoom halus setiap kali slide muncul."
+  },
+  "Zoom %": {
+   "en": "Besar zoom %"
+  },
+  "Zoom secs": {
+   "en": "Geser & zoom (dtk)",
+   "tip": "Berapa lama satu putaran geser dan zoom berlangsung, dalam detik"
+  },
+  "dash-march": {
+   "en": "Garis putus berjalan"
+  },
+  "motion-path": {
+   "en": "Ikuti jalur"
+  },
+  "Loop secs": {
+   "en": "Detik per putaran",
+   "tip": "Berapa lama satu putaran berlangsung — makin kecil makin cepat"
+  },
+  "Path": {
+   "en": "Jalur gerak"
+  },
+  "Lap easing": {
+   "en": "Kecepatan putaran",
+   "tip": "Bagaimana kecepatan berubah selama satu putaran — konstan, atau melambat di awal dan akhir"
+  },
+  "V-align": {
+   "en": "Perataan vertikal"
+  },
+  "Grad. angle": {
+   "en": "Sudut gradien"
+  },
+  "Start tip": {
+   "en": "Awal garis"
+  },
+  "End tip": {
+   "en": "Akhir garis"
+  },
+  "Ghost cut — the selection fades until you paste to move it; Esc cancels": {
+   "en": "Potong untuk memindahkan — pilihan memudar sampai Anda menempelkannya di tempat baru; Esc membatalkan"
+  },
+  "Presenting ▸ Loop": {
+   "en": "Animasi ▸ Animasi berulang"
+  },
+  "Give an element a motion-path loop, then Edit path on canvas": {
+   "en": "Pilih Ikuti jalur, lalu Edit jalur di kanvas"
+  },
+  "Format — show or hide the properties panel": {
+   "en": "Tampilkan atau sembunyikan panel Format, Animasi, dan Interaksi (])"
+  },
+  "Notes for presenter view (press S while presenting)…": {
+   "en": "Catatan untuk tampilan presenter (tekan S saat berpresentasi)…"
+  }
+ },
+ "untranslated": {
+  "slides/src/editor/panels.ts:397": "Menambahkan slide ini ke tata letak yang ditawarkan Slide baru di presentasi ini",
+  "slides/src/editor/panels.ts:399": "Nama tata letak",
+  "slides/src/editor/panels.ts:399#default": "Tata letak saya",
+  "slides/src/editor/panels.ts:545": "nama grup",
+  "slides/src/editor/panels.ts:658": "Bayangan {n}",
+  "slides/src/editor/panels.ts:915": "Ketik nama Grup hover: elemen ini tetap tersembunyi sampai penunjuk berada di atas elemen dari grup itu (Saat hover pada slide: Ganti konten). Kosong = selalu terlihat.",
+  "slides/src/editor/panels.ts:1009": "Varian ini tidak berbagi elemen apa pun dengan slide utamanya — tidak ada yang bisa diperbarui",
+  "slides/src/editor/panels.ts:1029": "Diperbarui dari slide utama — baru: {added} · hanya di varian ini: {kept}",
+  "slides/src/editor/panels.ts:1051": "varian",
+  "slides/src/editor/panels.ts:1080": "varian dari slide {n}",
+  "slides/src/editor/panels.ts:1083": "slide {n}",
+  "slides/src/editor/panels.ts:1236": "Titik warna {n}",
+  "slides/src/editor/panels.ts:1307": "Font tema",
+  "slides/src/editor/panels.ts:1311": "{name} (tersemat)",
+  "slides/src/editor/panels.ts:1318": "kustom",
+  "slides/src/editor/panels.ts:1348": "“{name}” disematkan di file ini",
+  "slides/src/editor/panels.ts:2230": "Ratakan",
+  "slides/src/editor/panels.ts:2231": "Rata kiri",
+  "slides/src/editor/panels.ts:2232": "Rata tengah",
+  "slides/src/editor/panels.ts:2233": "Rata kanan",
+  "slides/src/editor/panels.ts:2234": "Rata atas",
+  "slides/src/editor/panels.ts:2235": "Rata tengah vertikal",
+  "slides/src/editor/panels.ts:2236": "Rata bawah",
+  "slides/src/editor/panels.ts:2238": "Jarak",
+  "slides/src/editor/panels.ts:2239": "Beri jarak sama mendatar (3 atau lebih)",
+  "slides/src/editor/panels.ts:2240": "Beri jarak sama menurun (3 atau lebih)",
+  "slides/src/editor/panels.ts:2241": "Lebar sama dengan yang pertama dipilih (2 atau lebih)",
+  "slides/src/editor/panels.ts:2242": "Tinggi sama dengan yang pertama dipilih (2 atau lebih)",
+  "slides/src/editor/panels.ts:2244": "Urutan",
+  "slides/src/editor/panels.ts:2245": "Bawa ke depan",
+  "slides/src/editor/panels.ts:2246": "Maju satu lapis",
+  "slides/src/editor/panels.ts:2247": "Mundur satu lapis",
+  "slides/src/editor/panels.ts:2248": "Kirim ke belakang",
+  "slides/src/editor/panels.ts:2549#bg2": "Latar belakang 2",
+  "slides/src/editor/panels.ts:2549#tx2": "Teks 2",
+  "slides/src/editor/panels.ts:2549#hlink": "Tautan",
+  "slides/src/editor/panels.ts:2549#folHlink": "Tautan yang dikunjungi",
+  "slides/src/editor/panels.ts:2576": "Aksen",
+  "slides/src/editor/panels.ts:63": "Seberapa besar gambar diperbesar di dalam bingkainya",
+  "slides/src/editor/panels.ts:44": "Berlaku untuk seluruh presentasi. Tampilkan penghitung slide kepada audiens saat berpresentasi.",
+  "slides/src/editor/panels.ts:45": "Berlaku untuk seluruh presentasi. Tampilkan bilah kemajuan tipis di bagian bawah saat berpresentasi.",
+  "slides/src/editor/panels.ts:629#normal": "Normal",
+  "slides/src/editor/panels.ts:629#multiply": "Kalikan",
+  "slides/src/editor/panels.ts:629#screen": "Layar",
+  "slides/src/editor/panels.ts:629#overlay": "Overlay",
+  "slides/src/editor/panels.ts:629#darken": "Gelapkan",
+  "slides/src/editor/panels.ts:629#lighten": "Terangkan",
+  "slides/src/editor/panels.ts:629#difference": "Perbedaan",
+  "slides/src/editor/panels.ts:629#exclusion": "Pengecualian",
+  "slides/src/editor/panels.ts:1791#Lined": "Bergaris",
+  "slides/src/editor/panels.ts:1791#Zebra": "Belang",
+  "slides/src/editor/panels.ts:1791#Boxed": "Berkotak",
+  "slides/src/editor/panels.ts:1791#Minimal": "Minimal",
+  "slides/src/editor/panels.ts:2191": "{n} bahasa bawaan",
+  "slides/src/editor/editor.ts:1871": "Varian dari slide {n} — terbuka saat elemen bertaut diklik ketika berpresentasi",
+  "slides/src/editor/editor.ts:1895": "Komentar terbuka: {n}"
+ }
+}

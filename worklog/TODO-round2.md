@@ -1,0 +1,47 @@
+# Round 2 — pedidos do usuário (pt-BR)
+
+- [x] 1. Hover do menu de contexto ruim no modo escuro (--hover não existia → --chrome-2; item desabilitado nunca acende)
+- [x] 2. Bug: selecionar membro de grupo nas camadas, clicar na tela → seleciona o grupo todo (escopo de grupo estilo Figma)
+- [x] 3. Abas "flutuando" (painel direito) → faixa sticky de ponta a ponta
+- [x] 4. Tipografia sem espaçamento / selects gigantes (flex-basis 110px virava altura)
+- [x] 5. Copiar o Penpot: cores/opacidade, alinhamentos, tamanhos/posições compactos, seções dedicadas com +/−
+- [x] 6. Renomear camadas: duplo clique e botão direito (Rename)
+- [x] 7. Notas do apresentador: sem espaço dos dois lados (full bleed); sem handle de resize na textarea; o PAINEL redimensiona pela borda (como os laterais) e a caixa acompanha
+- [x] 8. Toolbar alinhar + ordem numa linha só, com separador, responsiva
+- [x] 9. Opacidade na cor do texto (como no gradiente / Penpot)
+- [x] 10. Cores do tema (bolinhas acima do campo) confusas, também no Slide/Plano de fundo → representar bem: botão paleta, lista nomeada, cor vinculada mostra o nome + desvincular
+- [x] 11. "Inserir campo" perdido no meio → ícone na barra de ferramentas do texto com menu
+- [x] 12. "Função no layout" não está claro → seção Layout com explicação
+- [x] 13. Responder: a sombra já existia? (SIM — era o select "Sombra" em Aparência; só mudou para seção +/−)
+- [x] 14. Abas do painel esquerdo (Slides | Camadas) iguais às da direita (estilo, caixa, faixa sticky)
+- [x] 15. Atualizar testes (inspector-look, inspector-tabs, segmented, scrub, hints, chrome-rulings) + novos (rename, notas resize, tema)
+- [x] 16. i18n: chaves novas nos 30 catálogos
+- [ ] 17. Verificar escuro + claro com capturas; rodar todos os testes; reconstruir arquivo único
+- [x] 18. Commits no branch slides/all-together (nada publicado)
+- [x] 19. Alça das notas deitada (chevron) + caixa de texto com cara de campo + encosta nas laterais
+- [x] 20. Moldura laranja na lista de camadas (anel de foco) → destaque na linha
+- [x] 21. Revisar TODOS os painéis (slide, imagem, gráfico, tabela, mídia, código, embed, multi) em claro/escuro com capturas
+- [x] 22. Renomear GRUPOS também (duplo clique / botão direito na linha do grupo)
+- [x] 23. Sombras: presets como seletor visual (ícone/prévia + texto) em vez de dropdown
+- [x] 24. Barra de ferramentas pequena e apertada → usar a largura toda (botões maiores, distribuídos)
+- [ ] 25. Internacionalização: MUITOS problemas → auditoria completa (subagente) — strings sem tradução, valores crus em minúsculas ("cor sólida", "nenhum", "bar"), cortes
+- [x] 26. Feature: overlay de medição (Alt/Option + hover mede distância do selecionado ao alvo) — spec colada pelo usuário (subagente)
+- [x] 27. Corrigir checks: segmented pt "preenchido" cortado; select de fonte cortado (pt/de)
+- [x] 28. Traduções round 2 aplicadas (18 chaves × 30 idiomas, rascunho de máquina)
+- [x] 29. Scrub respeita min/max (nunca cruza os limites do campo)
+- [x] 30. Abas superiores (Slides|Camadas, Formato|Animar|Interação) no tema escuro: selecionada/não selecionada com mais contraste (subagente)
+- [x] 31. Topbar: dividir esquerda (logo+nome+desfazer) | centro (inserir) | direita (ações); nome longo com reticências sem quebrar o layout
+- [x] 32. Laser pointer no modo apresentação: ao soltar o mouse, sumir com a animação (hoje para de repente)
+- [ ] 33. Tamanho da página (Documento) como ícones de proporção em vez de dropdown
+
+## Revisão final — achados (corrigir)
+- [x] R1 BLOQ: name/groupName sem verificação no portão untrusted → somem ao colar/loadDoc/restaurar; CI test-clipboard vermelho; schema; docs/format.md
+- [x] R2 BLOQ: renomear → ao sair por blur o foco volta pra lista → Backspace apaga elemento
+- [x] R3 renomear perdido quando a lista reconstrói (undo/CRDT)
+- [ ] R4 notas: altura não re-limitada ao encolher a janela (canvas vai a 0px); touch-action; telefone
+- [x] R5 renomear membro de grupo dobrado; renomear em doc somente leitura; codefence BASE_KEYS perde name/groupName
+- [ ] R6 (agente A) canvas: ⌘-click com 1–3px duplica; Alt-dig passo de undo vazio; medição trava após drag nativo; Alt no Windows abre menu; shift-toggle toque; entered-group com shift; guardas do ⌘-click; duplicar grupo mantém groupId
+- [ ] R7 (agente B) inspetor: opacidade em cor vinculada ao tema se perde; linhas de status escondidas atrás do ?; + em seção recolhida; contorno de seta/linha errado; cor = 2 passos de undo e 0%→100%; rótulo de cor abre seletor; a11y (aria-label nos campos, radiogroups); scrub pointercancel/undo vazio; código morto (ROW_TIPS, CSS, chaves i18n)
+- [ ] R8 CSS/docs (aguardando revisor 4)
+- [ ] R9 Rodar o gate completo de CI do repo (.github), não só os rigs do navegador
+- [ ] 34. Fork nyblnet/bento na conta GitHub do usuário (hugoassisj) e enviar TODOS os branches/commits (backup; separar em issues coesas fica pra depois) — quando as integrações estiverem prontas

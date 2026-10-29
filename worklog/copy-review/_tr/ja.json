@@ -1,0 +1,265 @@
+{
+ "changes": {
+  "Unnumbered": {
+   "en": "番号を付けない",
+   "tip": "このスライドはスライドショーに残りますが、独自の番号は付きません。ページ番号欄には前のスライドの番号が表示されます。"
+  },
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": {
+   "en": "スライドショーに残りますが、独自の番号は付きません — ページ番号欄には前のスライドの番号が表示されます。段階的に見せる途中のスライドや、数に入れたくない区切りスライドに使います。"
+  },
+  "Number hidden slides": {
+   "tip": "オン：非表示スライドも番号を保持するので、スライドを非表示にしても他のスライドの番号は変わりません（PowerPoint と同じ）。オフ：聴衆に見える番号に抜けがありません。"
+  },
+  "Corner arrows": {
+   "tip": "デッキ全体の設定。発表中、隅にクリックできる ‹ › 矢印を表示します。既定はオフ — クリックや矢印キーでもスライドを移動できます。"
+  },
+  "Transition": {
+   "tip": "このスライドの登場のしかた。モーフは、前のスライドの一致する要素を所定の位置へ動かします。"
+  },
+  "Name": {
+   "en": "スライド名",
+   "tip": "省略可。「リンク先」と「バリエーション元」の一覧、およびバリエーションのサムネイルに表示され、このスライドを選びやすくなります。"
+  },
+  "State of": {
+   "en": "バリエーション元",
+   "tip": "このスライドを別のスライドのバリエーションにします。矢印キーでは飛ばされ、聴衆はリンクされた要素をクリックして開きます。一致する要素は 2 枚の間でモーフします。"
+  },
+  "A state is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.": {
+   "en": "このスライドを別のスライドのバリエーションにします。矢印キーでは飛ばされ、聴衆はリンクされた要素をクリックして開きます。一致する要素は 2 枚の間でモーフします。"
+  },
+  "no — normal slide": {
+   "en": "なし — 通常のスライド"
+  },
+  "Sync from parent slide": {
+   "en": "メインスライドから更新"
+  },
+  "Pull elements added to the parent into this state and adopt its ordering — your changes to shared elements are kept": {
+   "en": "その後メインスライドに追加された要素をコピーし、レイヤーの順序もそろえます。このバリエーションでの変更は保持されます。"
+  },
+  "Hover": {
+   "en": "ホバー時の動作",
+   "tip": "発表中、ホバーグループのある要素にポインターを置いたときの動作：他のグループを暗くするか、表示する内容を切り替えます。"
+  },
+  "focus-group": {
+   "en": "他のグループを暗く"
+  },
+  "reveal": {
+   "en": "内容を切り替え"
+  },
+  "Hover dim": {
+   "en": "他の不透明度",
+   "tip": "あるグループを指している間、他のグループをどれだけ見せるか：0 = 非表示、1 = 薄くしない。0.15 で控えめに薄くなります。"
+  },
+  "Default set": {
+   "en": "待機時の表示",
+   "tip": "ポインターが何も指していないときに内容を表示するホバーグループ。空欄 = 追加表示なし。"
+  },
+  "Preview set": {
+   "en": "プレビュー表示",
+   "tip": "編集中にキャンバスに表示するホバーグループの内容。スライドショーには影響しません。"
+  },
+  "While presenting, hovering an element whose <b>group</b> matches a set name shows that set. Use Preview to edit each set.": {
+   "en": "発表中、要素にポインターを置くと、<b>ホバー時に表示</b> がその要素の <b>ホバーグループ</b> と一致する内容が表示されます。<b>プレビュー表示</b> でグループを選ぶと、その内容を編集できます。"
+  },
+  "Show on hover": {
+   "en": "ホバー時に表示",
+   "tip": "ホバーグループ名を入力します。ポインターがそのグループの要素に乗るまで、この要素は非表示のままです（スライドの「ホバー時の動作」：内容を切り替え）。空欄 = 常に表示。"
+  },
+  "Group": {
+   "en": "ホバーグループ",
+   "tip": "発表中、ポインターに一緒に反応する要素に付ける共通の名前です（スライドの「ホバー時の動作」を参照）。⌘G のグループ化とは別のものです。"
+  },
+  "＋ New state linked from this element": {
+   "en": "＋ このスライドの新しいバリエーションにリンク"
+  },
+  "Duplicates this slide as a hidden interactive state and links the selected element to it": {
+   "en": "このスライドをバリエーションとしてコピーし、この要素からリンクします。発表中に要素をクリックするとコピーが開きます。コピーを編集して、変わる部分を見せましょう。"
+  },
+  "Role": {
+   "en": "レイアウト役割",
+   "tip": "このテキストがレイアウト内で何にあたるか（タイトル、本文…）。「レイアウトを適用」はこれを使って内容を対応する場所に配置します。"
+  },
+  "Backdrop": {
+   "en": "背景ぼかし"
+  },
+  "Blend": {
+   "en": "描画モード",
+   "tip": "この要素と下にあるものの混ざり方 — 乗算は暗く、スクリーンは明るくします。"
+  },
+  "Morph id": {
+   "en": "モーフ名",
+   "tip": "隣り合うスライドで同じモーフ名を持つ要素どうしがモーフします。最初は要素固有の名前が入っています。"
+  },
+  "Pair with": {
+   "en": "モーフ相手",
+   "tip": "別のスライドの要素を選ぶと、この要素がそのモーフ名を受け継ぎ、その要素へモーフします。"
+  },
+  "Don’t pair — use its own id": {
+   "en": "ペアにしない — 自身の名前を使う"
+  },
+  "Morph id can’t be empty.": {
+   "en": "モーフ名は空にできません。"
+  },
+  "Another element on this slide already uses that morph id.": {
+   "en": "このスライドの別の要素がすでにそのモーフ名を使っています。"
+  },
+  "Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.": {
+   "en": "自身の名前 <code>{own}</code> ではなく <code>{id}</code> としてモーフします。元に戻すには下の「ペアにしない」を選びます。"
+  },
+  "Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.": {
+   "en": "同じモーフ名の要素は、スライド間で互いにモーフします。別のスライドの要素とペアにするには、名前を変えるか下で選びます。"
+  },
+  "Enter": {
+   "en": "登場",
+   "tip": "スライドが始まるときの要素の現れ方。前のスライドからモーフで入る場合は使われません。"
+  },
+  "fade-up": {
+   "en": "上へフェードイン"
+  },
+  "fade-down": {
+   "en": "下へフェードイン"
+  },
+  "slide-left": {
+   "en": "右からスライドイン"
+  },
+  "slide-right": {
+   "en": "左からスライドイン"
+  },
+  "slide-up": {
+   "en": "下からスライドイン"
+  },
+  "slide-down": {
+   "en": "上からスライドイン"
+  },
+  "Enter secs": {
+   "en": "登場（秒）"
+  },
+  "Reveal step": {
+   "en": "クリックで表示",
+   "tip": "0 = スライドと同時に表示。1 = 最初のクリックまたは → キーで表示、2 = 2 回目で表示、以降同様。同じ番号の要素は同時に表示されます。"
+  },
+  "Count up": {
+   "en": "数字をカウントアップ"
+  },
+  "Ambient": {
+   "en": "パン＆ズーム",
+   "tip": "スライドの表示中、ゆっくり続く Ken Burns の動き — 全面に配置した写真向けです。"
+  },
+  "kenburns": {
+   "en": "Ken Burns"
+  },
+  "Zoom": {
+   "en": "動き",
+   "tip": "ドリフト：ゆっくりしたパンとズームが続きます。ズームアウト／ズームイン：スライドが表示されるたびに 1 回なめらかにズームします。"
+  },
+  "Zoom %": {
+   "en": "ズーム量 %"
+  },
+  "Zoom secs": {
+   "en": "パン＆ズーム（秒）",
+   "tip": "パンとズーム 1 回にかかる秒数"
+  },
+  "dash-march": {
+   "en": "破線を流す"
+  },
+  "motion-path": {
+   "en": "パスに沿って移動"
+  },
+  "Loop secs": {
+   "en": "1 周の秒数",
+   "tip": "1 周にかかる時間 — 小さいほど速くなります"
+  },
+  "Path": {
+   "en": "モーションパス"
+  },
+  "Lap easing": {
+   "en": "周回の速さ",
+   "tip": "1 周の間の速さの変化 — 一定、または両端でゆるやかに加速・減速"
+  },
+  "V-align": {
+   "en": "垂直揃え"
+  },
+  "Grad. angle": {
+   "en": "グラデーション角度"
+  },
+  "Start tip": {
+   "en": "線の始点"
+  },
+  "End tip": {
+   "en": "線の終点"
+  },
+  "Ghost cut — the selection fades until you paste to move it; Esc cancels": {
+   "en": "切り取って移動 — 新しい場所に貼り付けるまで選択範囲が半透明になります。Esc で取り消し"
+  },
+  "Presenting ▸ Loop": {
+   "en": "アニメーション ▸ ループアニメーション"
+  },
+  "Give an element a motion-path loop, then Edit path on canvas": {
+   "en": "「パスに沿って移動」を選び、「キャンバスでパスを編集」をクリック"
+  },
+  "Format — show or hide the properties panel": {
+   "en": "書式・アニメーション・インタラクションのパネルを表示/非表示（]）"
+  },
+  "Notes for presenter view (press S while presenting)…": {
+   "en": "発表者ビュー用ノート（発表中に S キー）…"
+  }
+ },
+ "untranslated": {
+  "slides/src/editor/panels.ts:397": "このスライドを、このデッキの「新規スライド」で選べるレイアウトに追加します",
+  "slides/src/editor/panels.ts:399": "レイアウト名",
+  "slides/src/editor/panels.ts:399#default": "マイレイアウト",
+  "slides/src/editor/panels.ts:545": "グループ名",
+  "slides/src/editor/panels.ts:658": "シャドウ {n}",
+  "slides/src/editor/panels.ts:915": "ホバーグループ名を入力します。ポインターがそのグループの要素に乗るまで、この要素は非表示のままです（スライドの「ホバー時の動作」：内容を切り替え）。空欄 = 常に表示。",
+  "slides/src/editor/panels.ts:1009": "このバリエーションにはメインスライドと共通の要素がありません — 更新するものはありません",
+  "slides/src/editor/panels.ts:1029": "メインスライドから更新しました — 新規: {added} · このバリエーションのみ: {kept}",
+  "slides/src/editor/panels.ts:1051": "バリエーション",
+  "slides/src/editor/panels.ts:1080": "スライド {n} のバリエーション",
+  "slides/src/editor/panels.ts:1083": "スライド {n}",
+  "slides/src/editor/panels.ts:1236": "分岐点 {n}",
+  "slides/src/editor/panels.ts:1307": "テーマのフォント",
+  "slides/src/editor/panels.ts:1311": "{name}（埋め込み）",
+  "slides/src/editor/panels.ts:1318": "カスタム",
+  "slides/src/editor/panels.ts:1348": "「{name}」をこのファイルに埋め込みました",
+  "slides/src/editor/panels.ts:2230": "整列",
+  "slides/src/editor/panels.ts:2231": "左揃え",
+  "slides/src/editor/panels.ts:2232": "左右中央揃え",
+  "slides/src/editor/panels.ts:2233": "右揃え",
+  "slides/src/editor/panels.ts:2234": "上揃え",
+  "slides/src/editor/panels.ts:2235": "上下中央揃え",
+  "slides/src/editor/panels.ts:2236": "下揃え",
+  "slides/src/editor/panels.ts:2238": "間隔",
+  "slides/src/editor/panels.ts:2239": "左右に均等配置（3 つ以上）",
+  "slides/src/editor/panels.ts:2240": "上下に均等配置（3 つ以上）",
+  "slides/src/editor/panels.ts:2241": "最初に選んだものと同じ幅（2 つ以上）",
+  "slides/src/editor/panels.ts:2242": "最初に選んだものと同じ高さ（2 つ以上）",
+  "slides/src/editor/panels.ts:2244": "順序",
+  "slides/src/editor/panels.ts:2245": "最前面へ移動",
+  "slides/src/editor/panels.ts:2246": "前面へ移動",
+  "slides/src/editor/panels.ts:2247": "背面へ移動",
+  "slides/src/editor/panels.ts:2248": "最背面へ移動",
+  "slides/src/editor/panels.ts:2549#bg2": "背景 2",
+  "slides/src/editor/panels.ts:2549#tx2": "テキスト 2",
+  "slides/src/editor/panels.ts:2549#hlink": "ハイパーリンク",
+  "slides/src/editor/panels.ts:2549#folHlink": "表示済みのハイパーリンク",
+  "slides/src/editor/panels.ts:2576": "アクセント",
+  "slides/src/editor/panels.ts:63": "枠内での画像の拡大率",
+  "slides/src/editor/panels.ts:44": "デッキ全体の設定。発表中、スライド番号のカウンターを聴衆に表示します。",
+  "slides/src/editor/panels.ts:45": "デッキ全体の設定。発表中、下端に細い進行状況バーを表示します。",
+  "slides/src/editor/panels.ts:629#normal": "通常",
+  "slides/src/editor/panels.ts:629#multiply": "乗算",
+  "slides/src/editor/panels.ts:629#screen": "スクリーン",
+  "slides/src/editor/panels.ts:629#overlay": "オーバーレイ",
+  "slides/src/editor/panels.ts:629#darken": "比較（暗）",
+  "slides/src/editor/panels.ts:629#lighten": "比較（明）",
+  "slides/src/editor/panels.ts:629#difference": "差の絶対値",
+  "slides/src/editor/panels.ts:629#exclusion": "除外",
+  "slides/src/editor/panels.ts:1791#Lined": "罫線",
+  "slides/src/editor/panels.ts:1791#Zebra": "縞模様",
+  "slides/src/editor/panels.ts:1791#Boxed": "格子",
+  "slides/src/editor/panels.ts:1791#Minimal": "シンプル",
+  "slides/src/editor/panels.ts:2191": "{n} 言語を内蔵",
+  "slides/src/editor/editor.ts:1871": "スライド {n} のバリエーション — 発表中にリンクされた要素をクリックすると開きます",
+  "slides/src/editor/editor.ts:1895": "未解決のコメント: {n}"
+ }
+}

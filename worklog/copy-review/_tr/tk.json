@@ -1,0 +1,265 @@
+{
+ "changes": {
+  "Unnumbered": {
+   "en": "Belgilenmesin",
+   "tip": "Bu slaýd görkezişde galýar, ýöne öz belgisini almaýar; sahypa belgisi meýdany öňki slaýdyň belgisini görkezýär."
+  },
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": {
+   "en": "Görkezişde galýar, ýöne öz belgisi bolmaýar — sahypa belgisi meýdany öňki slaýdyň belgisini görkezýär. Ädimme-ädim gurulýan böleklere ýa-da sanalmaly däl bölüji slaýda ulanyň."
+  },
+  "Number hidden slides": {
+   "tip": "Açyk: gizlin slaýdlar belgisini saklaýar, şonuň üçin birini gizläniňizde beýlekileriň belgisi üýtgemeýär (PowerPoint-daky ýaly). Ýapyk: tomaşaçylar belgilemede boşluk görmeýär."
+  },
+  "Corner arrows": {
+   "tip": "Ähli görkeziş üçin. Görkezip durkaňyz burçda basylýan ‹ › oklaryny görkezýär. Deslapdan öçük — basmak we ok düwmeleri slaýdlaryň arasynda eýýäm geçirýär."
+  },
+  "Transition": {
+   "tip": "Bu slaýdyň nähili girýändigi. Öwrülme gabat gelýän elementleri öňki slaýddan öz ýerine geçirýär."
+  },
+  "Name": {
+   "en": "Slaýdyň ady",
+   "tip": "Hökmany däl. «Baglanyşyk» we «Nämäniň warianty» sanawlarynda hem-de wariantlaryň kiçi suratlarynda görkezilýär, şeýlelikde bu slaýdy saýlamak aňsat bolýar."
+  },
+  "State of": {
+   "en": "Nämäniň warianty",
+   "tip": "Bu slaýdy başga slaýdyň warianty ediň: ok düwmeleri ony geçýär, tomaşaçylar ony baglanan elemente basyp açýarlar, gabat gelýän elementler bolsa ikisiniň arasynda öwrülýär."
+  },
+  "A state is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.": {
+   "en": "Bu slaýdy başga slaýdyň warianty ediň: ok düwmeleri ony geçýär, tomaşaçylar ony baglanan elemente basyp açýarlar, gabat gelýän elementler bolsa ikisiniň arasynda öwrülýär."
+  },
+  "no — normal slide": {
+   "en": "Ýok — adaty slaýd"
+  },
+  "Sync from parent slide": {
+   "en": "Esasy slaýddan täzele"
+  },
+  "Pull elements added to the parent into this state and adopt its ordering — your changes to shared elements are kept": {
+   "en": "Şondan bäri esasy slaýda goşulan elementleri göçürýär we onuň gatlak tertibine eýerýär. Bu wariantdaky üýtgetmeleriňiz saklanýar."
+  },
+  "Hover": {
+   "en": "Üstüne getirilende",
+   "tip": "Görkezip durkaňyz, kursor topary bolan elementiň üstünde kursor duranda näme bolýar: beýleki toparlar garaldylýar ýa-da görkezilýän mazmun çalşylýar."
+  },
+  "focus-group": {
+   "en": "Beýleki toparlary garalt"
+  },
+  "reveal": {
+   "en": "Mazmuny çalyş"
+  },
+  "Hover dim": {
+   "en": "Beýlekileri garalt",
+   "tip": "Kursor bir toparyň üstündekä beýleki toparlaryň näçe görünýändigi: 0 = gizlin, 1 = garaldylmaýar. 0.15 ýumşak garaltma."
+  },
+  "Default set": {
+   "en": "Ilki görkezilýän",
+   "tip": "Kursor hiç zadyň üstünde däkä mazmuny görkezilýän kursor topary. Boş = goşmaça hiç zat ýok."
+  },
+  "Preview set": {
+   "en": "Meýdanda öňünden gör",
+   "tip": "Redaktirläp durkaňyz iş meýdanynda haýsy kursor toparynyň mazmuny görkezilýär. Görkezişi üýtgetmeýär."
+  },
+  "While presenting, hovering an element whose <b>group</b> matches a set name shows that set. Use Preview to edit each set.": {
+   "en": "Görkezip durkaňyz, elementiň üstüne kursor getirilende <b>Görkezýän topar</b> meýdany şol elementiň <b>Kursor toparyna</b> gabat gelýän mazmun görkezilýär. Mazmunyny redaktirlemek üçin <b>Meýdanda öňünden gör</b> bölüminde topar saýlaň."
+  },
+  "Show on hover": {
+   "en": "Görkezýän topar",
+   "tip": "Kursor toparynyň adyny ýazyň: kursor şol toparyň elementiniň üstüne gelýänçä bu element gizlin galýar (slaýdyň «Üstüne getirilende» sazlamasy: Mazmuny çalyş). Boş = hemişe görünýär."
+  },
+  "Group": {
+   "en": "Kursor topary",
+   "tip": "Görkezip durkaňyz kursora bilelikde täsir edýän elementleriň umumy ady (slaýddaky «Üstüne getirilende» serediň). ⌘G bilen toparlamak bilen birmeňzeş däl."
+  },
+  "＋ New state linked from this element": {
+   "en": "＋ Bu slaýdyň täze wariantyna baglanyşyk"
+  },
+  "Duplicates this slide as a hidden interactive state and links the selected element to it": {
+   "en": "Bu slaýdy wariant hökmünde göçürýär we bu elementi oňa baglaýar: görkezip durkaňyz elemente basmak göçürmäni açýar. Näme üýtgeýändigini görkezmek üçin göçürmäni redaktirläň."
+  },
+  "Role": {
+   "en": "Ýerleşişdäki roly",
+   "tip": "Bu tekstiň ýerleşişde näme bolýandygy (sözbaşy, esasy tekst…). «Ýerleşişi ulan» mazmuny gabat gelýän ýere goýmak üçin muny ulanýar."
+  },
+  "Backdrop": {
+   "en": "Arkasy bulanyk"
+  },
+  "Blend": {
+   "en": "Garyşdyrma usuly",
+   "tip": "Bu elementiň aşagyndaky bilen nähili garyşýandygy — Köpeltmek garaldýar, Ekran ýagtyldýar."
+  },
+  "Morph id": {
+   "en": "Öwrülme ady",
+   "tip": "Goňşy slaýdlarda şol bir öwrülme adyna eýe bolan elementler biri-birine öwrülýär. Başda elementiň öz ady bolýar."
+  },
+  "Pair with": {
+   "en": "Öwrülme jübüti",
+   "tip": "Başga slaýddan element saýlaň; bu element onuň öwrülme adyny alýar we oňa öwrülýär."
+  },
+  "Don’t pair — use its own id": {
+   "en": "Jübütleme — öz adyny ulan"
+  },
+  "Morph id can’t be empty.": {
+   "en": "Öwrülme ady boş bolup bilmez."
+  },
+  "Another element on this slide already uses that morph id.": {
+   "en": "Şu slaýddaky başga bir element eýýäm şol öwrülme adyny ulanýar."
+  },
+  "Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.": {
+   "en": "Öz ady <code>{own}</code> däl-de, <code>{id}</code> hökmünde öwrülýär. Yzyna gaýtarmak üçin aşakdan «Jübütleme» saýlaň."
+  },
+  "Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.": {
+   "en": "Şol bir öwrülme adyna eýe bolan elementler slaýdlaryň arasynda biri-birine öwrülýär. Başga slaýddaky element bilen jübütlemek üçin adyny üýtgediň ýa-da aşakdan saýlaň."
+  },
+  "Enter": {
+   "en": "Giriş",
+   "tip": "Slaýd girende elementiň nähili peýda bolýandygy. Öňki slaýddan öwrülip gelýän bolsa ulanylmaýar."
+  },
+  "fade-up": {
+   "en": "Ýokary peýda bol"
+  },
+  "fade-down": {
+   "en": "Aşak peýda bol"
+  },
+  "slide-left": {
+   "en": "Sagdan uçup gir"
+  },
+  "slide-right": {
+   "en": "Çepden uçup gir"
+  },
+  "slide-up": {
+   "en": "Aşakdan uçup gir"
+  },
+  "slide-down": {
+   "en": "Ýokardan uçup gir"
+  },
+  "Enter secs": {
+   "en": "Giriş (sek.)"
+  },
+  "Reveal step": {
+   "en": "Basanda peýda bolar",
+   "tip": "0 = slaýd bilen bile görkezilýär. 1 = ilkinji basmakda ýa-da → basylanda peýda bolýar, 2 = ikinjide we ş.m. Şol bir belgili elementler bilelikde peýda bolýar."
+  },
+  "Count up": {
+   "en": "Sanlary noldan sana"
+  },
+  "Ambient": {
+   "en": "Süýşme we masştab",
+   "tip": "Slaýd ekranda durka haýal, üznüksiz Ken Burns hereketi — doly ekranly suratlar üçin."
+  },
+  "kenburns": {
+   "en": "Ken Burns"
+  },
+  "Zoom": {
+   "en": "Hereket",
+   "tip": "Haýal süýşme: gutarnyksyz haýal süýşme we masştab. Kiçeltme / Ulaltma: slaýd her peýda bolanda bir ýumşak masştablama."
+  },
+  "Zoom %": {
+   "en": "Masştab mukdary %"
+  },
+  "Zoom secs": {
+   "en": "Süýşme we masştab (sek.)",
+   "tip": "Bir süýşme we masştab geçişiniň näçe sekunt dowam edýändigi"
+  },
+  "dash-march": {
+   "en": "Ýöreýän punktir"
+  },
+  "motion-path": {
+   "en": "Ýola eýer"
+  },
+  "Loop secs": {
+   "en": "Bir aýlaw (sek.)",
+   "tip": "Bir aýlawyň näçe wagt alýandygy — az bolsa çalt"
+  },
+  "Path": {
+   "en": "Hereket ýoly"
+  },
+  "Lap easing": {
+   "en": "Aýlawyň tizligi",
+   "tip": "Bir aýlawda tizligiň nähili üýtgeýändigi — hemişelik ýa-da başda we ahyrda ýuwaş"
+  },
+  "V-align": {
+   "en": "Dik deňleşdirme"
+  },
+  "Grad. angle": {
+   "en": "Gradiýent burçy"
+  },
+  "Start tip": {
+   "en": "Çyzygyň başy"
+  },
+  "End tip": {
+   "en": "Çyzygyň soňy"
+  },
+  "Ghost cut — the selection fades until you paste to move it; Esc cancels": {
+   "en": "Göçürmek üçin kes — saýlanan zat täze ýerine goýýançaňyz solgun görünýär; Esc ýatyrýar"
+  },
+  "Presenting ▸ Loop": {
+   "en": "Animasiýa ▸ Animasiýa aýlawy"
+  },
+  "Give an element a motion-path loop, then Edit path on canvas": {
+   "en": "«Ýola eýer» saýlaň, soňra «Ýoly iş meýdanynda redaktirle»"
+  },
+  "Format — show or hide the properties panel": {
+   "en": "Format, Animasiýa we Täsirleşme panelini görkez ýa-da gizle (])"
+  },
+  "Notes for presenter view (press S while presenting)…": {
+   "en": "Çykyş edijiniň görnüşi üçin bellikler (görkezip durkaňyz S basyň)…"
+  }
+ },
+ "untranslated": {
+  "slides/src/editor/panels.ts:397": "Bu slaýdy şu görkezişde «Täze slaýd» hödürleýän ýerleşişlere goşýar",
+  "slides/src/editor/panels.ts:399": "Ýerleşişiň ady",
+  "slides/src/editor/panels.ts:399#default": "Meniň ýerleşişim",
+  "slides/src/editor/panels.ts:545": "toparyň ady",
+  "slides/src/editor/panels.ts:658": "Kölege {n}",
+  "slides/src/editor/panels.ts:915": "Kursor toparynyň adyny ýazyň: kursor şol toparyň elementiniň üstüne gelýänçä bu element gizlin galýar (slaýdyň «Üstüne getirilende» sazlamasy: Mazmuny çalyş). Boş = hemişe görünýär.",
+  "slides/src/editor/panels.ts:1009": "Bu wariantyň esasy slaýdy bilen umumy elementi ýok — täzelär ýaly zat ýok",
+  "slides/src/editor/panels.ts:1029": "Esasy slaýddan täzelendi — täze: {added} · diňe bu wariantda: {kept}",
+  "slides/src/editor/panels.ts:1051": "wariant",
+  "slides/src/editor/panels.ts:1080": "Slaýd {n} warianty",
+  "slides/src/editor/panels.ts:1083": "Slaýd {n}",
+  "slides/src/editor/panels.ts:1236": "Duralga {n}",
+  "slides/src/editor/panels.ts:1307": "Tema şrifti",
+  "slides/src/editor/panels.ts:1311": "{name} (goşulan)",
+  "slides/src/editor/panels.ts:1318": "özleşdirilen",
+  "slides/src/editor/panels.ts:1348": "«{name}» şu faýla goşuldy",
+  "slides/src/editor/panels.ts:2230": "Deňleşdir",
+  "slides/src/editor/panels.ts:2231": "Çepe deňleşdir",
+  "slides/src/editor/panels.ts:2232": "Keseligine ortala",
+  "slides/src/editor/panels.ts:2233": "Saga deňleşdir",
+  "slides/src/editor/panels.ts:2234": "Ýokara deňleşdir",
+  "slides/src/editor/panels.ts:2235": "Dikligine ortala",
+  "slides/src/editor/panels.ts:2236": "Aşaga deňleşdir",
+  "slides/src/editor/panels.ts:2238": "Aralyk",
+  "slides/src/editor/panels.ts:2239": "Keseligine deň aralyk (3 ýa-da köp)",
+  "slides/src/editor/panels.ts:2240": "Dikligine deň aralyk (3 ýa-da köp)",
+  "slides/src/editor/panels.ts:2241": "Ilkinji saýlanan bilen deň ini (2 ýa-da köp)",
+  "slides/src/editor/panels.ts:2242": "Ilkinji saýlanan bilen deň beýikligi (2 ýa-da köp)",
+  "slides/src/editor/panels.ts:2244": "Tertip",
+  "slides/src/editor/panels.ts:2245": "Öňe getir",
+  "slides/src/editor/panels.ts:2246": "Bir ädim öňe",
+  "slides/src/editor/panels.ts:2247": "Bir ädim yza",
+  "slides/src/editor/panels.ts:2248": "Yza iber",
+  "slides/src/editor/panels.ts:2549#bg2": "Fon 2",
+  "slides/src/editor/panels.ts:2549#tx2": "Tekst 2",
+  "slides/src/editor/panels.ts:2549#hlink": "Baglanyşyk",
+  "slides/src/editor/panels.ts:2549#folHlink": "Açylan baglanyşyk",
+  "slides/src/editor/panels.ts:2576": "Aksent",
+  "slides/src/editor/panels.ts:63": "Suratyň öz çarçuwasynyň içinde näçe ulaldylandygy",
+  "slides/src/editor/panels.ts:44": "Ähli görkeziş üçin. Görkezip durkaňyz slaýd hasaplaýjysyny tomaşaçylara görkezýär.",
+  "slides/src/editor/panels.ts:45": "Ähli görkeziş üçin. Görkezip durkaňyz aşakda inçe ilerleýiş zolagyny görkezýär.",
+  "slides/src/editor/panels.ts:629#normal": "Adaty",
+  "slides/src/editor/panels.ts:629#multiply": "Köpeltmek",
+  "slides/src/editor/panels.ts:629#screen": "Ekran",
+  "slides/src/editor/panels.ts:629#overlay": "Örtmek",
+  "slides/src/editor/panels.ts:629#darken": "Garaltmak",
+  "slides/src/editor/panels.ts:629#lighten": "Ýagtyltmak",
+  "slides/src/editor/panels.ts:629#difference": "Tapawut",
+  "slides/src/editor/panels.ts:629#exclusion": "Aýyrmak",
+  "slides/src/editor/panels.ts:1791#Lined": "Çyzykly",
+  "slides/src/editor/panels.ts:1791#Zebra": "Zolakly",
+  "slides/src/editor/panels.ts:1791#Boxed": "Gutuly",
+  "slides/src/editor/panels.ts:1791#Minimal": "Ýönekeý",
+  "slides/src/editor/panels.ts:2191": "{n} dil gurnalan",
+  "slides/src/editor/editor.ts:1871": "Slaýd {n} warianty — görkezip durkaňyz baglanan elemente basylanda açylýar",
+  "slides/src/editor/editor.ts:1895": "Açyk teswirler: {n}"
+ }
+}

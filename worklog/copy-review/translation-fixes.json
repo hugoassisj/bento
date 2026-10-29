@@ -1,0 +1,51 @@
+{
+  "Backdrop": {
+    "de": { "current": "Hintergrund", "proposed": "Hintergrund-Unschärfe", "why": "control is a frosted-glass blur of what is BEHIND the element, not its background; collides with 'Background' (also 'Hintergrund')" },
+    "es": { "current": "Fondo", "proposed": "Desenfoque de fondo", "why": "same: reads as 'Background' (also 'Fondo')" },
+    "fr": { "current": "Arrière-plan", "proposed": "Flou d’arrière-plan", "why": "same: identical to the translation of 'Background'" },
+    "it": { "current": "Sfondo", "proposed": "Sfocatura sfondo", "why": "same: identical to the translation of 'Background'" },
+    "pt": { "current": "Fundo", "proposed": "Desfoque de fundo", "why": "same: reads as 'Background'" }
+  },
+  "Enter": {
+    "pt": { "current": "Enter", "proposed": "Entrada", "why": "left in English — reads as the Enter key" }
+  },
+  "slide": {
+    "zh-Hans": { "current": "幻灯片", "proposed": "滑动", "why": "transition option 'slide' (a movement) translated as the noun 'slide' (幻灯片); zh-Hant already says 滑動" },
+    "pt": { "current": "slide", "proposed": "deslizar", "why": "left in English; es/it use the verb" }
+  },
+  "Weight": {
+    "de": { "current": "Strichstärke", "proposed": "Schriftstärke", "why": "Strichstärke is line/stroke thickness; font weight is Schriftstärke (Schriftschnitt)" }
+  },
+  "Live": {
+    "zh-Hans": { "current": "已连接", "proposed": "实时", "why": "'已连接' = 'connected' (a status); the toggle loads the live page" },
+    "zh-Hant": { "current": "已連線", "proposed": "即時", "why": "same as zh-Hans" }
+  },
+  "fill": {
+    "pt": { "current": "preencher", "proposed": "esticar", "why": "Fit option 'fill' stretches the media (every other catalog says stretch); 'preencher' sounds like 'cover'" }
+  },
+  "Remove stop": {
+    "fr": { "current": "Retirer l'étape", "proposed": "Retirer l’arrêt de couleur", "why": "a gradient stop is not a step ('étape' also collides with reveal steps)" }
+  },
+  "＋ Add stop": {
+    "fr": { "current": "＋ Ajouter une étape", "proposed": "＋ Ajouter un arrêt de couleur", "why": "same as Remove stop" }
+  },
+  "＋ Add series": {
+    "de": { "current": "＋ Datenreihe", "proposed": "＋ Datenreihe hinzufügen", "why": "verb missing; every other locale says 'add'" }
+  },
+  "＋ Add row": {
+    "de": { "current": "＋ Zeile", "proposed": "＋ Zeile hinzufügen", "why": "verb missing" }
+  },
+  "＋ Add slice": {
+    "de": { "current": "＋ Segment", "proposed": "＋ Segment hinzufügen", "why": "verb missing" }
+  },
+  "Outdent": {
+    "ja": { "current": "左へ", "proposed": "字下げ解除", "why": "'to the left' is wrong in a list-level sense and in RTL text; standard Office term" }
+  },
+  "Indent": {
+    "ja": { "current": "右へ", "proposed": "字下げ", "why": "same as Outdent" }
+  },
+  "Group": {
+    "pt": { "current": "Agrupar", "proposed": "(no change — split the key)", "why": "one key serves the ⌘G verb (correct) and the Interact-tab hover-group field (wrong as a verb); fixed by the new 'Hover group' key in changes.json" },
+    "zh-Hans": { "current": "编组", "proposed": "(no change — split the key)", "why": "same: 编组 is the ⌘G action; the Interact row needs its own key" }
+  }
+}
