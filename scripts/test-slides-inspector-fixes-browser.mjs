@@ -201,6 +201,37 @@ try {
   await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(100)
   ok(await p.evaluate(() => document.querySelector('.ed-props').dataset.tab) === 'format', 'ArrowLeft moves back to Format')
 
+  // CSS rulings: the shadow tile keeps its grey preview patch on hover; the
+  // in-field label and the value's padding agree in RTL; the tooltip has an
+  // edge in dark; measure labels read at 4.5:1 in light.
+  await select('r')
+  if (!(await el('r')).shadow) await p.locator('.ed-props .ed-section[data-key="Shadow"] .ed-sec-act').click()
+  await p.waitForTimeout(200)
+  const tile = p.locator('.ed-props .ed-shadow-tile').nth(1)
+  await tile.hover(); await p.waitForTimeout(100)
+  ok(await tile.evaluate((x) => getComputedStyle(x).backgroundImage.includes('gradient')), 'a hovered shadow tile keeps its grey preview patch')
+  await p.evaluate(() => { document.documentElement.dir = 'rtl' })
+  await p.waitForTimeout(100)
+  const rtl = await p.evaluate(() => {
+    const m = [...document.querySelectorAll('.ed-props .ed-mini')].find((x) => x.firstElementChild?.textContent === 'X')
+    const s = m.querySelector('span').getBoundingClientRect(), i = m.querySelector('input'), r = i.getBoundingClientRect(), cs = getComputedStyle(i)
+    return { labelRight: Math.round(r.right - s.right), padR: parseFloat(cs.paddingRight), padL: parseFloat(cs.paddingLeft), labelW: s.width }
+  })
+  await p.evaluate(() => { document.documentElement.dir = 'ltr' })
+  ok(rtl.labelRight < 12 && rtl.padR > rtl.labelW + rtl.labelRight && rtl.padL < 8, `RTL: the in-field label sits right and the value is padded past it on the right (${JSON.stringify(rtl)})`)
+  const tok = await p.evaluate(() => {
+    const read = (th) => { document.documentElement.dataset.theme = th; const c = getComputedStyle(document.documentElement); return { edge: c.getPropertyValue('--tip-edge').trim(), label: c.getPropertyValue('--blue-label').trim(), surface: c.getPropertyValue('--surface').trim() } }
+    const was = document.documentElement.dataset.theme
+    const r = { light: read('light'), dark: read('dark') }
+    document.documentElement.dataset.theme = was
+    return r
+  })
+  const lum = (hex) => { const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2] }
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05) }
+  ok(tok.dark.edge !== 'transparent' && tok.dark.edge !== '', `the tooltip has an edge on the dark chrome (${tok.dark.edge})`)
+  const lr = ratio(tok.light.label, tok.light.surface)
+  ok(lr >= 4.5, `light measure labels: white on ${tok.light.label} is ${lr.toFixed(2)}:1 (≥ 4.5)`)
+
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()
