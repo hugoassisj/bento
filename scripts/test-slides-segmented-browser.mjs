@@ -52,7 +52,7 @@ try {
       ok(await align.locator('button').count() === 3, `${tag} all three alignments are visible at rest`)
       await align.locator('button').nth(1).click(); await p.waitForTimeout(250)
       ok(await model() === 'center/top/filled', `${tag} one click centres the text (${await model()})`)
-      ok(await p.locator('.ed-props .ed-seg').nth(0).locator('button[aria-checked="true"]').getAttribute('title') === 'center', `${tag} the pressed segment follows the model`)
+      ok(await p.locator('.ed-props .ed-seg').nth(0).locator('button[aria-checked="true"]').getAttribute('aria-label') === 'center', `${tag} the pressed segment follows the model`)
       await p.locator('.ed-props .ed-seg').nth(1).locator('button').nth(2).click(); await p.waitForTimeout(250)
       ok(await model() === 'center/bottom/filled', `${tag} one click sets V-align (${await model()})`)
       await p.locator('.ed-props .ed-row > span', { hasText: /^Align$/ }).click(); await p.waitForTimeout(250)
