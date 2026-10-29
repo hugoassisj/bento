@@ -1116,6 +1116,20 @@ export class SlideCanvas {
   /** ⌘/Ctrl-drag duplicate: originals move, copies stay behind (committed at drag end) */
   private pendingCopy: SlideElement[] | null = null
 
+  /** A Shift press that Selecto handed to Moveable because it landed on the
+   *  selection (or inside a group's box) — see the click handlers below. */
+  private shiftPressOnSelection = false
+
+  /** Shift-click toggles the element painted under the cursor in or out of the
+   *  selection, whole groups at a time. */
+  private toggleAt(clientX: number, clientY: number) {
+    const id = this.topElementAt(clientX, clientY)
+    if (!id || this.isGhost(id)) return
+    const kin = this.expandGroups([id])
+    const sel = this.store.selection
+    this.store.select(sel.includes(id) ? sel.filter((s) => !kin.includes(s)) : [...sel, ...kin.filter((k) => !sel.includes(k))])
+  }
+
   private wireMoveable() {
     const mv = this.moveable
     // start positions per target — Shift axis-locks against these
@@ -1205,6 +1219,20 @@ export class SlideCanvas {
     mv.on('resizeGroup', (e) => e.events.forEach((ev) => {
       applyResize(ev.target as HTMLElement, ev.width, ev.height, ev.drag.left, ev.drag.top, e.inputEvent as MouseEvent)
     }))
+    // Shift-click over the selection. Selecto never sees it: once two or more
+    // elements are selected, Moveable's group area covers their whole bounding
+    // box, and Selecto backs off for anything Moveable owns — so an element
+    // sitting inside that box could not be added, and a selected one could not
+    // be removed. Toggled here, on Moveable's click (a press that did not become
+    // a drag), because Shift-DRAG on the selection is an axis-locked move.
+    const onClick = (e: { inputEvent: Event }) => {
+      if (!this.shiftPressOnSelection) return
+      this.shiftPressOnSelection = false
+      const ev = e.inputEvent as MouseEvent
+      this.toggleAt(ev.clientX, ev.clientY)
+    }
+    mv.on('click', onClick)
+    mv.on('clickGroup', onClick)
     // Shift while rotating snaps to 15° steps
     mv.on('rotateStart', (e) => { mv.throttleRotate = (e.inputEvent as MouseEvent | undefined)?.shiftKey ? 15 : 1 })
     mv.on('rotate', (e) => {
@@ -1324,11 +1352,15 @@ export class SlideCanvas {
         return
       }
       const selected = this.selectedNodes()
+      this.shiftPressOnSelection = false
       if (
         this.moveable.isMoveableElement(target) ||
         selected.some((n) => n === target || n.contains(target))
       ) {
-        e.stop() // let Moveable take the drag
+        // let Moveable take the drag; a Shift press that never moves is a
+        // toggle, resolved in Moveable's click handler
+        this.shiftPressOnSelection = (e.inputEvent as MouseEvent).shiftKey
+        e.stop()
       }
     })
 
