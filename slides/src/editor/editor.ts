@@ -21,6 +21,7 @@ import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
+import { mountNotesPane } from './notespane'
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
@@ -525,7 +526,11 @@ export class Editor {
       if (zb) corner.appendChild(zb)
     })
     this.props = div('ed-props')
-    main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
+    // the canvas over its speaker notes, as in every slide editor
+    const centre = div('ed-centre')
+    centre.appendChild(canvasWrap)
+    mountNotesPane(this.store, centre, this.buildScope.signal)
+    main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
 

@@ -11,7 +11,6 @@ import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { cssColor, resolveAsset } from '../render'
 import { measureElement } from '../measure'
 import { PALETTE_SLOTS, paletteOf, refAt, setColor, slotIsSet } from '../palette'
-import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { fontFaceDescriptors } from '../fontmeta'
@@ -238,7 +237,7 @@ export class PropsPanel {
 
   /** Sections about the SHOW rather than the look: they live on the
    *  Presenting tab. Everything else is Design; Layers shows on both, under the tabs. */
-  private static SHOW_SECTIONS = ['Presenting', 'Morph', 'Slideshow', 'Interactivity', 'Speaker notes']
+  private static SHOW_SECTIONS = ['Presenting', 'Morph', 'Slideshow', 'Interactivity']
 
   private tab: 'design' | 'show' = lsJson<string>('bento-panel-tab', 'design') === 'show' ? 'show' : 'design'
 
@@ -546,18 +545,6 @@ export class PropsPanel {
     })
     this.host.appendChild(saveLy)
 
-    this.section(t('Speaker notes'))
-    const notes = document.createElement('textarea')
-    notes.className = 'ed-notes'
-    notes.placeholder = t('Notes for presenter view (press S while presenting)…')
-    notes.value = slide.notes
-    // Using the captured value of `slide` in the closure here to ensure that we edit the slide that fired the event.
-    // Otherwise we end up racing against store updates.
-    notes.addEventListener('input', () => this.editSlideAttrs(slideId, (slide: Slide) => { slide.notes = notes.value }, false))
-    notes.addEventListener('change', () => this.editSlideAttrs(slideId, (slide: Slide) => { slide.notes = notes.value }, true))
-    notes.title = t('Shown in the speaker view (Slideshow menu, or S while presenting).') +
-      (isMacOS() ? ' ' + t('On macOS, open the speaker view before going fullscreen.') : '')
-    this.host.appendChild(notes)
   }
 
   private buildMultiPanel(els: SlideElement[]) {

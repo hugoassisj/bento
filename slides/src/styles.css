@@ -717,7 +717,14 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-ops { display: flex; gap: 4px; margin-bottom: 10px; }
 .ed-btn-icon { border: 1px solid var(--line); padding: 6px; }
 
-.ed-notes { width: 100%; min-height: 130px; }
+/* the canvas over its speaker notes (editor/notespane.ts) */
+.ed-centre { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ed-centre > .ed-canvas-wrap { flex: 1; min-height: 0; }
+.ed-notespane { flex: none; padding: 4px 14px 10px; background: var(--surface); border-top: 1px solid var(--line); }
+.ed-notespane.closed { padding-bottom: 4px; }
+.ed-notespane-head { display: block; width: 100%; margin: 0; padding-block: 4px; font-family: inherit; text-align: start; background: none; border: 0; }
+.ed-notespane-text { display: block; width: 100%; height: 84px; margin-top: 4px; resize: vertical; }
+.ed-notespane.closed .ed-notespane-text { display: none; }
 
 .ed-hint {
   font-size: 11.5px;

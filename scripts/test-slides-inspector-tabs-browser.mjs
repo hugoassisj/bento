@@ -10,7 +10,8 @@
 //      (Presenting, Morph) on Presenting; the tabs head the panel, and
 //      Layers shows on both, right under them;
 //   2. the slide's own panel splits the same way (Slide and Theme on Design;
-//      Slideshow, Interactivity and Speaker notes on Presenting);
+//      Slideshow and Interactivity on Presenting — speaker notes have their
+//      own pane under the canvas, test-slides-notes-pane-browser.mjs);
 //   3. switching tabs does not rebuild the panel (a field is the same node);
 //   4. the chosen tab holds across a new selection and a reload;
 //   5. all of it in Portuguese too: sections are matched by their translated
@@ -75,7 +76,7 @@ try {
     ok(await tab(L.show).getAttribute('aria-selected') === 'true', `${tag} the tab holds across a new selection`)
     await p.keyboard.press('Escape'); await p.waitForTimeout(250)
     v = await visible()
-    ok(v.includes(L.notes) && v.includes(L.slideshow) && !v.includes(L.slide), `${tag} the slide's panel: notes and slideshow on Presenting (${v.join(', ')})`)
+    ok(v.includes(L.slideshow) && !v.includes(L.slide), `${tag} the slide's panel: Slideshow on Presenting (${v.join(', ')})`)
     await tab(L.design).click()
     v = await visible()
     ok(v.includes(L.slide) && !v.includes(L.notes), `${tag} the slide's panel: Slide on Design (${v.join(', ')})`)
