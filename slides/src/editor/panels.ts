@@ -144,7 +144,25 @@ function internView(doc: BentoDoc, markup: string): string {
  * import time.
  */
 const fillStyles = (): Array<[string, string]> =>
-  [['solid', t('solid colour')], ['gradient', t('gradient')]]
+  [['solid', t('Solid colour')], ['gradient', t('Gradient')]]
+
+/**
+ * Stored model words → the sentence-case English key that labels them, for
+ * select()/segmented() and the few lists built from model words. A model word
+ * is never its own label: 'none' would show as "none" (and "nenhum" in pt)
+ * where every other option reads "Fade up". Words without an entry are
+ * already labels ('Arrow', 'Widescreen 16:9').
+ */
+const OPTION_LABEL: Record<string, string> = {
+  none: 'None', off: 'Off', on: 'On', custom: 'Custom',
+  fade: 'Fade', slide: 'Push', zoom: 'Zoom', morph: 'Morph', // slide transitions
+  subtle: 'Subtle', soft: 'Soft', elevated: 'Elevated', glow: 'Glow', // shadow presets
+  filled: 'Filled', hollow: 'Hollow',
+  contain: 'Contain', cover: 'Cover', fill: 'Stretch',
+  left: 'Left', center: 'Center', right: 'Right', top: 'Top', middle: 'Middle', bottom: 'Bottom',
+  title: 'Title', subtitle: 'Subtitle', body: 'Body', kicker: 'Kicker', // layout roles
+}
+const optLabel = (v: string): string => t(OPTION_LABEL[v] ?? v)
 
 export class PropsPanel {
   private burst = false
@@ -601,7 +619,7 @@ export class PropsPanel {
     }
 
     this.row('On hover', this.labeledSelect(
-      [['none', t('none')], ['focus-group', t('Dim other groups')], ['reveal', t('Switch content')]],
+      [['none', t('None')], ['focus-group', t('Dim other groups')], ['reveal', t('Switch content')]],
       slide.hover?.type ?? 'none',
       (v) => this.editSlideAttrs(slideId, (slide: Slide) => {
         slide.hover = v === 'none'
@@ -680,7 +698,7 @@ export class PropsPanel {
     why.textContent = t('Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.')
     this.host.appendChild(why)
     this.row('Layout role', this.labeledSelect(
-      (['none', 'title', 'subtitle', 'body', 'kicker'] as const).map((r): [string, string] => [r, t(r)]),
+      (['none', 'title', 'subtitle', 'body', 'kicker'] as const).map((r): [string, string] => [r, optLabel(r)]),
       el.role ?? 'none',
       (v) => this.mutate(el.id, (e) => {
         if (v === 'none') delete e.role
@@ -820,7 +838,7 @@ export class PropsPanel {
       // the preset drawn at a quarter of its size, so all four fit a tile
       swatch.style.boxShadow = `${(sh.x ?? 0) / 4}px ${(sh.y ?? 0) / 4}px ${sh.blur / 4}px ${sh.color}`
       const name = document.createElement('span')
-      name.textContent = t(SHADOW_NAMES[key] ?? key)
+      name.textContent = optLabel(key)
       b.append(swatch, name)
       b.addEventListener('click', () => { if (key !== current) this.mutate(el.id, (e) => { e.shadow = { ...SHADOW_PRESETS[key] } }, true) })
       tiles.appendChild(b)
@@ -1006,7 +1024,7 @@ export class PropsPanel {
     // labelled by where the element comes FROM: slide-left starts on the right
     // and travels left (present.ts enterSpec)
     this.row('Entrance', this.labeledSelect(
-      [['none', t('none')], ['fade', t('fade')], ['fade-up', t('Fade up')], ['fade-down', t('Fade down')],
+      [['none', t('None')], ['fade', t('Fade')], ['fade-up', t('Fade up')], ['fade-down', t('Fade down')],
         ['slide-left', t('Fly in from right')], ['slide-right', t('Fly in from left')],
         ['slide-up', t('Fly in from below')], ['slide-down', t('Fly in from above')]],
       el.fx?.enter ?? 'none',
@@ -1039,7 +1057,7 @@ export class PropsPanel {
       ['off', 'on'], el.fx?.typeWriter ? 'on' : 'off',
       (v) => setFx({ typeWriter: v === 'on' ? true : undefined })))
     this.row('Pan & zoom', this.labeledSelect(
-      [['none', t('none')], ['kenburns', t('Ken Burns')]], el.fx?.ambient ?? 'none',
+      [['none', t('None')], ['kenburns', t('Ken Burns')]], el.fx?.ambient ?? 'none',
       (v) => setFx(v === 'none' ? { ambient: undefined, ken: undefined } : { ambient: 'kenburns' })))
     if (el.fx?.ambient === 'kenburns') {
       const ken = el.fx.ken ?? {}
@@ -1065,7 +1083,7 @@ export class PropsPanel {
     // continuous loop animation
     const loop = el.fx?.loop
     this.row('Loop animation', this.labeledSelect(
-      [['none', t('none')], ['dash-march', t('Marching dashes')], ['motion-path', t('Follow a path')]],
+      [['none', t('None')], ['dash-march', t('Marching dashes')], ['motion-path', t('Follow a path')]],
       loop?.type ?? 'none',
       (v) => setFx({
         loop: v === 'none' ? undefined
@@ -1131,7 +1149,7 @@ export class PropsPanel {
     // group tag (hover focus & interaction targeting)
     const group = document.createElement('input')
     group.type = 'text'
-    group.placeholder = t('none')
+    group.placeholder = t('None')
     group.value = el.group ?? ''
     group.addEventListener('change', () =>
       this.mutate(el.id, (e) => {
@@ -1144,7 +1162,7 @@ export class PropsPanel {
     const sel = document.createElement('select')
     const none = document.createElement('option')
     none.value = ''
-    none.textContent = t('none')
+    none.textContent = t('None')
     sel.appendChild(none)
     this.store.doc.slides.forEach((s, i) => {
       const o = document.createElement('option')
@@ -1270,7 +1288,7 @@ export class PropsPanel {
 
   /**
    * Human label for a slide in pickers — the number the SIDEBAR shows, so an
-   * author who reads "4" there finds "slide 4" here. That is the page number
+   * author who reads "4" there finds "Slide 4" here. That is the page number
    * (`paginates`), not the position: an unnumbered or hidden slide shows the
    * number it continues, marked, so two entries can share a number without
    * being confused for each other.
@@ -1280,10 +1298,10 @@ export class PropsPanel {
     const pageAt = (idx: number) => doc.slides.slice(0, idx + 1).filter((x) => paginates(x, doc)).length
     if (s.stateOf) {
       const p = doc.slides.findIndex((x) => x.id === s.stateOf)
-      return `${t('variant of slide {n}', { n: pageAt(p) })}${s.name ? ` — ${s.name}` : ''}`
+      return `${t('Variant of slide {n}', { n: pageAt(p) })}${s.name ? ` — ${s.name}` : ''}`
     }
     const mark = s.hidden ? ` (${t('hidden')})` : s.unnumbered ? ` (${t('unnumbered')})` : ''
-    return `${t('slide {n}', { n: pageAt(i) })}${mark}${s.name ? ` — ${s.name}` : ''}`
+    return `${t('Slide {n}', { n: pageAt(i) })}${mark}${s.name ? ` — ${s.name}` : ''}`
   }
 
   /**
@@ -1568,7 +1586,7 @@ export class PropsPanel {
       if (hit) matched = true
       add(c.label, c.stack, hit)
     }
-    if (current && !matched) add(curFirst || t('custom'), current, true)
+    if (current && !matched) add(curFirst || t('Custom'), current, true)
     // bringing in a font is where you look for fonts: the list's last entry
     const EMBED = '\u0000embed'
     const chosen = sel.selectedIndex
@@ -1623,7 +1641,7 @@ export class PropsPanel {
     // options are tips.ts's catalogue — display labels localized, values the
     // model's words. A closed path (polygon) has no ends to tip.
     if (el.shape === 'line' || (el.shape === 'path' && !/z\s*$/i.test(el.d ?? ''))) {
-      const ENDINGS: Array<[string, string]> = TIPS.map((tip) => [tip.kind, t(tip.label)])
+      const ENDINGS: Array<[string, string]> = TIPS.map((tip) => [tip.kind, optLabel(tip.label)])
       this.row('Line start', this.labeledSelect(ENDINGS, el.lineStart ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineStart = v === 'none' ? undefined : (v as LineEnding) }, true)))
       this.row('Line end', this.labeledSelect(ENDINGS, el.lineEnd ?? 'none', (v) =>
@@ -1683,7 +1701,7 @@ export class PropsPanel {
     this.field(this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
       this.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
     const style = this.labeledSelect(
-      [['solid', t('solid')], ['dashed', t('dashed')], ['dotted', t('dotted')]],
+      [['solid', t('Solid')], ['dashed', t('Dashed')], ['dotted', t('Dotted')]],
       el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
       (v) => this.mutate(el.id, (e) => {
         const s = e as ShapeElement
@@ -2431,7 +2449,7 @@ export class PropsPanel {
     // seam for a future signed-extension tier carrying real TextMate grammars
     // as deck assets, at which point pickers for them return here.
     const langs = Object.keys(LANGS).sort().concat(['diff', 'md'])
-    this.row(t('Language'), this.select(langs, el.grammarName ?? 'js', (v) =>
+    this.row('Language', this.select(langs, el.grammarName ?? 'js', (v) =>
       this.mutate(el.id, (e) => { (e as CodeElement).grammarName = v }, true)))
     status.textContent = t('{n} languages built in', { n: String(langs.length) })
     this.host.appendChild(status)
@@ -3076,7 +3094,7 @@ export class PropsPanel {
     for (const opt of options) {
       const o = document.createElement('option')
       o.value = opt
-      o.textContent = t(opt)
+      o.textContent = optLabel(opt)
       if (opt === value) o.selected = true
       sel.appendChild(o)
     }
@@ -3089,7 +3107,7 @@ export class PropsPanel {
    *  SEG_ICONS entry show the icon, with the word as its tooltip; otherwise the
    *  words show and the control takes the row's full width. */
   private segmented(options: string[], value: string, onChange: (v: string) => void, labels?: Record<string, string>): HTMLElement {
-    const say = (o: string) => labels?.[o] ?? t(o)
+    const say = (o: string) => labels?.[o] ?? optLabel(o)
     const wrap = document.createElement('div')
     wrap.className = 'ed-seg'
     wrap.setAttribute('role', 'radiogroup')
@@ -3260,9 +3278,6 @@ export function combineColor(hex: string, a: number): string {
 }
 
 /** Aesthetic shadow presets offered in the panel (custom values stay 'custom'). */
-/** the presets' names on screen (the keys are stored in no file, but read as words) */
-const SHADOW_NAMES: Record<string, string> = { subtle: 'Subtle', soft: 'Soft', elevated: 'Elevated', glow: 'Glow' }
-
 const SHADOW_PRESETS: Record<string, { x?: number; y?: number; blur: number; color: string }> = {
   subtle: { y: 2, blur: 10, color: 'rgba(10,16,28,0.25)' },
   soft: { y: 10, blur: 28, color: 'rgba(10,16,28,0.32)' },

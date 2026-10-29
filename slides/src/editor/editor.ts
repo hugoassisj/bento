@@ -1503,7 +1503,7 @@ export class Editor {
         const where = document.createElement('span')
         where.className = 'where'
         const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
-        where.textContent = [roleLabel(peer.role), idx >= 0 ? t('slide {n}', { n: idx + 1 }) : ''].filter(Boolean).join(' · ')
+        where.textContent = [roleLabel(peer.role), idx >= 0 ? t('Slide {n}', { n: idx + 1 }) : ''].filter(Boolean).join(' · ')
         row.append(dot, who, where)
         row.title = t('{name} — on slide {n} (click to follow)', { name: peer.name, n: idx + 1 })
         row.addEventListener('click', () => {
