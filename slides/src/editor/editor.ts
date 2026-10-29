@@ -22,6 +22,7 @@ import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { mountNotesPane } from './notespane'
+import { mountHints } from './hints'
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
@@ -542,6 +543,7 @@ export class Editor {
     main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
+    mountHints(this.root, this.buildScope.signal)
 
     // phones/small windows: start with both panels collapsed so the CANVAS
     // is what you see — the topbar toggles (and [ / ]) bring them back

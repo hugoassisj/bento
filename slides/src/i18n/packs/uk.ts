@@ -966,4 +966,9 @@ export const strings: Catalog = {
   "Animation": "Анімація",
   "Deck": "Документ",
   "Nothing to set here for this selection.": "Для цього виділення тут нічого налаштовувати.",
+  "Help": "Довідка",
+  "Slide {n}": "Слайд {n}",
+  "Select something on the slide to see its options.": "Виділіть щось на слайді, щоб побачити параметри.",
+  "Click an empty part of the slide for the slide’s options.": "Клацніть порожнє місце слайда, щоб побачити параметри слайда.",
+  "Shift-click to add an element or take one out.": "Клацання з Shift додає елемент або прибирає його.",
 }

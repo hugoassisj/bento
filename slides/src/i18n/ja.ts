@@ -970,4 +970,9 @@ export const ja: Catalog = {
   "Animation": "アニメーション",
   "Deck": "書類",
   "Nothing to set here for this selection.": "この選択に対してここで設定する項目はありません。",
+  "Help": "ヘルプ",
+  "Slide {n}": "スライド {n}",
+  "Select something on the slide to see its options.": "スライド上の要素を選択すると、そのオプションが表示されます。",
+  "Click an empty part of the slide for the slide’s options.": "スライドの空いている所をクリックすると、スライドのオプションに戻ります。",
+  "Shift-click to add an element or take one out.": "Shift+クリックで要素を追加・解除できます。",
 }

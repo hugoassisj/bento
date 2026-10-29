@@ -19,7 +19,8 @@ export interface LayersHost {
   setOrder: (elements: SlideElement[]) => void
 }
 
-const GLYPH: Partial<Record<SlideElement['type'], string>> = {
+/** the element kinds' glyphs, shared with the inspector's context line */
+export const GLYPH: Partial<Record<SlideElement['type'], string>> = {
   text: ICONS.text, shape: ICONS.shapes, image: ICONS.image, chart: ICONS.chart, table: ICONS.table,
   code: ICONS.code, media: ICONS.media, svg: ICONS.freeform, embed: ICONS.window,
 }

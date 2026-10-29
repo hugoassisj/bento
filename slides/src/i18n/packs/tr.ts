@@ -957,4 +957,9 @@ export const strings: Catalog = {
   "Animation": "Animasyon",
   "Deck": "Belge",
   "Nothing to set here for this selection.": "Bu seçim için burada ayarlanacak bir şey yok.",
+  "Help": "Yardım",
+  "Slide {n}": "Slayt {n}",
+  "Select something on the slide to see its options.": "Seçeneklerini görmek için slayttan bir şey seçin.",
+  "Click an empty part of the slide for the slide’s options.": "Slaytın seçenekleri için slaytın boş bir yerine tıklayın.",
+  "Shift-click to add an element or take one out.": "Öğe eklemek veya çıkarmak için Shift-tıklayın.",
 }

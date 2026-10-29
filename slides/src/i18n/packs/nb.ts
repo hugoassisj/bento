@@ -960,4 +960,9 @@ export const strings: Catalog = {
   "Animation": "Animasjon",
   "Deck": "Dokument",
   "Nothing to set here for this selection.": "Ingenting å stille inn her for dette utvalget.",
+  "Help": "Hjelp",
+  "Slide {n}": "Lysbilde {n}",
+  "Select something on the slide to see its options.": "Merk noe på lysbildet for å se valgene for det.",
+  "Click an empty part of the slide for the slide’s options.": "Klikk et tomt sted på lysbildet for lysbildets valg.",
+  "Shift-click to add an element or take one out.": "Skift-klikk for å legge til eller ta ut et element.",
 }

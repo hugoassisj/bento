@@ -959,4 +959,9 @@ export const strings: Catalog = {
   "Animation": "Animasi",
   "Deck": "Dokumen",
   "Nothing to set here for this selection.": "Tiada apa untuk ditetapkan di sini bagi pilihan ini.",
+  "Help": "Bantuan",
+  "Slide {n}": "Slaid {n}",
+  "Select something on the slide to see its options.": "Pilih sesuatu pada slaid untuk melihat pilihannya.",
+  "Click an empty part of the slide for the slide’s options.": "Klik bahagian kosong slaid untuk pilihan slaid.",
+  "Shift-click to add an element or take one out.": "Shift-klik untuk menambah atau mengeluarkan elemen.",
 }

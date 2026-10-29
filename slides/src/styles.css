@@ -2925,3 +2925,38 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-swatch:hover { transform: scale(1.15); }
 .ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* ————— HINTS (editor/hints.ts) — one tooltip for the whole chrome —————————— */
+.ed-tip {
+  position: fixed; z-index: 10000; max-width: 260px; padding: 5px 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font: 500 11.5px/1.4 system-ui, sans-serif; color: #f3f5f8; background: #1b1f26;
+  border-radius: 6px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.28); pointer-events: none;
+}
+.ed-tip[hidden] { display: none; }
+.ed-tip-keys { display: inline-flex; gap: 3px; margin-inline-start: auto; }
+.ed-tip kbd {
+  font: inherit; font-size: 10.5px; padding: 0 5px; min-width: 18px; text-align: center;
+  color: #c9d0db; background: rgb(255 255 255 / 0.1); border-radius: 4px;
+}
+
+/* help folded behind a "?" on the section header line (panels.ts applyAccordion) */
+.ed-section-body { position: relative; }
+.ed-help-btn {
+  position: absolute; top: -25px; inset-inline-end: 0; width: 18px; height: 18px; padding: 0;
+  display: grid; place-items: center; font: 600 11px/1 system-ui, sans-serif; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 50%; cursor: pointer;
+}
+.ed-help-btn:hover, .ed-help-btn[aria-expanded='true'] { color: var(--ink); border-color: var(--muted); }
+.ed-section-body:not(.ed-help-open) > p.ed-hint:not(.ed-status, .ed-morph-warn) { display: none; }
+.ed-tip { white-space: pre-line; }
+
+/* what the panel is about (panels.ts mountContext): glyph, name, actions,
+   and a quiet line on how the selection changes it */
+.ed-context { display: flex; align-items: center; gap: 6px; min-height: 26px; margin: 2px 0 2px; }
+.ed-context-glyph { flex: none; display: grid; place-items: center; width: 22px; height: 22px; color: var(--muted); background: var(--chrome-2); border-radius: 5px; }
+.ed-context-glyph svg { width: 14px; height: 14px; }
+.ed-context-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-context .ed-btn-icon { flex: none; padding: 3px; color: var(--muted); }
+.ed-context .ed-btn-icon:hover { color: var(--ink); }
+.ed-context-how { margin: 0 0 6px; font-size: 11px; line-height: 1.4; color: var(--muted); }

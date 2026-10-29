@@ -970,4 +970,9 @@ export const zhHans: Catalog = {
   "Animation": "动画",
   "Deck": "文稿",
   "Nothing to set here for this selection.": "此选择在这里没有可设置的项。",
+  "Help": "帮助",
+  "Slide {n}": "幻灯片 {n}",
+  "Select something on the slide to see its options.": "选择幻灯片上的内容即可看到它的选项。",
+  "Click an empty part of the slide for the slide’s options.": "点击幻灯片的空白处可查看幻灯片的选项。",
+  "Shift-click to add an element or take one out.": "按住 Shift 点击可添加或移除元素。",
 }

@@ -955,4 +955,9 @@ export const strings: Catalog = {
   "Animation": "Animering",
   "Deck": "Dokument",
   "Nothing to set here for this selection.": "Inget att ställa in här för den här markeringen.",
+  "Help": "Hjälp",
+  "Slide {n}": "Bild {n}",
+  "Select something on the slide to see its options.": "Markera något på bilden för att se dess alternativ.",
+  "Click an empty part of the slide for the slide’s options.": "Klicka på en tom del av bilden för bildens alternativ.",
+  "Shift-click to add an element or take one out.": "Skift-klicka för att lägga till eller ta bort ett element.",
 }

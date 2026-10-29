@@ -970,4 +970,9 @@ export const it: Catalog = {
   "Animation": "Animazione",
   "Deck": "Documento",
   "Nothing to set here for this selection.": "Niente da impostare qui per questa selezione.",
+  "Help": "Aiuto",
+  "Slide {n}": "Diapositiva {n}",
+  "Select something on the slide to see its options.": "Seleziona qualcosa nella diapositiva per vederne le opzioni.",
+  "Click an empty part of the slide for the slide’s options.": "Fai clic su un punto vuoto della diapositiva per le sue opzioni.",
+  "Shift-click to add an element or take one out.": "Maiusc-clic per aggiungere un elemento o toglierlo.",
 }

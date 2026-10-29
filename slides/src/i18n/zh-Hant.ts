@@ -970,4 +970,9 @@ export const zhHant: Catalog = {
   "Animation": "動畫",
   "Deck": "文件",
   "Nothing to set here for this selection.": "此選取範圍在這裡沒有可設定的項目。",
+  "Help": "說明",
+  "Slide {n}": "投影片 {n}",
+  "Select something on the slide to see its options.": "選取投影片上的內容即可看到它的選項。",
+  "Click an empty part of the slide for the slide’s options.": "按一下投影片的空白處可查看投影片的選項。",
+  "Shift-click to add an element or take one out.": "按住 Shift 按一下可加入或移除元素。",
 }

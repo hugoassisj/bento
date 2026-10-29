@@ -963,4 +963,9 @@ export const strings: Catalog = {
   "Animation": "Animaatio",
   "Deck": "Dokumentti",
   "Nothing to set here for this selection.": "Tälle valinnalle ei ole täällä asetettavaa.",
+  "Help": "Ohje",
+  "Slide {n}": "Dia {n}",
+  "Select something on the slide to see its options.": "Valitse jotain diasta nähdäksesi sen asetukset.",
+  "Click an empty part of the slide for the slide’s options.": "Napsauta dian tyhjää kohtaa nähdäksesi dian asetukset.",
+  "Shift-click to add an element or take one out.": "Vaihto-napsautus lisää elementin tai poistaa sen.",
 }

@@ -976,4 +976,9 @@ export const strings: Catalog = {
   "Animation": "اینیمیشن",
   "Deck": "دستاویز",
   "Nothing to set here for this selection.": "اس انتخاب کے لیے یہاں سیٹ کرنے کو کچھ نہیں۔",
+  "Help": "مدد",
+  "Slide {n}": "سلائیڈ {n}",
+  "Select something on the slide to see its options.": "اختیارات دیکھنے کے لیے سلائیڈ پر کچھ منتخب کریں۔",
+  "Click an empty part of the slide for the slide’s options.": "سلائیڈ کے اختیارات کے لیے سلائیڈ کے خالی حصے پر کلک کریں۔",
+  "Shift-click to add an element or take one out.": "کوئی عنصر شامل کرنے یا نکالنے کے لیے Shift-کلک کریں۔",
 }

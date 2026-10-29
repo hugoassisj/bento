@@ -21,7 +21,8 @@ import { shrinkImageFile, shrinkNote, fmtBytes } from './shrink'
 import { revealInOrder, revealTogether, removeReveal, type StepPatch } from './reveal'
 import { stepOf } from '../steps'
 import { ICONS } from '../icons'
-import { LayersUI } from './layers'
+import { LayersUI, labelFor, GLYPH as LAYER_GLYPH } from './layers'
+import { isMacOS } from '../screens'
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
@@ -222,6 +223,7 @@ export class PropsPanel {
     else this.buildMultiPanel(els)
     this.applyAccordion()
     this.mountTabs()
+    this.mountContext(els)
     this.host.scrollTop = scrollTop
   }
 
@@ -314,6 +316,22 @@ export class PropsPanel {
         n = next
       }
       h.after(body)
+      // Help paragraphs fold behind a "?" on the section's header line, as
+      // design tools keep explanation out of the controls: hover or focus shows
+      // it as a hint, a click unfolds it in place (touch has no hover). State
+      // messages — .ed-status, the morph warning — are not help, and stay.
+      const help = [...body.querySelectorAll<HTMLElement>(':scope > p.ed-hint:not(.ed-status, .ed-morph-warn, .ed-tab-empty)')]
+      if (help.length) {
+        const q = document.createElement('button')
+        q.type = 'button'
+        q.className = 'ed-help-btn'
+        q.textContent = '?'
+        q.setAttribute('aria-label', t('Help'))
+        q.setAttribute('aria-expanded', 'false')
+        q.title = help.map((p) => p.textContent?.trim()).join('\n\n')
+        q.addEventListener('click', () => q.setAttribute('aria-expanded', String(body.classList.toggle('ed-help-open'))))
+        body.prepend(q)
+      }
       h.dataset.tab = body.dataset.tab = tabOf.get(key) ?? 'format'
       const isOpen = openState[key] ?? !closed.has(key)
       h.classList.add('ed-sec-toggle')
@@ -564,8 +582,6 @@ export class PropsPanel {
   private buildMultiPanel(els: SlideElement[]) {
     // Separate singular key rather than plural machinery — same shape as the
     // 'Pasted 1 item' / 'Pasted {n} items' pair in editor.ts.
-    this.section(els.length === 1 ? t('1 element') : t('{n} elements', { n: els.length }))
-    this.opsRow(els)
     this.section(t('Arrange'))
     this.arrangeRows(els)
     this.section(t('Animation'))
@@ -574,7 +590,6 @@ export class PropsPanel {
 
   private buildElementPanel(el: SlideElement) {
     this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video', embed: 'Embed' }[el.type]))
-    this.opsRow([el])
     // what the element IS in a layout — content, not geometry
     this.row('Role', this.select(
       ['none', 'title', 'subtitle', 'body', 'kicker'],
@@ -740,7 +755,8 @@ export class PropsPanel {
     this.host.appendChild(warn)
 
     const hint = document.createElement('p')
-    hint.className = 'ed-hint'
+    // an override in force is STATE, and stays in view; otherwise it is help
+    hint.className = el.morphId ? 'ed-hint ed-status' : 'ed-hint'
     hint.innerHTML = el.morphId
       ? t('Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.', { id: effective, own: el.id })
       : t('Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.')
@@ -2097,7 +2113,7 @@ export class PropsPanel {
     this.section(t('Web page'))
 
     const status = document.createElement('p')
-    status.className = 'ed-hint'
+    status.className = 'ed-hint ed-status'
     const view = (el.view ?? '').trim()
     if (!view) status.textContent = t('No view yet. Capture a picture of the page so it shows offline.')
     else if (view.startsWith('<') || view.startsWith('asset:')) status.textContent = t('View embedded in the file')
@@ -2194,14 +2210,43 @@ export class PropsPanel {
 
   // --- element ops --------------------------------------------------------------
 
-  private opsRow(els: SlideElement[]) {
-    const row = document.createElement('div')
-    row.className = 'ed-ops'
-    row.append(
-      this.opBtn(ICONS.copy, t('Duplicate'), () => this.duplicate(els)),
-      this.opBtn(ICONS.trash, t('Delete'), () => this.deleteEls(els)),
-    )
-    this.host.appendChild(row)
+  /**
+   * What the panel is about, under the tabs, on every tab: the selection's
+   * glyph and name, its two everyday actions, and one quiet line on how to
+   * change it. The panel follows the selection — select something and its
+   * options appear, click empty space and the slide's come back — and this
+   * says so, so a different set of options never arrives as a surprise.
+   */
+  private mountContext(els: SlideElement[]) {
+    const bar = document.createElement('div')
+    bar.className = 'ed-context'
+    const glyph = document.createElement('span')
+    glyph.className = 'ed-context-glyph'
+    const name = document.createElement('span')
+    name.className = 'ed-context-name'
+    const how = document.createElement('p')
+    how.className = 'ed-context-how'
+    const one = els.length === 1 ? els[0] : null
+    if (!els.length) {
+      const slide = this.store.slide
+      glyph.innerHTML = ICONS.slideshow
+      name.textContent = slide.name || t('Slide {n}', { n: this.store.currentIndex + 1 })
+      how.textContent = t('Select something on the slide to see its options.')
+    } else {
+      glyph.innerHTML = one ? (LAYER_GLYPH[one.type] ?? ICONS.shapes) : ICONS.shapes
+      name.textContent = one ? labelFor(one, t) : t('{n} elements', { n: els.length })
+      how.textContent = one ? t('Click an empty part of the slide for the slide’s options.') : t('Shift-click to add an element or take one out.')
+    }
+    name.title = name.textContent ?? ''
+    bar.append(glyph, name)
+    if (els.length) {
+      const mod = isMacOS() ? '⌘' : 'Ctrl+'
+      bar.append(
+        this.opBtn(ICONS.copy, `${t('Duplicate')} (${mod}D)`, () => this.duplicate(els)),
+        this.opBtn(ICONS.trash, `${t('Delete')} (⌫)`, () => this.deleteEls(els)),
+      )
+    }
+    this.host.querySelector(':scope > .ed-tabs')!.after(bar, how)
   }
 
   /** Align / distribute / size / order / rotate — the arrange kit, in

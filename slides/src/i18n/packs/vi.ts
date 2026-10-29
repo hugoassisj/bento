@@ -956,4 +956,9 @@ export const strings: Catalog = {
   "Animation": "Hoạt ảnh",
   "Deck": "Tài liệu",
   "Nothing to set here for this selection.": "Không có gì để đặt ở đây cho vùng chọn này.",
+  "Help": "Trợ giúp",
+  "Slide {n}": "Trang chiếu {n}",
+  "Select something on the slide to see its options.": "Chọn một thứ trên trang chiếu để xem tùy chọn.",
+  "Click an empty part of the slide for the slide’s options.": "Bấm vào chỗ trống trên trang chiếu để xem tùy chọn của trang chiếu.",
+  "Shift-click to add an element or take one out.": "Shift-bấm để thêm hoặc bỏ một phần tử.",
 }
