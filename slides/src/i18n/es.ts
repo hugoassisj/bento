@@ -965,5 +965,9 @@ export const es: Catalog = {
   "{n} pictures still uploading…": "{n} imágenes subiéndose…",
   "Not rendered: {what}": "Sin representar: {what}",
   "no space just inside the $ signs": "sin espacio justo dentro de los signos $",
-  "Design": "Diseño",
+  "Animate": "Animar",
+  "Interact": "Interacción",
+  "Animation": "Animación",
+  "Deck": "Documento",
+  "Nothing to set here for this selection.": "No hay nada que ajustar aquí para esta selección.",
 }

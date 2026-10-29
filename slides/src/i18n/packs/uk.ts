@@ -961,5 +961,9 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} зображень завантажуються…",
   "Not rendered: {what}": "Не відображено: {what}",
   "no space just inside the $ signs": "без пробілу одразу всередині знаків $",
-  "Design": "Дизайн",
+  "Animate": "Анімація",
+  "Interact": "Взаємодія",
+  "Animation": "Анімація",
+  "Deck": "Документ",
+  "Nothing to set here for this selection.": "Для цього виділення тут нічого налаштовувати.",
 }

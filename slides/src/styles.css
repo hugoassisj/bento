@@ -695,8 +695,11 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   color: var(--ink-2);
 }
 .ed-row > span { flex: none; }
-/* Design | Presenting (panels.ts mountTabs). A tab hides the other's sections. */
-.ed-props[data-tab='design'] [data-tab='show'], .ed-props[data-tab='show'] [data-tab='design'] { display: none !important; }
+/* Format | Animate | Interact (panels.ts mountTabs). A tab hides the others' sections. */
+.ed-props:not([data-tab='format']) [data-tab='format'],
+.ed-props:not([data-tab='animate']) [data-tab='animate'],
+.ed-props:not([data-tab='interact']) [data-tab='interact'] { display: none !important; }
+.ed-tab-empty { margin: 4px 2px; }
 .ed-tabs {
   position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; padding: 3px; margin: 0 0 10px;
   background: var(--chrome-2); border-radius: 8px;
@@ -2837,6 +2840,13 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
    the user's attention. Text being EDITED is exempt: there the system bubble is
    the better menu, and it carries paste, dictation and spelling with it. */
 .ed-scroll,
+/* the side column's two views (editor.ts sideTabs) */
+.ed-side-tabs { width: 100%; flex: none; }
+.ed-thumbs { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.ed-side-layers { width: 100%; }
+.ed-side-layers > .ed-section { display: none; } /* the tab already says Layers */
+.ed-side-layers .ed-layers { max-height: none; overflow: visible; }
+.ed-sidebar[data-view='slides'] .ed-side-layers, .ed-sidebar[data-view='layers'] .ed-thumbs { display: none; }
 .ed-sidebar .ed-thumb {
   -webkit-touch-callout: none;
 }

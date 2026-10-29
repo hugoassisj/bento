@@ -945,5 +945,9 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "그림 {n}개 업로드 중…",
   "Not rendered: {what}": "렌더링되지 않음: {what}",
   "no space just inside the $ signs": "$ 기호 바로 안쪽에 공백을 두지 마세요",
-  "Design": "디자인",
+  "Animate": "애니메이션",
+  "Interact": "인터랙션",
+  "Animation": "애니메이션",
+  "Deck": "문서",
+  "Nothing to set here for this selection.": "이 선택 항목에는 여기서 설정할 것이 없습니다.",
 }

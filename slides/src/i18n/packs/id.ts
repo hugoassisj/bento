@@ -951,5 +951,9 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} gambar diunggah…",
   "Not rendered: {what}": "Tidak dirender: {what}",
   "no space just inside the $ signs": "tanpa spasi tepat di dalam tanda $",
-  "Design": "Desain",
+  "Animate": "Animasi",
+  "Interact": "Interaksi",
+  "Animation": "Animasi",
+  "Deck": "Dokumen",
+  "Nothing to set here for this selection.": "Tidak ada yang bisa diatur di sini untuk pilihan ini.",
 }

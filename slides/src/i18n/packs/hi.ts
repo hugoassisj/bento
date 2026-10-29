@@ -961,5 +961,9 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} चित्र अपलोड हो रहे हैं…",
   "Not rendered: {what}": "रेंडर नहीं हुआ: {what}",
   "no space just inside the $ signs": "$ चिह्नों के ठीक अंदर कोई स्पेस नहीं",
-  "Design": "डिज़ाइन",
+  "Animate": "एनिमेट",
+  "Interact": "इंटरैक्शन",
+  "Animation": "एनिमेशन",
+  "Deck": "दस्तावेज़",
+  "Nothing to set here for this selection.": "इस चयन के लिए यहाँ सेट करने को कुछ नहीं है।",
 }

@@ -951,5 +951,9 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} hình đang tải lên…",
   "Not rendered: {what}": "Không hiển thị được: {what}",
   "no space just inside the $ signs": "không có dấu cách ngay bên trong cặp dấu $",
-  "Design": "Thiết kế",
+  "Animate": "Hoạt ảnh",
+  "Interact": "Tương tác",
+  "Animation": "Hoạt ảnh",
+  "Deck": "Tài liệu",
+  "Nothing to set here for this selection.": "Không có gì để đặt ở đây cho vùng chọn này.",
 }

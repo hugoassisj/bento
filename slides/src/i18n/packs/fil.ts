@@ -970,5 +970,9 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} larawan ina-upload…",
   "Not rendered: {what}": "Hindi na-render: {what}",
   "no space just inside the $ signs": "walang espasyo agad sa loob ng mga $",
-  "Design": "Disenyo",
+  "Animate": "I-animate",
+  "Interact": "Interaksyon",
+  "Animation": "Animasyon",
+  "Deck": "Dokumento",
+  "Nothing to set here for this selection.": "Walang maitatakda rito para sa pagpiling ito.",
 }

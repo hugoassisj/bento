@@ -965,5 +965,9 @@ export const zhHant: Catalog = {
   "{n} pictures still uploading…": "{n} 張圖片上傳中…",
   "Not rendered: {what}": "未能呈現：{what}",
   "no space just inside the $ signs": "$ 符號內側不要緊貼空格",
-  "Design": "設計",
+  "Animate": "動畫",
+  "Interact": "互動",
+  "Animation": "動畫",
+  "Deck": "文件",
+  "Nothing to set here for this selection.": "此選取範圍在這裡沒有可設定的項目。",
 }

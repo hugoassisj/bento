@@ -965,5 +965,9 @@ export const de: Catalog = {
   "{n} pictures still uploading…": "{n} Bilder werden noch hochgeladen…",
   "Not rendered: {what}": "Nicht gerendert: {what}",
   "no space just inside the $ signs": "kein Leerzeichen direkt innerhalb der $-Zeichen",
-  "Design": "Design",
+  "Animate": "Animieren",
+  "Interact": "Interaktion",
+  "Animation": "Animation",
+  "Deck": "Dokument",
+  "Nothing to set here for this selection.": "Für diese Auswahl gibt es hier nichts einzustellen.",
 }

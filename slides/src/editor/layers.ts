@@ -30,9 +30,6 @@ export class LayersUI {
   private dragId: string | null = null
   /** what the rows on screen were built from — see layerrows.ts rowSignature */
   private sig: ReturnType<typeof rowSignature> | null = null
-  /** the list's own scroll, carried across a panel rebuild (a detached node
-   *  forgets its scroll position; the panel clears its host on every edit) */
-  private savedScroll = 0
 
   constructor(private host: LayersHost) {
     this.list = document.createElement('div')
@@ -47,25 +44,14 @@ export class LayersUI {
     this.header.textContent = t('Layers')
   }
 
-  /** Called by the panel before it clears its host, so the list's own scroll
-   *  survives the re-append. */
-  detach() {
-    if (this.list.isConnected) this.savedScroll = this.list.scrollTop
-  }
-
-  /** Append the section (header + list) to a panel host. The same two nodes
-   *  every time — rows are only rebuilt when they changed (refresh). */
+  /** Append the section (header + list) to its host — once: the side
+   *  column's Layers view (editor.ts). Rows are only rebuilt when they
+   *  changed (refresh). */
   mount(into: HTMLElement) {
     this.header.textContent = t('Layers')
     into.appendChild(this.header)
     into.appendChild(this.list)
     this.refresh()
-  }
-
-  /** After the panel's accordion has wrapped the list (moving a node into
-   *  the section body resets its scroll), put the list's scroll back. */
-  restoreScroll() {
-    if (this.savedScroll && this.list.isConnected) this.list.scrollTop = this.savedScroll
   }
 
   /** Bring the rows up to date, touching as little as the change needs:

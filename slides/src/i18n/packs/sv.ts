@@ -950,5 +950,9 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} bilder laddas upp…",
   "Not rendered: {what}": "Inte återgiven: {what}",
   "no space just inside the $ signs": "inget mellanslag direkt innanför $-tecknen",
-  "Design": "Design",
+  "Animate": "Animera",
+  "Interact": "Interaktion",
+  "Animation": "Animering",
+  "Deck": "Dokument",
+  "Nothing to set here for this selection.": "Inget att ställa in här för den här markeringen.",
 }

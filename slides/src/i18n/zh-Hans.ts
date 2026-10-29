@@ -965,5 +965,9 @@ export const zhHans: Catalog = {
   "{n} pictures still uploading…": "{n} 张图片上传中…",
   "Not rendered: {what}": "未能渲染：{what}",
   "no space just inside the $ signs": "$ 符号内侧不要紧挨空格",
-  "Design": "设计",
+  "Animate": "动画",
+  "Interact": "交互",
+  "Animation": "动画",
+  "Deck": "文稿",
+  "Nothing to set here for this selection.": "此选择在这里没有可设置的项。",
 }

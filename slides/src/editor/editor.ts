@@ -150,6 +150,9 @@ export class Editor {
    *  Delete removes. Empty = just the current slide, as before. */
   private thumbSel: number[] = []
   private sidebar!: HTMLElement
+  /** the side column's two views: slide thumbnails, and the current slide's layers */
+  private thumbs!: HTMLElement
+  private sideLayers!: HTMLElement
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
   private fileChip?: HTMLElement
@@ -484,6 +487,12 @@ export class Editor {
     // main area
     const main = div('ed-main')
     this.sidebar = div('ed-sidebar')
+    // Slides | Layers: navigation on the left, properties on the right, the
+    // way Penpot (Pages / Layers) and Figma (Layers) lay it out. The layer
+    // list used to sit at the top of the inspector, on every tab.
+    this.thumbs = div('ed-thumbs')
+    this.sideLayers = div('ed-side-layers')
+    this.sidebar.append(this.sideTabs(), this.thumbs, this.sideLayers)
     const canvasWrap = div('ed-canvas-wrap')
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
@@ -604,6 +613,9 @@ export class Editor {
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
+    this.panel.layers.mount(this.sideLayers)
+    const offs = (['doc', 'selection', 'current'] as const).map((e) => this.store.on(e, () => this.panel.layers.refresh()))
+    this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
     this.panel.onListIndent = (dir) => { this.canvas.indentList(dir) }
 
     if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
@@ -1911,25 +1923,46 @@ export class Editor {
     return this.store.doc.slides.slice(0, i + 1).filter((s) => paginates(s, this.store.doc)).length
   }
 
+  /** Slides | Layers, in the same tab look as the inspector's. */
+  private sideTabs(): HTMLElement {
+    const bar = div('ed-tabs ed-side-tabs')
+    bar.setAttribute('role', 'tablist')
+    const show = (view: string) => {
+      this.sidebar.dataset.view = view
+      for (const b of bar.children) b.setAttribute('aria-selected', String((b as HTMLElement).dataset.view === view))
+    }
+    for (const [view, label] of [['slides', t('Slides')], ['layers', t('Layers')]] as const) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.setAttribute('role', 'tab')
+      b.dataset.view = view
+      b.textContent = label
+      b.addEventListener('click', () => { show(view); lsSet('bento-side-view', view) })
+      bar.appendChild(b)
+    }
+    show(lsGet('bento-side-view') === 'layers' ? 'layers' : 'slides')
+    return bar
+  }
+
   private rebuildSidebar() {
     // States sit in doc order right after their parent and render nested —
     // smaller, indented, dimmed — so the structure reads at a glance.
     const scroll = this.sidebar.scrollTop
-    this.sidebar.innerHTML = ''
+    this.thumbs.innerHTML = ''
     const slides = this.store.doc.slides
     slides.forEach((slide, i) => {
       // hover gap = insert here; never between a parent and its states
-      if (!slide.stateOf) this.sidebar.appendChild(this.insertGap(i))
+      if (!slide.stateOf) this.thumbs.appendChild(this.insertGap(i))
       const item = this.makeThumb(slide, i, !!slide.stateOf)
       if (slide.stateOf) item.classList.add('ed-thumb-state')
       if (slide.hidden) item.classList.add('ed-thumb-hidden')
-      this.sidebar.appendChild(item)
+      this.thumbs.appendChild(item)
     })
-    this.sidebar.appendChild(this.insertGap(slides.length))
+    this.thumbs.appendChild(this.insertGap(slides.length))
     const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add))
     add.classList.add('ed-add-slide')
     add.title = t('New slide from a layout')
-    this.sidebar.appendChild(add)
+    this.thumbs.appendChild(add)
     this.sidebar.scrollTop = scroll
     this.highlightSidebar()
   }

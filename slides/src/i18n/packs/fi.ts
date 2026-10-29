@@ -958,5 +958,9 @@ export const strings: Catalog = {
   "{n} pictures still uploading…": "{n} kuvaa latautuu…",
   "Not rendered: {what}": "Ei piirretty: {what}",
   "no space just inside the $ signs": "ei välilyöntiä heti $-merkkien sisäpuolelle",
-  "Design": "Ulkoasu",
+  "Animate": "Animoi",
+  "Interact": "Vuorovaikutus",
+  "Animation": "Animaatio",
+  "Deck": "Dokumentti",
+  "Nothing to set here for this selection.": "Tälle valinnalle ei ole täällä asetettavaa.",
 }

@@ -215,41 +215,45 @@ export class PropsPanel {
     // every change. A selection or slide switch (force) starts the new
     // inspector at the top, which is where a different subject belongs.
     const scrollTop = force ? 0 : this.host.scrollTop
-    this.layers.detach()
     this.host.innerHTML = ''
     const els = this.store.selectedElements
-    // Layers (editor/layers.ts): FIRST, whatever is selected — one home. It
-    // used to sit first on the Slide panel and last on an element's, so every
-    // canvas click hopped it from top to bottom (see layerrows.ts's header).
-    this.layers.mount(this.host)
     if (els.length === 0) this.buildSlidePanel()
     else if (els.length === 1) this.buildElementPanel(els[0])
     else this.buildMultiPanel(els)
     this.applyAccordion()
     this.mountTabs()
-    this.layers.restoreScroll()
     this.host.scrollTop = scrollTop
   }
 
   /** Collapsed by default until the user opens them (persisted per title).
    *  English keys, matched against the TRANSLATED header like SHOW_SECTIONS. */
-  private static CLOSED_BY_DEFAULT = ['Layout', 'Advanced (JSON)', 'Layers']
+  private static CLOSED_BY_DEFAULT = ['Layout', 'Advanced (JSON)']
 
-  /** Sections about the SHOW rather than the look: they live on the
-   *  Presenting tab. Everything else is Design; Layers shows on both, under the tabs. */
-  private static SHOW_SECTIONS = ['Presenting', 'Morph', 'Slideshow', 'Interactivity']
+  /** Which tab a section lives on, by its English title — matched against
+   *  the TRANSLATED header, like CLOSED_BY_DEFAULT. Format is the rest: how
+   *  things look. Animate is how they move; Interact is what they do when the
+   *  audience points at them. */
+  private static TAB_SECTIONS: Record<'animate' | 'interact', string[]> = {
+    animate: ['Animation', 'Morph', 'Transition'],
+    interact: ['Interactivity'],
+  }
 
-  private tab: 'design' | 'show' = lsJson<string>('bento-panel-tab', 'design') === 'show' ? 'show' : 'design'
+  private tab: PanelTab = (() => {
+    const saved = lsJson<string>('bento-panel-tab', 'format')
+    return saved === 'animate' || saved === 'interact' ? saved : saved === 'show' ? 'animate' : 'format'
+  })()
 
-  /** Design | Presenting — the split design tools make between what a thing
-   *  looks like and what it does, heading the panel as theirs does. A tab
-   *  hides the other tab's sections with CSS (data-tab), so switching never
-   *  rebuilds or loses a field's state. */
+  /** Format | Animate | Interact, heading the panel the way design tools head
+   *  theirs (Penpot: Design | Prototype | Inspect; Keynote: Format | Animate).
+   *  A tab hides the others' sections with CSS (data-tab), so switching never
+   *  rebuilds the panel or loses a field's state. A tab with nothing for this
+   *  selection says so, rather than showing a blank. */
   private mountTabs() {
     const bar = document.createElement('div')
     bar.className = 'ed-tabs'
     bar.setAttribute('role', 'tablist')
-    for (const [id, label] of [['design', t('Design')], ['show', t('Presenting')]] as const) {
+    const tabs = [['format', t('Format')], ['animate', t('Animate')], ['interact', t('Interact')]] as const
+    for (const [id, label] of tabs) {
       const b = document.createElement('button')
       b.type = 'button'
       b.setAttribute('role', 'tab')
@@ -262,6 +266,13 @@ export class PropsPanel {
         for (const x of bar.children) x.setAttribute('aria-selected', String(x === b))
       })
       bar.appendChild(b)
+      if (!this.host.querySelector(`:scope > .ed-section[data-tab="${id}"]`)) {
+        const empty = document.createElement('p')
+        empty.className = 'ed-hint ed-tab-empty'
+        empty.dataset.tab = id
+        empty.textContent = t('Nothing to set here for this selection.')
+        this.host.appendChild(empty)
+      }
     }
     this.host.prepend(bar)
     this.host.dataset.tab = this.tab
@@ -270,7 +281,9 @@ export class PropsPanel {
   /** The layer list: one instance, the SAME header and list nodes re-appended
    *  on every rebuild (a drag emits a doc event per frame; the rows are only
    *  rebuilt when what they say changed — layers.ts refresh). */
-  private layers = new LayersUI({
+  /** The layer list. It lives in the side column now (editor.ts mounts it
+   *  there); the panel still owns it because the panel owns the store verbs. */
+  readonly layers = new LayersUI({
     slide: () => this.store.slide,
     selection: () => this.store.selection,
     select: (ids) => this.store.select(ids),
@@ -288,8 +301,8 @@ export class PropsPanel {
     openState = lsJson<Record<string, boolean>>('bento-panel-open', {})
     const headers = [...this.host.querySelectorAll<HTMLElement>('.ed-section')]
     const closed = new Set(PropsPanel.CLOSED_BY_DEFAULT.map((k) => t(k)))
-    const show = new Set(PropsPanel.SHOW_SECTIONS.map((k) => t(k)))
-    const layers = t('Layers')
+    const tabOf = new Map<string, PanelTab>()
+    for (const [tab, keys] of Object.entries(PropsPanel.TAB_SECTIONS)) for (const k of keys) tabOf.set(t(k), tab as PanelTab)
     for (const h of headers) {
       const key = h.textContent ?? ''
       const body = document.createElement('div')
@@ -301,7 +314,7 @@ export class PropsPanel {
         n = next
       }
       h.after(body)
-      h.dataset.tab = body.dataset.tab = key === layers ? 'both' : show.has(key) ? 'show' : 'design'
+      h.dataset.tab = body.dataset.tab = tabOf.get(key) ?? 'format'
       const isOpen = openState[key] ?? !closed.has(key)
       h.classList.add('ed-sec-toggle')
       h.classList.toggle('closed', !isOpen)
@@ -341,6 +354,65 @@ export class PropsPanel {
     // This way if the doc is actively replaced and the references are stale the update still succeeds.
     const slideId = slide.id
     this.section(t('Slide'))
+    this.row('Background', this.color(slide.background, (v, fin) =>
+      this.editSlideAttrs(slideId, (slide: Slide) => { slide.background = v }, fin),
+      { id: null, path: 'background', slide }))
+    // Hidden slides stay in the deck and stay editable; they drop out of the
+    // walk, the PDF and the file thumbnail. Offered only on ordinary slides —
+    // a state is already unreachable linearly, so hiding one means nothing.
+    if (!slide.stateOf) {
+      this.row('Hide slide', this.toggle(!!slide.hidden, (v) =>
+        this.editSlideAttrs(slideId, (slide: Slide) => {
+          if (v) slide.hidden = true
+          else delete slide.hidden
+        }, true)))
+      // The third answer to "does it take a number": stays in the walk, counts
+      // for nothing, and {{page}} on it continues the slide before. Builds
+      // (one element revealed per morph step) and interstitials.
+      this.row('Unnumbered', this.toggle(!!slide.unnumbered, (v) =>
+        this.editSlideAttrs(slideId, (slide: Slide) => {
+          if (v) slide.unnumbered = true
+          else delete slide.unnumbered
+        }, true)))
+      if (slide.unnumbered) {
+        const hint = document.createElement('p')
+        hint.className = 'ed-hint'
+        hint.textContent = t('Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.')
+        this.host.appendChild(hint)
+      }
+    }
+
+    this.section(t('Layout'))
+    const applyLy = document.createElement('button')
+    applyLy.className = 'ed-btn ed-btn-block'
+    applyLy.textContent = t('⧉ Apply layout…')
+    applyLy.title = t('Re-arrange this slide onto a layout — content moves by matching id, then role; extra elements are kept')
+    applyLy.addEventListener('click', () =>
+      document.dispatchEvent(new CustomEvent('bento:apply-layout', { detail: { anchor: applyLy } })))
+    this.host.appendChild(applyLy)
+
+    const saveLy = document.createElement('button')
+    saveLy.className = 'ed-btn ed-btn-block'
+    saveLy.textContent = t('＋ Save slide as layout…')
+    saveLy.title = "Add this slide to the document's layout picker (New slide button)"
+    saveLy.addEventListener('click', () => {
+      const name = window.prompt('Layout name', slide.name ?? 'My layout')
+      if (!name) return
+      this.edit(() => {
+        const doc = this.store.doc
+        const copy: Slide = JSON.parse(JSON.stringify(slide))
+        doc.layouts = [...(doc.layouts ?? []), { ...copy, id: uid('layout'), name, stateOf: undefined, notes: '' }]
+      }, true)
+    })
+    this.host.appendChild(saveLy)
+
+    this.buildThemeProps()
+
+    // What applies to the whole DECK, in one section: its page size and how
+    // it presents (slide numbers, progress, arrows). None of these is a
+    // property of THIS slide, and mixing them in beside Background read as
+    // per-slide. Keynote keeps the same set in its Document inspector.
+    this.section(t('Deck'))
     // deck-wide page size: presets + custom. Elements keep their absolute
     // positions — a size change reframes the canvas, it never rescales art.
     const { width: dw, height: dh } = this.store.doc.size
@@ -370,52 +442,6 @@ export class PropsPanel {
     heightRow = this.row('Height', this.number(dh, 10, (v, fin) =>
       this.edit(() => { this.store.doc.size.height = Math.max(320, Math.min(4000, Math.round(v))) }, fin)))
     showCustomSize(presetKey === 'Custom…')
-    this.row('Background', this.color(slide.background, (v, fin) =>
-      this.editSlideAttrs(slideId, (slide: Slide) => { slide.background = v }, fin),
-      { id: null, path: 'background', slide }))
-    this.row('Transition', this.select(
-      ['none', 'fade', 'slide', 'zoom', 'morph'],
-      slide.transition,
-      (v) => this.editSlideAttrs(slideId, (slide: Slide) => { slide.transition = v as TransitionKind }, true),
-    ))
-    // Hidden slides stay in the deck and stay editable; they drop out of the
-    // walk, the PDF and the file thumbnail. Offered only on ordinary slides —
-    // a state is already unreachable linearly, so hiding one means nothing.
-    if (!slide.stateOf) {
-      this.row('Hide slide', this.toggle(!!slide.hidden, (v) =>
-        this.editSlideAttrs(slideId, (slide: Slide) => {
-          if (v) slide.hidden = true
-          else delete slide.hidden
-        }, true)))
-      // The third answer to "does it take a number": stays in the walk, counts
-      // for nothing, and {{page}} on it continues the slide before. Builds
-      // (one element revealed per morph step) and interstitials.
-      this.row('Unnumbered', this.toggle(!!slide.unnumbered, (v) =>
-        this.editSlideAttrs(slideId, (slide: Slide) => {
-          if (v) slide.unnumbered = true
-          else delete slide.unnumbered
-        }, true)))
-      if (slide.unnumbered) {
-        const hint = document.createElement('p')
-        hint.className = 'ed-hint'
-        hint.textContent = t('Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.')
-        this.host.appendChild(hint)
-      }
-    }
-    if (slide.transition === 'morph') {
-      const hint = document.createElement('p')
-      hint.className = 'ed-hint'
-      hint.innerHTML = t('<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).')
-      this.host.appendChild(hint)
-    }
-
-    // Deck-wide slideshow chrome, in its own section: these are not properties
-    // of THIS slide (the section above) but of how the whole deck presents, and
-    // mixing them in beside Background and Transition read as per-slide.
-    //
-    // "Slideshow" is what the UI already calls present mode on the button, and
-    // it avoids colliding with the element panel's own "Presenting" section.
-    this.section(t('Slideshow'))
     // These live in doc.present because they are AUDIENCE-facing: what the
     // author designs is what a recipient's audience sees. Contrast reduce-motion
     // and locale, which are viewer preferences and deliberately never enter the
@@ -448,7 +474,19 @@ export class PropsPanel {
 
 
     // interactivity: naming, state-of, hover focus
-    this.buildThemeProps()
+    this.section(t('Transition'))
+    this.row('Transition', this.select(
+      ['none', 'fade', 'slide', 'zoom', 'morph'],
+      slide.transition,
+      (v) => this.editSlideAttrs(slideId, (slide: Slide) => { slide.transition = v as TransitionKind }, true),
+    ))
+    if (slide.transition === 'morph') {
+      const hint = document.createElement('p')
+      hint.className = 'ed-hint'
+      hint.innerHTML = t('<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).')
+      this.host.appendChild(hint)
+    }
+
     this.section(t('Interactivity'))
     const name = document.createElement('input')
     name.type = 'text'
@@ -521,30 +559,6 @@ export class PropsPanel {
       }
     }
 
-    this.section(t('Layout'))
-    const applyLy = document.createElement('button')
-    applyLy.className = 'ed-btn ed-btn-block'
-    applyLy.textContent = t('⧉ Apply layout…')
-    applyLy.title = t('Re-arrange this slide onto a layout — content moves by matching id, then role; extra elements are kept')
-    applyLy.addEventListener('click', () =>
-      document.dispatchEvent(new CustomEvent('bento:apply-layout', { detail: { anchor: applyLy } })))
-    this.host.appendChild(applyLy)
-
-    const saveLy = document.createElement('button')
-    saveLy.className = 'ed-btn ed-btn-block'
-    saveLy.textContent = t('＋ Save slide as layout…')
-    saveLy.title = "Add this slide to the document's layout picker (New slide button)"
-    saveLy.addEventListener('click', () => {
-      const name = window.prompt('Layout name', slide.name ?? 'My layout')
-      if (!name) return
-      this.edit(() => {
-        const doc = this.store.doc
-        const copy: Slide = JSON.parse(JSON.stringify(slide))
-        doc.layouts = [...(doc.layouts ?? []), { ...copy, id: uid('layout'), name, stateOf: undefined, notes: '' }]
-      }, true)
-    })
-    this.host.appendChild(saveLy)
-
   }
 
   private buildMultiPanel(els: SlideElement[]) {
@@ -554,13 +568,21 @@ export class PropsPanel {
     this.opsRow(els)
     this.section(t('Arrange'))
     this.arrangeRows(els)
-    this.section(t('Presenting'))
+    this.section(t('Animation'))
     this.revealRow(els)
   }
 
   private buildElementPanel(el: SlideElement) {
     this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video', embed: 'Embed' }[el.type]))
     this.opsRow([el])
+    // what the element IS in a layout — content, not geometry
+    this.row('Role', this.select(
+      ['none', 'title', 'subtitle', 'body', 'kicker'],
+      el.role ?? 'none',
+      (v) => this.mutate(el.id, (e) => {
+        if (v === 'none') delete e.role
+        else e.role = v
+      }, true)))
 
     // Lead with the element's OWN controls — the reason it was selected —
     // then geometry, effects, arrange, and finally present-time behaviour.
@@ -582,20 +604,35 @@ export class PropsPanel {
       this.mini(t('W'), el.w, (v) => this.setNum(el.id, 'w', Math.max(v, 1))),
       this.mini(t('H'), el.h, (v) => this.setNum(el.id, 'h', Math.max(v, 1))),
       this.mini(t('Angle'), el.rotation, (v) => this.setNum(el.id, 'rotation', v)),
-      this.mini(t('Opacity'), Math.round(el.opacity * 100), (v) =>
-        this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1))),
     )
     this.host.appendChild(geo)
 
-    this.row('Role', this.select(
-      ['none', 'title', 'subtitle', 'body', 'kicker'],
-      el.role ?? 'none',
+    this.section(t('Appearance'))
+    // Blur (on the element) / frosted-glass backdrop (behind it) / blend mode —
+    // available on any element. 0 clears blur/backdrop; 'normal' clears blend.
+    const fxGrid = document.createElement('div')
+    fxGrid.className = 'ed-grid2'
+    fxGrid.append(
+      this.mini(t('Opacity'), Math.round(el.opacity * 100), (v) =>
+        this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1))),
+      this.mini(t('Blur'), el.blur ?? 0, (v) => this.mutate(el.id, (e) => {
+        if (v > 0) e.blur = v
+        else delete e.blur
+      }, true)),
+      this.mini(t('Backdrop'), el.backdropFilter ?? 0, (v) => this.mutate(el.id, (e) => {
+        if (v > 0) e.backdropFilter = v
+        else delete e.backdropFilter
+      }, true)),
+    )
+    this.host.appendChild(fxGrid)
+    this.row('Blend', this.select(
+      ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'difference', 'exclusion'],
+      el.blend || 'normal',
       (v) => this.mutate(el.id, (e) => {
-        if (v === 'none') delete e.role
-        else e.role = v
+        if (v === 'normal') delete e.blend
+        else e.blend = v
       }, true)))
 
-    this.section(t('Effects'))
     const current = Object.entries(SHADOW_PRESETS).find(([, p]) => JSON.stringify(p) === JSON.stringify(el.shadow))?.[0]
       ?? (el.shadow ? 'custom' : 'none')
     this.row('Shadow', this.select(
@@ -631,29 +668,6 @@ export class PropsPanel {
       this.host.appendChild(grid)
       this.row('Color', this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
     })
-
-    // Blur (on the element) / frosted-glass backdrop (behind it) / blend mode —
-    // available on any element. 0 clears blur/backdrop; 'normal' clears blend.
-    const fxGrid = document.createElement('div')
-    fxGrid.className = 'ed-grid2'
-    fxGrid.append(
-      this.mini(t('Blur'), el.blur ?? 0, (v) => this.mutate(el.id, (e) => {
-        if (v > 0) e.blur = v
-        else delete e.blur
-      }, true)),
-      this.mini(t('Backdrop'), el.backdropFilter ?? 0, (v) => this.mutate(el.id, (e) => {
-        if (v > 0) e.backdropFilter = v
-        else delete e.backdropFilter
-      }, true)),
-    )
-    this.host.appendChild(fxGrid)
-    this.row('Blend', this.select(
-      ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'difference', 'exclusion'],
-      el.blend || 'normal',
-      (v) => this.mutate(el.id, (e) => {
-        if (v === 'normal') delete e.blend
-        else e.blend = v
-      }, true)))
 
     this.section(t('Arrange'))
     this.arrangeRows([el])
@@ -780,7 +794,7 @@ export class PropsPanel {
 
   /** fx + link — how the element behaves while presenting. */
   private buildPresentingProps(el: SlideElement) {
-    this.section(t('Presenting'))
+    this.section(t('Animation'))
     const setFx = (patch: Partial<NonNullable<SlideElement['fx']>>) =>
       this.mutate(el.id, (e) => {
         const fx = { ...(e.fx ?? {}), ...patch }
@@ -888,6 +902,10 @@ export class PropsPanel {
         this.host.appendChild(speedHint)
       }
     }
+
+    // What the element DOES in the show, as opposed to how it moves: its own
+    // section, on the Interact tab.
+    this.section(t('Interactivity'))
 
     // hover-reveal set membership
     const soh = document.createElement('input')
@@ -2694,6 +2712,8 @@ export class PropsPanel {
     return btn
   }
 }
+
+type PanelTab = 'format' | 'animate' | 'interact'
 
 /** Any CSS color → {hex, a}. Handles #rgb/#rrggbb/#rrggbbaa/rgb()/rgba()/transparent. */
 export function parseColor(v: string): { hex: string; a: number } {
