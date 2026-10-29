@@ -136,14 +136,16 @@ try {
   const op2 = p.locator('.ed-props .ed-layer-block .ed-mini[title="Opacity"] span')
   const b2 = await op2.boundingBox()
   await p.mouse.move(b2.x + 3, b2.y + 5); await p.mouse.down(); await p.mouse.move(b2.x - 40, b2.y + 5, { steps: 5 })
+  // the OS takes the pointer: a cancel and NO release follows
   await p.evaluate(() => window.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true })))
-  await p.mouse.up(); await p.waitForTimeout(250)
+  await p.waitForTimeout(250)
   ok(await p.evaluate(() => !document.body.classList.contains('ed-scrubbing')), 'pointercancel takes the scrub cursor off')
   const scrubbed = (await el('r')).opacity
   ok(scrubbed < 1, `the cancelled drag moved the value (${scrubbed})`)
   const xIn = p.locator('.ed-props .ed-mini', { has: p.locator(':scope > span', { hasText: /^X$/ }) }).first().locator('input')
   await xIn.fill('77'); await xIn.press('Enter'); await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(250)
   await undo()
+  await p.mouse.up() // only now: a release must not be what ended the drag
   const after = await el('r')
   ok(after.x === 400 && after.opacity === scrubbed, `the next edit is its own undo step — the burst closed on cancel (x ${after.x}, opacity ${after.opacity})`)
 
