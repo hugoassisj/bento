@@ -552,13 +552,13 @@ export class PropsPanel {
     const geo = document.createElement('div')
     geo.className = 'ed-grid2'
     geo.append(
-      this.mini(t('X'), el.x, (v) => this.setNum(el.id, 'x', v)),
-      this.mini(t('Y'), el.y, (v) => this.setNum(el.id, 'y', v)),
-      this.mini(t('W'), el.w, (v) => this.setNum(el.id, 'w', Math.max(v, 1))),
-      this.mini(t('H'), el.h, (v) => this.setNum(el.id, 'h', Math.max(v, 1))),
-      this.mini(t('Angle'), el.rotation, (v) => this.setNum(el.id, 'rotation', v)),
-      this.mini(t('Opacity'), Math.round(el.opacity * 100), (v) =>
-        this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1))),
+      this.mini(t('X'), el.x, (v, fin) => this.setNum(el.id, 'x', v, fin)),
+      this.mini(t('Y'), el.y, (v, fin) => this.setNum(el.id, 'y', v, fin)),
+      this.mini(t('W'), el.w, (v, fin) => this.setNum(el.id, 'w', Math.max(v, 1), fin)),
+      this.mini(t('H'), el.h, (v, fin) => this.setNum(el.id, 'h', Math.max(v, 1), fin)),
+      this.mini(t('Angle'), el.rotation, (v, fin) => this.setNum(el.id, 'rotation', v, fin)),
+      this.mini(t('Opacity'), Math.round(el.opacity * 100), (v, fin) =>
+        this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1), fin)),
     )
     this.host.appendChild(geo)
 
@@ -599,9 +599,9 @@ export class PropsPanel {
       const grid = document.createElement('div')
       grid.className = 'ed-grid2'
       grid.append(
-        this.mini(t('X'), sh.x ?? 0, (v) => setShadow(i, { x: v })),
-        this.mini(t('Y'), sh.y ?? 0, (v) => setShadow(i, { y: v })),
-        this.mini(t('Blur'), sh.blur, (v) => setShadow(i, { blur: Math.max(v, 0) })),
+        this.mini(t('X'), sh.x ?? 0, (v, fin) => setShadow(i, { x: v }, fin)),
+        this.mini(t('Y'), sh.y ?? 0, (v, fin) => setShadow(i, { y: v }, fin)),
+        this.mini(t('Blur'), sh.blur, (v, fin) => setShadow(i, { blur: Math.max(v, 0) }, fin)),
       )
       this.host.appendChild(grid)
       this.row('Color', this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
@@ -612,14 +612,14 @@ export class PropsPanel {
     const fxGrid = document.createElement('div')
     fxGrid.className = 'ed-grid2'
     fxGrid.append(
-      this.mini(t('Blur'), el.blur ?? 0, (v) => this.mutate(el.id, (e) => {
+      this.mini(t('Blur'), el.blur ?? 0, (v, fin) => this.mutate(el.id, (e) => {
         if (v > 0) e.blur = v
         else delete e.blur
-      }, true)),
-      this.mini(t('Backdrop'), el.backdropFilter ?? 0, (v) => this.mutate(el.id, (e) => {
+      }, fin)),
+      this.mini(t('Backdrop'), el.backdropFilter ?? 0, (v, fin) => this.mutate(el.id, (e) => {
         if (v > 0) e.backdropFilter = v
         else delete e.backdropFilter
-      }, true)),
+      }, fin)),
     )
     this.host.appendChild(fxGrid)
     this.row('Blend', this.select(
@@ -1177,7 +1177,7 @@ export class PropsPanel {
             const g = (e as TextElement).colorGradient
             if (g?.stops[i]) g.stops[i].color = v
           }, fin))
-        wrap.append(at, color)
+        wrap.append(at, unitHandle('%', at as HTMLInputElement), color)
         if (tgrad.stops.length > 2) {
           const del = document.createElement('button')
           del.className = 'ed-btn ed-btn-icon'
@@ -1353,7 +1353,7 @@ export class PropsPanel {
             const g = (e as ShapeElement).fillGradient
             if (g?.stops[i]) g.stops[i].color = v
           }, fin))
-        wrap.append(at, color)
+        wrap.append(at, unitHandle('%', at as HTMLInputElement), color)
         if (grad.stops.length > 2) {
           const del = document.createElement('button')
           del.className = 'ed-btn ed-btn-icon'
@@ -1576,9 +1576,13 @@ export class PropsPanel {
         }, final)
         inp.addEventListener('input', () => commit(false))
         inp.addEventListener('change', () => commit(true))
+        inp.addEventListener(SCRUB, () => commit(false))
         return inp
       }
-      wrap.append(mk('min', t('min')), mk('max', t('max')))
+      // a placeholder is no label once a value is typed: say min/max beside
+      // the fields, and let those words scrub them
+      const lo = mk('min', t('min')), hi = mk('max', t('max'))
+      wrap.append(unitHandle(t('min'), lo), lo, unitHandle(t('max'), hi), hi)
       this.row(label, wrap)
     })
 
@@ -1769,14 +1773,14 @@ export class PropsPanel {
     const grid = document.createElement('div')
     grid.className = 'ed-grid2'
     grid.append(
-      this.mini(t('Font'), st.fontSize, (v) => this.mutate(el.id, (e) =>
-        { (e as TableElement).style.fontSize = Math.max(v, 6) }, true)),
-      this.mini(t('Radius'), st.radius, (v) => this.mutate(el.id, (e) =>
-        { (e as TableElement).style.radius = Math.max(v, 0) }, true)),
-      this.mini(t('Pad X'), st.cellPadX, (v) => this.mutate(el.id, (e) =>
-        { (e as TableElement).style.cellPadX = Math.max(v, 0) }, true)),
-      this.mini(t('Pad Y'), st.cellPadY, (v) => this.mutate(el.id, (e) =>
-        { (e as TableElement).style.cellPadY = Math.max(v, 0) }, true)),
+      this.mini(t('Font'), st.fontSize, (v, fin) => this.mutate(el.id, (e) =>
+        { (e as TableElement).style.fontSize = Math.max(v, 6) }, fin)),
+      this.mini(t('Radius'), st.radius, (v, fin) => this.mutate(el.id, (e) =>
+        { (e as TableElement).style.radius = Math.max(v, 0) }, fin)),
+      this.mini(t('Pad X'), st.cellPadX, (v, fin) => this.mutate(el.id, (e) =>
+        { (e as TableElement).style.cellPadX = Math.max(v, 0) }, fin)),
+      this.mini(t('Pad Y'), st.cellPadY, (v, fin) => this.mutate(el.id, (e) =>
+        { (e as TableElement).style.cellPadY = Math.max(v, 0) }, fin)),
     )
     this.host.appendChild(grid)
 
@@ -2397,9 +2401,9 @@ export class PropsPanel {
     if (el) this.edit(() => fn(el), final)
   }
 
-  private setNum(id: string, key: 'x' | 'y' | 'w' | 'h' | 'rotation' | 'opacity', v: number) {
+  private setNum(id: string, key: 'x' | 'y' | 'w' | 'h' | 'rotation' | 'opacity', v: number, final = true) {
     if (Number.isNaN(v)) return
-    this.mutate(id, (el) => { (el as any)[key] = v }, true)
+    this.mutate(id, (el) => { (el as any)[key] = v }, final)
   }
 
   private section(title: string) {
@@ -2418,12 +2422,13 @@ export class PropsPanel {
     // rows without an entry get no tooltip — never a useless label echo
     const tip = ROW_TIPS[label]
     if (tip && !input.title) row.title = t(tip)
+    if (input instanceof HTMLInputElement && input.type === 'number') scrub(span, input)
     row.append(span, input)
     this.host.appendChild(row)
     return row
   }
 
-  private mini(label: string, value: number, onChange: (v: number) => void): HTMLElement {
+  private mini(label: string, value: number, onChange: (v: number, final: boolean) => void): HTMLElement {
     const wrap = document.createElement('label')
     wrap.className = 'ed-mini'
     const span = document.createElement('span')
@@ -2431,7 +2436,9 @@ export class PropsPanel {
     const input = document.createElement('input')
     input.type = 'number'
     input.value = String(Math.round(value * 10) / 10)
-    input.addEventListener('change', () => onChange(parseFloat(input.value)))
+    input.addEventListener('change', () => onChange(parseFloat(input.value), true))
+    input.addEventListener(SCRUB, () => onChange(parseFloat(input.value), false))
+    scrub(span, input)
     wrap.append(span, input)
     return wrap
   }
@@ -2441,10 +2448,12 @@ export class PropsPanel {
     input.type = 'number'
     input.step = String(step)
     input.value = String(value)
-    input.addEventListener('change', () => {
+    const send = (final: boolean) => {
       const v = parseFloat(input.value)
-      if (!Number.isNaN(v)) onEdit(v, true)
-    })
+      if (!Number.isNaN(v)) onEdit(v, final)
+    }
+    input.addEventListener('change', () => send(true))
+    input.addEventListener(SCRUB, () => send(false))
     return input
   }
 
@@ -2601,7 +2610,8 @@ export class PropsPanel {
       if (ref) this.setRef(ref, combineColor(col.value, parseFloat(alpha.value) / 100 || 1), null)
     })
     alpha.addEventListener('change', () => emit(true))
-    wrap.append(col, alpha)
+    alpha.addEventListener(SCRUB, () => emit(false))
+    wrap.append(col, alpha, unitHandle('%', alpha))
     if (!ref) return wrap
     const outer = document.createElement('div')
     outer.className = 'ed-colorref'
@@ -2668,6 +2678,70 @@ export class PropsPanel {
     btn.addEventListener('click', onClick)
     return btn
   }
+}
+
+/** Fired on a numeric field while its label is being scrubbed: a live,
+ *  non-final edit. The release fires an ordinary `change`. */
+const SCRUB = 'ed-scrub'
+
+/**
+ * Drag a numeric field's label to change its value, the gesture every design
+ * tool has: 2px per step, Shift ×10, Alt ×0.1. A press that does not move is
+ * an ordinary label click and focuses the field for typing.
+ *
+ * The field holds focus for the length of the drag. That is what makes this
+ * work at all: the panel defers its rebuild while a field is focused
+ * (isActiveEditFocus), so the label being dragged is not torn out from under
+ * the pointer, and edit()'s burst stays open, so the whole drag is ONE undo
+ * step. Blurring on release lets the deferred rebuild catch up.
+ */
+function scrub(handle: HTMLElement, input: HTMLInputElement) {
+  handle.classList.add('ed-scrub')
+  handle.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0 || input.disabled) return
+    const start = parseFloat(input.value) || 0
+    const step = parseFloat(input.step) || 1
+    const x0 = ev.clientX
+    let moved = false
+    const move = (e: PointerEvent) => {
+      const dx = e.clientX - x0
+      if (!moved && Math.abs(dx) < 3) return
+      if (!moved) { moved = true; input.focus(); document.body.classList.add('ed-scrubbing') }
+      const k = step * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1)
+      const digits = Math.max(0, Math.ceil(-Math.log10(k) - 1e-9))
+      const v = (start + Math.round(dx / 2) * k).toFixed(digits)
+      if (v === input.value) return
+      input.value = v
+      input.dispatchEvent(new Event(SCRUB))
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      if (!moved) return
+      document.body.classList.remove('ed-scrubbing')
+      input.dispatchEvent(new Event('change'))
+      // The click that ends a drag is not a label click: it must not refocus
+      // the field (focus would keep ⌘Z in the field's own text undo). Caught
+      // on window, because a press on the label released over the field is
+      // dispatched to their common ancestor, the <label>, not to the handle.
+      const swallow = (c: Event) => c.preventDefault()
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, true), 0)
+      input.blur()
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  })
+}
+
+/** The scrub handle for a numeric field with no label of its own: its unit,
+ *  or the word that names it, beside it. */
+function unitHandle(text: string, input: HTMLInputElement): HTMLElement {
+  const s = document.createElement('span')
+  s.className = 'ed-unit'
+  s.textContent = text
+  scrub(s, input)
+  return s
 }
 
 /** Any CSS color → {hex, a}. Handles #rgb/#rrggbb/#rrggbbaa/rgb()/rgba()/transparent. */

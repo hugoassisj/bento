@@ -700,6 +700,11 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
 .ed-mini { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink-2); }
 .ed-mini input { width: 100%; min-width: 0; padding: 0 5px; }
+/* a numeric field's label is a scrub handle (panels.ts scrub()) */
+.ed-scrub { cursor: ew-resize; user-select: none; -webkit-user-select: none; touch-action: none; }
+.ed-scrub:hover { color: var(--ink); }
+.ed-unit { flex: none; font-size: 11.5px; color: var(--muted); }
+body.ed-scrubbing, body.ed-scrubbing * { cursor: ew-resize !important; }
 
 .ed-ops { display: flex; gap: 4px; margin-bottom: 10px; }
 .ed-btn-icon { border: 1px solid var(--line); padding: 6px; }
