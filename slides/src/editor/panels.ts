@@ -54,8 +54,6 @@ const ROW_TIPS: Record<string, string> = {
   'Shown at rest': 'The Hover group whose content shows before the pointer is on anything. Empty = nothing extra.',
   'Preview on canvas': 'Which Hover group’s content the canvas shows while you edit. Doesn’t change the show.',
   'Layout role': 'What this text is in the layout (title, body…). Apply layout uses it to put content in the matching place.',
-  'Shadow': 'Drop-shadow presets — the shadow follows the element’s real shape, corners and transparency',
-  'Color': 'Colour with opacity — pick with the swatch, the % field is how opaque it is',
   'Entrance': 'How the element appears when the slide comes in. Skipped when it morphs in from the previous slide.',
   'Entrance (s)': 'How long the entrance takes, in seconds',
   'Appears on click': '0 = shown with the slide. 1 = appears on the first click or → press, 2 = on the second, and so on. Elements with the same number appear together.',
@@ -77,18 +75,10 @@ const ROW_TIPS: Record<string, string> = {
   'Hover group': 'A name shared by elements that react to the pointer together while presenting (see On hover on the slide). Not the same as ⌘G grouping.',
   'Link to': 'Clicking this element during the show jumps to the chosen slide',
   'Web link': 'Clicking this element during the show opens this web page in a new tab (https:// only)',
-  'Font': 'Typeface for this text',
   'Size (pt)': 'Font size in points',
-  'Weight': 'Font weight — 400 regular, 700 bold',
   'Align': 'Horizontal text alignment',
   'Vertical align': 'Vertical alignment inside the box',
   'Line height': 'Line spacing as a multiple of the font size',
-  'Fill style': 'Solid colour or a linear gradient',
-  'Fill': 'Fill colour with opacity — for lines this IS the line colour',
-  'Gradient angle': 'Gradient direction in degrees (CSS convention: 0° points up)',
-  'Stroke': 'Outline colour',
-  'Stroke width': 'Outline thickness in pixels',
-  'Line style': 'Solid, dashed or dotted stroke',
   'Line start': 'Decoration at the line’s start — arrow, dot or bar',
   'Line end': 'Decoration at the line’s end — arrow, dot or bar',
   'Corner radius': 'How rounded the corners are, in pixels',
@@ -110,7 +100,6 @@ const ROW_TIPS: Record<string, string> = {
   'Variant of': 'Make this slide a variant of another slide: arrow keys skip it, the audience opens it by clicking a linked element, and matching elements morph between the two.',
   'Skip numbering': 'This slide stays in the show but gets no number of its own; its page-number field shows the previous slide’s.',
   'Number hidden slides': 'On: hidden slides keep their number, so the others don’t renumber when you hide one (as in PowerPoint). Off: the audience sees no gaps in the numbering.',
-  'Blend mode': 'How this element mixes with what is underneath — Multiply darkens, Screen lightens.',
   'Morph name': 'Elements with the same morph name on neighbouring slides morph into each other. Until you change it, it is the element’s own name.',
   'Morph with': 'Pick an element on another slide; this one takes its morph name and morphs into it.',
 }
@@ -241,6 +230,9 @@ export class PropsPanel {
     // every change. A selection or slide switch (force) starts the new
     // inspector at the top, which is where a different subject belongs.
     const scrollTop = force ? 0 : this.host.scrollTop
+    // a radio chosen from the keyboard rebuilds the panel: keep focus on it
+    const radios = () => [...this.host.querySelectorAll<HTMLElement>('[role=radio]')]
+    const radioAt = force ? -1 : radios().indexOf(document.activeElement as HTMLElement)
     this.host.innerHTML = ''
     const els = this.store.selectedElements
     if (els.length === 0) this.buildSlidePanel()
@@ -251,6 +243,7 @@ export class PropsPanel {
     this.mountContext(els)
     this.stackCrampedRows()
     this.host.scrollTop = scrollTop
+    if (radioAt >= 0) radios()[radioAt]?.focus()
   }
 
   /** Collapsed by default until the user opens them (persisted per title).
@@ -305,6 +298,7 @@ export class PropsPanel {
     }
     // the pill sits in a full-width band of the panel's own surface: sticky,
     // it covers what scrolls under it edge to edge instead of floating over it
+    roving(bar, 'tab')
     const band = document.createElement('div')
     band.className = 'ed-tabs-band'
     band.appendChild(bar)
@@ -793,6 +787,7 @@ export class PropsPanel {
     const opacity = this.mini('%', Math.round(el.opacity * 100), (v, fin) =>
       this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1), fin), undefined, { min: 0, max: 100 })
     opacity.title = t('Opacity')
+    opacity.querySelector('input')!.setAttribute('aria-label', opacity.title) // not '%'
     layer.append(blend, opacity)
     block.appendChild(layer)
 
@@ -843,6 +838,7 @@ export class PropsPanel {
       b.addEventListener('click', () => { if (key !== current) this.mutate(el.id, (e) => { e.shadow = { ...SHADOW_PRESETS[key] } }, true) })
       tiles.appendChild(b)
     }
+    roving(tiles, 'radio')
     this.host.appendChild(tiles)
     // editing any value turns a preset into 'custom' on the next rebuild
     const shadows = Array.isArray(el.shadow) ? el.shadow : [el.shadow]
@@ -1398,6 +1394,7 @@ export class PropsPanel {
         (e as TextElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
       }, fin), undefined, { min: 3 })
     size.title = t('Size (pt)')
+    size.querySelector('input')!.setAttribute('aria-label', size.title) // not 'pt'
     const weight = this.weightSelect(el)
     weight.title = t('Weight')
     weight.setAttribute('aria-label', t('Weight'))
@@ -1539,6 +1536,7 @@ export class PropsPanel {
       const at = this.mini('%', Math.round(stop.at * 100), (v, fin) =>
         edit((g) => { if (g.stops[i]) g.stops[i].at = Math.min(Math.max(v / 100, 0), 1) }, fin), undefined, { min: 0, max: 100 })
       at.title = t('Stop {n}', { n: i + 1 }) + ' · ' + t('Position %')
+      at.querySelector('input')!.setAttribute('aria-label', at.title) // not '%'
       at.classList.add('ed-gradstop-at')
       const color = this.colorAlpha(stop.color, (v, fin) => edit((g) => { if (g.stops[i]) g.stops[i].color = v }, fin))
       wrap.append(at, color)
@@ -1655,6 +1653,7 @@ export class PropsPanel {
   }
 
   private buildShapeFill(el: ShapeElement) {
+    if (el.shape === 'line') return // its one colour is `fill`, shown under Stroke (buildShapeStroke)
     this.section(t('Fill'))
     const grad = el.fillGradient
     this.field(this.fillKind(grad ? 'gradient' : 'solid', (v) =>
@@ -1686,9 +1685,12 @@ export class PropsPanel {
   }
 
   /** Stroke — an optional layer for a closed shape; a line IS its stroke, so
-   *  a line's cannot be removed. */
+   *  a line's cannot be removed. An arrow is a closed polygon (kernel/src/
+   *  shape.ts), so its stroke is optional like a rect's. A `line` is drawn in
+   *  its `fill` colour, so its Stroke colour field edits `fill` and the panel
+   *  shows no Fill section for it; an open path is stroked with `stroke`. */
   private buildShapeStroke(el: ShapeElement) {
-    const isLine = el.shape === 'line' || el.shape === 'arrow' || (el.shape === 'path' && !/z\s*$/i.test(el.d ?? ''))
+    const isLine = el.shape === 'line' || (el.shape === 'path' && !/z\s*$/i.test(el.d ?? ''))
     const on = el.strokeWidth > 0 && parseColor(el.stroke).a > 0
     this.section(t('Stroke'), isLine ? undefined : on
       ? { add: false, hint: t('Remove stroke'), run: () => this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = 0 }, true) }
@@ -1698,8 +1700,14 @@ export class PropsPanel {
         if (parseColor(s.stroke).a === 0) s.stroke = '#1E2A3A'
       }, true) })
     if (!on && !isLine) return
-    this.field(this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
+    if (el.shape === 'line') {
+      this.field(this.colorAlpha(el.fill, (v, fin) =>
+        this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
+        { id: el.id, path: 'fill' }))
+    } else {
+      this.field(this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
+        this.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
+    }
     const style = this.labeledSelect(
       [['solid', t('Solid')], ['dashed', t('Dashed')], ['dotted', t('Dotted')]],
       el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
@@ -2173,7 +2181,7 @@ export class PropsPanel {
     const src = (el as ImageElement).src
     // what is stored: size and pixels for an embed, the URL otherwise
     const status = document.createElement('p')
-    status.className = 'ed-hint'
+    status.className = 'ed-hint ed-status' // a state line, not help: never folded behind '?'
     const resolved = src ? resolveAsset(this.store.doc, src) : ''
     if (resolved.startsWith('data:')) {
       const bytes = Math.floor(((resolved.length - resolved.indexOf(',') - 1) * 3) / 4)
@@ -2268,7 +2276,7 @@ export class PropsPanel {
 
     // source status: embedded (with size) / linked / none
     const status = document.createElement('p')
-    status.className = 'ed-hint'
+    status.className = 'ed-hint ed-status' // a state line, not help: never folded behind '?'
     // Resolve first: an embed is stored as an `asset:` ref, so testing el.src
     // directly would report an embedded clip as "linked".
     const resolved = el.src ? resolveAsset(this.store.doc, el.src) : ''
@@ -2426,7 +2434,7 @@ export class PropsPanel {
   private buildCodeProps(el: CodeElement) {
     this.section(t('Source Code'))
     const status = document.createElement('p')
-    status.className = 'ed-hint'
+    status.className = 'ed-hint ed-status' // a state line, not help: never folded behind '?'
     this.host.appendChild(status)
     // Font Size
     // Shown in POINTS (the unit office users know); the model stores slide-space
@@ -2460,9 +2468,10 @@ export class PropsPanel {
   /**
    * A dropdown whose chosen option does not fit beside its caption gets the
    * row to itself — caption above, field full width — rather than cutting
-   * the value off, in whichever language made it long. Measured with text
-   * metrics, not layout, so sections on a hidden tab are sized too; a resize
-   * of the panel measures again.
+   * the value off, in whichever language made it long. The value is measured
+   * with text metrics against the select's laid-out width, so a dropdown that
+   * is not rendered (closed section, other tab) is skipped: opening a section,
+   * switching tab and resizing the panel each measure again.
    */
   private stackCrampedRows() {
     const host = this.host
@@ -2484,6 +2493,7 @@ export class PropsPanel {
     }
   }
   private static measure: CanvasRenderingContext2D | undefined
+  private static rowIds = 0
   private watchingWidth = false
 
   /**
@@ -2733,7 +2743,16 @@ export class PropsPanel {
       b.innerHTML = action.add ? ICONS.plus : ICONS.minus
       b.title = action.hint
       b.setAttribute('aria-label', action.hint)
-      b.addEventListener('click', (ev) => { ev.stopPropagation(); action.run() })
+      b.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        // what was just added is shown: open the section in the store applyAccordion reads
+        if (action.add) {
+          const state = lsJson<Record<string, boolean>>('bento-panel-open', {})
+          state[title] = true
+          lsSet('bento-panel-open', JSON.stringify(state))
+        }
+        action.run()
+      })
       h.appendChild(b)
       if (action.add) h.classList.add('ed-sec-empty')
     }
@@ -2751,11 +2770,19 @@ export class PropsPanel {
 
   private row(label: string, input: HTMLElement): HTMLElement {
     // A segmented control is a group of buttons, and a <label> hands a click on
-    // its caption to the first of them: clicking the word "Align" would align left.
-    const row = document.createElement(input.classList.contains('ed-seg') ? 'div' : 'label')
+    // its caption to the first of them: clicking the word "Align" would align
+    // left. A colour field's first control is the native picker: a click on
+    // "Background" would open it. Those rows are a div, named by aria instead.
+    const plain = input.classList.contains('ed-seg') || !!input.querySelector('input[type=color]')
+    const row = document.createElement(plain ? 'div' : 'label')
     row.className = 'ed-row'
     const span = document.createElement('span')
     span.textContent = t(label)
+    if (plain) {
+      span.id = `ed-row-${++PropsPanel.rowIds}`
+      if (input.getAttribute('role') === 'radiogroup') input.setAttribute('aria-labelledby', span.id)
+      else { row.setAttribute('role', 'group'); row.setAttribute('aria-labelledby', span.id) }
+    }
     // real help on hover (label + control): looked up by the RAW English label;
     // rows without an entry get no tooltip — never a useless label echo
     const tip = ROW_TIPS[label]
@@ -2787,6 +2814,7 @@ export class PropsPanel {
     }
     const input = document.createElement('input')
     input.type = 'number'
+    input.setAttribute('aria-label', label) // the label/hint; a unit-labelled caller names it properly
     input.value = String(Math.round(value * 10) / 10)
     if (range?.min !== undefined) input.min = String(range.min)
     if (range?.max !== undefined) input.max = String(range.max)
@@ -2836,9 +2864,10 @@ export class PropsPanel {
     // A colour chosen by hand must CLEAR any palette reference on this path.
     // Without that, the next theme edit silently overwrites a colour somebody
     // picked deliberately — which reads as the app changing their work.
+    // setRef writes the colour AND clears the reference in one edit: one undo step.
     input.addEventListener('change', () => {
-      onEdit(input.value, true)
       if (ref) this.setRef(ref, input.value, null)
+      else onEdit(input.value, true)
     })
     const field = this.colorField(input)
     return ref ? this.themeLink(ref, input, field) : field
@@ -2932,7 +2961,9 @@ export class PropsPanel {
       if (slot === linked) b.classList.add('is-on')
       b.addEventListener('click', () => {
         input.value = /^#[0-9a-fA-F]{6}$/.test(base) ? base : parseColor(base).hex
-        this.setRef(ref, base, slot)
+        // a theme colour names the hue; the field keeps its own opacity
+        const a = field.querySelector<HTMLInputElement>('.ed-color-alpha input')
+        this.setRef(ref, a ? combineColor(input.value, alphaOf(a)) : base, slot)
       })
       list.appendChild(b)
     }
@@ -2961,7 +2992,7 @@ export class PropsPanel {
       detach.setAttribute('aria-label', t('Detach from the theme'))
       detach.addEventListener('click', () => {
         const a = field.querySelector<HTMLInputElement>('.ed-color-alpha input')
-        this.setRef(ref, a ? combineColor(input.value, Math.min(Math.max(parseFloat(a.value) / 100, 0), 1)) : input.value, null)
+        this.setRef(ref, a ? combineColor(input.value, alphaOf(a)) : input.value, null)
       })
       token.appendChild(detach)
       hex?.replaceWith(token)
@@ -3044,16 +3075,15 @@ export class PropsPanel {
     alpha.step = '1'
     alpha.value = String(Math.round(parsed.a * 100))
     alpha.title = t('Opacity %')
-    const emit = (final: boolean) => {
-      const raw = parseFloat(alpha.value)
-      const a = Number.isFinite(raw) ? Math.min(Math.max(raw / 100, 0), 1) : 1
-      onEdit(combineColor(col.value, a), final)
-    }
+    alpha.setAttribute('aria-label', alpha.title) // the wrapping label's '%' would name it otherwise
+    const emit = (final: boolean) => onEdit(combineColor(col.value, alphaOf(alpha)), final)
     col.addEventListener('input', () => emit(false))
-    // picking by hand clears the palette reference — see color() for why
+    // picking by hand clears the palette reference — see color() for why — in
+    // the same edit as the colour. The opacity % keeps the reference: a
+    // reference names the hue, and the theme re-derives it with this alpha kept.
     col.addEventListener('change', () => {
-      emit(true)
-      if (ref) this.setRef(ref, combineColor(col.value, parseFloat(alpha.value) / 100 || 1), null)
+      if (ref) this.setRef(ref, combineColor(col.value, alphaOf(alpha)), null)
+      else emit(true)
     })
     alpha.addEventListener('change', () => emit(true))
     alpha.addEventListener(SCRUB, () => emit(false))
@@ -3126,6 +3156,7 @@ export class PropsPanel {
       b.addEventListener('click', () => { if (opt !== value) onChange(opt) })
       wrap.appendChild(b)
     }
+    roving(wrap, 'radio')
     return wrap
   }
 
@@ -3183,6 +3214,7 @@ function scrub(handle: HTMLElement, input: HTMLInputElement) {
   handle.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0 || input.disabled) return
     let cur = parseFloat(input.value) || 0
+    let changed = false // a drag that never moved the value is no edit, and no undo step
     const step = parseFloat(input.step) || 1
     const x0 = ev.clientX
     let last = x0 // where the value was last stepped from
@@ -3203,14 +3235,18 @@ function scrub(handle: HTMLElement, input: HTMLInputElement) {
       cur = parseFloat(v) // no float drift across a long drag
       if (v === input.value) return
       input.value = v
+      changed = true
       input.dispatchEvent(new Event(SCRUB))
     }
+    // pointercancel (the OS took the pointer) ends the drag like a release:
+    // the cursor class and the edit burst must not stick
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
       if (!moved) return
       document.body.classList.remove('ed-scrubbing')
-      input.dispatchEvent(new Event('change'))
+      if (changed) input.dispatchEvent(new Event('change'))
       // The click that ends a drag is not a label click: it must not refocus
       // the field (focus would keep ⌘Z in the field's own text undo). Caught
       // on window, because a press on the label released over the field is
@@ -3222,7 +3258,47 @@ function scrub(handle: HTMLElement, input: HTMLInputElement) {
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   })
+}
+
+/**
+ * One tab stop for a group of radios or tabs (roving tabindex): Tab lands on
+ * the chosen one, the arrows (Home/End) move to and choose a neighbour, as the
+ * WAI-ARIA radio-group and tabs patterns ask. Mirrored in RTL.
+ */
+function roving(group: HTMLElement, role: 'radio' | 'tab') {
+  const items = () => [...group.querySelectorAll<HTMLElement>(`:scope > [role=${role}]`)]
+  const on = (b: HTMLElement) => b.getAttribute(role === 'radio' ? 'aria-checked' : 'aria-selected') === 'true'
+  const stop = (to: HTMLElement) => { for (const b of items()) b.tabIndex = b === to ? 0 : -1 }
+  const all = items()
+  if (all.length) stop(all.find(on) ?? all[0])
+  group.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>(`[role=${role}]`)
+    if (b && group.contains(b)) stop(b)
+  })
+  group.addEventListener('keydown', (e) => {
+    const list = items()
+    const i = list.indexOf(document.activeElement as HTMLElement)
+    if (i < 0) return
+    const back = getComputedStyle(group).direction === 'rtl' ? 'ArrowRight' : 'ArrowLeft'
+    const k = e.key
+    const j = k === 'Home' ? 0 : k === 'End' ? list.length - 1
+      : k === back || k === 'ArrowUp' ? (i - 1 + list.length) % list.length
+      : k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowDown' ? (i + 1) % list.length : -1
+    if (j < 0) return
+    e.preventDefault()
+    e.stopPropagation() // the editor's own arrows nudge the selection
+    stop(list[j])
+    list[j].focus()
+    list[j].click()
+  })
+}
+
+/** An opacity % field as 0..1; empty or junk reads as opaque, 0 stays 0. */
+function alphaOf(input: HTMLInputElement): number {
+  const raw = parseFloat(input.value)
+  return Number.isFinite(raw) ? Math.min(Math.max(raw / 100, 0), 1) : 1
 }
 
 /** A value held to a numeric field's min and max, where it has them. */

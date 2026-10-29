@@ -225,6 +225,14 @@ try {
   ok(/rgba\(20, 30, 45, 0\.14\)/.test(shadows.light), `light keeps navy at 14% (${shadows.light})`)
   ok(shadows.dark !== shadows.light && /rgba\(0, 0, 0, 0\.5\)/.test(shadows.dark), `dark has its own, black at 50% (${shadows.dark})`)
 
+  // The canvas viewport is in the iOS callout list (no "Copy / Look Up" bubble
+  // racing the long-press menu). A side-tab rule once got pasted into the
+  // middle of that selector list: .ed-scroll lost the callout rule and took
+  // the tab strip's `flex: none; width: 100%` instead. Chromium drops
+  // -webkit-touch-callout from computed style, so the tell is the flex.
+  const scroll = await p.evaluate(() => { const s = getComputedStyle(document.querySelector('.ed-scroll')); return { callout: s.webkitTouchCallout, flex: s.flex } })
+  ok(scroll.flex !== '0 0 auto' && (scroll.callout === undefined || scroll.callout === 'none'), `the canvas viewport keeps its own rules, not the side tabs' (flex ${scroll.flex}, callout ${scroll.callout})`)
+
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`)
 } finally { await browser.close() }
 

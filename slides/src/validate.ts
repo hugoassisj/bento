@@ -27,7 +27,7 @@ import { MODEL_KEYS } from './modelkeys.generated.ts'
 import { isRemoteUrl } from '../../kernel/src/net.ts'
 import { measureElements, measureTables } from './measure.ts'
 import { BUILTIN_FONTS } from './fonts.ts'
-import { eachRef, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
+import { eachRef, keepAlpha, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
 
@@ -223,8 +223,10 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
           message: `Palette slot "${parsed.slot}" is empty, so this colour will not follow the palette. Set it in the theme, or drop the reference.` })
         return
       }
-      const want = resolveRef(token, palette)
       const have = _readPath(element ?? slide, path)
+      // a reference names the hue; the colour keeps its own opacity (palette.ts keepAlpha)
+      const base = resolveRef(token, palette)
+      const want = base ? keepAlpha(have, base) : base
       if (typeof have !== 'string') {
         add({ ...at, code: 'theme-ref-dangling', severity: 'warning', path: `themeRefs.${path}`,
           message: `There is no colour at "${path}" for this reference to control — it does nothing. Remove it, or restore the property.` })
