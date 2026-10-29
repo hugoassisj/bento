@@ -75,6 +75,13 @@ export const ICONS = {
   toBack: svg('<rect x="4" y="4" width="12" height="12" rx="1.5"/><path d="M20 8v11a1 1 0 0 1-1 1H8" stroke-opacity=".55"/>'),
   indent: svg('<path d="M21 6H11"/><path d="M21 12H11"/><path d="M21 18H11"/><path d="m3 8 4 4-4 4"/>'),
   outdent: svg('<path d="M21 6H11"/><path d="M21 12H11"/><path d="M21 18H11"/><path d="m7 8-4 4 4 4"/>'),
+  // text alignment in its box (inspector segmented controls)
+  alignLeft: svg('<path d="M21 6H3"/><path d="M15 12H3"/><path d="M17 18H3"/>'),
+  alignCenter: svg('<path d="M21 6H3"/><path d="M17 12H7"/><path d="M19 18H5"/>'),
+  alignRight: svg('<path d="M21 6H3"/><path d="M21 12H9"/><path d="M21 18H7"/>'),
+  valignTop: svg('<path d="M3 3h18"/><rect x="6" y="7" width="12" height="6" rx="1.5"/>'),
+  valignMiddle: svg('<path d="M3 12h3"/><path d="M18 12h3"/><rect x="6" y="9" width="12" height="6" rx="1.5"/>'),
+  valignBottom: svg('<path d="M3 21h18"/><rect x="6" y="11" width="12" height="6" rx="1.5"/>'),
 } as const
 
 export type IconName = keyof typeof ICONS

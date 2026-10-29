@@ -443,8 +443,8 @@ export class PropsPanel {
     const { width: dw, height: dh } = this.store.doc.size
     const presetKey =
       Object.entries(PropsPanel.PAGE_PRESETS).find(([, s]) => s.w === dw && s.h === dh)?.[0] ?? 'Custom…'
-    let widthRow: HTMLLabelElement
-    let heightRow: HTMLLabelElement
+    let widthRow: HTMLElement
+    let heightRow: HTMLElement
     const showCustomSize = (show: boolean) => {
       widthRow.style.display = show ? '' : 'none'
       heightRow.style.display = show ? '' : 'none'
@@ -1275,9 +1275,9 @@ export class PropsPanel {
         }, true))
       this.host.appendChild(addStop)
     }
-    this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
+    this.row('Align', this.segmented(['left', 'center', 'right'], el.align, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).align = v as TextElement['align'] }, true)))
-    this.row('Vertical align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
+    this.row('Vertical align', this.segmented(['top', 'middle', 'bottom'], el.valign, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).valign = v as TextElement['valign'] }, true)))
     this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(v, 0.5) }, fin)))
@@ -1297,7 +1297,7 @@ export class PropsPanel {
           const g = (e as TextElement).textStroke
           if (g) g.color = v
         }, fin)))
-      this.row('Interior', this.select(['filled', 'hollow'], ts.fill === 'none' ? 'hollow' : 'filled', (v) =>
+      this.row('Interior', this.segmented(['filled', 'hollow'], ts.fill === 'none' ? 'hollow' : 'filled', (v) =>
         this.mutate(el.id, (e) => {
           const g = (e as TextElement).textStroke
           if (g) { if (v === 'hollow') g.fill = 'none'; else delete g.fill }
@@ -1978,7 +1978,7 @@ export class PropsPanel {
     pick(t('Replace file…'), false)
     pick(t('Replace file (original size)…'), true)
     this.section(t('Fit & corners'))
-    this.row('Fit', this.select(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
+    this.row('Fit', this.segmented(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
       this.mutate(el.id, (e) => { (e as any).fit = v }, true)))
     this.row('Corner radius', this.number((el as any).radius, 1, (v, fin) =>
       this.mutate(el.id, (e) => { (e as any).radius = Math.max(v, 0) }, fin)))
@@ -2088,7 +2088,7 @@ export class PropsPanel {
     // by the English label. Passing t(…) here would translate twice and miss
     // ROW_TIPS in every locale but English.
     const toggle = (label: string, on: boolean, set: (v: boolean) => void) =>
-      this.row(label, this.select(['off', 'on'], on ? 'on' : 'off', (v) => set(v === 'on')))
+      this.row(label, this.toggle(on, set))
     toggle('Controls', el.controls !== false, (v) => this.mutate(el.id, (e) => { (e as MediaElement).controls = v ? undefined : false }, true))
     toggle('Autoplay', !!el.autoplay, (v) => this.mutate(el.id, (e) => { (e as MediaElement).autoplay = v || undefined }, true))
     toggle('Loop', !!el.loop, (v) => this.mutate(el.id, (e) => { (e as MediaElement).loop = v || undefined }, true))
@@ -2099,7 +2099,7 @@ export class PropsPanel {
     this.host.appendChild(note)
 
     if (el.kind === 'video') {
-      this.row('Fit', this.select(['contain', 'cover', 'fill'], el.fit ?? 'contain', (v) =>
+      this.row('Fit', this.segmented(['contain', 'cover', 'fill'], el.fit ?? 'contain', (v) =>
         this.mutate(el.id, (e) => { (e as MediaElement).fit = v as MediaElement['fit'] }, true)))
       this.row('Corner radius', this.number(el.radius ?? 0, 1, (v, fin) =>
         this.mutate(el.id, (e) => { (e as MediaElement).radius = Math.max(v, 0) }, fin)))
@@ -2175,8 +2175,8 @@ export class PropsPanel {
       }, true))
     this.row('Page URL', url)
 
-    this.row('Live', this.select(['off', 'on'], el.live ? 'on' : 'off', (v) =>
-      this.mutate(el.id, (e) => { (e as EmbedElement).live = v === 'on' || undefined }, true)))
+    this.row('Live', this.toggle(!!el.live, (v) =>
+      this.mutate(el.id, (e) => { (e as EmbedElement).live = v || undefined }, true)))
     const note = document.createElement('p')
     note.className = 'ed-hint'
     note.textContent = t('The live frame loads only while online. Offline mode and a missing network show the captured view instead.')
@@ -2204,10 +2204,10 @@ export class PropsPanel {
         (e as CodeElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
       }, fin)))
     // Alignment
-    this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
+    this.row('Align', this.segmented(['left', 'center', 'right'], el.align, (v) =>
       this.mutate(el.id, (e) => { (e as CodeElement).align = v as CodeElement['align'] }, true)))
     // V-Alignment
-    this.row('Vertical align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
+    this.row('Vertical align', this.segmented(['top', 'middle', 'bottom'], el.valign, (v) =>
       this.mutate(el.id, (e) => { (e as CodeElement).valign = v as CodeElement['valign'] }, true)))
     // Line height
     this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
@@ -2563,8 +2563,10 @@ export class PropsPanel {
     this.host.appendChild(h)
   }
 
-  private row(label: string, input: HTMLElement): HTMLLabelElement {
-    const row = document.createElement('label')
+  private row(label: string, input: HTMLElement): HTMLElement {
+    // A segmented control is a group of buttons, and a <label> hands a click on
+    // its caption to the first of them: clicking the word "Align" would align left.
+    const row = document.createElement(input.classList.contains('ed-seg') ? 'div' : 'label')
     row.className = 'ed-row'
     const span = document.createElement('span')
     span.textContent = t(label)
@@ -2855,6 +2857,32 @@ export class PropsPanel {
     return sel
   }
 
+  /** A choice among a few options, every one visible, one click — where a
+   *  <select> hid them behind two. Same call shape as select(). Options with a
+   *  SEG_ICONS entry show the icon, with the word as its tooltip; otherwise the
+   *  words show and the control takes the row's full width. */
+  private segmented(options: string[], value: string, onChange: (v: string) => void): HTMLElement {
+    const wrap = document.createElement('div')
+    wrap.className = 'ed-seg'
+    wrap.setAttribute('role', 'radiogroup')
+    const icons = options.every((o) => SEG_ICONS[o])
+    if (!icons) wrap.classList.add('ed-seg-text')
+    for (const opt of options) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.setAttribute('role', 'radio')
+      b.setAttribute('aria-checked', String(opt === value))
+      if (icons) {
+        b.innerHTML = SEG_ICONS[opt]
+        b.title = t(opt)
+        b.setAttribute('aria-label', t(opt))
+      } else b.textContent = t(opt)
+      b.addEventListener('click', () => { if (opt !== value) onChange(opt) })
+      wrap.appendChild(b)
+    }
+    return wrap
+  }
+
   private toggle(value: boolean, onChange: (v: boolean) => void): HTMLElement {
     const cb = document.createElement('input')
     cb.type = 'checkbox'
@@ -2951,6 +2979,12 @@ function unitHandle(text: string, input: HTMLInputElement): HTMLElement {
   s.textContent = text
   scrub(s, input)
   return s
+}
+
+/** Segmented options that read better as a glyph (keyed by option value). */
+const SEG_ICONS: Record<string, string> = {
+  left: ICONS.alignLeft, center: ICONS.alignCenter, right: ICONS.alignRight,
+  top: ICONS.valignTop, middle: ICONS.valignMiddle, bottom: ICONS.valignBottom,
 }
 
 /** Any CSS color → {hex, a}. Handles #rgb/#rrggbb/#rrggbbaa/rgb()/rgba()/transparent. */
