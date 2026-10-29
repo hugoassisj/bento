@@ -484,7 +484,12 @@ export class Editor {
       authored: new Map(), homeOf: new Map(),
     }
 
-    bar.append(logo, this.updatesB, title, this.fileChip, phoneTools, insert, actions, moreD)
+    // Three zones: the document | insert | output. The document's zone and the
+    // output group share the spare width equally (styles.css), which is what
+    // keeps the insert tools centred whatever the deck is called.
+    const docZone = div('ed-zone-doc')
+    docZone.append(logo, this.updatesB, title, this.fileChip, phoneTools)
+    bar.append(docZone, insert, actions, moreD)
 
     // main area
     const main = div('ed-main')

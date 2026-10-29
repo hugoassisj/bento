@@ -3339,3 +3339,16 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize !important; use
   color: var(--ink); background: var(--tab-on); border-color: var(--tab-on-line);
   box-shadow: 0 1px 2px rgb(0 0 0 / .18);
 }
+
+/* ————— TOPBAR ZONES — document | insert | output ————————————————————————————
+   Three zones, each intentional: the DOCUMENT on the left (mark, name, undo),
+   the INSERT tools in the middle, OUTPUT on the right. The name and the right
+   zone take equal shares of the spare width, so the tools sit between two
+   balanced margins and a long deck name gets the room the left zone has —
+   ellipsed at its end, never wrapping, never pushing a button off the bar. */
+.ed-zone-doc { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: inherit; }
+.ed-topbar .ed-title { flex: 1 1 auto; width: auto; min-width: 48px; max-width: 520px; text-overflow: ellipsis; }
+.ed-topbar .ed-title:focus { text-overflow: clip; }
+.ed-topbar .ed-group-right { flex: 1 1 0; justify-content: flex-end; margin-inline-start: 0; min-width: max-content; }
+.ed-topbar .ed-insert { padding-inline: 10px; border-inline: 1px solid var(--line); }
+.ed-topbar.ed-bar-fold .ed-insert { border-inline: 0; padding-inline: 0; }
