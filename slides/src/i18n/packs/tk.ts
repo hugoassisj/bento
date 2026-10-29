@@ -988,4 +988,7 @@ export const strings: Catalog = {
   "Select something on the slide to see its options.": "Opsiýalaryny görmek üçin slaýdda bir zady saýlaň.",
   "Click an empty part of the slide for the slide’s options.": "Slaýdyň opsiýalary üçin slaýdyň boş ýerine basyň.",
   "Shift-click to add an element or take one out.": "Element goşmak ýa-da aýyrmak üçin Shift bilen basyň.",
+  "Group of {n}": "{n} elementli topar",
+  "Collapse": "Ýygna",
+  "Expand": "Giňelt",
 }

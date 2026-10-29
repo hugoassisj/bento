@@ -959,4 +959,7 @@ export const strings: Catalog = {
   "Select something on the slide to see its options.": "Selecteer iets op de dia om de opties te zien.",
   "Click an empty part of the slide for the slide’s options.": "Klik op een lege plek van de dia voor de opties van de dia.",
   "Shift-click to add an element or take one out.": "Shift-klik om een element toe te voegen of eruit te halen.",
+  "Group of {n}": "Groep van {n}",
+  "Collapse": "Samenvouwen",
+  "Expand": "Uitvouwen",
 }

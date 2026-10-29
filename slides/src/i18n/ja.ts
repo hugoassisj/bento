@@ -975,4 +975,7 @@ export const ja: Catalog = {
   "Select something on the slide to see its options.": "スライド上の要素を選択すると、そのオプションが表示されます。",
   "Click an empty part of the slide for the slide’s options.": "スライドの空いている所をクリックすると、スライドのオプションに戻ります。",
   "Shift-click to add an element or take one out.": "Shift+クリックで要素を追加・解除できます。",
+  "Group of {n}": "グループ（{n}）",
+  "Collapse": "折りたたむ",
+  "Expand": "展開する",
 }

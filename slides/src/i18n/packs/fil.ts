@@ -980,4 +980,7 @@ export const strings: Catalog = {
   "Select something on the slide to see its options.": "Pumili ng isang bagay sa slide para makita ang mga opsyon nito.",
   "Click an empty part of the slide for the slide’s options.": "I-click ang bakanteng bahagi ng slide para sa mga opsyon ng slide.",
   "Shift-click to add an element or take one out.": "Shift-click para magdagdag o mag-alis ng element.",
+  "Group of {n}": "Grupo ng {n}",
+  "Collapse": "I-collapse",
+  "Expand": "I-expand",
 }

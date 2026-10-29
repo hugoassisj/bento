@@ -2378,7 +2378,21 @@ export class PropsPanel {
   group(els: SlideElement[]) {
     if (els.length < 2) return
     const gid = `grp-${uid()}`
-    this.edit(() => { for (const el of els) el.groupId = gid }, true)
+    // A group is one block in the stack, as in every design tool: the members
+    // gather where the topmost of them was, keeping their own order, so the
+    // layer list can show the group as one row with its members under it.
+    // One undo step with the tagging.
+    this.edit(() => {
+      const ids = new Set(els.map((e) => e.id))
+      const all = this.store.slide.elements
+      const members = all.filter((e) => ids.has(e.id))
+      let top = -1
+      all.forEach((e, i) => { if (ids.has(e.id)) top = i })
+      const rest = all.filter((e) => !ids.has(e.id))
+      const at = all.slice(0, top + 1).filter((e) => !ids.has(e.id)).length
+      this.store.slide.elements = [...rest.slice(0, at), ...members, ...rest.slice(at)]
+      for (const el of members) el.groupId = gid
+    }, true)
   }
 
   // --- reveal verbs (editor/reveal.ts decides, this applies) ---------------

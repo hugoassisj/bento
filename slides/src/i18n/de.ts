@@ -975,4 +975,7 @@ export const de: Catalog = {
   "Select something on the slide to see its options.": "Wählen Sie etwas auf der Folie aus, um seine Optionen zu sehen.",
   "Click an empty part of the slide for the slide’s options.": "Klicken Sie auf eine leere Stelle der Folie für die Optionen der Folie.",
   "Shift-click to add an element or take one out.": "Mit Umschalt-Klick ein Element hinzufügen oder herausnehmen.",
+  "Group of {n}": "Gruppe aus {n}",
+  "Collapse": "Einklappen",
+  "Expand": "Ausklappen",
 }

@@ -967,4 +967,7 @@ export const strings: Catalog = {
   "Select something on the slide to see its options.": "چیزی را روی اسلاید انتخاب کنید تا گزینه‌هایش را ببینید.",
   "Click an empty part of the slide for the slide’s options.": "برای گزینه‌های اسلاید، روی بخش خالی اسلاید کلیک کنید.",
   "Shift-click to add an element or take one out.": "با Shift و کلیک یک عنصر را اضافه یا حذف کنید.",
+  "Group of {n}": "گروه {n}تایی",
+  "Collapse": "جمع کردن",
+  "Expand": "باز کردن",
 }

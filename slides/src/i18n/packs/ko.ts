@@ -955,4 +955,7 @@ export const strings: Catalog = {
   "Select something on the slide to see its options.": "슬라이드에서 항목을 선택하면 옵션이 표시됩니다.",
   "Click an empty part of the slide for the slide’s options.": "슬라이드의 빈 곳을 클릭하면 슬라이드 옵션이 표시됩니다.",
   "Shift-click to add an element or take one out.": "Shift+클릭으로 요소를 추가하거나 뺄 수 있습니다.",
+  "Group of {n}": "{n}개 그룹",
+  "Collapse": "접기",
+  "Expand": "펼치기",
 }

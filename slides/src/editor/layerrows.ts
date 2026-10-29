@@ -10,17 +10,24 @@
  * somewhere ends up exactly where the Order buttons would have put it
  * (moveInPaintOrder below is the same splice as repeated steps).
  *
- * WHERE IT LIVES: FIRST in the properties panel, whatever is selected. The
+ * WHERE IT LIVES: the side column's Layers view (Slides | Layers), as in
+ * Penpot and Figma — navigation on the left, properties on the right. It
+ * used to be FIRST in the properties panel, whatever was selected. The
  * #481 measurement (Chrome 1565 px wide, starter deck, panel viewport 740 px:
  * the Slide panel is 1192 px of content, a selected text element's 2219 px)
  * argued for putting it first on the Slide panel and LAST on an element's, so
  * it was reachable in both — but a section that moves is worse than one that
  * is far: every click on the canvas hopped it from the top of the panel to
- * the bottom, and a user who opened it expected it where they left it. One
- * home now: structure first, then the properties of the selection; closed by
- * default, open state shared under one title. The list caps itself at ~12
- * rows and scrolls inside (the showcase title slide has 39 elements: uncapped
- * it pushed the Slide controls ~975 px down).
+ * the bottom, and a user who opened it expected it where they left it. Its
+ * own column settles both: it never moves, and it no longer pushes anything
+ * down, so it runs the full height instead of capping itself at ~12 rows.
+ *
+ * GROUPS read as Penpot and Figma show them: a row for the group (disclosure
+ * arrow, 'Group of N'), its members nested under it. Grouping gathers the
+ * members into one block of the stack (panels.ts group), so a group is one
+ * run; a file grouped before that can still interleave, and then each run
+ * gets its own group row — the list never pretends the stack is other than
+ * it is.
  *
  * WHAT REBUILDS IT: only a change in what the rows SAY. A drag emits a doc
  * event per frame, and none of them changes a row (position and size are not
@@ -107,12 +114,13 @@ export function moveInPaintOrder<E extends { id: string; groupId?: string }>(ele
   return next.every((e, i) => e === elements[i]) ? (elements as E[]) : next
 }
 
-/** Which rows read as selected — a grouped element's row lights when any
- *  member is selected, the way the canvas selects the group. */
+/** Which element rows read as selected: exactly the selected elements. A
+ *  group has its own row now (layers.ts groupRow), lit when the whole group is
+ *  selected — so a member reached on its own (⌘-click, or its row) lights
+ *  alone, and a group selected by a canvas click lights every row of it. */
 export function highlighted(rows: readonly LayerRow[], selection: readonly string[]): Set<string> {
   const sel = new Set(selection)
-  const groups = new Set(rows.filter((r) => sel.has(r.id) && r.groupId).map((r) => r.groupId))
-  return new Set(rows.filter((r) => sel.has(r.id) || (r.groupId && groups.has(r.groupId))).map((r) => r.id))
+  return new Set(rows.filter((r) => sel.has(r.id)).map((r) => r.id))
 }
 
 /** What the rows depend on, as one comparable string — ids in paint order,

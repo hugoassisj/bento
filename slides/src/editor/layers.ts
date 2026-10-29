@@ -31,6 +31,8 @@ export class LayersUI {
   private dragId: string | null = null
   /** what the rows on screen were built from — see layerrows.ts rowSignature */
   private sig: ReturnType<typeof rowSignature> | null = null
+  /** groups folded to their one row (by groupId, for the session) */
+  private folded = new Set<string>()
 
   constructor(private host: LayersHost) {
     this.list = document.createElement('div')
@@ -84,10 +86,14 @@ export class LayersUI {
   private highlight() {
     const rows = layerRows(this.host.slide(), t)
     const lit = highlighted(rows, this.host.selection())
+    const sel = new Set(this.host.selection())
     for (const n of this.list.children) {
       const row = n as HTMLElement
-      if (!row.dataset.id) continue
-      const on = lit.has(row.dataset.id)
+      const gid = row.dataset.group
+      const on = gid
+        ? rows.filter((r) => r.groupId === gid).every((r) => sel.has(r.id))
+        : !!row.dataset.id && lit.has(row.dataset.id)
+      if (!gid && !row.dataset.id) continue
       row.classList.toggle('sel', on)
       row.setAttribute('aria-selected', on ? 'true' : 'false')
     }
@@ -106,7 +112,13 @@ export class LayersUI {
       this.list.appendChild(empty)
       return
     }
+    let run: string | undefined
     for (const r of rows) {
+      if (r.groupId !== run) {
+        run = r.groupId
+        if (run) this.list.appendChild(this.groupRow(run, rows))
+      }
+      if (r.groupId && this.folded.has(r.groupId)) continue
       const row = document.createElement('div')
       row.className = 'ed-layer' + (lit.has(r.id) ? ' sel' : '') + (r.grouped ? ' grouped' : '')
       row.dataset.id = r.id
@@ -150,6 +162,72 @@ export class LayersUI {
     if (had) this.list.focus({ preventScroll: true })
   }
 
+  /**
+   * The row that stands for a group, the way Penpot and Figma show one: a
+   * disclosure arrow, the group glyph, 'Group of N'; its members are nested
+   * under it. Clicking it selects the whole group (the canvas's click);
+   * dragging it moves the group as one, and it takes drops for its run.
+   */
+  private groupRow(gid: string, rows: LayerRow[]): HTMLElement {
+    const members = rows.filter((r) => r.groupId === gid)
+    const row = document.createElement('div')
+    row.className = 'ed-layer ed-layer-group'
+    row.dataset.group = gid
+    row.draggable = true
+    row.setAttribute('role', 'option')
+    const open = !this.folded.has(gid)
+    const fold = document.createElement('button')
+    fold.type = 'button'
+    fold.className = 'ed-layer-fold'
+    fold.setAttribute('aria-expanded', String(open))
+    fold.setAttribute('aria-label', open ? t('Collapse') : t('Expand'))
+    fold.addEventListener('click', (ev) => {
+      ev.stopPropagation()
+      if (open) this.folded.add(gid); else this.folded.delete(gid)
+      this.rebuildRows()
+    })
+    const glyph = document.createElement('span')
+    glyph.className = 'ed-layer-glyph'
+    glyph.innerHTML = ICONS.group
+    const label = document.createElement('span')
+    label.className = 'ed-layer-label'
+    label.textContent = t('Group of {n}', { n: members.length })
+    row.append(fold, glyph, label)
+    const all = this.host.slide().elements.filter((e) => e.groupId === gid).map((e) => e.id)
+    row.addEventListener('click', (ev) => {
+      const cur = [...this.host.selection()]
+      if (ev.shiftKey || ev.metaKey || ev.ctrlKey) {
+        const has = all.every((id) => cur.includes(id))
+        this.host.select(has ? cur.filter((id) => !all.includes(id)) : [...cur.filter((id) => !all.includes(id)), ...all])
+      } else this.host.select(all)
+      this.list.focus({ preventScroll: true })
+    })
+    // dragging the group drags its topmost member, and moveInPaintOrder takes
+    // the whole group along; a drop on it lands above or below the whole run
+    row.addEventListener('dragstart', (ev) => {
+      this.dragId = members[0].id
+      ev.dataTransfer?.setData('text/plain', members[0].id)
+      if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move'
+      row.classList.add('dragging')
+    })
+    row.addEventListener('dragend', () => { this.dragId = null; this.clearDropMarks() })
+    row.addEventListener('dragover', (ev) => {
+      if (!this.dragId || all.includes(this.dragId)) return
+      ev.preventDefault()
+      this.clearDropMarks()
+      row.classList.add(this.dropAbove(ev, row) ? 'drop-above' : 'drop-below')
+    })
+    row.addEventListener('drop', (ev) => {
+      ev.preventDefault()
+      const id = this.dragId ?? ev.dataTransfer?.getData('text/plain')
+      this.clearDropMarks()
+      if (!id || all.includes(id)) return
+      const above = this.dropAbove(ev, row)
+      this.dropOn(id, above ? members[0] : members[members.length - 1], above)
+    })
+    return row
+  }
+
   private dropAbove(ev: DragEvent, row: HTMLElement): boolean {
     const b = row.getBoundingClientRect()
     return ev.clientY < b.top + b.height / 2
@@ -185,9 +263,9 @@ export class LayersUI {
   }
 
   private onClick(ev: MouseEvent, r: LayerRow) {
-    const elements = this.host.slide().elements
-    // the canvas selects a whole group on click and reaches a member with Alt
-    const unit = r.groupId && !ev.altKey ? elements.filter((e) => e.groupId === r.groupId).map((e) => e.id) : [r.id]
+    // A member's row selects that member — the list is where you reach inside
+    // a group, as in Penpot and Figma; the group's own row selects the group.
+    const unit = [r.id]
     const cur = [...this.host.selection()]
     if (ev.shiftKey || ev.metaKey || ev.ctrlKey) {
       const has = unit.every((id) => cur.includes(id))

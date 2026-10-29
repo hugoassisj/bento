@@ -960,4 +960,7 @@ export const strings: Catalog = {
   "Select something on the slide to see its options.": "Markera något på bilden för att se dess alternativ.",
   "Click an empty part of the slide for the slide’s options.": "Klicka på en tom del av bilden för bildens alternativ.",
   "Shift-click to add an element or take one out.": "Skift-klicka för att lägga till eller ta bort ett element.",
+  "Group of {n}": "Grupp med {n}",
+  "Collapse": "Fäll ihop",
+  "Expand": "Fäll ut",
 }

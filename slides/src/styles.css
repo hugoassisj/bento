@@ -677,7 +677,20 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-layer:hover { background: rgb(94 118 153 / 0.10); }
 .ed-layer.sel { background: rgb(94 118 153 / 0.18); border-color: rgb(94 118 153 / 0.35); }
-.ed-layer.grouped { padding-left: 20px; }
+/* a group's own row heads its members, which nest under it on a guide line
+   (layers.ts groupRow), as Penpot and Figma draw a group */
+.ed-layer.grouped { position: relative; padding-inline-start: 26px; }
+.ed-layer.grouped::before { content: ''; position: absolute; inset-inline-start: 12px; top: 0; bottom: 0; border-inline-start: 1px solid var(--line); }
+.ed-layer-group { padding-inline-start: 2px; }
+.ed-layer-group .ed-layer-label { font-weight: 600; }
+.ed-layer-fold { flex: none; position: relative; width: 14px; height: 18px; padding: 0; margin-inline-end: -4px; color: var(--muted); background: none; border: 0; cursor: pointer; }
+.ed-layer-fold::before {
+  content: ''; position: absolute; top: 50%; inset-inline-start: 4px;
+  border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  transform: translateY(-50%) rotate(90deg); transition: transform .12s ease; opacity: .7;
+}
+.ed-layer-fold[aria-expanded='false']::before { transform: translateY(-50%); }
+[dir='rtl'] .ed-layer-fold[aria-expanded='false']::before { transform: translateY(-50%) scaleX(-1); }
 .ed-layer.dragging { opacity: 0.4; }
 .ed-layer.drop-above { box-shadow: 0 -2px 0 0 var(--accent); }
 .ed-layer.drop-below { box-shadow: 0 2px 0 0 var(--accent); }

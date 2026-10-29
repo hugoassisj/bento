@@ -56,6 +56,8 @@ export const ICONS = {
   arrow: svg('<line x1="3" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/>'),
   arrow2: svg('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/><polyline points="11 6 5 12 11 18"/>'),
   line: svg('<line x1="4" y1="19" x2="20" y2="5"/>'),
+  // a group in the layer list: two shapes inside a dashed frame
+  group: svg('<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect width="7" height="5" x="7" y="7" rx="1"/><rect width="7" height="5" x="10" y="12" rx="1"/>'),
 } as const
 
 export type IconName = keyof typeof ICONS

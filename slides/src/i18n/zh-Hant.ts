@@ -975,4 +975,7 @@ export const zhHant: Catalog = {
   "Select something on the slide to see its options.": "選取投影片上的內容即可看到它的選項。",
   "Click an empty part of the slide for the slide’s options.": "按一下投影片的空白處可查看投影片的選項。",
   "Shift-click to add an element or take one out.": "按住 Shift 按一下可加入或移除元素。",
+  "Group of {n}": "群組（{n} 個）",
+  "Collapse": "收合",
+  "Expand": "展開",
 }

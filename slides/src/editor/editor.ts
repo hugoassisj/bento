@@ -3561,6 +3561,16 @@ export class Editor {
       openCtxMenu(x, y, this.slideMenuItems(Number(thumb.dataset.index), thumb))
       return true
     }
+    // a layer row: the canvas's own element menu (Group, Ungroup, order,
+    // delete…), on that row's element — or, on a group's row, the group
+    const layer = target.closest<HTMLElement>('.ed-side-layers .ed-layer')
+    if (layer) {
+      const gid = layer.dataset.group
+      const ids = gid ? this.store.slide.elements.filter((e) => e.groupId === gid).map((e) => e.id) : [layer.dataset.id!]
+      if (!ids.every((id) => this.store.selection.includes(id))) this.store.select(ids)
+      openCtxMenu(x, y, this.elementMenuItems())
+      return true
+    }
     if (!target.closest('.ed-scroll')) return false // not the canvas — leave it alone
     const id = this.elementIdAtPoint(x, y)
     if (!id) {

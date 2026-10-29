@@ -981,4 +981,7 @@ export const strings: Catalog = {
   "Select something on the slide to see its options.": "اختیارات دیکھنے کے لیے سلائیڈ پر کچھ منتخب کریں۔",
   "Click an empty part of the slide for the slide’s options.": "سلائیڈ کے اختیارات کے لیے سلائیڈ کے خالی حصے پر کلک کریں۔",
   "Shift-click to add an element or take one out.": "کوئی عنصر شامل کرنے یا نکالنے کے لیے Shift-کلک کریں۔",
+  "Group of {n}": "{n} کا گروپ",
+  "Collapse": "سمیٹیں",
+  "Expand": "پھیلائیں",
 }
