@@ -582,7 +582,7 @@ export class PropsPanel {
       }, true)))
     if (slide.hover?.type === 'focus-group') {
       this.row('Fade others to', this.number(slide.hover.dim ?? 0.15, 0.01, (v, fin) =>
-        this.editSlideAttrs(slideId, (slide: Slide) => { if (slide.hover) slide.hover.dim = Math.min(Math.max(v, 0), 1) }, fin)))
+        this.editSlideAttrs(slideId, (slide: Slide) => { if (slide.hover) slide.hover.dim = Math.min(Math.max(v, 0), 1) }, fin), { min: 0, max: 1 }))
     }
     if (slide.hover?.type === 'reveal') {
       const sets = [...new Set(slide.elements.map((e) => e.showOnHover).filter(Boolean))] as string[]
@@ -700,6 +700,7 @@ export class PropsPanel {
     const kind = (...buttons: HTMLElement[]) => {
       const k = document.createElement('div')
       k.className = 'ed-toolbar-kind'
+      k.style.setProperty('--n', String(buttons.length))
       k.append(...buttons)
       return k
     }
@@ -744,7 +745,7 @@ export class PropsPanel {
     blend.title = t('Blend mode')
     blend.setAttribute('aria-label', t('Blend mode'))
     const opacity = this.mini('%', Math.round(el.opacity * 100), (v, fin) =>
-      this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1), fin))
+      this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1), fin), undefined, { min: 0, max: 100 })
     opacity.title = t('Opacity')
     layer.append(blend, opacity)
     block.appendChild(layer)
@@ -752,15 +753,15 @@ export class PropsPanel {
     const geo = document.createElement('div')
     geo.className = 'ed-grid2'
     geo.append(
-      this.mini(t('W'), el.w, (v, fin) => this.setNum(el.id, 'w', Math.max(v, 1), fin)),
-      this.mini(t('H'), el.h, (v, fin) => this.setNum(el.id, 'h', Math.max(v, 1), fin)),
+      this.mini(t('W'), el.w, (v, fin) => this.setNum(el.id, 'w', Math.max(v, 1), fin), undefined, { min: 1 }),
+      this.mini(t('H'), el.h, (v, fin) => this.setNum(el.id, 'h', Math.max(v, 1), fin), undefined, { min: 1 }),
       this.mini(t('X'), el.x, (v, fin) => this.setNum(el.id, 'x', v, fin)),
       this.mini(t('Y'), el.y, (v, fin) => this.setNum(el.id, 'y', v, fin)),
       this.mini(t('Angle'), el.rotation, (v, fin) => this.setNum(el.id, 'rotation', v, fin), ICONS.rotate),
     )
     if (el.type === 'shape' && el.shape === 'rect') {
       geo.append(this.mini(t('Corner radius'), el.radius, (v, fin) =>
-        this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin), ICONS.radius))
+        this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin), ICONS.radius, { min: 0 }))
     }
     block.appendChild(geo)
   }
@@ -773,13 +774,30 @@ export class PropsPanel {
       ? { add: false, hint: t('Remove shadow'), run: () => this.mutate(el.id, (e) => { delete e.shadow }, true) }
       : { add: true, hint: t('Add shadow'), run: () => this.mutate(el.id, (e) => { e.shadow = { ...SHADOW_PRESETS[first] } }, true) })
     if (!el.shadow) return
+    // The presets as tiles: each one SHOWS its shadow, its name under it —
+    // one click, all visible, where a dropdown of words hid what they meant.
     const current = Object.entries(SHADOW_PRESETS).find(([, p]) => JSON.stringify(p) === JSON.stringify(el.shadow))?.[0] ?? 'custom'
-    const presets = this.select(
-      [...(current === 'custom' ? ['custom'] : []), ...Object.keys(SHADOW_PRESETS)],
-      current,
-      (v) => this.mutate(el.id, (e) => { if (v !== 'custom') e.shadow = { ...SHADOW_PRESETS[v] } }, true))
-    presets.setAttribute('aria-label', t('Shadow'))
-    this.field(presets)
+    const tiles = document.createElement('div')
+    tiles.className = 'ed-shadow-tiles'
+    tiles.setAttribute('role', 'radiogroup')
+    tiles.setAttribute('aria-label', t('Shadow'))
+    for (const [key, sh] of Object.entries(SHADOW_PRESETS)) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-shadow-tile'
+      b.setAttribute('role', 'radio')
+      b.setAttribute('aria-checked', String(key === current))
+      const swatch = document.createElement('span')
+      swatch.className = 'ed-shadow-swatch'
+      // the preset drawn at a quarter of its size, so all four fit a tile
+      swatch.style.boxShadow = `${(sh.x ?? 0) / 4}px ${(sh.y ?? 0) / 4}px ${sh.blur / 4}px ${sh.color}`
+      const name = document.createElement('span')
+      name.textContent = t(key)
+      b.append(swatch, name)
+      b.addEventListener('click', () => { if (key !== current) this.mutate(el.id, (e) => { e.shadow = { ...SHADOW_PRESETS[key] } }, true) })
+      tiles.appendChild(b)
+    }
+    this.host.appendChild(tiles)
     // editing any value turns a preset into 'custom' on the next rebuild
     const shadows = Array.isArray(el.shadow) ? el.shadow : [el.shadow]
     const setShadow = (i: number, patch: Record<string, unknown>, fin = true) =>
@@ -800,7 +818,7 @@ export class PropsPanel {
       grid.append(
         this.mini(t('X'), sh.x ?? 0, (v, fin) => setShadow(i, { x: v }, fin)),
         this.mini(t('Y'), sh.y ?? 0, (v, fin) => setShadow(i, { y: v }, fin)),
-        this.mini(t('Blur'), sh.blur, (v, fin) => setShadow(i, { blur: Math.max(v, 0) }, fin)),
+        this.mini(t('Blur'), sh.blur, (v, fin) => setShadow(i, { blur: Math.max(v, 0) }, fin), undefined, { min: 0 }),
       )
       this.host.appendChild(grid)
       this.field(this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
@@ -820,11 +838,11 @@ export class PropsPanel {
       this.mini(t('Blur'), el.blur ?? 0, (v, fin) => this.mutate(el.id, (e) => {
         if (v > 0) e.blur = v
         else delete e.blur
-      }, fin)),
+      }, fin), undefined, { min: 0 }),
       this.mini(t('Behind'), el.backdropFilter ?? 0, (v, fin) => this.mutate(el.id, (e) => {
         if (v > 0) e.backdropFilter = v
         else delete e.backdropFilter
-      }, fin)),
+      }, fin), undefined, { min: 0 }),
     )
     grid.lastElementChild!.setAttribute('title', t('Blur behind'))
     this.host.appendChild(grid)
@@ -971,7 +989,7 @@ export class PropsPanel {
       // per-kind default (slide-* 0.75s, fade-* 0.55s); lower = snappier
       this.row('Entrance (s)', this.number(
         el.fx.enterDur ?? (el.fx.enter.startsWith('slide-') ? 0.75 : 0.55), 0.05,
-        (v, fin) => { if (fin) setFx({ enterDur: Math.max(v, 0.05) }) }))
+        (v, fin) => { if (fin) setFx({ enterDur: Math.max(v, 0.05) }) }, { min: 0.05 }))
     }
     // "Animate on click": hidden until the n-th → on this slide (0 = with the
     // slide). The element's Enter plays when its step comes, or a plain fade.
@@ -1010,10 +1028,10 @@ export class PropsPanel {
         }))
       this.row('Zoom amount %', this.number(
         Math.round(((ken.scale ?? (dir === 'drift' ? 1.1 : 1.06)) - 1) * 100), 1,
-        (v, fin) => { if (fin) setKen({ scale: 1 + Math.min(Math.max(v, 0), 100) / 100 }) }))
+        (v, fin) => { if (fin) setKen({ scale: 1 + Math.min(Math.max(v, 0), 100) / 100 }) }, { min: 0, max: 100 }))
       this.row('Pan & zoom (s)', this.number(
         ken.duration ?? (dir === 'drift' ? 26 : 2.5), 0.1,
-        (v, fin) => { if (fin) setKen({ duration: Math.max(v, 0.1) }) }))
+        (v, fin) => { if (fin) setKen({ duration: Math.max(v, 0.1) }) }, { min: 0.1 }))
     }
 
     // continuous loop animation
@@ -1028,7 +1046,7 @@ export class PropsPanel {
       })))
     if (loop) {
       this.row('Seconds per lap', this.number(loop.duration ?? 2, 0.1, (v, fin) =>
-        this.mutate(el.id, (e) => { if (e.fx?.loop) e.fx.loop.duration = Math.max(v, 0.1) }, fin)))
+        this.mutate(el.id, (e) => { if (e.fx?.loop) e.fx.loop.duration = Math.max(v, 0.1) }, fin), { min: 0.1 }))
       if (loop.type === 'motion-path') {
         const path = document.createElement('input')
         path.type = 'text'
@@ -1323,14 +1341,7 @@ export class PropsPanel {
     const font = this.fontSelect(el)
     font.setAttribute('aria-label', t('Font'))
     font.title = t('Font')
-    const embed = document.createElement('button')
-    embed.type = 'button'
-    embed.className = 'ed-btn ed-tool'
-    embed.innerHTML = ICONS.fontAdd
-    embed.title = t('Bundle a .woff2/.woff/.ttf/.otf into this file and use it here')
-    embed.setAttribute('aria-label', t('＋ Embed font file…').replace(/^＋\s*/, ''))
-    embed.addEventListener('click', () => this.embedFont(el))
-    this.field(font, embed)
+    this.field(font)
 
     const sizes = document.createElement('div')
     sizes.className = 'ed-grid2'
@@ -1339,14 +1350,14 @@ export class PropsPanel {
     const size = this.mini('pt', Math.round(el.fontSize * 0.75 * 10) / 10, (v, fin) =>
       this.mutate(el.id, (e) => {
         (e as TextElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
-      }, fin))
+      }, fin), undefined, { min: 3 })
     size.title = t('Size (pt)')
     const weight = this.weightSelect(el)
     weight.title = t('Weight')
     weight.setAttribute('aria-label', t('Weight'))
     sizes.append(size, weight,
       this.mini(t('Line height'), el.lineHeight, (v, fin) =>
-        this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(Math.round(v * 100) / 100, 0.5) }, fin), ICONS.lineHeight),
+        this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(Math.round(v * 100) / 100, 0.5) }, fin), ICONS.lineHeight, { min: 0.5 }),
       this.mini(t('Letter spacing'), el.letterSpacing ?? 0, (v, fin) =>
         this.mutate(el.id, (e) => {
           const tx = e as TextElement
@@ -1437,17 +1448,20 @@ export class PropsPanel {
         const tx = e as TextElement
         if (v > 0) tx.textStroke = { color: '#1E2A3A', ...(tx.textStroke ?? {}), width: v }
         else delete tx.textStroke
-      }, fin))
+      }, fin), undefined, { min: 0 })
     const interior = this.segmented(['filled', 'hollow'], ts.fill === 'none' ? 'hollow' : 'filled', (v) =>
       this.mutate(el.id, (e) => {
         const g = (e as TextElement).textStroke
         if (g) { if (v === 'hollow') g.fill = 'none'; else delete g.fill }
       }, true))
     interior.setAttribute('aria-label', t('Interior'))
+    // the width beside nothing it could crowd; the words ('filled' / 'hollow')
+    // get a line of their own, so no translation is cut
     const grid = document.createElement('div')
     grid.className = 'ed-grid2'
-    grid.append(w, interior)
+    grid.append(w)
     this.host.appendChild(grid)
+    this.field(interior)
   }
 
   /** Solid | Gradient, one click. */
@@ -1477,7 +1491,7 @@ export class PropsPanel {
       const wrap = document.createElement('div')
       wrap.className = 'ed-gradstop'
       const at = this.mini('%', Math.round(stop.at * 100), (v, fin) =>
-        edit((g) => { if (g.stops[i]) g.stops[i].at = Math.min(Math.max(v / 100, 0), 1) }, fin))
+        edit((g) => { if (g.stops[i]) g.stops[i].at = Math.min(Math.max(v / 100, 0), 1) }, fin), undefined, { min: 0, max: 100 })
       at.title = t('Stop {n}', { n: i + 1 }) + ' · ' + t('Position %')
       at.classList.add('ed-gradstop-at')
       const color = this.colorAlpha(stop.color, (v, fin) => edit((g) => { if (g.stops[i]) g.stops[i].color = v }, fin))
@@ -1527,8 +1541,20 @@ export class PropsPanel {
       add(c.label, c.stack, hit)
     }
     if (current && !matched) add(curFirst || t('custom'), current, true)
-    sel.addEventListener('change', () =>
-      this.mutate(el.id, (e) => { (e as TextElement).fontFamily = sel.value }, true))
+    // bringing in a font is where you look for fonts: the list's last entry
+    const EMBED = '\u0000embed'
+    const chosen = sel.selectedIndex
+    const embed = add(t('＋ Embed font file…'), EMBED, false)
+    embed.style.fontFamily = 'inherit'
+    embed.title = t('Bundle a .woff2/.woff/.ttf/.otf into this file and use it here')
+    sel.addEventListener('change', () => {
+      if (sel.value === EMBED) {
+        sel.selectedIndex = chosen // the choice stays the font in use
+        this.embedFont(el)
+        return
+      }
+      this.mutate(el.id, (e) => { (e as TextElement).fontFamily = sel.value }, true)
+    })
     return sel
   }
 
@@ -1641,7 +1667,7 @@ export class PropsPanel {
     const grid = document.createElement('div')
     grid.className = 'ed-grid2'
     grid.append(this.mini(t('Width'), el.strokeWidth, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin)), style)
+      this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin), undefined, { min: 0 }), style)
     this.host.appendChild(grid)
   }
 
@@ -2004,13 +2030,13 @@ export class PropsPanel {
     grid.className = 'ed-grid2'
     grid.append(
       this.mini(t('Font'), st.fontSize, (v, fin) => this.mutate(el.id, (e) =>
-        { (e as TableElement).style.fontSize = Math.max(v, 6) }, fin)),
+        { (e as TableElement).style.fontSize = Math.max(v, 6) }, fin), undefined, { min: 6 }),
       this.mini(t('Radius'), st.radius, (v, fin) => this.mutate(el.id, (e) =>
-        { (e as TableElement).style.radius = Math.max(v, 0) }, fin)),
+        { (e as TableElement).style.radius = Math.max(v, 0) }, fin), undefined, { min: 0 }),
       this.mini(t('Pad X'), st.cellPadX, (v, fin) => this.mutate(el.id, (e) =>
-        { (e as TableElement).style.cellPadX = Math.max(v, 0) }, fin)),
+        { (e as TableElement).style.cellPadX = Math.max(v, 0) }, fin), undefined, { min: 0 }),
       this.mini(t('Pad Y'), st.cellPadY, (v, fin) => this.mutate(el.id, (e) =>
-        { (e as TableElement).style.cellPadY = Math.max(v, 0) }, fin)),
+        { (e as TableElement).style.cellPadY = Math.max(v, 0) }, fin), undefined, { min: 0 }),
     )
     this.host.appendChild(grid)
 
@@ -2141,7 +2167,7 @@ export class PropsPanel {
     this.row('Fit', this.segmented(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
       this.mutate(el.id, (e) => { (e as any).fit = v }, true)))
     this.row('Corner radius', this.number((el as any).radius, 1, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as any).radius = Math.max(v, 0) }, fin)))
+      this.mutate(el.id, (e) => { (e as any).radius = Math.max(v, 0) }, fin), { min: 0 }))
     // Off = width and height resize independently. Unlocking also sets
     // fit:'fill' so the stretch is what the reader sees — contain/cover would
     // letterbox the distortion away. Re-locking deletes the field (absent =
@@ -2262,7 +2288,7 @@ export class PropsPanel {
       this.row('Fit', this.segmented(['contain', 'cover', 'fill'], el.fit ?? 'contain', (v) =>
         this.mutate(el.id, (e) => { (e as MediaElement).fit = v as MediaElement['fit'] }, true)))
       this.row('Corner radius', this.number(el.radius ?? 0, 1, (v, fin) =>
-        this.mutate(el.id, (e) => { (e as MediaElement).radius = Math.max(v, 0) }, fin)))
+        this.mutate(el.id, (e) => { (e as MediaElement).radius = Math.max(v, 0) }, fin), { min: 0 }))
       const poster = document.createElement('input')
       poster.type = 'text'
       poster.placeholder = t('Poster image URL (optional)')
@@ -2362,7 +2388,7 @@ export class PropsPanel {
     this.row('Size (pt)', this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
       this.mutate(el.id, (e) => {
         (e as CodeElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
-      }, fin)))
+      }, fin), { min: 3 }))
     // Alignment
     this.row('Align', this.segmented(['left', 'center', 'right'], el.align, (v) =>
       this.mutate(el.id, (e) => { (e as CodeElement).align = v as CodeElement['align'] }, true)))
@@ -2371,7 +2397,7 @@ export class PropsPanel {
       this.mutate(el.id, (e) => { (e as CodeElement).valign = v as CodeElement['valign'] }, true)))
     // Line height
     this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as CodeElement).lineHeight = Math.max(v, 0.5) }, fin)))
+      this.mutate(el.id, (e) => { (e as CodeElement).lineHeight = Math.max(v, 0.5) }, fin), { min: 0.5 }))
     // Language — selects the built-in tokenizer table. grammarName doubles as
     // the language id; grammarAssetId/themeAssetId stay in the format as the
     // seam for a future signed-extension tier carrying real TextMate grammars
@@ -2696,7 +2722,7 @@ export class PropsPanel {
 
   /** A numeric field with its label inside it, Penpot's way. `icon` draws an
    *  icon there instead and makes the label the hint. */
-  private mini(label: string, value: number, onChange: (v: number, final: boolean) => void, icon?: string): HTMLElement {
+  private mini(label: string, value: number, onChange: (v: number, final: boolean) => void, icon?: string, range?: { min?: number; max?: number }): HTMLElement {
     const wrap = document.createElement('label')
     wrap.className = 'ed-mini'
     const span = document.createElement('span')
@@ -2716,21 +2742,34 @@ export class PropsPanel {
     const input = document.createElement('input')
     input.type = 'number'
     input.value = String(Math.round(value * 10) / 10)
-    input.addEventListener('change', () => onChange(parseFloat(input.value), true))
+    if (range?.min !== undefined) input.min = String(range.min)
+    if (range?.max !== undefined) input.max = String(range.max)
+    input.addEventListener('change', () => {
+      const v = parseFloat(input.value)
+      if (Number.isNaN(v)) return
+      const held = bound(input, v) // a typed value past the limits is held to them, and shows so
+      if (held !== v) input.value = String(held)
+      onChange(held, true)
+    })
     input.addEventListener(SCRUB, () => onChange(parseFloat(input.value), false))
     scrub(span, input)
     wrap.append(span, input)
     return wrap
   }
 
-  private number(value: number, step: number, onEdit: (v: number, final: boolean) => void): HTMLElement {
+  private number(value: number, step: number, onEdit: (v: number, final: boolean) => void, range?: { min?: number; max?: number }): HTMLElement {
     const input = document.createElement('input')
     input.type = 'number'
     input.step = String(step)
     input.value = String(value)
+    if (range?.min !== undefined) input.min = String(range.min)
+    if (range?.max !== undefined) input.max = String(range.max)
     const send = (final: boolean) => {
       const v = parseFloat(input.value)
-      if (!Number.isNaN(v)) onEdit(v, final)
+      if (Number.isNaN(v)) return
+      const held = bound(input, v)
+      if (final && held !== v) input.value = String(held)
+      onEdit(held, final)
     }
     input.addEventListener('change', () => send(true))
     input.addEventListener(SCRUB, () => send(false))
@@ -3107,7 +3146,8 @@ function scrub(handle: HTMLElement, input: HTMLInputElement) {
       if (!moved) { moved = true; input.focus(); document.body.classList.add('ed-scrubbing') }
       const k = step * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1)
       const digits = Math.max(0, Math.ceil(-Math.log10(k) - 1e-9))
-      const v = (start + Math.round(dx / 2) * k).toFixed(digits)
+      // never past the field's own limits (min/max), however far the drag goes
+      const v = bound(input, start + Math.round(dx / 2) * k).toFixed(digits)
       if (v === input.value) return
       input.value = v
       input.dispatchEvent(new Event(SCRUB))
@@ -3130,6 +3170,13 @@ function scrub(handle: HTMLElement, input: HTMLInputElement) {
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
   })
+}
+
+/** A value held to a numeric field's min and max, where it has them. */
+function bound(input: HTMLInputElement, v: number): number {
+  const lo = input.min === '' ? -Infinity : parseFloat(input.min)
+  const hi = input.max === '' ? Infinity : parseFloat(input.max)
+  return Math.min(hi, Math.max(lo, v))
 }
 
 /** The scrub handle for a numeric field with no label of its own: its unit,

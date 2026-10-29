@@ -15,6 +15,8 @@
 //   5. a row's numeric field (text Size) scrubs the same way;
 //   6. a field with no label of its own (a colour's opacity) scrubs from its
 //      unit chip.
+//   7. a drag never takes a field past its limits: opacity stays within
+//      0–100, a width never under 1, however far the pointer goes.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -106,6 +108,17 @@ try {
   await drag(chip, -40)
   const stroke = await p.evaluate(() => window.bento.doc.slides[0].elements.find((e) => e.id === 'txt').textStroke.color)
   ok(/^rgba\(0, 0, 0, 0\.8\)$/.test(stroke), `dragging the % chip 40px left takes 20% off (${stroke})`)
+
+  // 7. Limits.
+  await select('box')
+  const opacity = () => p.evaluate(() => window.bento.doc.slides[0].elements.find((e) => e.id === 'box').opacity)
+  const op = p.locator('.ed-props .ed-layer-block .ed-mini[title="Opacity"]')
+  await drag(op.locator('span'), 900)
+  ok(await opacity() === 1 && await op.locator('input').inputValue() === '100', `dragging opacity far right stops at 100 (${await opacity()})`)
+  await drag(op.locator('span'), -900)
+  ok(await opacity() === 0, `and far left stops at 0 (${await opacity()})`)
+  await drag(mini('W'), -2000)
+  ok((await el('box')).w === 1, `a width never goes under 1 (${(await el('box')).w})`)
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
