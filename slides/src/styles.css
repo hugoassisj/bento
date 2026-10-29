@@ -3070,3 +3070,20 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 /* a gradient stop: position and remove on one line, its colour on the next */
 .ed-gradstop { flex-wrap: wrap; }
 .ed-gradstop > .ed-color { order: 2; flex: 1 1 100%; }
+
+/* ————— HELP SHEET — room for everything, nothing spilling ———————————————————
+   The key column was a fixed 128px: a long key ('Animate ▸ Loop animation',
+   longer still translated) spilled LEFT across the other column and over its
+   text. Each section is now its own grid whose key column fits its longest
+   key (capped, and a key that long wraps), keys still right-aligned against
+   what they do (D8); the sheet is wider, so descriptions stop wrapping into
+   towers, and drops to one column well before the two would crowd. */
+.ed-help-box { width: min(980px, 94vw); max-width: none; }
+.ed-help-cols { gap: 0 40px; }
+@media (max-width: 760px) { .ed-help-cols { grid-template-columns: 1fr; } }
+.ed-help-sec { display: grid; grid-template-columns: fit-content(15em) 1fr; column-gap: 14px; align-items: baseline; }
+.ed-help-sec h3 { grid-column: 1 / -1; }
+.ed-help-row { display: contents; }
+.ed-help-row > * { margin: 3px 0; }
+.ed-help-row > span { font-size: 13px; }
+.ed-help-row kbd { white-space: normal; text-align: end; }
