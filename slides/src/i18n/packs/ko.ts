@@ -1053,6 +1053,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "요소를 선택에 추가하거나 선택에서 빼기",
   "Select the element under the pointer, even inside a group": "그룹 안에 있더라도 포인터 아래의 요소 선택",
   "Select the element behind it; click again to go deeper": "뒤에 있는 요소 선택; 다시 클릭하면 더 안쪽으로",
+  "hover": "호버",
+  "Measure from the selection to the element under the pointer": "선택 항목에서 포인터 아래 요소까지의 거리 측정",
   "Right-click": "오른쪽 클릭",
   "Lists every element under the pointer, to select one that is covered": "포인터 아래의 모든 요소를 나열하여 가려진 요소를 선택할 수 있습니다",
   "Add blur": "흐림 추가",

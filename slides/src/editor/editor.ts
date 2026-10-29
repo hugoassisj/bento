@@ -3141,6 +3141,7 @@ export class Editor {
       [`⇧-${t('click')}`, t('Add an element to the selection, or take it out')],
       [`${mod}-${t('click')}`, t('Select the element under the pointer, even inside a group')],
       [`${t('Alt')}-${t('click')}`, t('Select the element behind it; click again to go deeper')],
+      [`${t('Alt')}-${t('hover')}`, t('Measure from the selection to the element under the pointer')],
       [t('Right-click'), t('Lists every element under the pointer, to select one that is covered')],
       [t('Space-drag'), t('Pan the canvas, including past the edges of the slide')],
       [t('Middle-drag'), t('Pan as well, if your mouse has a middle button')],

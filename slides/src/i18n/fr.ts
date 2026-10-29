@@ -1072,6 +1072,8 @@ export const fr: Catalog = {
   "Add an element to the selection, or take it out": "Ajouter un élément à la sélection, ou l’en retirer",
   "Select the element under the pointer, even inside a group": "Sélectionner l’élément sous le pointeur, même dans un groupe",
   "Select the element behind it; click again to go deeper": "Sélectionner l’élément situé derrière ; cliquez à nouveau pour aller plus loin",
+  "hover": "survol",
+  "Measure from the selection to the element under the pointer": "Mesurer de la sélection jusqu’à l’élément sous le pointeur",
   "Right-click": "Clic droit",
   "Lists every element under the pointer, to select one that is covered": "Liste tous les éléments sous le pointeur, pour en sélectionner un qui est recouvert",
   "Add blur": "Ajouter un flou",

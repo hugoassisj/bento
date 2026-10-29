@@ -1063,6 +1063,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "Legg et element til i utvalget, eller fjern det",
   "Select the element under the pointer, even inside a group": "Velg elementet under pekeren, også inne i en gruppe",
   "Select the element behind it; click again to go deeper": "Velg elementet bak; klikk igjen for å gå dypere",
+  "hover": "hold over",
+  "Measure from the selection to the element under the pointer": "Mål fra markeringen til elementet under pekeren",
   "Right-click": "Høyreklikk",
   "Lists every element under the pointer, to select one that is covered": "Viser alle elementer under pekeren, så du kan velge et som er dekket",
   "Add blur": "Legg til uskarphet",

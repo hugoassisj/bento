@@ -1060,6 +1060,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "Seçime bir öğe ekle veya seçimden çıkar",
   "Select the element under the pointer, even inside a group": "İşaretçinin altındaki öğeyi seç, grup içinde olsa bile",
   "Select the element behind it; click again to go deeper": "Arkadaki öğeyi seç; daha derine inmek için yeniden tıkla",
+  "hover": "üzerine gel",
+  "Measure from the selection to the element under the pointer": "Seçimden işaretçinin altındaki öğeye kadar ölç",
   "Right-click": "Sağ tıklama",
   "Lists every element under the pointer, to select one that is covered": "İşaretçinin altındaki tüm öğeleri listeler, böylece örtülü olanı seçebilirsiniz",
   "Add blur": "Bulanıklık ekle",

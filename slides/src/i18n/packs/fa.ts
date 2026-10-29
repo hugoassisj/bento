@@ -1065,6 +1065,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "افزودن یک عنصر به انتخاب، یا برداشتن آن",
   "Select the element under the pointer, even inside a group": "انتخاب عنصر زیر نشانگر، حتی درون یک گروه",
   "Select the element behind it; click again to go deeper": "انتخاب عنصر پشت آن؛ برای رفتن به عمق بیشتر دوباره کلیک کنید",
+  "hover": "نگه‌داشتن نشانگر",
+  "Measure from the selection to the element under the pointer": "اندازه‌گیری از انتخاب تا عنصر زیر نشانگر",
   "Right-click": "کلیک راست",
   "Lists every element under the pointer, to select one that is covered": "همهٔ عناصر زیر نشانگر را فهرست می‌کند تا عنصر پوشیده‌شده را انتخاب کنید",
   "Add blur": "افزودن تاری",

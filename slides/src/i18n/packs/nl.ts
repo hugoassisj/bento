@@ -1057,6 +1057,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "Een element aan de selectie toevoegen, of eruit halen",
   "Select the element under the pointer, even inside a group": "Het element onder de aanwijzer selecteren, ook binnen een groep",
   "Select the element behind it; click again to go deeper": "Het element erachter selecteren; klik opnieuw om dieper te gaan",
+  "hover": "aanwijzen",
+  "Measure from the selection to the element under the pointer": "Meten van de selectie tot het element onder de aanwijzer",
   "Right-click": "Rechtsklik",
   "Lists every element under the pointer, to select one that is covered": "Toont alle elementen onder de aanwijzer, om een bedekt element te selecteren",
   "Add blur": "Vervaging toevoegen",

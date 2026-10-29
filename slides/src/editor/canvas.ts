@@ -28,6 +28,7 @@ import { CommentsUI } from './comments'
 import { StepBadges } from './stepbadges'
 import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
+import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 
 /** How far a finger may travel and still count as a tap rather than a drag.
  *  10px matches what a thumb does on glass while trying to hold still. */
@@ -491,6 +492,8 @@ export class SlideCanvas {
       if (opened && ev.cancelable) ev.preventDefault()
     }, { passive: false })
 
+    this.wireMeasure()
+
     new ResizeObserver(() => this.relayout()).observe(wrap)
 
     store.on('current', () => this.render())
@@ -589,6 +592,7 @@ export class SlideCanvas {
     this.comments?.refresh()
     this.stepBadges?.refresh()
     this.drawRemote()
+    this.scheduleMeasure()
   }
 
   // --- zoom ------------------------------------------------------------------
@@ -867,6 +871,115 @@ export class SlideCanvas {
     this.store.select([pick])
   }
 
+  // --- Alt-hover measuring ---------------------------------------------------
+  //
+  // Hold Alt with something selected and point at another element: the gaps
+  // between them are drawn, Figma-style. Inspection only — it never touches the
+  // document, the selection or undo, and the layer is pointer-events: none, so
+  // Alt-click's dig and Alt-drag's centre-scale are exactly what they were. It
+  // lives in the scaled host like the presence layer, so pan and zoom carry it.
+
+  private measureLayer: HTMLElement | null = null
+  private altHeld = false
+  /** the pointer over the canvas, or null once it has left */
+  private hoverAt: { x: number; y: number } | null = null
+  /** a button is down: a click, drag, resize or marquee owns the canvas */
+  private pressing = false
+  private measureRaf = 0
+
+  private wireMeasure() {
+    const setAlt = (on: boolean) => { if (on !== this.altHeld) { this.altHeld = on; this.scheduleMeasure() } }
+    window.addEventListener('keydown', (ev) => { if (ev.key === 'Alt') setAlt(true) })
+    window.addEventListener('keyup', (ev) => { if (ev.key === 'Alt') setAlt(false) })
+    window.addEventListener('blur', () => setAlt(false))
+    this.scroller.addEventListener('mousemove', (ev) => {
+      this.hoverAt = { x: ev.clientX, y: ev.clientY }
+      // the event's own flag catches an Alt pressed while the window was unfocused
+      this.altHeld = ev.altKey
+      this.scheduleMeasure()
+    })
+    this.scroller.addEventListener('mouseleave', () => { this.hoverAt = null; this.scheduleMeasure() })
+    this.scroller.addEventListener('scroll', () => this.scheduleMeasure(), { passive: true })
+    // window capture: runs before the Alt-dig handler, which stops propagation
+    window.addEventListener('mousedown', () => { this.pressing = true; this.scheduleMeasure() }, true)
+    window.addEventListener('mouseup', () => { this.pressing = false; this.scheduleMeasure() }, true)
+  }
+
+  private scheduleMeasure() {
+    if (!this.measureRaf) this.measureRaf = requestAnimationFrame(() => { this.measureRaf = 0; this.drawMeasure() })
+  }
+
+  /** What Alt-hover measures to: the element Alt-click would select first, the
+   *  slide itself over empty canvas, or nothing over the selection. */
+  private measureTarget(): Box | null {
+    const p = this.hoverAt
+    const slide = this.store.slide
+    if (!p || !slide) return null
+    const id = this.elementsAt(p.x, p.y).find((i) => !this.isGhost(i))
+    if (!id) return { x: 0, y: 0, w: this.store.doc.size.width, h: this.store.doc.size.height }
+    if (this.store.selection.includes(id)) return null
+    const el = slide.elements.find((e) => e.id === id)
+    return el ? aabb(el) : null
+  }
+
+  private drawMeasure() {
+    const layer = this.measureLayer ?? (this.measureLayer = document.createElement('div'))
+    layer.className = 'ed-measure-layer'
+    layer.replaceChildren()
+    const busy = this.pressing || !!this.editing || !!this.editingCell || this.pathEditor.active
+      || this.cropEditor.active || this.bezierEditor.active
+    const ref = !busy && this.altHeld ? union(this.store.selectedElements.map(aabb)) : null
+    const tgt = ref && this.measureTarget()
+    if (!ref || !tgt) { layer.remove(); return }
+    // last in the scaled host so it paints above the slide (as drawRemote does)
+    if (layer.parentNode !== this.scaleHost || layer.nextSibling) this.scaleHost.appendChild(layer)
+    const inv = 1 / (this.scale || 1)
+    const line = (x1: number, y1: number, x2: number, y2: number, cls: string) => {
+      const d = document.createElement('div')
+      d.className = cls
+      const h = y1 === y2
+      d.style.left = `${Math.min(x1, x2) - (h ? 0 : inv / 2)}px`
+      d.style.top = `${Math.min(y1, y2) - (h ? inv / 2 : 0)}px`
+      d.style.width = h ? `${Math.abs(x2 - x1)}px` : `${inv}px`
+      d.style.height = h ? `${inv}px` : `${Math.abs(y2 - y1)}px`
+      d.style[h ? 'borderTopWidth' : 'borderLeftWidth'] = `${inv}px` // the dash; solid lines are background
+      layer.appendChild(d)
+    }
+    const isSlide = tgt.x === 0 && tgt.y === 0 && tgt.w === this.store.doc.size.width && tgt.h === this.store.doc.size.height
+    if (!isSlide) {
+      const box = document.createElement('div')
+      box.className = 'ed-measure-target'
+      Object.assign(box.style, { left: `${tgt.x}px`, top: `${tgt.y}px`, width: `${tgt.w}px`, height: `${tgt.h}px`, borderWidth: `${inv}px` })
+      layer.appendChild(box)
+    }
+    const { measures, guides } = measureBoxes(ref, tgt)
+    for (const g of guides) line(g.x1, g.y1, g.x2, g.y2, g.kind === 'align' ? 'ed-measure-align' : 'ed-measure-dash')
+    // labels are screen-sized; one that would land on an earlier one steps
+    // aside, perpendicular to its line (ponytail: a fixed 3-step nudge, not a
+    // layout solver — measures rarely number more than six)
+    const placed: { x: number; y: number; w: number; h: number }[] = []
+    for (const m of measures) {
+      line(m.x1, m.y1, m.x2, m.y2, 'ed-measure-line')
+      const text = fmt(m.value)
+      const w = (text.length * 7 + 10) * inv, h = 17 * inv
+      const horiz = m.y1 === m.y2
+      let cx = (m.x1 + m.x2) / 2, cy = (m.y1 + m.y2) / 2
+      const hits = () => placed.some((r) => Math.abs(r.x - cx) < (r.w + w) / 2 && Math.abs(r.y - cy) < (r.h + h) / 2)
+      for (let i = 1; i <= 3 && hits(); i++) {
+        if (horiz) cy = (m.y1 + m.y2) / 2 + i * (h + 2 * inv)
+        else cx = (m.x1 + m.x2) / 2 + i * (w + 2 * inv)
+      }
+      placed.push({ x: cx, y: cy, w, h })
+      const label = document.createElement('div')
+      label.className = 'ed-measure-label'
+      label.textContent = text
+      label.style.left = `${cx}px`
+      label.style.top = `${cy}px`
+      label.style.transform = `translate(-50%, -50%) scale(${inv})`
+      layer.appendChild(label)
+    }
+  }
+
   // --- crop editing (pan + zoom a picture inside its frame) --------------------
 
   get isCropEditing() { return this.cropEditor.active }
@@ -1076,6 +1189,7 @@ export class SlideCanvas {
     this.selecto.setSelectedTargets(targets)
     this.updateTableHandles()
     this.stepBadges?.refresh()
+    this.scheduleMeasure()
   }
 
   // --- column resize handles (single selected table) --------------------------

@@ -1078,6 +1078,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "Magdagdag ng element sa selection, o alisin ito",
   "Select the element under the pointer, even inside a group": "Piliin ang element sa ilalim ng pointer, kahit nasa loob ng grupo",
   "Select the element behind it; click again to go deeper": "Piliin ang element sa likod nito; mag-click ulit para lumalim pa",
+  "hover": "i-hover",
+  "Measure from the selection to the element under the pointer": "Sukatin mula sa napili hanggang sa element sa ilalim ng pointer",
   "Right-click": "Right-click",
   "Lists every element under the pointer, to select one that is covered": "Inililista ang bawat element sa ilalim ng pointer, para mapili ang natatakpan",
   "Add blur": "Magdagdag ng blur",

@@ -1060,6 +1060,8 @@ export const strings: Catalog = {
   "Add an element to the selection, or take it out": "Dodaj element do zaznaczenia lub go z niego usuń",
   "Select the element under the pointer, even inside a group": "Zaznacz element pod wskaźnikiem, nawet wewnątrz grupy",
   "Select the element behind it; click again to go deeper": "Zaznacz element znajdujący się pod spodem; kliknij ponownie, aby zejść głębiej",
+  "hover": "najechanie",
+  "Measure from the selection to the element under the pointer": "Zmierz odległość od zaznaczenia do elementu pod wskaźnikiem",
   "Right-click": "Kliknięcie prawym przyciskiem",
   "Lists every element under the pointer, to select one that is covered": "Wyświetla wszystkie elementy pod wskaźnikiem, aby zaznaczyć zasłonięty",
   "Add blur": "Dodaj rozmycie",
