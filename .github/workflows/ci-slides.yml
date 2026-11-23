@@ -729,3 +729,11 @@ jobs:
         # the thumbnail, present and print show none, real content is
         # unaffected, and read() and the saved file carry no prompt in html.
         run: node scripts/test-slides-placeholder-browser.mjs
+      - name: Tab stays in an open text box in Chromium
+        if: ${{ !cancelled() }}
+        # Tab on a plain line makes it a first-level bullet with the caret
+        # kept, and never moves focus out (which committed the box and let the
+        # next key replace its text); ⌘Z straight after restores the line;
+        # Shift+Tab un-bullets a first-level item and does nothing on a plain
+        # line; nested bullets and table cells are unchanged.
+        run: node scripts/test-slides-tab-in-text-browser.mjs
