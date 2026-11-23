@@ -27,7 +27,9 @@
 //   5. {{pages}}, {{title}}, {{date}} and {{author}} are each measured at their
 //      rendered value — and each case is one where the token typed as text
 //      would measure differently, so the check can fail;
-//   6. a bare spec (no element) measures a field against the current slide.
+//   6. a bare spec (no element) measures a field against the current slide;
+//   7. a raw doc passed to validate() or measure() with no title, or with a
+//      non-string author, measures instead of throwing.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -192,6 +194,29 @@ try {
     literal: window.bento.measure({ html: '001 001 001', w: 200, fontSize: 40 }),
   }))
   ok(spec.field.height === spec.literal.height, `a bare spec measures {{page:3}} as "001" on the current (first) slide (${spec.field.height}px vs ${spec.literal.height}px)`)
+
+  // ---- 7. a raw doc with no title, or a non-string author, still checks ----
+  // validate(doc) and measure(spec, {doc}) take documents that never went
+  // through the loader; a missing or odd property must measure as text, not throw
+  console.log('\nraw documents')
+  const raw = await p.evaluate(() => {
+    const base = window.bento.read()
+    const d = { ...base, meta: { ...(base.meta ?? {}), author: 42 }, slides: [{ id: 's1', elements: [
+      { id: 'a', type: 'text', x: 10, y: 10, w: 300, h: 60, html: 'Deck: {{title}}', fontSize: 40 },
+      { id: 'b', type: 'text', x: 10, y: 100, w: 300, h: 60, html: 'By {{author}}', fontSize: 40 },
+    ] }] }
+    delete d.title
+    const run = (fn) => { try { return { value: fn() } } catch (e) { return { error: String(e) } } }
+    return {
+      validate: run(() => window.bento.validate(d).measured),
+      title: run(() => window.bento.measure({ html: 'Deck: {{title}}', w: 300, fontSize: 40 }, { doc: d }).height),
+      author: run(() => window.bento.measure({ html: 'By {{author}}', w: 300, fontSize: 40 }, { doc: d }).height),
+      authorLit: window.bento.measure({ html: 'By 42', w: 300, fontSize: 40 }, { doc: d }).height,
+    }
+  })
+  ok(raw.validate.value === true, `validate() on a doc with no title and a numeric author measures instead of throwing (${raw.validate.error ?? 'measured'})`)
+  ok(typeof raw.title.value === 'number', `measure() of {{title}} against a doc with no title returns a height (${raw.title.error ?? raw.title.value + 'px'})`)
+  ok(raw.author.value === raw.authorLit, `measure() of {{author}} with a numeric author measures it as "42" (${raw.author.error ?? raw.author.value + 'px'} vs ${raw.authorLit}px)`)
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
