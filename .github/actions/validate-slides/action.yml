@@ -314,8 +314,9 @@ runs:
     - name: Reveal authoring rig
       # Reading order (top-to-bottom, then left-to-right, rows by vertical
       # overlap) is deterministic; the verbs continue the slide's sequence;
-      # the badge cycle never reaches 0; and the badge layer is editor
-      # chrome that render/present/preview do not know.
+      # a badge click swaps its element one place later, so steps stay 1..k
+      # and two elements never share one by accident (MP-03); and the badge
+      # layer is editor chrome that render/present/preview do not know.
       shell: bento-step {0}
       run: node scripts/test-slides-reveal-ui.ts
 
