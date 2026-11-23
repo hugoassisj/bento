@@ -62,7 +62,9 @@ export function fieldContext(doc: BentoDoc, slide: Slide): FieldContext {
   }
 }
 
-const escapeFieldText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+// String(): validate() and measure() resolve fields on docs that never went
+// through the loader, where a title can be missing or an author a number
+const escapeFieldText = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 /**
  * Resolve dynamic field tokens in text: {{page}}, {{pages}}, {{title}},
