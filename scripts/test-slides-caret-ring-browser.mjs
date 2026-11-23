@@ -52,7 +52,10 @@ try {
     const nb = await node.boundingBox()
     await p.mouse.dblclick(nb.x + 80, nb.y + 20)
     await p.waitForTimeout(250)
-    await p.keyboard.press('ArrowLeft') // collapse the select-all to the very start
+    // a double-click puts the caret at the point: select all, then collapse
+    // to the very start
+    await p.keyboard.press('ControlOrMeta+a')
+    await p.keyboard.press('ArrowLeft')
     await p.waitForTimeout(250)
     const m = await p.evaluate(() => {
       const inner = document.querySelector('.ed-stage-scale [data-el-id="t1"] .bento-text-inner')

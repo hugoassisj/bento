@@ -31,7 +31,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const src = readFileSync(join(root, 'slides/src/editor/canvas.ts'), 'utf8')
 
 console.log('one controller per edit\n')
-const text = src.slice(src.indexOf('  startTextEdit(node: HTMLElement) {'), src.indexOf('  commitTextEdit() {'))
+const text = src.slice(src.indexOf('  startTextEdit(node: HTMLElement'), src.indexOf('  commitTextEdit() {'))
 const cell = src.slice(src.indexOf('  private editCellAt('), src.indexOf('  private commitCellEdit('))
 for (const [name, block] of [['a text box', text], ['a table cell', cell]] as const) {
   ok(/this\.editListeners\?\.abort\(\)\s*\n\s*this\.editListeners = new AbortController\(\)/.test(block), `${name}: starting an edit aborts the previous controller and makes a fresh one`)

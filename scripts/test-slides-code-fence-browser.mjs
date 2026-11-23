@@ -16,8 +16,9 @@
 //   2. a box with text around the fence splits into text / code / text,
 //      stacked top to bottom inside where the box was;
 //   3. an unclosed fence stays text;
-//   4. typing ``` right after entering a box REPLACES its text (the automatic
-//      select-all is not a request to wrap);
+//   4. typing ``` right after entering a box through an entry that selects
+//      everything (Edit text) REPLACES its text (the automatic select-all is
+//      not a request to wrap);
 //   5. selecting lines and pressing ` wraps each line in <code>; pressing it
 //      again unwraps;
 //   6. a fence pasted into a box being edited, and one pasted onto the canvas,
@@ -49,8 +50,24 @@ async function fresh(html = 'Old text') {
   await p.waitForTimeout(300)
   return { p, errors }
 }
-const edit = async (p) => {
+const open = async (p) => {
   await p.locator('.ed-stage-scale [data-el-id="tx"]').dblclick()
+  await p.waitForFunction(() => document.querySelector('.ed-stage-scale .bento-editing'))
+}
+// a double-click puts the caret at the point; these cases type into the box
+// emptied, as they did over the select-all entering used to make
+const edit = async (p) => {
+  await open(p)
+  await p.keyboard.press('ControlOrMeta+a')
+  await p.keyboard.press('Backspace')
+}
+/** Open the box through an entry that selects everything by itself: the
+ *  context menu's Edit text. */
+const editSelectingAll = async (p) => {
+  const box = p.locator('.ed-stage-scale [data-el-id="tx"]')
+  await box.click()
+  await box.click({ button: 'right' })
+  await p.locator('.ed-ctxmenu .ed-ctxmenu-item').filter({ hasText: /Edit text/ }).first().click()
   await p.waitForFunction(() => document.querySelector('.ed-stage-scale .bento-editing'))
 }
 const typeLines = async (p, lines) => {
@@ -111,7 +128,7 @@ try {
   console.log('\n4 · typing ``` on entering a box replaces, it does not wrap\n')
   {
     const { p } = await fresh('Old text')
-    await edit(p) // the whole box is selected on entry
+    await editSelectingAll(p) // the whole box is selected on entry
     await p.keyboard.type('`x`', { delay: 5 })
     await commit(p)
     const e = await els(p)
@@ -131,7 +148,7 @@ try {
     const codes = (e[0]?.html.match(/<code>/g) ?? []).length
     ok(e[0]?.type === 'text' && codes === 2, `two lines, two <code> runs (${e[0]?.html})`)
     ok(/<code>alpha one<\/code>/.test(e[0]?.html) && /<code>beta two<\/code>/.test(e[0]?.html), 'each line wrapped whole, text unchanged')
-    await edit(p)
+    await open(p)
     await p.keyboard.press('ControlOrMeta+a') // select-all on every platform: Meta+A is not select-all on Linux CI
     await p.keyboard.press('`')
     await commit(p)

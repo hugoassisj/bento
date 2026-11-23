@@ -52,6 +52,29 @@ const CLICK_SLOP = 3
  *  slide, so neither a marquee nor a ⌘-click starts from one. */
 const FLOATING_CONTROLS = '.ed-present-fabs, .ed-zoombar, .ed-panel-toggle, .ed-resizer'
 
+/** How a text box opens for editing: everything selected, the caret at the
+ *  end, or the caret at a client point (where the pointer pressed). */
+type TextEntry = 'all' | 'end' | { x: number; y: number }
+
+/** The caret position under a client point, when it falls inside `root`:
+ *  the standard caretPositionFromPoint (Firefox, Chromium), else
+ *  caretRangeFromPoint (WebKit, older Chromium). */
+function caretFromPoint(root: HTMLElement, x: number, y: number): { node: Node; offset: number } | null {
+  const doc = document as unknown as {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
+    caretRangeFromPoint?: (x: number, y: number) => Range | null
+  }
+  let at: { node: Node; offset: number } | null = null
+  if (doc.caretPositionFromPoint) {
+    const p = doc.caretPositionFromPoint(x, y)
+    if (p) at = { node: p.offsetNode, offset: p.offset }
+  } else if (doc.caretRangeFromPoint) {
+    const r = doc.caretRangeFromPoint(x, y)
+    if (r) at = { node: r.startContainer, offset: r.startOffset }
+  }
+  return at && root.contains(at.node) ? at : null
+}
+
 /** The title on an unrendered formula (render.ts mathHint): what went wrong,
  *  translated at call time — `\\foo` is shown as typed. */
 const mathHintTitle = (what: string) =>
@@ -432,7 +455,7 @@ export class SlideCanvas {
         textEl = (ev.target as HTMLElement).closest<HTMLElement>(selector)
         if (textEl) break
       }
-      if (textEl) { this.startTextEdit(textEl); return }
+      if (textEl) { this.startTextEdit(textEl, { x: ev.clientX, y: ev.clientY }); return }
       const td = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-table td[data-c]')
       if (td) { this.editCellFromTd(td); return }
       // a picture: double-click opens crop mode (pan + zoom inside the frame)
@@ -499,7 +522,7 @@ export class SlideCanvas {
       if (!node) return
       let opened = false
       if (node.classList.contains('bento-el-text')) {
-        this.startTextEdit(node)
+        this.startTextEdit(node, { x: t.clientX, y: t.clientY })
         opened = true
       } else if (node.classList.contains('bento-el-table')) {
         // a table opens the CELL under the thumb. Its <td>s are real DOM boxes,
@@ -2175,17 +2198,26 @@ export class SlideCanvas {
   }
 
   /** Open the inline editor for an element by id — the entry point for callers
-   *  that have an id rather than a node (the context menu). A table opens its
-   *  first cell, since a menu has no point to aim at. */
-  editElement(id: string) {
+   *  that have an id rather than a node (the context menu, typing at a
+   *  selected box). A table opens its first cell, since a menu has no point
+   *  to aim at. */
+  editElement(id: string, entry: 'all' | 'end' = 'all') {
     const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`)
     if (!node) return
-    if (node.classList.contains('bento-el-text')) { this.startTextEdit(node); return }
+    if (node.classList.contains('bento-el-text')) { this.startTextEdit(node, entry); return }
     const td = node.querySelector<HTMLElement>('td[data-c]')
     if (td) this.editCellFromTd(td)
   }
 
-  startTextEdit(node: HTMLElement) {
+  /**
+   * Open a text box for editing. Where the caret goes (docs/DECISIONS.md,
+   * 2026-11-23): a pointer entry (double-click, a tap on the selected box)
+   * puts it at the point; `end` puts it after the last character; `all`
+   * selects everything — a box just inserted, whose starter text is there to
+   * be typed over, and the context menu's Edit text. An empty placeholder has
+   * nothing to select and always gets a caret.
+   */
+  startTextEdit(node: HTMLElement, entry: TextEntry = 'all') {
     if (this.store.readOnly) return // live viewer — no inline editing
     if (this.editing === node) return
     this.commitTextEdit()
@@ -2242,11 +2274,18 @@ export class SlideCanvas {
     this.editingSlideId = this.store.slide.id
     node.classList.add('bento-editing')
     inner.contentEditable = 'true'
+    // Resolved BEFORE focus(), which may scroll the box to reveal the caret
+    // and leave the point aimed elsewhere; after the raw-source swap above,
+    // so the caret lands in what is being edited. Off the text: the end.
+    const at = emptyPlaceholder || typeof entry !== 'object' ? null : caretFromPoint(inner, entry.x, entry.y)
+    const mode = emptyPlaceholder ? 'caret' : typeof entry === 'object' ? (at ? 'caret' : 'end') : entry
     inner.focus()
-    // an empty placeholder has nothing to select: the caret sits on its line
-    if (emptyPlaceholder) document.getSelection()?.collapse(inner, 0)
-    else document.getSelection()?.selectAllChildren(inner)
-    this.editAutoSelected = !emptyPlaceholder // cleared by the first key or click (see the ` toggle)
+    const sel = document.getSelection()
+    if (mode === 'all') sel?.selectAllChildren(inner)
+    else if (at) sel?.collapse(at.node, at.offset)
+    else if (mode === 'end') { sel?.selectAllChildren(inner); sel?.collapseToEnd() }
+    else sel?.collapse(inner, 0) // an empty placeholder: the caret sits on its line
+    this.editAutoSelected = mode === 'all' // cleared by the first key or click (see the ` toggle)
     this.syncTargets()
     this.watchSelection(inner)
     this.onTextEditChange?.(node.dataset.elId)

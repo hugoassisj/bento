@@ -4004,8 +4004,10 @@ export class Editor {
     })
   }
 
-  /** Open the one selected text box with the key just typed: it replaces the
-   *  words the edit selects on opening, or fills an empty placeholder. */
+  /** Open the one selected text box with the key just typed. It goes at the
+   *  end of what the box says, so a stray key never deletes it; it fills an
+   *  empty placeholder, and it replaces a box's untouched starter text, which
+   *  is there to be typed over. */
   private typeIntoText(ev: KeyboardEvent): boolean {
     if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.isComposing || [...ev.key].length !== 1) return false
     const sel = this.store.selectedElements
@@ -4015,7 +4017,7 @@ export class Editor {
     if (ev.key === ' ') return false
     if ((ev.shiftKey || !/[\p{L}\p{N}]/u.test(ev.key)) && this.commands.some((c) => c.match?.(ev, false))) return false
     ev.preventDefault()
-    this.canvas.editElement(sel[0].id)
+    this.canvas.editElement(sel[0].id, sel[0].html === defaultText().html ? 'all' : 'end')
     if (!this.canvas.isEditingText) return true
     document.execCommand('insertText', false, ev.key)
     return true

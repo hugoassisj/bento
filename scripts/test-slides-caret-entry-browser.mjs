@@ -92,6 +92,8 @@ try {
   for (const standard of [true, false]) {
     console.log(`\na double-click in a word (${standard ? 'caretPositionFromPoint' : 'caretRangeFromPoint only'})\n`)
     const { ctx, p } = await open(browser, { standard })
+    const apis = await p.evaluate(() => [typeof document.caretPositionFromPoint, typeof document.caretRangeFromPoint])
+    ok(apis[1] === 'function' && apis[0] === (standard ? 'function' : 'undefined'), `the page has ${standard ? 'both APIs' : 'only caretRangeFromPoint'} (${apis})`)
     // "wonderful": the point at the left edge of its fourth letter, the d
     const pt = await charPoint(p, 'words', 'wonderful', 3)
     await p.mouse.dblclick(pt.x, pt.y)

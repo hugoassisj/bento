@@ -30,6 +30,14 @@ pre-1.0.
   just as typing "- " at its start does, and ⇧Tab on a top-level bullet makes
   it a plain line again. ⌘Z straight after takes either back. Esc is still the
   way out of the box, and Tab in a table still moves to the next cell.
+- **Double-click a text box and the caret goes where you clicked.** Opening a
+  box used to select all of its text, so fixing one word by double-clicking
+  and typing replaced the whole box. Now a double-click (or, on a touch
+  screen, a tap on the box you already selected) puts the caret at that spot.
+  Typing with a box selected adds to the end instead of replacing what it
+  says. A box you just inserted still opens with its starter text selected
+  so you can type over it, an empty placeholder simply opens with the caret
+  in it, and Edit text in the right-click menu still selects everything.
 
 ## [1.3.0] — 2026-11-22
 

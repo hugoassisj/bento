@@ -108,6 +108,7 @@ try {
 
   console.log('\ntyped bullets\n')
   await edit('typed')
+  await p.keyboard.press(`${MOD}+a`) // a double-click puts the caret at the point; type over the box
   await p.keyboard.type('- a')
   await p.keyboard.press('Enter')
   await p.keyboard.type('- b')

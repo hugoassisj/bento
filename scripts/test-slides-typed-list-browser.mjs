@@ -52,6 +52,8 @@ try {
     const b = await p.locator('.ed-stage-scale [data-el-id="t"]').boundingBox()
     await p.mouse.dblclick(b.x + 30, b.y + 20)
     await p.waitForTimeout(200)
+    // a double-click puts the caret at the point; these cases type over the box
+    await p.keyboard.press(`${MOD}+a`)
   }
   const atEnd = (css = '') => p.evaluate(([s, c]) => {
     const e = document.querySelector(s); const t = c ? e.querySelector(c) : e

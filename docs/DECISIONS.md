@@ -15396,3 +15396,34 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-23 — slides: opening a text box puts the caret where you clicked; select-all only where it is the gesture
+
+Opening a text box used to select everything in it, from every entry, so one
+typed character after a double-click replaced the whole box. Every
+mainstream editor puts the caret at the click. What each entry does now
+(`canvas.ts` `startTextEdit`, its `TextEntry` argument):
+
+- **Double-click, or a tap on the already selected box (touch):** the caret
+  at the point, resolved with `document.caretPositionFromPoint` (standard;
+  Firefox and Chromium) or `document.caretRangeFromPoint` (WebKit's, the only
+  one it has). A point that resolves outside the text, or a raw-source swap
+  (`{{page}}`, `$…$`) that moved the text from under it, puts the caret at the
+  end. No word selection is emulated; a caret is the minimum and the norm.
+- **A box just inserted:** everything selected, as before. Its starter text
+  is there to be typed over.
+- **The context menu's Edit text:** everything selected, as Figma does on
+  Enter. A menu has no point to aim at.
+- **An empty placeholder:** a caret, nothing selected (there is nothing to
+  select since the prompt stopped being text).
+- **Typing with a box selected** (`editor.ts` `typeIntoText`): the key goes
+  at the END of what the box says. It used to replace the box (Keynote's
+  rule), which made any stray key after leaving an edit destroy the text.
+  The two exceptions keep "type to fill": an empty placeholder, and a box
+  still holding its untouched starter text, which is replaced.
+
+`editAutoSelected` (so a backtick on the automatic selection types a
+backtick rather than wrapping the box as code) is now set only for the two
+select-all entries; a pointer entry has no selection to wrap. Guard:
+`scripts/test-slides-caret-entry-browser.mjs` (real mouse, touch and keyboard;
+both caret APIs, the WebKit path by removing the standard one).
