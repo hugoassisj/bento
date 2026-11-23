@@ -23,6 +23,16 @@ pre-1.0.
   instead of 375px). They now measure the value the slide shows (`02`, the
   deck's title, the author, today's date), so a box sized to fit its field
   checks clean.
+- **The starter deck checks clean, and a deliberate bleed is no longer a
+  warning.** The deck check (`window.bento.validate()`, `bento check`) reported
+  six warnings on the untouched starter deck, all on its big faint page
+  numeral: its box started above the slide and was shorter than its line. The
+  numeral now sits in a box on the slide with a line that fits (it looks
+  exactly the same), and the check measures where a text box's glyphs actually
+  paint: a box that hangs off the edge with every letter inside is reported as
+  information, a deliberate bleed, while text that is really cut off by the
+  edge still warns. The starter now reports zero warnings, and CI keeps it
+  that way.
 
 ## [1.3.0] — 2026-11-22
 

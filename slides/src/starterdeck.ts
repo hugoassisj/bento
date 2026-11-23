@@ -270,11 +270,15 @@ const furniture = (dark: boolean): SlideElement[] => group('Slide furniture', [
 ])
 
 /** 300px ghost numeral (paper slides) — editorial depth, sits behind content.
- *  Also the auto page number, so it can never drift out of sync. */
+ *  Also the auto page number, so it can never drift out of sync.
+ *  The box sits on the slide and the line fits the box: the glyphs paint where
+ *  a box at y -30 with the default 1.25 line height put them (30px lower, a
+ *  line 60px shorter: the baseline does not move), but the deck the check is
+ *  run against no longer reports an off-canvas box or a 35px overflow. */
 const ghost = (): TextElement =>
   text({
-    name: 'Ghost numeral', x: 780, y: -30, w: 420, h: 340, html: '{{page:2}}', align: 'right',
-    fontSize: 300, fontWeight: 900, fontFamily: DISPLAY, color: 'rgba(13,27,46,0.05)',
+    name: 'Ghost numeral', x: 780, y: 0, w: 420, h: 340, html: '{{page:2}}', align: 'right',
+    fontSize: 300, fontWeight: 900, fontFamily: DISPLAY, color: 'rgba(13,27,46,0.05)', lineHeight: 1.05,
   })
 
 const dots = (dark: boolean, fx?: SvgElement['fx']): SvgElement => ({

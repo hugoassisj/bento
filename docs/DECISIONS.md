@@ -15396,3 +15396,32 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-23 — slides: the starter checks with zero warnings; an overhanging text box is judged by its glyphs
+
+- **The starter is the reference, so it gates at zero warnings.** An agent is
+  told to validate and fix; that loop only ends if the deck it starts from
+  passes. `scripts/test-slides-starterdeck.ts` fails on any warning in the
+  unmeasured checks, and `scripts/test-slides-starter-clean-browser.mjs` on
+  any warning with measuring on and fonts loaded. Future findings (new codes,
+  new checks) must leave the starter at zero, by fixing the deck or the check.
+- **Out-of-canvas on text is decided by ink, not the box.** A text box past
+  the canvas edge stays a warning unless the measured pass shows every glyph
+  painting inside the canvas; then it is info, worded like a shape's bleed.
+  Ink = per character, the DOM's advance and font ascent (a Range) plus a
+  canvas `measureText` of that character in the same computed font
+  (`measure.ts measureInk`), so it goes through the same render as
+  `measure()`. Anything it cannot attribute (rotated, mirrored, lists, inline
+  pictures or formulas) is not measured and keeps the warning: nothing is
+  cleared on a guess. Without a DOM, behaviour is unchanged.
+- **No `decorative` key.** Marking a deliberate bleed explicitly would be a
+  format addition; the ink rule makes it unnecessary for the case that
+  prompted it. Raise it separately (with screen-reader skipping as its own
+  argument) if a case appears that the ink rule cannot serve.
+- **The ghost numeral moved its box, not its glyphs.** `y -30 → 0` and line
+  height `1.25 → 1.05` (a line 60px shorter, so half-leading drops 30px):
+  the baseline stays put whatever the font's metrics. The slide PNGs are
+  byte-identical before and after; a 6px mutant of the same element changes
+  exactly the three pages that carry it. Its right edge (x 1200) reaches past
+  the 96px margin, which is `past-margin` info, left as is: moving it would
+  move the numeral.
