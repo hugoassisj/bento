@@ -11,11 +11,12 @@
 // user saw the demo and believed their work gone; and where the file came with
 // a writable handle (an installed app, a native host's launchQueue) the first
 // auto-save wrote the starter over it. Checked here, per case:
-//   1. a truncated block, a trailing comma, a compact document: the recovery
-//      card, not the editor; window.bento is a published stub with
-//      `unreadable: true` and the loader counted it as mounted (no failure
-//      card, one card); the card names the reason, with line and column for a
-//      syntax error;
+//   1. a truncated block, a trailing comma, a pretty-printed block with a
+//      leading newline, a compact document: the recovery card, not the
+//      editor; window.bento is a published stub with `unreadable: true` and
+//      the loader counted it as mounted (no failure card, one card); the card
+//      names the reason, with line and column for a syntax error, counted in
+//      the text Copy and Download hand out, and marks the character there;
 //   2. while the card is up nothing writes: ⌘S, a save picker, IndexedDB, the
 //      launch handle (a fake host handle on the file, as home/bridge.js vends);
 //   3. Copy puts the exact block text on the clipboard, Download saves exactly
@@ -45,6 +46,13 @@ const dir = mkdtempSync(join(tmpdir(), 'bento-unreadable-'))
 const TRUNCATED = '{"format":"bento/slides","version":1,"title":"My real deck","slides":[{"id":"s1","elements":[{"id":"a","type":"text","x":10'
 const TRAILING = '{"format":"bento/slides","version":1,"title":"My real deck","slides":[{"id":"s1","elements":[]},]}'
 const COMPACT = '{"compact":true,"title":"My real deck","slides":[{"layout":"title","title":"Hello"}]}'
+// pretty-printed, as an agent or an editor writes it, with the leading
+// newline and indent the block keeps: positions are counted in the text the
+// card hands out (Copy, Download), not in a trimmed copy of it
+const PRETTY = '\n  {\n  "format": "bento/slides",\n  "version": 1,\n  "slides": [ {"id":"s1","elements":[]}, ]\n}\n'
+const PRETTY_AT = PRETTY.indexOf(', ]') + 2
+const PRETTY_LINE = PRETTY.slice(0, PRETTY_AT).split('\n').length
+const PRETTY_COLUMN = PRETTY_AT - PRETTY.lastIndexOf('\n', PRETTY_AT - 1)
 const VALID = '{"format":"bento/slides","version":1,"title":"My real deck","size":{"w":1280,"h":720},"slides":[{"id":"s1","elements":[]}]}'
 
 function fileWith(name, json) {
@@ -99,6 +107,7 @@ const state = (p) => p.evaluate(() => ({
   hasDoc: !!window.bento?.doc,
   reason: window.bento?.reason ?? null,
   loader: window.bento?.loader?.path ?? null,
+  mark: document.querySelector('.ed-unreadable mark')?.textContent ?? null,
   title: window.bento?.doc?.title ?? null,
   slides: window.bento?.doc?.slides?.length ?? 0,
   rig: { picker: window.__rig.picker, idb: window.__rig.idb.slice(), handleWrites: window.__rig.handleWrites },
@@ -111,6 +120,8 @@ try {
   for (const [label, json, expect] of [
     ['a truncated block', TRUNCATED, { reason: /not valid JSON \(line 1, column 124\)/, error: 'syntax', line: 1, column: 124 }],
     ['a trailing comma', TRAILING, { reason: /not valid JSON \(line 1, column 97\)/, error: 'syntax', line: 1, column: 97 }],
+    ['a pretty-printed block with a leading newline', PRETTY,
+      { reason: new RegExp(`not valid JSON \\(line ${PRETTY_LINE}, column ${PRETTY_COLUMN}\\)`), error: 'syntax', line: PRETTY_LINE, column: PRETTY_COLUMN, mark: ']' }],
     ['a compact document', COMPACT, { reason: /compact document/, error: 'format', compact: true }],
   ]) {
     console.log(`\n${label}\n`)
@@ -123,6 +134,7 @@ try {
     ok(s.loader && !s.failCard && !s.splash, `the loader counted it mounted (path ${s.loader}; failure card: ${s.failCard}; splash left: ${s.splash})`)
     ok(expect.reason.test(s.text), `the card names the reason (${JSON.stringify(s.text.split('\n').filter(Boolean).slice(1, 3).join(' / ').slice(0, 160))})`)
     ok(/has not been changed/.test(s.text), 'the card says the file has not been changed')
+    if (expect.mark) ok(s.mark === expect.mark && PRETTY[PRETTY_AT] === expect.mark, `the excerpt marks the character at the error (${JSON.stringify(s.mark)}, expected ${JSON.stringify(expect.mark)} at line ${PRETTY_LINE}, column ${PRETTY_COLUMN} of the downloaded text)`)
     if (expect.line) ok(s.reason?.line === expect.line && s.reason?.column === expect.column, `the stub carries the position (line ${s.reason?.line}, column ${s.reason?.column})`)
 
     // nothing writes while the card is up, ⌘S included
