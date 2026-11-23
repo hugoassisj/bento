@@ -24,7 +24,8 @@ pre-1.0.
   past the end of the tools without moving any of them. In a narrower window
   the four combine buttons become a single Combine shapes button with the
   same four inside, and where even that has no room it hangs just below the
-  toolbar instead of covering Share or Save.
+  toolbar, over the slide area, so it never covers Share or Save, the
+  Format, Animate and Interact tabs, or the panel edges.
 
 ## [1.3.0] — 2026-11-22
 

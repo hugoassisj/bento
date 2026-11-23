@@ -174,6 +174,15 @@ try {
     const dAfter = await q.evaluate(() => window.bento.doc.slides[0].elements.find((e) => e.id === 'tri').d)
     ok(tabNow === 'true' && dAfter === dBefore, `${tag}: a click on Animate with a path selected switches the tab and leaves the path alone (selected ${tabNow}, d ${dAfter === dBefore ? 'unchanged' : 'changed'})`)
     await q.evaluate(() => document.querySelector('.ed-props .ed-tabs-band [role=tab]').click()); await frame() // back to Format (set-up, not under test)
+    if (sp.below) {
+      // the panel opening under a strip placed while it was shut: the column
+      // narrows without the bar changing size, and the strip must follow
+      await deselect(); await q.keyboard.press(']'); await q.waitForTimeout(500)
+      await clickEl('tri'); await q.waitForTimeout(150)
+      await q.keyboard.press(']'); await q.waitForTimeout(500); await frame()
+      const reopened = await strip()
+      ok(reopened.below && reopened.covered.length === 0 && reopened.probes >= 4, `${tag}: the Format panel opened under the hanging path bar: it moves off the panel (${reopened.probes} probed, covered: ${reopened.covered.join(', ') || 'none'})`)
+    }
     for (const [what, st] of [['three shapes', s3], ['a path', sp]]) {
       if (st.below) ok(st.covered.length === 0 && st.probes >= 4, `${tag}: with ${what} the strip hangs below the bar and covers no panel tab or resizer (${st.probes} probed, covered: ${st.covered.join(', ') || 'none'})`)
     }

@@ -760,7 +760,15 @@ export class Editor {
     const bottomRO = new ResizeObserver(publishBarBottom)
     bottomRO.observe(bar)
     window.addEventListener('resize', publishBarBottom, { signal })
-    this.buildObservers.push(this.barRO, this.barMO, bottomRO)
+    // A strip hanging below the bar is kept over the canvas column
+    // (fitInsertCtx), and that column changes width without the bar doing so:
+    // a panel dragged wider, collapsed or opened. Re-place the strip alone.
+    const ctxRO = new ResizeObserver(() => {
+      if (!bar.querySelector('.ed-dropdown.open')) this.fitInsertCtx(bar)
+      this.barMO?.takeRecords()
+    })
+    ctxRO.observe(canvasWrap)
+    this.buildObservers.push(this.barRO, this.barMO, bottomRO, ctxRO)
     publishBarBottom()
 
     this.wireDrawerDismiss()
@@ -1095,15 +1103,19 @@ export class Editor {
    * Place the contextual bars that hang past the insert group's end edge (out
    * of flow, so they never move a tool). Measured, like the tiers: full width
    * when the gap before the output zone holds it; else the booleans collapse to
-   * one "Combine shapes" button; else the strip hangs just below the bar, at
-   * the same edge, rather than lie over Share or Save. Folded, they live in ＋
-   * and none of this applies.
+   * one "Combine shapes" button; else the strip hangs just below the bar rather
+   * than lie over Share or Save. Below the bar it is over the panels' band, and
+   * from about 1280px down the group's end is over the PROPERTIES panel (its
+   * tabs, the resizer), which the bar's z-index would let it cover and steal
+   * clicks from; so there it is slid back inside the canvas column. Folded,
+   * they live in ＋ and none of this applies.
    */
   private fitInsertCtx(bar: HTMLElement) {
     const ctx = bar.querySelector<HTMLElement>('.ed-insert-ctx')
     if (!ctx) return
     ctx.classList.remove('ed-ctx-compact', 'ed-ctx-below')
     ctx.style.removeProperty('top')
+    ctx.style.removeProperty('transform')
     if (bar.classList.contains('ed-bar-fold')) return
     const edge = bar.getBoundingClientRect()
     const fits = () => {
@@ -1116,10 +1128,21 @@ export class Editor {
         .some((r) => r.width > 0 && r.left < own.right - 1 && own.left < r.right - 1 && r.top < own.bottom && own.top < r.bottom)
     }
     if (fits()) return
-    ctx.classList.add('ed-ctx-compact')
-    if (fits()) return
+    // only the booleans have a compact form; the path bar goes straight below
+    if (ctx.querySelector('.ed-bool:not([hidden])')) {
+      ctx.classList.add('ed-ctx-compact')
+      if (fits()) return
+    }
     ctx.classList.add('ed-ctx-below')
     ctx.style.top = `${edge.bottom - (ctx.parentElement ?? bar).getBoundingClientRect().top}px`
+    // keep it over the canvas column (between the two panels and their
+    // resizers), in screen px, so the same arithmetic holds in RTL
+    const col = this.root.querySelector('.ed-scroll')?.getBoundingClientRect()
+    if (!col?.width) return
+    const own = ctx.getBoundingClientRect()
+    let dx = own.right > col.right ? col.right - own.right : 0
+    if (own.left + dx < col.left) dx = col.left - own.left
+    if (dx) ctx.style.transform = `translateX(${dx}px)`
   }
 
   togglePanel(side: 'left' | 'right') {

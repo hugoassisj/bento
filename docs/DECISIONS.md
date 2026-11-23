@@ -15415,10 +15415,25 @@ group, and selecting three rectangles slid Move 83px at 1440×900.
   the booleans collapse to one "Combine shapes" dropdown; else the strip
   hangs just below the bar at the same edge. At 1024px there is about 4px
   between the insert group and the output zone, so the compact button alone
-  does not fit there and hangs below.
+  does not fit there and hangs below. Only the booleans have a compact form;
+  the path bar goes straight from full to below.
+- **Below the bar it stays over the canvas column.** There it lies over the
+  panels' band, not the bar, and from about 1280px down the insert group's
+  end is over the PROPERTIES panel: hanging from that edge, the strip (inside
+  the bar's z-index) covered the Format / Animate / Interact tabs and the
+  right resizer, and a click on Animate changed the selected path instead.
+  So it is slid back (a screen-px `translateX`, the same arithmetic in RTL)
+  inside `.ed-scroll`'s horizontal extent, between the panels and their
+  resizers. That column changes width without the bar doing so (a panel
+  dragged, collapsed or opened), so a ResizeObserver on the canvas wrap
+  re-places the strip. Anything else that hangs from the bar must respect the
+  same constraint.
 - Rejected: reserving the room with `visibility: hidden` (about 150px of every
   bar), greying the buttons (the recorded intent is "not there", not "greyed").
 - **Guard.** `scripts/test-slides-steady-chrome-browser.mjs` reads Move's left
   edge with nothing, one shape, three shapes (real marquee) and a path
-  selected at 1440, 1024 and 1024 RTL, checks the strip overlaps no other bar
-  control, the compact form at 1024 and Tab order after Comment.
+  selected at 1440, 1100, 1024 and 1024 RTL, checks the strip overlaps no
+  other bar control, the compact form, Tab order after Comment, and, while the
+  strip hangs below, that the props tabs and both resizers are still the top
+  element (also after the Format panel opens under it) and a real click on
+  Animate switches the tab and leaves the path alone.
