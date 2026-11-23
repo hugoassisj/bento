@@ -16,6 +16,12 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Page numbers and other fields are checked at the size they show.** The
+  deck check (`window.bento.validate()`) and `window.bento.measure()` used to
+  lay out a field such as `{{page:2}}` as its ten characters of code, so a big
+  page number that fits on the slide was reported as overflowing by four
+  lines. They now measure the value the slide shows (`02`, the deck's title,
+  the author, today's date), so a box sized to fit its field checks clean.
 
 ## [1.3.0] — 2026-11-22
 

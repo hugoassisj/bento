@@ -27,6 +27,7 @@ import { isWebUrl } from './model.ts'
 import { MODEL_KEYS } from './modelkeys.generated.ts'
 import { isRemoteUrl } from '../../kernel/src/net.ts'
 import { measureElements, measureTables } from './measure.ts'
+import { fieldContext, type FieldContext } from './render.ts'
 import { BUILTIN_FONTS } from './fonts.ts'
 import { eachRef, keepAlpha, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
 import { tokenName } from './tokens.ts'
@@ -482,13 +483,16 @@ function validateChart(
  */
 function measureOverflow(doc: BentoDoc, add: (f: Finding) => void) {
   // a placeholder with no content measures as one empty line — not overflow
-  const targets: Array<{ slide: string; el: TextElement }> = []
+  const targets: Array<{ slide: string; el: TextElement; fields: FieldContext }> = []
   for (const slide of doc.slides) {
+    // fields measure as the value this slide renders ({{page:2}} → "02"), not
+    // as the token's own characters
+    let fields: FieldContext | undefined
     for (const el of slide.elements) {
-      if (el.type === 'text' && el.html?.trim()) targets.push({ slide: slide.id, el })
+      if (el.type === 'text' && el.html?.trim()) targets.push({ slide: slide.id, el, fields: (fields ??= fieldContext(doc, slide)) })
     }
   }
-  const measured = measureElements(targets.map((t) => t.el), doc)
+  const measured = measureElements(targets, doc)
   measured.forEach((m, i) => {
     const { slide, el } = targets[i]
     if (m.fits !== false || m.overflow! <= 1) return

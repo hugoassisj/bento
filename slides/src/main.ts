@@ -33,6 +33,7 @@ function reportGuard(dropped: Dropped[]) {
 import { validateDoc, type ValidateOpts } from './validate'
 import { buildSchema } from './schema'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
+import { fieldContext } from './render'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
 import { Store } from './store'
@@ -427,13 +428,20 @@ dismissSplash()
    * instead of writing it, checking, and correcting.
    *
    * Returns {height, width, lines} — plus {fits, overflow} when you supply `h`.
+   *
+   * A field ({{page:2}}, {{title}}, …) measures as the value it renders: an
+   * element on its own slide, a spec on the current slide (the first slide of
+   * a doc you pass). Date and time measure as they read here and now.
    */
   measure(target: string | TextMeasureSpec, opts?: { doc?: BentoDoc }) {
     const doc = opts?.doc ?? store.doc
-    if (typeof target !== 'string') return measureText(target, doc)
+    if (typeof target !== 'string') {
+      const slide = doc === store.doc ? store.slide : doc.slides[0]
+      return measureText(target, doc, slide ? fieldContext(doc, slide) : undefined)
+    }
     for (const s of doc.slides) {
       const el = s.elements.find((e) => e.id === target && e.type === 'text')
-      if (el) return measureElement(el as TextElement, doc)
+      if (el) return measureElement(el as TextElement, doc, fieldContext(doc, s))
     }
     return null
   },
