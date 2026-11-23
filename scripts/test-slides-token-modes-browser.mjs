@@ -13,8 +13,10 @@
 // geometry: the column's scrollLeft and scrollWidth, and where the section
 // headings, the chips and the field actually sit — at the default width and
 // at the narrowest the splitter allows, after +, after Esc and after Enter,
-// with one mode and with three. Also: the shown mode's chip differs from the
-// others by weight, not only by a tint.
+// with one mode and with three. Esc closes the field, even after a refused
+// name (it used to leave it open: the rebuild it asked for waits while a field
+// is focused). And the shown mode's chip differs from the others by weight,
+// not only by a tint.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -148,6 +150,22 @@ try {
     const field = await p.evaluate(() => !!document.querySelector('.ed-tokens-head .ed-edit-field:focus'))
     ok(field, 'a double-click opens the rename field')
     ok(still(m), `while renaming: ${fmt(m)}`)
+    await ctx.close()
+  }
+
+  console.log('\nEsc after a refused name still closes the field\n')
+  {
+    const { p, ctx } = await open(['default'])
+    await p.locator('.ed-tokens-addmode').click()
+    await p.keyboard.type('default')
+    await p.keyboard.press('Enter')
+    await p.waitForTimeout(200)
+    const why = await p.evaluate(() => document.querySelector('.ed-tokens-head .ed-token-why')?.textContent ?? '')
+    ok(why.length > 0, `a mode that exists is refused and says why ("${why}")`)
+    await p.keyboard.press('Escape')
+    await p.waitForTimeout(200)
+    const after = await p.evaluate(() => ({ field: !!document.querySelector('.ed-tokens-head .ed-token-new'), why: !!document.querySelector('.ed-tokens-head .ed-token-why'), plus: document.activeElement?.classList.contains('ed-tokens-addmode') }))
+    ok(!after.field && !after.why && after.plus, `Esc closes it, its note goes with it, the + is back and focused (${JSON.stringify(after)})`)
     await ctx.close()
   }
 

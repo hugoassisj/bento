@@ -16,6 +16,12 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Adding a token mode no longer pushes the side panel sideways.** Clicking
+  + beside the mode chips in the Tokens view used to shift the whole panel to
+  the left, cutting the first letters off every heading until it was rebuilt.
+  The name field now takes a line of its own when the chips leave no room,
+  Esc closes it and puts the + back, and the mode you are looking at shows in
+  bold, so it reads as chosen without relying on its tint.
 
 ## [1.3.0] — 2026-11-22
 

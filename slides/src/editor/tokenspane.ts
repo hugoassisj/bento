@@ -135,7 +135,7 @@ function editing(text: string, label: string, check: (v: string) => string | nul
     // leaving commits; leaving a refused value puts the old one back
     i.addEventListener('blur', () => { if (i.hasAttribute('aria-invalid')) { i.value = placeholder ? '' : text; finish(false) } else finish(true) })
     shown.replaceWith(i)
-    i.focus()
+    i.focus({ preventScroll: true }) // it took the place of what was just clicked: already in view
     i.select()
   }
   shown.addEventListener('click', start)
@@ -385,9 +385,16 @@ export class TokensPane {
           x.mode = name
         })
         return null
-      }, () => this.refresh())
+      }, () => {
+        // put the + back by hand: refresh() waits while a field is focused or
+        // refused, and Esc arrives while this one is, so it used to stay open
+        const esc = document.activeElement === field
+        sayInvalid(field, '')
+        field.replaceWith(add)
+        if (esc) add.focus({ preventScroll: true })
+      })
       add.replaceWith(field)
-      field.focus()
+      field.focus({ preventScroll: true })
     })
     bar.appendChild(add)
     return bar
