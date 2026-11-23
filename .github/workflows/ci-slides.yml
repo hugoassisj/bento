@@ -720,4 +720,13 @@ jobs:
         # clipped frame child exports clipped, a hidden selection cannot be
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
+      - name: Present-only file asks what it carries in Chromium
+        if: ${{ !cancelled() }}
+        # Share ▸ Present-only file… opens a dialog (speaker notes, comments,
+        # hidden slides — all off) that traps focus, closes on Escape and hands
+        # focus back to Share; the default file holds no notes text, no
+        # comments, no hidden slide nor its states and no dead link; ticking
+        # notes keeps them for the speaker view; a deck with nothing private
+        # saves with no dialog.
+        run: node scripts/test-slides-presentonly-browser.mjs
 

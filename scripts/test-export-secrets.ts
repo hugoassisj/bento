@@ -301,6 +301,95 @@ ok(!/writeText\(JSON\.stringify\(this\.store\.doc\)/.test(body('copyDocJson')),
   ok(carriesHidden(JSON.parse(out)).length === 0, 'carriesHidden() agrees: nothing hidden travels')
 }
 
+// The present-only file (Share ▸ Present-only file…) is a hand-out too, and
+// the format is readable by design: what goes in can be read with a text
+// editor, or with S in the show. Measured on the parent of this check: the
+// saved file carried every speaker note, every comment and every hidden slide
+// under a menu line that called it "a sealed hand-out". All three are now left
+// out unless the author ticks them; the content is decided by one pure
+// function (slides/src/presentonly.ts), RUN here with every combination of the
+// three choices, and the editor method is pinned to call it.
+console.log('\npresent-only file')
+{
+  const pkg = body('savePresentationPackage')
+  ok(/\bpresentOnlyDoc\(this\.store\.doc,/.test(mask(pkg)),
+    'savePresentationPackage() builds the copy with presentOnlyDoc(this.store.doc, …)')
+  ok(/clone\.readonly = true/.test(pkg), 'and still marks it a player file (readonly)')
+  const choose = mask(body('choosePresentationPackage'))
+  ok(/\bprivateContent\(this\.store\.doc\)/.test(choose) && /\bcreateDialog\(/.test(choose),
+    'choosePresentationPackage() counts what is private and asks in a dialog')
+  ok(/savePresentationPackage\(PRESENT_ONLY_DEFAULTS\)/.test(choose),
+    'and saves straight away, with the defaults, when there is nothing to ask about')
+
+  let mod: typeof import('../slides/src/presentonly.ts') | null = null
+  try { mod = await import('../slides/src/presentonly.ts') } catch (e) { ok(false, `slides/src/presentonly.ts imports (${(e as Error).message.split('\n')[0]})`) }
+  if (mod) {
+    const { presentOnlyDoc, privateContent, PRESENT_ONLY_DEFAULTS } = mod
+    const N = (s: string) => `NOTE-${s}-MUST-NOT-TRAVEL`
+    const C = (s: string) => [{ id: `c-${s}`, author: 'a', text: `COMMENT-${s}-MUST-NOT-TRAVEL`, at: 'now' }]
+    const slide = (id: string, extra: Record<string, unknown> = {}, elements: unknown[] = []) =>
+      ({ id, background: '#fff', transition: 'fade', notes: '', elements, ...extra })
+    const el = (id: string, link?: string) => ({ id, type: 'shape', shape: 'rect', x: 0, y: 0, w: 10, h: 10, ...(link ? { link } : {}) })
+    const deck = {
+      format: 'bento/slides', version: 1, docId: 'd', title: 't', size: { width: 1280, height: 720 },
+      theme: { background: '#fff', color: '#000', accent: '#f00', fontFamily: 'x' },
+      slides: [
+        slide('s1', { notes: N('s1'), comments: C('s1') },
+          [el('e1', 'h1'), el('e2', 'h1-state'), el('e3', 's2'), el('e4', 'https://example.com'), el('e5')]),
+        slide('h1', { hidden: true, notes: N('h1'), comments: C('h1') }, [el('e6', 's1')]),
+        slide('h1-state', { stateOf: 'h1', notes: N('h1-state') }),
+        slide('h1-state-state', { stateOf: 'h1-state' }),
+        slide('s2', { notes: N('s2') }, [el('e7', 's2-state')]),
+        slide('s2-state', { stateOf: 's2', comments: C('s2-state') }, [el('e8', 'h1')]),
+      ],
+      layouts: [slide('l1', { notes: N('layout'), comments: C('layout') }, [el('e9', 'h1')])],
+    } as never as import('../slides/src/model.ts').BentoDoc
+    const before = JSON.stringify(deck)
+
+    const counts = privateContent(deck)
+    ok(counts.notes === 4 && counts.comments === 3 && counts.hidden === 1,
+      `privateContent counts slides with notes, comment threads and hidden slides (${JSON.stringify(counts)})`)
+    ok(PRESENT_ONLY_DEFAULTS.notes === false && PRESENT_ONLY_DEFAULTS.comments === false && PRESENT_ONLY_DEFAULTS.hidden === false,
+      'the defaults leave all three out')
+
+    const HIDDEN_IDS = ['h1', 'h1-state', 'h1-state-state']
+    for (const notes of [false, true]) for (const comments of [false, true]) for (const hidden of [false, true]) {
+      const tag = `notes ${notes ? 'in' : 'out'}, comments ${comments ? 'in' : 'out'}, hidden ${hidden ? 'in' : 'out'}`
+      const out = presentOnlyDoc(deck, { notes, comments, hidden })
+      const text = JSON.stringify(out)
+      const all = [...out.slides, ...(out.layouts ?? [])]
+      const ids = new Set(out.slides.map((s) => s.id))
+      const problems: string[] = []
+      if (!notes) {
+        if (/NOTE-/.test(text)) problems.push('notes text present')
+        if (!all.every((s) => s.notes === '')) problems.push('a notes value is not empty')
+      } else if (!out.slides.filter((s) => s.id !== 's2-state' && s.id !== 'h1-state-state').every((s) => s.notes === N(s.id))) problems.push('notes lost')
+      if (!comments) {
+        if (/COMMENT-/.test(text)) problems.push('comment text present')
+        if (all.some((s) => 'comments' in s)) problems.push('a comments key remains')
+      } else if (!/COMMENT-s1-/.test(text) || !/COMMENT-layout-/.test(text)) problems.push('comments lost')
+      if (!hidden) {
+        if (out.slides.some((s) => s.hidden)) problems.push('a hidden slide remains')
+        if (HIDDEN_IDS.some((id) => ids.has(id))) problems.push('a state of a hidden slide remains')
+        if (!ids.has('s2-state')) problems.push('a state of a VISIBLE slide was dropped')
+      } else if (!HIDDEN_IDS.every((id) => ids.has(id))) problems.push('hidden slides lost')
+      const dead = all.flatMap((s) => s.elements.map((e) => (e as { link?: string }).link))
+        .filter((l): l is string => !!l && !/^https?:/.test(l) && !ids.has(l))
+      if (dead.length) problems.push(`dead links → ${dead.join(', ')}`)
+      const kept = out.slides.find((s) => s.id === 's1')!.elements.map((e) => (e as { link?: string }).link ?? '-').join(' ')
+      if (!hidden && kept !== '- - s2 https://example.com -') problems.push(`s1 links ${kept}`)
+      if (hidden && kept !== 'h1 h1-state s2 https://example.com -') problems.push(`s1 links ${kept}`)
+      ok(problems.length === 0, `${tag}: ${problems.length ? problems.join('; ') : 'exactly what was chosen, no dead link'}`)
+    }
+    ok(JSON.stringify(deck) === before, 'presentOnlyDoc never touches the open deck')
+
+    // a deck whose every slide in the walk is hidden keeps them: a hand-out
+    // with nothing to show is not a hand-out
+    const allHidden = { ...(deck as object), slides: [slide('a', { hidden: true }), slide('b', { hidden: true })] } as never as import('../slides/src/model.ts').BentoDoc
+    ok(presentOnlyDoc(allHidden, PRESENT_ONLY_DEFAULTS).slides.length === 2, 'a deck with every slide hidden keeps them rather than saving an empty show')
+  }
+}
+
 // The catch-all: any method that clones the document and then hands it to an
 // outbound sink is an export, named in the list above or not. saveAsNewDeck is
 // the one clone that legitimately keeps a session — it mints a brand new one.
