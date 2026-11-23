@@ -728,4 +728,4 @@ jobs:
         # once, and its Undo restores it in one step; "Make a color token from
         # this" copies the slot into every mode and binds nothing; the mode
         # switch counts theme-colour properties as not changed.
-        run: node scripts/test-slides-token-modes-browser.mjs
+        run: node scripts/test-slides-theme-modes-browser.mjs

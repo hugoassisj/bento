@@ -2,7 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 // Theme colours and token modes in the packaged editor, with real input.
 //
-//   npm run build:single --prefix slides && node scripts/test-slides-token-modes-browser.mjs
+//   npm run build:single --prefix slides && node scripts/test-slides-theme-modes-browser.mjs
 //
 // Tokens hold one value per mode; the deck's theme colours hold one value for
 // every mode. The Tokens view lists both in one Colors group, so it has to say
