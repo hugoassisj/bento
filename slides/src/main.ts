@@ -97,6 +97,16 @@ if (envelope) {
 } else {
   const report = embedded ? parseDocReport(embedded) : null
   if (report && !('doc' in report)) {
+    // readEmbeddedDoc trimmed the block; the card hands it out untouched
+    // (Copy, Download), so a position is counted in THAT text — a
+    // pretty-printed block starts with a newline and an indent
+    if (report.error === 'syntax' && report.offset !== undefined) {
+      const raw = document.getElementById('bento-doc')?.textContent ?? ''
+      const offset = report.offset + raw.length - raw.trimStart().length
+      report.offset = offset
+      report.line = raw.slice(0, offset).split('\n').length
+      report.column = offset - raw.lastIndexOf('\n', offset - 1)
+    }
     // A block that is THERE but did not load is someone's document — a
     // truncated write, a stray comma, the compact form an agent wrote. It is
     // never swapped for the starter: that read as lost work, and where the
@@ -158,6 +168,7 @@ function unreadableCard(why: DocParseError) {
     // where it breaks: the text either side of the position, the engine's
     // own words when there is no position
     const pre = document.createElement('pre')
+    pre.dir = 'ltr' // JSON reads left to right in a right-to-left interface too
     if (why.offset !== undefined) {
       const at = document.createElement('mark')
       at.textContent = text[why.offset] ?? ' '
@@ -210,6 +221,7 @@ function unreadableCard(why: DocParseError) {
   gate.append(card)
   document.body.appendChild(gate)
   document.getElementById('bento-splash')?.remove()
+  card.querySelector('button')?.focus() // the primary action, as the password gate focuses its field
 }
 
 /** Encrypted file: ask for the password (looping on failure), then boot. */
