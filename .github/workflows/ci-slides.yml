@@ -720,4 +720,12 @@ jobs:
         # clipped frame child exports clipped, a hidden selection cannot be
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
-
+      - name: Placeholder prompts are never content in Chromium
+        if: ${{ !cancelled() }}
+        # An empty layout placeholder paints its prompt without holding it as
+        # text: open then Esc leaves html empty with no undo step, a placed
+        # caret types only what was typed (full opacity from the first
+        # character), an emptied box shows its prompt again on the canvas and
+        # the thumbnail, present and print show none, real content is
+        # unaffected, and read() and the saved file carry no prompt in html.
+        run: node scripts/test-slides-placeholder-browser.mjs
