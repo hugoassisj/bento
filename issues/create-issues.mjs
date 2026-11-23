@@ -27,9 +27,11 @@ function parse(file) {
   for (const line of m[1].split('\n')) {
     const kv = /^([a-z_]+):\s*(.*)$/.exec(line)
     if (!kv) continue
-    let v = kv[2].replace(/\s+#.*$/, '').trim()
-    if (v.startsWith('[')) v = v.slice(1, -1).split(',').map((s) => s.trim().replace(/^"|"$/g, '')).filter(Boolean)
-    else v = v.replace(/^"|"$/g, '')
+    let v = kv[2].trim()
+    // a trailing "# comment" is stripped only outside quotes and brackets (titles may contain "#532")
+    if (v.startsWith('"')) v = v.slice(1, v.lastIndexOf('"'))
+    else if (v.startsWith('[')) v = v.slice(1, v.lastIndexOf(']')).split(',').map((s) => s.trim().replace(/^"|"$/g, '')).filter(Boolean)
+    else v = v.replace(/\s+#.*$/, '').trim()
     meta[kv[1]] = v
   }
   return { file, meta, body: m[2].trim() }
