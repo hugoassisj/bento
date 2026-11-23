@@ -720,4 +720,10 @@ jobs:
         # clipped frame child exports clipped, a hidden selection cannot be
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
-
+      - name: Adding a token mode holds the side column still in Chromium
+        if: ${{ !cancelled() }}
+        # + beside the mode chips opens its name field without scrolling the
+        # column sideways (at the default and the narrowest width, after +,
+        # Esc and Enter, with one mode and three: the header wraps); Esc puts
+        # the + back; the shown mode's chip is set heavier than the others.
+        run: node scripts/test-slides-token-modes-browser.mjs
