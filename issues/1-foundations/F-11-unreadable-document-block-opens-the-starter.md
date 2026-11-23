@@ -23,7 +23,7 @@ When the JSON in a file's `#bento-doc` block cannot be parsed, or parses but is 
 
 ## Reproduce
 
-Serve the app with a modified document block (the audit intercepted `/` on the dev server and replaced `id="bento-doc"></script>` with a block containing the JSON below, `<` escaped as `<`). Equivalent on a built file: edit the `#bento-doc` block by hand.
+Serve the app with a modified document block (the audit intercepted `/` on the dev server and replaced `id="bento-doc"></script>` with a block containing the JSON below, `<` escaped as `\u003c`). Equivalent on a built file: edit the `#bento-doc` block by hand.
 
 1. Truncated: `{"format":"bento/slides","version":1,"title":"My real deck","slides":[{"id":"s1","elements":[{"id":"a","type":"text","x":10`
 2. Trailing comma: `{"format":"bento/slides","version":1,"title":"My real deck","slides":[{"id":"s1","elements":[]},]}`
