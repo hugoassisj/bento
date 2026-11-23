@@ -21,6 +21,16 @@
 // the measuring tool cannot disagree about whether a box fits its text. Without
 // a DOM (node tooling) the measured checks are skipped and `measured` reports
 // false, rather than guessing.
+//
+// VALUES. An element of a type the format does not have (`unknown-type`), a
+// value its property does not take (`invalid-value`: a string where a number
+// belongs, a word that is not a colour, an enum value that is not one of its
+// words) and a `parentId` naming no frame (`dangling-parent`) are judged by the
+// paste gate's own per-property checks (untrusted.ts `checkElementProp`), so
+// the validator and the gate cannot disagree about what a valid value is.
+// Colour syntax is the browser's to decide (`CSS.supports`); node tooling does
+// not guess at it. An element whose type or geometry is invalid skips the
+// geometry and measured checks, which would only report nonsense derived from it.
 
 import type { BentoDoc, CodeElement, Slide, SlideElement, TableElement, TextElement } from './model.ts'
 import { isWebUrl } from './model.ts'
@@ -30,6 +40,9 @@ import { measureElements, measureTables } from './measure.ts'
 import { BUILTIN_FONTS } from './fonts.ts'
 import { eachRef, keepAlpha, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
 import { tokenName } from './tokens.ts'
+import { checkElementProp, ELEMENT_CHECKS, type JsonSchema } from './untrusted.ts'
+import { isFrame } from './layout.ts'
+import { REQUIRED_ELEMENT_KEYS } from './model.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
 
@@ -132,6 +145,162 @@ function morphArrivals(doc: BentoDoc): Map<string, Slide | undefined> {
   return out
 }
 
+/** Edit distance (insert, delete, substitute), bailing out above `max`. */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i]
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    prev = row
+  }
+  return prev[b.length]
+}
+
+/**
+ * The one candidate a typo most likely meant: within edit distance 2 (and
+ * shorter than the word itself, so `z` never "means" `x`), and strictly closer
+ * than any other — a tie suggests nothing rather than the wrong key.
+ */
+export function nearestName(word: string, candidates: readonly string[]): string | undefined {
+  const lower = word.toLowerCase()
+  let best: string | undefined
+  let bestD = Math.min(2, word.length - 1) + 1
+  let tie = false
+  for (const c of candidates) {
+    const d = editDistance(lower, c.toLowerCase(), 2)
+    if (d < bestD) { best = c; bestD = d; tie = false }
+    else if (d === bestD) tie = true
+  }
+  return tie ? undefined : best
+}
+
+const didYouMean = (word: string, candidates: readonly string[]) => {
+  const near = nearestName(word, candidates)
+  return near ? ` Perhaps a typo: did you mean "${near}"?` : ''
+}
+
+/** Element geometry: a bad value here makes every check derived from the box nonsense. */
+const GEOMETRY = new Set(['x', 'y', 'w', 'h'])
+
+/** What a gate check accepts, in words, read off the schema the check carries. */
+function expected(s: JsonSchema | undefined): string {
+  if (!s) return 'a value the format accepts'
+  if (Array.isArray(s.anyOf)) return (s.anyOf as JsonSchema[]).map(expected).join(', or ')
+  if (Array.isArray(s.enum)) return `one of ${(s.enum as unknown[]).map((v) => JSON.stringify(v)).join(', ')}`
+  if ('const' in s) return JSON.stringify(s.const)
+  if (typeof s.description === 'string' && s.type !== 'object') return `a ${s.description.split(';')[0]}`
+  switch (s.type) {
+    case 'number': {
+      const min = s.minimum as number, max = s.maximum as number
+      return max - min < 1e5 ? `a finite number from ${min} to ${max}` : 'a finite number'
+    }
+    case 'boolean': return 'true or false'
+    case 'string': return 'a string'
+    case 'array': return s.minItems !== undefined && s.minItems === s.maxItems ? `a list of ${s.minItems}` : 'a list'
+    case 'object': return Array.isArray(s.required) && s.required.length
+      ? `an object with ${(s.required as string[]).join(', ')}` : 'an object'
+  }
+  return 'a value the format accepts'
+}
+
+/** A value, named for a message. */
+function described(v: unknown): string {
+  if (typeof v === 'string') return `the string ${JSON.stringify(v.length > 40 ? v.slice(0, 40) + '…' : v)}`
+  if (Array.isArray(v)) return `a list of ${v.length}`
+  if (v === null) return 'null'
+  if (typeof v === 'object') return 'an object'
+  return String(v)
+}
+
+/** The schema branch of an `anyOf` this value is shaped for. */
+function branchFor(s: JsonSchema, v: unknown): JsonSchema | undefined {
+  const kind = Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v
+  return (s.anyOf as JsonSchema[]).find((b) => b.type === kind)
+}
+
+/**
+ * Does the browser parse this as a colour? Asked of the browser's own CSS
+ * parser (`CSS.supports`), the thing that decides at draw time — so this is
+ * not a second colour parser, and node tooling (no CSS object) does not guess:
+ * it returns undefined and the colour is not judged, as overflow is not
+ * measured without a DOM.
+ */
+function browserColour(v: string, paint: boolean): boolean | undefined {
+  const css = (globalThis as { CSS?: { supports?: (p: string, v: string) => boolean } }).CSS
+  if (typeof css?.supports !== 'function') return undefined
+  const s = v.trim()
+  // a paint may name a local paint server or none; the gate already judged those
+  if (paint && (s === 'none' || /^url\(/i.test(s))) return true
+  return css.supports('color', s)
+}
+
+interface BadValue { path: string; severity: Severity; message: string }
+
+/**
+ * Judge one element property by the paste gate's own check (untrusted.ts
+ * `checkElementProp`), read-only, so the validator and the gate cannot
+ * disagree about what a valid value is. Reported:
+ *  - a value the gate DROPS (the wrong type, out of range, not one of an
+ *    enum's words), at the deepest path the gate's output shows it lost;
+ *  - a number written as a string, which the gate silently coerces ("10" →
+ *    10) but a file opened from disk keeps as a string;
+ *  - a colour the browser cannot parse — the gate only keeps CSS out of a
+ *    colour, it does not know colour names, so this one asks the browser.
+ * Walks the input beside the gate's output and the schema the check carries.
+ */
+function badValues(type: string, key: string, value: unknown): BadValue[] {
+  const out: BadValue[] = []
+  const required = REQUIRED_ELEMENT_KEYS[type] ?? []
+  const res = checkElementProp(type, key, value)
+  const walk = (input: unknown, kept: unknown, schema: JsonSchema | undefined, path: string, top: boolean) => {
+    if (!schema) return
+    if (kept === undefined) { out.push(drop(input, schema, path, top)); return }
+    if (Array.isArray(schema.anyOf)) {
+      const branch = branchFor(schema, input)
+      if (!branch) return
+      schema = branch
+    }
+    if (schema.type === 'object' && schema.properties && input && typeof input === 'object' && !Array.isArray(input)) {
+      const props = schema.properties as Record<string, JsonSchema>
+      for (const k of Object.keys(input)) {
+        if (Object.hasOwn(props, k)) walk((input as any)[k], (kept as any)?.[k], props[k], `${path}.${k}`, false)
+      }
+      return
+    }
+    if (schema.type === 'array' && schema.items && Array.isArray(input) && Array.isArray(kept)) {
+      input.forEach((v, i) => walk(v, kept[i], schema!.items as JsonSchema, `${path}[${i}]`, false))
+      return
+    }
+    if (schema.type === 'number' && typeof input === 'string') {
+      out.push({ path, severity: top && GEOMETRY.has(key) ? 'error' : 'warning',
+        message: `"${path}" must be a finite number, got ${described(input)}. A file keeps it as written, so arithmetic on it concatenates ("10" + 100 = "10100"); a paste or loadDoc() converts it. Write the number without quotes.` })
+      return
+    }
+    const desc = typeof schema.description === 'string' ? schema.description : ''
+    if (typeof input === 'string' && desc.startsWith('CSS colour')) {
+      if (browserColour(input, desc.includes('url(')) === false) {
+        out.push({ path, severity: 'warning',
+          message: `"${path}" is ${described(input)}, which is not a colour the browser can parse — it is ignored where it is drawn, so the element paints a default instead (an svg fill turns black, text takes the inherited colour). Use a hex, rgb(), hsl() or named colour.` })
+      }
+    }
+  }
+  const drop = (input: unknown, schema: JsonSchema, path: string, top: boolean): BadValue => ({
+    path,
+    severity: top && (GEOMETRY.has(key) || required.includes(key)) ? 'error' : 'warning',
+    message: `"${path}" must be ${expected(schema)}, got ${described(input)}. A paste or loadDoc() drops it${top && required.includes(key) ? ' — and with it the whole element, which cannot render without it' : ''}; a file keeps it, and the renderer cannot use it.`,
+  })
+  walk(value, res.ok ? res.value : undefined, ELEMENT_CHECKS[key]?.schema, key, true)
+  return out
+}
+
+/** The document with the given elements left out — for the measured checks. */
+const withoutElements = (doc: BentoDoc, skip: Set<SlideElement>): BentoDoc => !skip.size ? doc : {
+  ...doc, slides: doc.slides.map((s) => ({ ...s, elements: s.elements.filter((e) => !skip.has(e)) })),
+}
+
 export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateResult {
   const findings: Finding[] = []
   const add = (f: Finding) => findings.push(f)
@@ -147,12 +316,14 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
   // way, so one with no inbound link is in the file and in nobody's path.
   const linkTargets = new Set<string>()
   for (const sl of doc.slides) for (const el of sl.elements) if (el.link) linkTargets.add(el.link)
+  // elements whose type or geometry is invalid: the measured checks skip them
+  const skipMeasure = new Set<SlideElement>()
 
   // ---- document level ------------------------------------------------------
   for (const k of Object.keys(doc)) {
     if (!(MODEL_KEYS.doc as readonly string[]).includes(k)) {
       add({ code: 'unknown-key', severity: 'warning', path: k,
-        message: `Document key "${k}" is not part of the bento/slides format — it is ignored at render time.` })
+        message: `Document key "${k}" is not part of the bento/slides format — it is ignored at render time.${didYouMean(k, MODEL_KEYS.doc)}` })
     }
   }
   for (const f of doc.fonts ?? []) {
@@ -268,11 +439,12 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
     const seenIds = new Set<string>()
     const seenMorph = new Map<string, string>()
     const elsOnSlide = new Set(slide.elements.map((e) => e.id))
+    const byId = new Map(slide.elements.map((e) => [e.id, e]))
 
     for (const k of Object.keys(slide)) {
       if (!(MODEL_KEYS.slide as readonly string[]).includes(k)) {
         add({ code: 'unknown-key', severity: 'warning', slide: sid, path: k,
-          message: `Slide key "${k}" is not part of the format — it is ignored.` })
+          message: `Slide key "${k}" is not part of the format — it is ignored.${didYouMean(k, MODEL_KEYS.slide)}` })
       }
     }
     if (slide.hidden && !slide.stateOf && !linkTargets.has(sid)) {
@@ -301,22 +473,54 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       }
       seenMorph.set(mk, el.id)
 
-      // unknown keys -------------------------------------------------------
+      // unknown type ---------------------------------------------------------
+      // Nothing else about an element this version cannot draw is worth
+      // reporting: its keys, geometry and references belong to a type the
+      // format does not have, so every derived finding would be noise.
+      const types = Object.keys(MODEL_KEYS.element)
       const known = (MODEL_KEYS.element as Record<string, readonly string[]>)[el.type]
-      if (known) {
-        for (const k of Object.keys(el)) {
-          if (!known.includes(k)) {
-            add({ ...at, code: 'unknown-key', severity: 'warning', path: k,
-              message: `"${k}" is not a property of a ${el.type} element — it is ignored, so whatever it was meant to do will not happen.` })
-          }
+      if (!known) {
+        add({ ...at, code: 'unknown-type', severity: 'error', path: 'type',
+          message: `${described(el.type)} is not an element type (${types.join(', ')}).${didYouMean(String(el.type), types)} An opened file keeps the element and saves it back untouched, but nothing is drawn for it; a paste or loadDoc() drops it.` })
+        skipMeasure.add(el)
+        continue
+      }
+
+      // unknown keys and invalid values --------------------------------------
+      let badGeometry = false
+      for (const k of Object.keys(el)) {
+        if (!known.includes(k)) {
+          add({ ...at, code: 'unknown-key', severity: 'warning', path: k,
+            message: `"${k}" is not a property of a ${el.type} element — it is ignored, so whatever it was meant to do will not happen.${didYouMean(k, known)}` })
+          continue
+        }
+        // palette and token references have their own findings below
+        if (k === 'themeRefs') continue
+        for (const bad of badValues(el.type, k, (el as unknown as Record<string, unknown>)[k])) {
+          add({ ...at, code: 'invalid-value', ...bad })
+          if (bad.path === k && GEOMETRY.has(k)) badGeometry = true
         }
       }
       if (el.fx) {
         for (const k of Object.keys(el.fx)) {
           if (!(MODEL_KEYS.fx as readonly string[]).includes(k)) {
             add({ ...at, code: 'unknown-key', severity: 'warning', path: `fx.${k}`,
-              message: `"fx.${k}" is not a known effect property — it is ignored.` })
+              message: `"fx.${k}" is not a known effect property — it is ignored.${didYouMean(k, MODEL_KEYS.fx)}` })
           }
+        }
+      }
+
+      // frame membership -----------------------------------------------------
+      // layout.ts layoutSlide unlinks these silently on the next layout pass
+      if (el.parentId !== undefined) {
+        const parent = byId.get(el.parentId)
+        const why = el.parentId === el.id ? 'names the element itself'
+          : !parent ? `names "${el.parentId}", which is not an element on this slide`
+          : !isFrame(parent) ? `names "${el.parentId}", which is not a frame (a rectangle with a layout)`
+          : ''
+        if (why) {
+          add({ ...at, code: 'dangling-parent', severity: 'warning', path: 'parentId',
+            message: `parentId ${why} — it will be treated as a free element; the layout pass removes the link (and its sizing).` })
         }
       }
 
@@ -326,11 +530,15 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       // only a warning for the element types that carry words, where going
       // past an edge means the reader loses some. For everything else it is
       // recorded at 'info' and stays out of the way.
+      // A box with a string or out-of-range coordinate has no geometry to
+      // judge: report the value (above), not the nonsense derived from it.
       const carriesText = el.type === 'text' || el.type === 'table'
       const right = el.x + el.w
       const bottom = el.y + el.h
       const fullBleed = el.w >= doc.size.width * 0.9 || el.h >= doc.size.height * 0.9
-      if (right > doc.size.width || bottom > doc.size.height || el.x < 0 || el.y < 0) {
+      if (badGeometry) {
+        skipMeasure.add(el)
+      } else if (right > doc.size.width || bottom > doc.size.height || el.x < 0 || el.y < 0) {
         add({ ...at, code: 'out-of-canvas', severity: carriesText ? 'warning' : 'info',
           message: carriesText
             ? `Extends outside the ${doc.size.width}x${doc.size.height} canvas (x ${el.x}-${right}, y ${el.y}-${bottom}) — the text past the edge is cropped when presenting.`
@@ -421,7 +629,7 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
   }
 
   // ---- measured checks -----------------------------------------------------
-  if (measure) measureOverflow(doc, add)
+  if (measure) measureOverflow(withoutElements(doc, skipMeasure), add)
 
   const counts = { error: 0, warning: 0, info: 0 }
   for (const f of findings) counts[f.severity]++

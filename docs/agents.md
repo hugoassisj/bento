@@ -266,8 +266,14 @@ findings.filter(f => f.severity !== 'info')
 ```
 
 Each finding is `{code, severity, message, slide?, element?, path?}`. It checks
-unknown property names (a typo is ignored, so the styling just never applies),
-text that overflows its box (measured against the real renderer), elements off
+unknown property names (a typo is ignored, so the styling just never applies;
+the message suggests the key you probably meant, `fil` → `fill`), element
+types the format does not have (`unknown-type`, an error: nothing is drawn),
+values a property does not take (`invalid-value`: `"x": "10"` instead of
+`10`, a colour the browser cannot parse, an enum word that is not one of its
+values, judged by the same checks the paste gate uses), a `parentId` that names
+no frame on the slide (`dangling-parent`: the element is free, and the layout
+pass drops the link), text that overflows its box (measured against the real renderer), elements off
 the canvas, entrances that can never run, `dash-march` without a dashed stroke,
 broken `link` and `asset:` references, duplicate ids and morph-key collisions,
 and chart options charts-lite does not implement.

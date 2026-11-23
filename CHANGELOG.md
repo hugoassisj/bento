@@ -16,6 +16,15 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Checking a deck catches four mistakes it used to let through.**
+  `window.bento.validate()` (and `bento check`) now reports an element of a
+  type that does not exist (`"type": "shap"`, which draws nothing), a value its
+  property does not take (`"x": "10"` instead of `10`, or a colour the browser
+  cannot read, which paints black or the default colour), and a `parentId` that
+  names no frame on the slide (the element is free, not in a frame). A
+  misspelled property now comes with a suggestion: `fil` asks "did you mean
+  `fill`?". Values are judged by the same rules a paste uses, so the two never
+  disagree, and the starter and gallery decks stay clean.
 
 ## [1.3.0] — 2026-11-22
 

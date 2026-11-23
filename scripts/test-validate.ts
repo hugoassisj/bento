@@ -25,6 +25,13 @@
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { validateDoc } from '../slides/src/validate.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
+import { expandDoc } from '../slides/src/compact.ts'
+import { parseDocInputReport } from '../slides/src/compactload.ts'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+// bundled: the bundle lives elsewhere, so the repo root is the cwd (CI runs from it)
+const fixtureDir = join(process.cwd(), 'scripts/fixtures/agent-decks')
 
 let failures = 0
 let checks = 0
@@ -309,6 +316,128 @@ ok(refCodes(refDoc({ 'shadow.color': 'accent1' })).has('theme-ref-dangling'),
   'a reference with no colour to control is reported')
 ok(refCodes(refDoc({ fill: 'accent1' }, '#123456')).has('theme-ref-stale'),
   'a literal that disagrees with its reference is reported before the palette overwrites it')
+
+// ------------------------------------------------- values the runtime swallows
+// An unknown element type, a value its property does not take, a parentId
+// that names no frame: each used to validate clean while the element did not
+// draw, drew a fallback, or silently left its frame. They are judged by the
+// paste gate's own per-property checks, so the two cannot disagree.
+const one = (els: unknown[]): BentoDoc => ({
+  ...clean,
+  slides: [{ id: 's1', name: 'one', background: '#FFF', transition: 'fade', notes: '', elements: els }],
+} as any)
+const findingsOf = (els: unknown[]) => validateDoc(one(els), { measure: false }).findings
+const rect = (extra: Record<string, unknown> = {}) =>
+  ({ id: 'a', type: 'shape', shape: 'rect', x: 10, y: 10, w: 100, h: 100, fill: '#f00', ...extra })
+{
+  const f = findingsOf([{ id: 'a', type: 'shap', x: 10, y: 10, w: 100, h: 100 }])
+  const t = f.find((x) => x.code === 'unknown-type')
+  ok(!!t && t.severity === 'error' && t.path === 'type' && t.element === 'a' && t.slide === 's1',
+    `an unknown element type is an error at path "type" (got ${f.map((x) => `${x.severity}:${x.code}@${x.path}`).join(', ') || 'nothing'})`)
+  ok(!!t && ['text', 'shape', 'image', 'chart', 'table', 'media', 'embed', 'code'].every((ty) => t.message.includes(ty)),
+    'its message names the valid types')
+  ok(!!t && t.message.includes('did you mean "shape"'), 'and suggests "shape" for "shap"')
+  ok(f.length === 1, `nothing else is derived from an element of an unknown type (${f.length} finding(s))`)
+  const far = findingsOf([{ id: 'a', type: 'widget', x: 5000, y: 10, w: 100, h: 100 }])
+  ok(far.length === 1 && !far[0].message.includes('did you mean'),
+    'a type nowhere near a real one suggests nothing, and its off-canvas box is not reported')
+}
+{
+  const f = findingsOf([rect({ x: '10' })])
+  const x = f.find((v) => v.code === 'invalid-value' && v.path === 'x')
+  ok(!!x && x.severity === 'error' && /must be a finite number, got the string "10"/.test(x.message),
+    `a string x is an error that says what it must be (${x?.message ?? 'no finding'})`)
+  ok(!f.some((v) => v.code === 'out-of-canvas'), 'and no out-of-canvas is derived from "10" + 100 = "10100"')
+}
+{
+  const f = findingsOf([rect({ opacity: 2 })])
+  ok(f.some((v) => v.code === 'invalid-value' && v.path === 'opacity' && v.severity === 'warning' && /from 0 to 1, got 2/.test(v.message)),
+    'an opacity out of range is a warning that states the range')
+  const g = findingsOf([{ id: 't', type: 'text', x: 96, y: 96, w: 400, h: 80, html: 'x', fontSize: '20', align: 'middle' }])
+  ok(g.some((v) => v.code === 'invalid-value' && v.path === 'fontSize' && v.severity === 'warning'),
+    'a string fontSize is a warning (not geometry)')
+  ok(g.some((v) => v.code === 'invalid-value' && v.path === 'align' && /one of "left", "center", "right"/.test(v.message)),
+    'an enum value that is not one of its words names the words')
+  const sh = findingsOf([rect({ shadow: { x: '3', y: 0, blur: 4, color: '#000' } })])
+  ok(sh.some((v) => v.code === 'invalid-value' && v.path === 'shadow.x'),
+    `a nested string number is reported at its own path (${sh.map((v) => v.path).join(', ') || 'nothing'})`)
+  const req = findingsOf([{ id: 't', type: 'text', x: 96, y: 96, w: 400, h: 80, html: 42 }])
+  ok(req.some((v) => v.code === 'invalid-value' && v.path === 'html' && v.severity === 'error'),
+    'a required key the gate would drop (taking the element with it) is an error')
+}
+{
+  // colour syntax is the browser's call; without one, nothing is guessed
+  ok(!findingsOf([rect({ fill: 'not-a-color' })]).some((v) => v.code === 'invalid-value'),
+    'without a CSS parser (node) a colour is not judged — no guess')
+  // with one, the validator asks it, for every colour the gate's schema marks
+  const asked: string[] = []
+  ;(globalThis as any).CSS = { supports: (p: string, v: string) => { asked.push(v); return p === 'color' && v !== 'not-a-color' } }
+  try {
+    const f = findingsOf([rect({
+      fill: 'not-a-color', stroke: 'not-a-color', shadow: { blur: 2, color: 'not-a-color' },
+      fillGradient: { angle: 0, stops: [{ at: 0, color: 'not-a-color' }, { at: 1, color: '#fff' }] },
+    })])
+    const paths = f.filter((v) => v.code === 'invalid-value').map((v) => v.path).sort()
+    ok(JSON.stringify(paths) === JSON.stringify(['fill', 'fillGradient.stops[0].color', 'shadow.color', 'stroke']),
+      `fill, stroke, a shadow and a gradient stop are each asked about (${paths.join(', ')})`)
+    ok(f.every((v) => v.code !== 'invalid-value' || v.severity === 'warning'), 'an unparseable colour is a warning, never an error')
+    asked.length = 0
+    const quiet = findingsOf([rect({ fill: 'url(#g)', stroke: 'none' })])
+    ok(!quiet.some((v) => v.code === 'invalid-value') && !asked.includes('url(#g)') && !asked.includes('none'),
+      'a paint may be a local url(#id) or none without asking the colour parser')
+  } finally { delete (globalThis as any).CSS }
+}
+{
+  const parent = (pid: string, extra: unknown[] = []) => findingsOf([...extra, rect({ id: 'c', parentId: pid })])
+    .filter((v) => v.code === 'dangling-parent')
+  const frame = rect({ id: 'f', layout: { dir: 'col', gap: 8, pad: [8, 8, 8, 8] } })
+  const missing = parent('nope')
+  ok(missing.length === 1 && missing[0].severity === 'warning' && missing[0].path === 'parentId' && /free element/.test(missing[0].message),
+    'a parentId naming nothing on the slide is a dangling-parent warning')
+  ok(parent('f', [rect({ id: 'f' })]).length === 1, 'a parentId naming an element that is not a frame is reported')
+  ok(parent('c').length === 1, 'a parentId naming the element itself is reported')
+  ok(parent('f', [frame]).length === 0, 'a child of a real frame is not reported')
+}
+{
+  const f = findingsOf([rect({ fil: '#f00' })]).find((v) => v.code === 'unknown-key')
+  ok(!!f && f.message.includes('did you mean "fill"'), `an unknown key suggests the nearest real one (${f?.message ?? 'no finding'})`)
+  const fx = findingsOf([rect({ fx: { ente: 'fade' } })]).find((v) => v.path === 'fx.ente')
+  ok(!!fx && fx.message.includes('did you mean "enter"'), 'so does an unknown fx key')
+  const z = findingsOf([rect({ z: 1 })]).find((v) => v.code === 'unknown-key')
+  ok(!!z && !z.message.includes('did you mean'), 'a one-letter key suggests nothing rather than a guess')
+}
+{
+  // real content: every value the starter and the agent fixtures carry is one
+  // the gate accepts, so none of the new codes may fire on them
+  const NEW = ['invalid-value', 'unknown-type', 'dangling-parent']
+  const fresh = (d: BentoDoc) => validateDoc(d, { measure: false }).findings.filter((v) => NEW.includes(v.code))
+  const s = fresh(starterDoc())
+  ok(s.length === 0, `the starter deck gains no value findings (${s.map((v) => `${v.code}@${v.element}.${v.path}`).join(', ') || 'none'})`)
+  for (const name of readdirSync(fixtureDir).filter((n) => n.endsWith('.json'))) {
+    const json = readFileSync(join(fixtureDir, name), 'utf8')
+    const raw = fresh(expandDoc(JSON.parse(json)))
+    const loaded = parseDocInputReport(json, { fit: false })
+    const after = loaded ? fresh(loaded.doc) : null
+    ok(raw.length === 0 && after?.length === 0,
+      `agent fixture ${name}: no value findings, as written or as loaded (${[...raw, ...(after ?? [])].map((v) => `${v.code}@${v.path}`).join(', ') || 'none'})`)
+  }
+}
+{
+  // read-only, and the finding shape is unchanged
+  const docs = [broken, one([rect({ x: '10', fil: '#f00', parentId: 'nope', shadow: { x: '3', blur: 2, color: '#000' } }),
+    { id: 'u', type: 'shap', x: 1, y: 1, w: 1, h: 1 }]), starterDoc()]
+  let same = true
+  let shaped = true
+  for (const d of docs) {
+    const before = JSON.stringify(d)
+    for (const f of validateDoc(d, { measure: false }).findings) {
+      if (Object.keys(f).some((k) => !['code', 'severity', 'message', 'slide', 'element', 'path'].includes(k))) shaped = false
+    }
+    if (JSON.stringify(d) !== before) same = false
+  }
+  ok(same, 'validate() never mutates the document it is given')
+  ok(shaped, 'every finding keeps the shape { code, severity, message, slide, element, path }')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

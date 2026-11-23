@@ -721,3 +721,11 @@ jobs:
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
 
+      - name: validate() reports the values the runtime swallows in Chromium
+        if: ${{ !cancelled() }}
+        # An unknown element type, a colour the browser cannot parse (asked of
+        # the browser's own parser), a parentId naming no frame and geometry
+        # written as strings are reported at their paths, with a did-you-mean
+        # for typos; every colour syntax the browser draws stays quiet, and the
+        # starter and fixture decks gain none of the new codes.
+        run: node scripts/test-slides-validate-values-browser.mjs
