@@ -79,8 +79,8 @@ New strings: none beyond the validator message (validator messages are English-o
 
 - Node: extend `scripts/test-slides-tokens.ts` and `scripts/test-slides-derive.ts` with the switch, add, rename and delete cases and the fixed-point check.
 - Old shell: follow `scripts/test-slides-alpha-refs.ts`, which pins released-shell behaviour: open a deck carrying `paletteModes` under the released regex/shell logic and assert the painted colours and what survives a save.
-- Gate: extend the restore-gate rig with hostile map values (a `url(...)`, a key reaching `__proto__`, 10,000 entries).
-- Schema: `node scripts/build-schema.mjs --check` and the frozen-schema rig must pass (released schema twins are never rewritten).
+- Gate: extend `scripts/test-fileopen-gate.ts` and `scripts/test-slides-gate-keys.ts` (the rigs that exercise `restoregate.ts`) with hostile map values (a `url(...)`, a key reaching `__proto__`, 10,000 entries).
+- Schema: `node scripts/build-schema.mjs --check` and `scripts/test-schema-frozen.mjs` must pass (released schema twins are never rewritten).
 
 ## Out of scope
 

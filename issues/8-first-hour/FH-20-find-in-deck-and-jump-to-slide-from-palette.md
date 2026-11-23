@@ -33,7 +33,7 @@ Observed in the running app (main session): ⌘K hides anything that is not a cu
 
 Confirmed in code now:
 
-- The palette's whole data source is the command list: `rank(cmds, query)` filters by `when` and fuzzy-matches the label, the English label and the id (`slides/src/editor/commands.ts:88-104`); the empty state is `t('No matching command')` (`commands.ts:155-160`). `openPalette(cmds)` (`commands.ts:107`) takes only commands.
+- The palette's whole data source is the command list: `rank(cmds, query)` filters by `when` and fuzzy-matches the label, the English label and the id (`slides/src/editor/commands.ts:88-102`); the empty state is `t('No matching command')` (`commands.ts:155-160`). `openPalette(cmds)` (`commands.ts:105`) takes only commands.
 - The palette command is declared at `slides/src/editor/editor.ts:3774`; slide navigation commands are only `next-slide` and `prev-slide` (`editor.ts:3833-3834`).
 - A search of `slides/src` for find or replace UI finds none (the only hit for the words is a string replace helper in `slides/src/editor/markdown.ts`). Confirmed in the earlier editor audit as well.
 - Content that would need searching: text elements' `html`, table cells, code elements' `content`, slide `notes`, slide `name`, element `name` and `alt`, chart titles in `option`. There is no shared "plain text of a slide" helper exported today (a search for `plainText|textOf|stripHtml|htmlToText` exports returns nothing); upstream's unmerged Assistant branch (PR #532) has one in `slides/src/editor/assistant/material.ts` ("addressed outline"), which is not on `main`.

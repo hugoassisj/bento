@@ -9,7 +9,7 @@ evidence: seen
 labels: [enhancement, "priority:P2", "size:S", "evidence:seen", "area:text"]
 depends_on: []
 related: [FH-02, F-05, MP-01]
-upstream: ["nyblnet/bento discussion #711"]
+upstream: ["nyblnet/bento#711"]
 ---
 ## Summary
 
