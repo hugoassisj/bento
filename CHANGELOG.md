@@ -16,6 +16,13 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Fix: "Click to add title" no longer ends up on your slide.** Opening a
+  layout placeholder and leaving it without typing, or clicking into it before
+  typing, used to save the prompt as real text, so the audience saw it in the
+  show. The prompt is now only a hint: it goes away while you type (your text
+  is at full strength from the first letter), comes back when the box is left
+  empty, and is never saved or shown in the show or in print. Slides already
+  saved with the prompt as text keep it; delete it once and it stays gone.
 
 ## [1.3.0] — 2026-11-22
 

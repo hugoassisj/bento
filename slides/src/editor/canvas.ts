@@ -89,7 +89,8 @@ export class SlideCanvas {
    *  deletion. */
   private editingSlideId: string | null = null
   /** startTextEdit swapped the rendered form for raw source (a field or a
-   *  formula), so commit must re-render even if the text is unchanged. */
+   *  formula) or for an empty line (a placeholder), so commit must re-render
+   *  even if the text is unchanged. */
   private editingShowedRaw = false
   /** The selection is still the select-all that entering the box made. */
   private editAutoSelected = false
@@ -2196,6 +2197,7 @@ export class SlideCanvas {
     // Remember that we swapped: on commit the resolved view has to be put back
     // even when the text did NOT change, and only a re-render can do that.
     this.editingShowedRaw = false
+    let emptyPlaceholder = false
     // (`\(` and `\[` open formulas too, #540 — and an unrendered one wears the
     // editor's hint span, which must never be what the author edits)
     if (model?.type === 'text' && typeof model.html === 'string' && /\{\{|\$|\\[([]/.test(model.html)) {
@@ -2213,6 +2215,14 @@ export class SlideCanvas {
       // When editing code, we always treat the content as raw text to preserve formatting.
       inner.innerText = model.content
       this.editingShowedRaw = true
+    } else if (inner.dataset.placeholder !== undefined) {
+      // An empty placeholder (render.ts paints its prompt, the node holds
+      // nothing): give the caret an empty line to sit on. The prompt goes
+      // while the box is open, as in PowerPoint; a commit with no text writes
+      // '' and the re-render paints the prompt again.
+      inner.replaceChildren(document.createElement('br'))
+      this.editingShowedRaw = true
+      emptyPlaceholder = true
     }
     // An inline code run that ENDS a line (last thing in the box, or right
     // before a <br>) has no text position after it, so the caret can only sit
@@ -2233,8 +2243,10 @@ export class SlideCanvas {
     node.classList.add('bento-editing')
     inner.contentEditable = 'true'
     inner.focus()
-    document.getSelection()?.selectAllChildren(inner)
-    this.editAutoSelected = true // cleared by the first key or click (see the ` toggle)
+    // an empty placeholder has nothing to select: the caret sits on its line
+    if (emptyPlaceholder) document.getSelection()?.collapse(inner, 0)
+    else document.getSelection()?.selectAllChildren(inner)
+    this.editAutoSelected = !emptyPlaceholder // cleared by the first key or click (see the ` toggle)
     this.syncTargets()
     this.watchSelection(inner)
     this.onTextEditChange?.(node.dataset.elId)
@@ -2337,11 +2349,15 @@ export class SlideCanvas {
     // typed "- " bullets are glyphs while you type (markdown.ts says why);
     // once the edit ends they become real list items, so a long bullet wraps
     // under its text rather than under the glyph (#502, editor/bullets.ts)
-    const html = bulletsToLists(sanitizeHtml(stripMarkerEscapes(inner.innerHTML.replace(/\u200B/g, ''))))
+    const typed = bulletsToLists(sanitizeHtml(stripMarkerEscapes(inner.innerHTML.replace(/\u200B/g, ''))))
     const grownH = Math.max(parseFloat(node.style.height) || 0, inner.scrollHeight)
     const el = this.store.doc.slides
       .find((slide) => slide.id === slideId)
       ?.elements.find((element) => element.id === id)
+    // a placeholder left with no text and no picture is empty, not a stray
+    // <br>, so its prompt comes back
+    const emptied = el?.type === 'text' && !!el.placeholder && !text.replace(/\u200B/g, '').trim() && !typed.includes('<img')
+    const html = emptied ? '' : typed
     // a closed ``` fence: the text box becomes (or splits around) a Code element
     if (el && el.type === 'text') {
       const parts = splitFences(text)

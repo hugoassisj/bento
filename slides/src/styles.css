@@ -611,6 +611,15 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   cursor: default;
 }
 
+/* A layout placeholder's prompt ("Click to add title"), painted while the box
+   is empty (render.ts sets data-placeholder only on an empty one). Painted,
+   never written into the node: whatever the node holds is what an edit saves.
+   :empty lets go at the first typed character, so typing is at full opacity. */
+.bento-text-inner[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  opacity: 0.38;
+}
+
 /* Code tokens the morph may MOVE. A CSS transform does nothing to a
    non-replaced inline element — accepted, readable back on style.transform,
    and zero pixels of movement — so a token has to be an atomic inline-level

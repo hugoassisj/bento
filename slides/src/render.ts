@@ -747,14 +747,17 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
       inner.innerHTML = resolveMath(sanitizeHtml(resolveFields(el.html, opts.fields)), opts.mathHint)
-      // layout placeholder: prompt while empty (editor), gone while presenting
+      // layout placeholder: prompt while empty (editor), gone while presenting.
+      // The prompt is PAINTED (styles.css, `[data-placeholder]:empty::before`),
+      // never written into the node: text in the node is what an edit reads
+      // back, and the prompt was being saved as the slide's real content.
       const isEmpty = !inner.textContent?.trim() && !el.html.includes('<img')
       if (el.placeholder && isEmpty) {
         if (opts.hidePlaceholders) {
           node.style.display = 'none'
         } else {
-          inner.textContent = el.placeholder
-          inner.style.opacity = '0.38'
+          inner.textContent = ''
+          inner.dataset.placeholder = el.placeholder
         }
       }
       node.appendChild(inner)

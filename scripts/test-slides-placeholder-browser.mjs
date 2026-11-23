@@ -120,6 +120,19 @@ try {
   await p.keyboard.press('PageUp')
   await p.waitForTimeout(400)
 
+  console.log('\ntyping with the placeholder selected\n')
+  box = await inner()
+  await p.mouse.click(box.x, box.y)
+  await p.waitForTimeout(200)
+  await p.keyboard.type('Q')
+  await p.keyboard.press('Escape')
+  await p.waitForTimeout(300)
+  ok((await html()) === 'Q', `a key typed on the selected placeholder fills it (got ${JSON.stringify(await html())})`)
+  await p.keyboard.press('Escape')
+  await p.evaluate(() => window.bento.undo())
+  await p.waitForTimeout(300)
+  ok((await html()) === '', 'one undo empties it again')
+
   console.log('\nwhat leaves the editor\n')
   // open both placeholders once more and leave them untouched
   for (const id of [ID, 'lt-sub']) {
