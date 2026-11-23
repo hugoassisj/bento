@@ -386,12 +386,15 @@ export class TokensPane {
         })
         return null
       }, () => {
-        // put the + back by hand: refresh() waits while a field is focused or
-        // refused, and Esc arrives while this one is, so it used to stay open
+        // refresh() waits while a field is focused or refused, and Esc arrives
+        // while this one is: take it out first (the + stands in, should the
+        // rebuild still wait on another field), then rebuild, which also shows
+        // whatever changed in the deck while the field was open
         const esc = document.activeElement === field
         sayInvalid(field, '')
         field.replaceWith(add)
-        if (esc) add.focus({ preventScroll: true })
+        this.refresh()
+        if (esc) this.host?.querySelector<HTMLElement>('.ed-tokens-addmode')?.focus({ preventScroll: true })
       })
       add.replaceWith(field)
       field.focus({ preventScroll: true })

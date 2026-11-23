@@ -15,8 +15,9 @@
 // at the narrowest the splitter allows, after +, after Esc and after Enter,
 // with one mode and with three. Esc closes the field, even after a refused
 // name (it used to leave it open: the rebuild it asked for waits while a field
-// is focused). And the shown mode's chip differs from the others by weight,
-// not only by a tint.
+// is focused), and a change to the deck made while it was open (an undo, a
+// collaborator's edit) shows as soon as it closes. And the shown mode's chip
+// differs from the others by weight, not only by a tint.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -166,6 +167,26 @@ try {
     await p.waitForTimeout(200)
     const after = await p.evaluate(() => ({ field: !!document.querySelector('.ed-tokens-head .ed-token-new'), why: !!document.querySelector('.ed-tokens-head .ed-token-why'), plus: document.activeElement?.classList.contains('ed-tokens-addmode') }))
     ok(!after.field && !after.why && after.plus, `Esc closes it, its note goes with it, the + is back and focused (${JSON.stringify(after)})`)
+    await ctx.close()
+  }
+
+  console.log('\na change to the deck while the field is open shows once it closes\n')
+  for (const how of ['leaving the field', 'Esc']) {
+    const { p, ctx } = await open(['default'])
+    await addMode(p)
+    await p.keyboard.type('Dark')
+    await p.keyboard.press('Enter')
+    await p.waitForTimeout(300)
+    await addMode(p)
+    // the same doc event a collaborator's patch sends; the open field holds the rebuild off
+    await p.evaluate(() => window.bento.undo())
+    await p.waitForTimeout(200)
+    if (how === 'Esc') await p.keyboard.press('Escape')
+    else await p.locator('.ed-tokens-head h3').click()
+    await p.waitForTimeout(300)
+    const after = await p.evaluate(() => ({ chips: [...document.querySelectorAll('.ed-tokens-mode')].map((c) => c.textContent), field: !!document.querySelector('.ed-tokens-head .ed-token-new'), plus: document.activeElement?.classList.contains('ed-tokens-addmode') ?? false }))
+    ok(after.chips.join(',') === 'Default' && !after.field, `after an undo with the field open, ${how} shows the deck as it is now (${after.chips.join(', ')}; field open: ${after.field})`)
+    if (how === 'Esc') ok(after.plus, `…and the + has the focus (${after.plus})`)
     await ctx.close()
   }
 
