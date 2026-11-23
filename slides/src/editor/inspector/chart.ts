@@ -2,11 +2,12 @@
 // Copyright (c) 2026 The Bento authors
 // Charts: type, series, axes, pies.
 import type { PropsPanel } from '../panels'
-import { type ChartElement, applyChartPalette } from '../../model'
+import type { ChartElement } from '../../model'
 import { section, row, toggle, opBtn, segmented } from './fields'
 import { ICONS } from '../../icons'
 import { t } from '../../i18n'
 import { CHART_PRESETS } from '../../charts'
+import { switchChartType } from '../../chartconvert'
 import { color } from './color'
 import { SCRUB, unitHandle, numeric } from './controls'
 
@@ -42,7 +43,7 @@ export function buildChartProps(p: PropsPanel, el: ChartElement) {
     p.mutate(el.id, (e) => {
       const c = e as ChartElement
       c.preset = v
-      c.option = applyChartPalette(CHART_PRESETS[v](), p.store.doc.theme)
+      c.option = switchChartType(c.option as Record<string, unknown>, v, p.store.doc.theme).option
     }, true),
     Object.fromEntries(kinds.map((k) => [k, t(CHART_WORDS[k] ?? k)])),
     kinds.every((k) => CHART_GLYPHS[k]) ? CHART_GLYPHS : undefined))

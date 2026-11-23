@@ -751,3 +751,13 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Switching a chart's type keeps its data
+      # The Type control converted nothing: it replaced the option with the
+      # target type's sample. Rows: bar ⇄ line round trip identical, bar ⇄ pie
+      # keeps categories and the first series, scatter pairs and back, an
+      # untouched sample still switches to the target sample, no conversion
+      # adds a chart-key-ignored key, and a linked chart keeps updating.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-chart-convert.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-chart-convert.mjs"
+        node "$RUNNER_TEMP/test-slides-chart-convert.mjs"
