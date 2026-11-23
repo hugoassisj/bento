@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Pie shows the first series: {name}": "Das Kreisdiagramm zeigt die erste Reihe: {name}",
+  "Scatter plots x against y, so the data was simplified. Undo restores it.": "Ein Streudiagramm stellt x gegen y dar, daher wurden die Daten vereinfacht. Rückgängig stellt sie wieder her.",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",

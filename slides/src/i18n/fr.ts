@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "Pie shows the first series: {name}": "Le graphique en secteurs affiche la première série : {name}",
+  "Scatter plots x against y, so the data was simplified. Undo restores it.": "Un nuage de points trace x en fonction de y, les données ont donc été simplifiées. Annuler les restaure.",
   "View": "Affichage",
   "Current slide": "Diapositive actuelle",
   "Slide thumbnails": "Miniatures des diapositives",

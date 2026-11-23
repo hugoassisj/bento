@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Pie shows the first series: {name}": "円グラフには最初の系列のみ表示されます: {name}",
+  "Scatter plots x against y, so the data was simplified. Undo restores it.": "散布図は x と y の組で表すため、データを簡略化しました。元に戻すと復元できます。",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

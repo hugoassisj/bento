@@ -16,6 +16,15 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Switching a chart's type keeps your data.** Choosing Line, Bar, Pie or
+  Scatter in the chart panel used to replace your series with sample data.
+  Now a bar chart becomes a line chart with the same series, names, values
+  and colours, and back again. A pie shows your categories and your first
+  series, and says which series that is when there were more; switching back
+  to bars restores the categories. A scatter plots one series against the
+  next, and says when that simplified the data. Undo still brings back
+  exactly what you had, and a chart that is still the untouched sample
+  switches to the new type's sample, as before.
 
 ## [1.3.0] — 2026-11-22
 

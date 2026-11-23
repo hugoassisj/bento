@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Pie shows the first series: {name}": "圓形圖只顯示第一個系列：{name}",
+  "Scatter plots x against y, so the data was simplified. Undo restores it.": "散佈圖以 x 對 y 繪製，因此資料已簡化。復原即可還原。",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",

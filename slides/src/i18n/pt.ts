@@ -7,6 +7,8 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Pie shows the first series: {name}": "O gráfico de pizza mostra a primeira série: {name}",
+  "Scatter plots x against y, so the data was simplified. Undo restores it.": "Um gráfico de dispersão plota x contra y, então os dados foram simplificados. Desfazer os restaura.",
   "View": "Exibir",
   "Current slide": "Slide atual",
   "Slide thumbnails": "Miniaturas dos slides",

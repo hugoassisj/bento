@@ -71,7 +71,7 @@ export interface ValidateOpts {
  * because `renderPie` is the sole reader of it and a `label` on a bar or line
  * series genuinely does nothing.
  */
-const CHART_KEYS = {
+export const CHART_KEYS = {
   top: ['color', 'series', 'xAxis', 'yAxis', 'legend', 'grid', 'tooltip', 'textStyle', 'dataZoom'],
   series: ['type', 'name', 'data', 'yAxisIndex', 'itemStyle'],
   seriesByType: {

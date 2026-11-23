@@ -7,7 +7,7 @@ import { section, row, toggle, opBtn, segmented } from './fields'
 import { ICONS } from '../../icons'
 import { t } from '../../i18n'
 import { CHART_PRESETS } from '../../charts'
-import { switchChartType } from '../../chartconvert'
+import { type ChartSwitchNote, switchChartType } from '../../chartconvert'
 import { color } from './color'
 import { SCRUB, unitHandle, numeric } from './controls'
 
@@ -39,12 +39,19 @@ export function buildChartProps(p: PropsPanel, el: ChartElement) {
     p.host.appendChild(linkRow)
   }
   const kinds = Object.keys(CHART_PRESETS)
-  row(p, 'Type', segmented(kinds, el.preset ?? 'bar', (v) =>
+  row(p, 'Type', segmented(kinds, el.preset ?? 'bar', (v) => {
+    // converts the chart's own data; only an untouched sample becomes the new type's sample
+    let note: ChartSwitchNote | undefined
     p.mutate(el.id, (e) => {
       const c = e as ChartElement
+      const r = switchChartType(c.option as Record<string, unknown>, v, p.store.doc.theme)
       c.preset = v
-      c.option = switchChartType(c.option as Record<string, unknown>, v, p.store.doc.theme).option
-    }, true),
+      c.option = r.option
+      note = r.note
+    }, true)
+    if (note?.kind === 'pie') p.toast(t('Pie shows the first series: {name}', { name: note.series || t('Series {n}', { n: 1 }) }))
+    else if (note?.kind === 'scatter') p.toast(t('Scatter plots x against y, so the data was simplified. Undo restores it.'))
+  },
     Object.fromEntries(kinds.map((k) => [k, t(CHART_WORDS[k] ?? k)])),
     kinds.every((k) => CHART_GLYPHS[k]) ? CHART_GLYPHS : undefined))
 
