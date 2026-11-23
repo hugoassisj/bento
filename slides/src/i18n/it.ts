@@ -4,6 +4,21 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "This deck could not be opened": "Impossibile aprire questa presentazione",
+  "The document stored in this file could not be read. The file has not been changed.": "Il documento salvato in questo file non può essere letto. Il file non è stato modificato.",
+  "The document text is not valid JSON (line {line}, column {column}).": "Il testo del documento non è JSON valido (riga {line}, colonna {column}).",
+  "The document text is not valid JSON.": "Il testo del documento non è JSON valido.",
+  "This is not a bento/slides document — its format is “{format}”.": "Questo non è un documento bento/slides — il suo formato è «{format}».",
+  "This is not a bento/slides document — it names no format.": "Questo non è un documento bento/slides — non indica alcun formato.",
+  "The document has no slides.": "Il documento non ha diapositive.",
+  "None of the document’s slides could be read.": "Nessuna diapositiva del documento è leggibile.",
+  "This is a compact document, the form agents write. It can be opened; saving writes it out in full.": "È un documento compatto, la forma che scrivono gli agenti. Si può aprire; salvandolo viene scritto per intero.",
+  "Open it": "Aprilo",
+  "Copy the document text": "Copia il testo del documento",
+  "Copied to the clipboard": "Copiato negli appunti",
+  "Copying failed — download the text instead": "Copia non riuscita — scarica invece il testo",
+  "Download the document text": "Scarica il testo del documento",
+  "Open the starter deck instead": "Apri invece la presentazione iniziale",
   "View": "Vista",
   "Current slide": "Diapositiva attuale",
   "Slide thumbnails": "Miniature delle diapositive",

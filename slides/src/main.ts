@@ -13,14 +13,14 @@ import { startNetGuard } from '../../kernel/src/net.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, downloadFile,
   suggestedFileName, parseEnvelope, decryptEnvelope, setEncryptionPassword,
-  registerPreview, canWriteInPlace, hostCan,
+  registerPreview, canWriteInPlace, hostCan, adoptFileHandle, openedFileName, fileBase,
 } from './save'
 import { maybeShowReturnGate } from './editor/returngate'
 import { buildSlidePreview } from './preview'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate, sandboxed } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
-import { parseDoc, type BentoDoc, type TextElement } from './model'
-import { compactDoc, compactJson } from './compact'
+import { parseDoc, parseDocReport, type BentoDoc, type DocParseError, type TextElement } from './model'
+import { compactDoc, compactJson, isCompact } from './compact'
 import { agentCopy } from './envelope'
 import { parseDocInputReport, fitAutoHeights, restack, type LoadReport } from './compactload'
 import { guardOpenedDoc } from './restoregate'
@@ -95,14 +95,121 @@ if (envelope) {
   ;(window as any).bento = { format: 'bento/slides', locked: true }
   void passwordGate()
 } else {
-  const parsed = embedded ? parseDoc(embedded) : null
-  // the file's own document, guarded by value, keys and identity kept
-  // (restoregate.ts guardOpenedDoc — a file may be from a newer Bento)
-  if (parsed) reportGuard(guardOpenedDoc(parsed))
-  // Whether this is OUR starter or someone's document is knowable only here —
-  // downstream the two are indistinguishable, and the difference is what stops
-  // the return gate appearing over real work.
-  bootWith(parsed || starterDoc(), !parsed)
+  const report = embedded ? parseDocReport(embedded) : null
+  if (report && !('doc' in report)) {
+    // A block that is THERE but did not load is someone's document — a
+    // truncated write, a stray comma, the compact form an agent wrote. It is
+    // never swapped for the starter: that read as lost work, and where the
+    // file came with a writable handle (launchQueue) the first save wrote the
+    // starter over it. Published as MOUNTED (`refused`, the suite's shape; see
+    // the password gate above for why the loader needs it) and as
+    // `unreadable` with the reason, for a headless tool to read.
+    ;(window as any).bento = { format: 'bento/slides', refused: true, unreadable: true, reason: report }
+    unreadableCard(report)
+  } else {
+    const parsed = report?.doc ?? null
+    // the file's own document, guarded by value, keys and identity kept
+    // (restoregate.ts guardOpenedDoc — a file may be from a newer Bento)
+    if (parsed) reportGuard(guardOpenedDoc(parsed))
+    // Whether this is OUR starter or someone's document is knowable only here —
+    // downstream the two are indistinguishable, and the difference is what stops
+    // the return gate appearing over real work.
+    bootWith(parsed || starterDoc(), !parsed)
+  }
+}
+
+/**
+ * The file's document block did not load. No editor, so nothing saves,
+ * auto-saves or snapshots: the card says why, hands the text out untouched
+ * (copy, download), and opens something only when asked — the compact form
+ * expanded, or the starter, with the file's handle dropped first.
+ */
+function unreadableCard(why: DocParseError) {
+  // the block exactly as the file carries it (readEmbeddedDoc trims)
+  const text = document.getElementById('bento-doc')?.textContent ?? ''
+  let compact = false
+  try { compact = isCompact(JSON.parse(text)) && !!parseDocInputReport(text, { fit: false }) } catch { /* not JSON */ }
+  const reason = compact
+    ? t('This is a compact document, the form agents write. It can be opened; saving writes it out in full.')
+    : why.error === 'syntax'
+      ? why.line
+        ? t('The document text is not valid JSON (line {line}, column {column}).', { line: why.line, column: why.column ?? 0 })
+        : t('The document text is not valid JSON.')
+      : why.error === 'format'
+        ? why.detail
+          ? t('This is not a bento/slides document — its format is “{format}”.', { format: why.detail })
+          : t('This is not a bento/slides document — it names no format.')
+        : why.error === 'empty'
+          ? t('The document has no slides.')
+          : t('None of the document’s slides could be read.')
+
+  const gate = document.createElement('div')
+  gate.className = 'ed-player ed-unreadable'
+  const card = document.createElement('div')
+  card.className = 'ed-playercard'
+  const h = document.createElement('h1')
+  h.textContent = t('This deck could not be opened')
+  const p = document.createElement('p')
+  p.textContent = t('The document stored in this file could not be read. The file has not been changed.')
+  const r = document.createElement('p')
+  r.textContent = reason
+  card.append(h, p, r)
+  if (why.error === 'syntax') {
+    // where it breaks: the text either side of the position, the engine's
+    // own words when there is no position
+    const pre = document.createElement('pre')
+    if (why.offset !== undefined) {
+      const at = document.createElement('mark')
+      at.textContent = text[why.offset] ?? ' '
+      pre.append(text.slice(Math.max(0, why.offset - 60), why.offset), at, text.slice(why.offset + 1, why.offset + 30))
+    } else pre.textContent = why.detail
+    card.append(pre)
+  }
+  const button = (label: string, secondary: boolean, fn: (b: HTMLButtonElement) => void) => {
+    const b = document.createElement('button')
+    if (secondary) b.className = 'ed-playcopy'
+    b.textContent = label
+    b.addEventListener('click', () => fn(b))
+    card.append(b)
+  }
+  if (compact) {
+    button(t('Open it'), false, () => {
+      // after the fonts settle: text boxes without a height are measured on them
+      void document.fonts.ready.then(() => {
+        const parsed = parseDocInputReport(text)
+        if (!parsed) return
+        gate.remove()
+        bootWith(parsed.doc)
+      })
+    })
+  }
+  button(t('Copy the document text'), compact, (b) => {
+    const clip = navigator.clipboard as Clipboard | undefined // absent off a secure context
+    ;(clip ? clip.writeText(text) : Promise.reject(new Error('no clipboard'))).then(
+      () => { b.textContent = t('Copied to the clipboard') },
+      () => { b.textContent = t('Copying failed — download the text instead') },
+    )
+  })
+  button(t('Download the document text'), true, () => {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${fileBase(openedFileName() ?? 'document.bento.html')}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
+  })
+  button(t('Open the starter deck instead'), true, () => {
+    // The starter is a NEW document in this page, never this file: a handle a
+    // host handed over for the file (launchQueue) is dropped, so ⌘S and
+    // auto-save cannot write through it; the starter's docId is fresh, so no
+    // remembered handle reconnects to it. The first save asks where to write.
+    adoptFileHandle(null)
+    gate.remove()
+    bootWith(starterDoc())
+  })
+  gate.append(card)
+  document.body.appendChild(gate)
+  document.getElementById('bento-splash')?.remove()
 }
 
 /** Encrypted file: ask for the password (looping on failure), then boot. */

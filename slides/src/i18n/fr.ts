@@ -4,6 +4,21 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "This deck could not be opened": "Impossible d’ouvrir cette présentation",
+  "The document stored in this file could not be read. The file has not been changed.": "Le document enregistré dans ce fichier n’a pas pu être lu. Le fichier n’a pas été modifié.",
+  "The document text is not valid JSON (line {line}, column {column}).": "Le texte du document n’est pas du JSON valide (ligne {line}, colonne {column}).",
+  "The document text is not valid JSON.": "Le texte du document n’est pas du JSON valide.",
+  "This is not a bento/slides document — its format is “{format}”.": "Ce n’est pas un document bento/slides — son format est « {format} ».",
+  "This is not a bento/slides document — it names no format.": "Ce n’est pas un document bento/slides — il n’indique aucun format.",
+  "The document has no slides.": "Le document ne contient aucune diapositive.",
+  "None of the document’s slides could be read.": "Aucune diapositive du document n’a pu être lue.",
+  "This is a compact document, the form agents write. It can be opened; saving writes it out in full.": "C’est un document compact, la forme qu’écrivent les agents. Il peut être ouvert ; l’enregistrer l’écrit en entier.",
+  "Open it": "L’ouvrir",
+  "Copy the document text": "Copier le texte du document",
+  "Copied to the clipboard": "Copié dans le presse-papiers",
+  "Copying failed — download the text instead": "La copie a échoué — téléchargez plutôt le texte",
+  "Download the document text": "Télécharger le texte du document",
+  "Open the starter deck instead": "Ouvrir plutôt la présentation de départ",
   "View": "Affichage",
   "Current slide": "Diapositive actuelle",
   "Slide thumbnails": "Miniatures des diapositives",

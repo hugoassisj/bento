@@ -2825,6 +2825,23 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-pwerr { color: #FF8A7A; font-size: 13px; min-height: 18px; }
 
+/* a document block that did not load (main.ts unreadableCard): the player's
+   card, scrollable when the excerpt makes it taller than the window */
+.ed-unreadable { overflow-y: auto; align-items: flex-start; }
+.ed-unreadable .ed-playercard { max-width: 460px; margin: auto; }
+.ed-unreadable pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-all;
+  text-align: start;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.06);
+  color: #fff;
+}
+.ed-unreadable mark { background: #ED8266; color: #0D1B2E; }
+
 /* password dialog (set/change) */
 dialog.ed-pwdialog {
   border: 0;

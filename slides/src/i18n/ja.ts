@@ -4,6 +4,21 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "This deck could not be opened": "このデッキを開けませんでした",
+  "The document stored in this file could not be read. The file has not been changed.": "このファイルに保存されたドキュメントを読み込めませんでした。ファイルは変更されていません。",
+  "The document text is not valid JSON (line {line}, column {column}).": "ドキュメントのテキストが有効な JSON ではありません（{line} 行 {column} 列）。",
+  "The document text is not valid JSON.": "ドキュメントのテキストが有効な JSON ではありません。",
+  "This is not a bento/slides document — its format is “{format}”.": "bento/slides のドキュメントではありません — 形式は「{format}」です。",
+  "This is not a bento/slides document — it names no format.": "bento/slides のドキュメントではありません — 形式が指定されていません。",
+  "The document has no slides.": "ドキュメントにスライドがありません。",
+  "None of the document’s slides could be read.": "ドキュメントのスライドを 1 枚も読み込めませんでした。",
+  "This is a compact document, the form agents write. It can be opened; saving writes it out in full.": "これはエージェントが書くコンパクト形式のドキュメントです。開くことができます。保存すると完全な形式で書き出されます。",
+  "Open it": "開く",
+  "Copy the document text": "ドキュメントのテキストをコピー",
+  "Copied to the clipboard": "クリップボードにコピーしました",
+  "Copying failed — download the text instead": "コピーできませんでした — 代わりにテキストをダウンロードしてください",
+  "Download the document text": "ドキュメントのテキストをダウンロード",
+  "Open the starter deck instead": "代わりにスターターデッキを開く",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

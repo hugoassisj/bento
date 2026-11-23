@@ -1645,28 +1645,118 @@ function fillRequired(doc: Record<string, unknown>): boolean {
 }
 
 export function parseDoc(json: string): BentoDoc | null {
+  const r = parseDocReport(json)
+  return 'doc' in r ? r.doc : null
+}
+
+/**
+ * Why a document block did not load (parseDocReport). `syntax`: not JSON —
+ * `detail` is the engine's message, `line`/`column` (1-based) and `offset`
+ * where the text stops being JSON, when that can be found. `format`: JSON,
+ * but no `format: "bento/slides"` — `detail` is the format it names, or ''.
+ * `empty`: no slides. `required`: none of its slides could be read.
+ */
+export type DocParseError =
+  | { error: 'syntax'; detail: string; line?: number; column?: number; offset?: number }
+  | { error: 'format' | 'empty' | 'required'; detail: string }
+
+/**
+ * parseDoc, saying why when it refuses. The boot path needs the reason: a
+ * block that is there but does not load is someone's document, and it is
+ * told apart from an empty one (the bare app, which opens the starter).
+ */
+export function parseDocReport(json: string): { doc: BentoDoc } | DocParseError {
+  let doc
   try {
-    const doc = JSON.parse(json)
-    if (doc && doc.format === FORMAT && Array.isArray(doc.slides) && doc.slides.length > 0) {
-      // The saved file names its schema (save.ts writes `$schema` first);
-      // it is a pointer for readers, not document data, so it never enters
-      // the live document — validate() would otherwise report it unknown.
-      delete doc.$schema
-      // Documents from before docId existed get one minted here; it persists
-      // on the next save and stays stable from then on.
-      if (typeof doc.docId !== 'string' || !doc.docId) doc.docId = newDocId()
-      if (doc.template) {
-        // template instantiation: this open IS a new document
-        delete doc.template
-        doc.docId = newDocId()
-        delete doc.collab
-      }
-      return fillRequired(doc) ? (doc as BentoDoc) : null
-    }
-  } catch {
-    /* fall through */
+    doc = JSON.parse(json)
+  } catch (e) {
+    const offset = jsonErrorOffset(json)
+    const detail = e instanceof Error ? e.message : String(e)
+    if (offset < 0) return { error: 'syntax', detail }
+    const line = json.slice(0, offset).split('\n').length
+    return { error: 'syntax', detail, line, column: offset - json.lastIndexOf('\n', offset - 1), offset }
   }
-  return null
+  if (!doc || doc.format !== FORMAT) {
+    return { error: 'format', detail: typeof doc?.format === 'string' ? doc.format : '' }
+  }
+  if (!Array.isArray(doc.slides) || doc.slides.length === 0) return { error: 'empty', detail: '' }
+  // The saved file names its schema (save.ts writes `$schema` first);
+  // it is a pointer for readers, not document data, so it never enters
+  // the live document — validate() would otherwise report it unknown.
+  delete doc.$schema
+  // Documents from before docId existed get one minted here; it persists
+  // on the next save and stays stable from then on.
+  if (typeof doc.docId !== 'string' || !doc.docId) doc.docId = newDocId()
+  if (doc.template) {
+    // template instantiation: this open IS a new document
+    delete doc.template
+    doc.docId = newDocId()
+    delete doc.collab
+  }
+  let filled = false
+  try { filled = fillRequired(doc) } catch { /* as unreadable as no slide left */ }
+  return filled ? { doc: doc as BentoDoc } : { error: 'required', detail: '' }
+}
+
+/**
+ * Where a text that JSON.parse refused stops being JSON: the offset of the
+ * first character that cannot continue it (the text's length when it ends
+ * too soon), or -1 when it cannot say. The engines' messages do not: V8 gives
+ * no position for an unexpected token (a trailing comma) and Safari none at
+ * all. Runs only after a parse failed, so it costs a valid file nothing.
+ */
+function jsonErrorOffset(s: string): number {
+  let i = 0
+  const NUM = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y
+  const fail = (): never => { throw i }
+  const ws = () => { while (s[i] === ' ' || s[i] === '\t' || s[i] === '\n' || s[i] === '\r') i++ }
+  const str = () => {
+    i++
+    for (;;) {
+      const c = s[i]
+      if (c === undefined || c < ' ') fail()
+      i++
+      if (c === '"') return
+      if (c === '\\') {
+        if (s[i] === 'u') { if (!/^[\da-fA-F]{4}$/.test(s.slice(i + 1, i + 5))) fail(); i += 5 }
+        else if (s[i] !== undefined && '"\\/bfnrt'.includes(s[i])) i++
+        else fail()
+      }
+    }
+  }
+  const val = (): void => {
+    ws()
+    const c = s[i]
+    if (c === '{' || c === '[') {
+      const close = c === '{' ? '}' : ']'
+      i++
+      ws()
+      if (s[i] === close) { i++; return }
+      for (;;) {
+        ws()
+        if (close === '}') { if (s[i] !== '"') fail(); str(); ws(); if (s[i] !== ':') fail(); i++ }
+        val()
+        ws()
+        if (s[i] === ',') { i++; continue }
+        if (s[i] === close) { i++; return }
+        fail()
+      }
+    }
+    if (c === '"') return str()
+    for (const w of ['true', 'false', 'null']) {
+      if (c === w[0]) { for (const ch of w) { if (s[i] !== ch) fail(); i++ } return }
+    }
+    NUM.lastIndex = i
+    if (!NUM.exec(s)) fail()
+    i = NUM.lastIndex
+  }
+  try {
+    val()
+    ws()
+    return i < s.length ? i : -1
+  } catch (at) {
+    return typeof at === 'number' ? at : -1 // RangeError: nested too deep to walk
+  }
 }
 
 /**

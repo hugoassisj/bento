@@ -16,6 +16,18 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **A deck whose document cannot be read says so, instead of opening the
+  demo.** When the document inside a file is damaged (a write cut short, a
+  stray comma left by a tool that edited it) or is not a full bento/slides
+  document, the file used to open the Showcase starter deck with no word, as
+  if your work were gone. Now a card says the document could not be read and
+  that the file has not been changed, gives the reason (for broken JSON, the
+  line and column, with the text around it), and lets you copy or download
+  the document text to repair it. A deck written in the compact form agents
+  use can be opened from the card; saving then writes it out in full. Opening
+  the starter deck instead is a choice on the card, and the starter is then a
+  new deck: saving it asks where to write it rather than writing over the
+  file. Nothing is saved or backed up while the card is shown.
 
 ## [1.3.0] — 2026-11-22
 

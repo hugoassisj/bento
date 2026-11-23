@@ -4,6 +4,21 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "This deck could not be opened": "Diese Präsentation konnte nicht geöffnet werden",
+  "The document stored in this file could not be read. The file has not been changed.": "Das in dieser Datei gespeicherte Dokument konnte nicht gelesen werden. Die Datei wurde nicht verändert.",
+  "The document text is not valid JSON (line {line}, column {column}).": "Der Dokumenttext ist kein gültiges JSON (Zeile {line}, Spalte {column}).",
+  "The document text is not valid JSON.": "Der Dokumenttext ist kein gültiges JSON.",
+  "This is not a bento/slides document — its format is “{format}”.": "Dies ist kein bento/slides-Dokument — sein Format ist „{format}“.",
+  "This is not a bento/slides document — it names no format.": "Dies ist kein bento/slides-Dokument — es nennt kein Format.",
+  "The document has no slides.": "Das Dokument enthält keine Folien.",
+  "None of the document’s slides could be read.": "Keine Folie des Dokuments konnte gelesen werden.",
+  "This is a compact document, the form agents write. It can be opened; saving writes it out in full.": "Dies ist ein kompaktes Dokument, die Form, die Agenten schreiben. Es lässt sich öffnen; beim Speichern wird es vollständig ausgeschrieben.",
+  "Open it": "Öffnen",
+  "Copy the document text": "Dokumenttext kopieren",
+  "Copied to the clipboard": "In die Zwischenablage kopiert",
+  "Copying failed — download the text instead": "Kopieren fehlgeschlagen — laden Sie den Text stattdessen herunter",
+  "Download the document text": "Dokumenttext herunterladen",
+  "Open the starter deck instead": "Stattdessen die Startpräsentation öffnen",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",

@@ -4,6 +4,21 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "This deck could not be opened": "無法開啟此簡報",
+  "The document stored in this file could not be read. The file has not been changed.": "無法讀取此檔案中儲存的文件。檔案未被變更。",
+  "The document text is not valid JSON (line {line}, column {column}).": "文件文字不是有效的 JSON（第 {line} 行，第 {column} 欄）。",
+  "The document text is not valid JSON.": "文件文字不是有效的 JSON。",
+  "This is not a bento/slides document — its format is “{format}”.": "這不是 bento/slides 文件 — 其格式為「{format}」。",
+  "This is not a bento/slides document — it names no format.": "這不是 bento/slides 文件 — 它未指明格式。",
+  "The document has no slides.": "文件中沒有投影片。",
+  "None of the document’s slides could be read.": "文件中沒有任何投影片可以讀取。",
+  "This is a compact document, the form agents write. It can be opened; saving writes it out in full.": "這是智慧代理撰寫的精簡格式文件。可以開啟；儲存時會寫出完整格式。",
+  "Open it": "開啟",
+  "Copy the document text": "複製文件文字",
+  "Copied to the clipboard": "已複製到剪貼簿",
+  "Copying failed — download the text instead": "複製失敗 — 請改為下載文字",
+  "Download the document text": "下載文件文字",
+  "Open the starter deck instead": "改為開啟入門簡報",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",
