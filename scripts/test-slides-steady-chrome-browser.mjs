@@ -16,7 +16,11 @@
 // instead of widening it, so Move never shifts (it slid 83px at 1440); at
 // 1024, with no room before the output zone, the booleans collapse to one
 // "Combine shapes" button that overlaps nothing — in RTL too — and the
-// contextual buttons still follow Comment in tab order.
+// contextual buttons still follow Comment in tab order. Where even that has
+// no room on the bar's row and the strip hangs below the bar, it stays over
+// the canvas column: the properties panel's tabs and the panel resizers under
+// it are still the top element, and a real click on Animate switches the tab
+// rather than landing on a path button.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -83,7 +87,7 @@ try {
     shape('tri', 820, 120, 300, 260, { shape: 'path', d: 'M 0 260 L 150 0 L 300 260 Z', pathBox: [0, 0, 300, 260] }),
     shape('ln', 100, 560, 400, 4, { shape: 'line', stroke: '#000000', strokeWidth: 4 }),
   ]
-  for (const [width, dir] of [[1440, 'ltr'], [1024, 'ltr'], [1024, 'rtl']]) {
+  for (const [width, dir] of [[1440, 'ltr'], [1100, 'ltr'], [1024, 'ltr'], [1024, 'rtl']]) {
     const tag = `${width}px${dir === 'rtl' ? ' RTL' : ''}`
     const c = await browser.newContext({ viewport: { width, height: 900 } })
     await c.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1') } catch {} })
@@ -120,8 +124,21 @@ try {
         const r = b.getBoundingClientRect()
         return r.left < own.right - 1 && own.left < r.right - 1 && r.top < own.bottom && own.top < r.bottom
       }).map((b) => b.dataset.cmd || b.className)
+      // hanging below the bar it lies over the panels' band, not the bar: the
+      // props tabs and the two resizers (at the strip's height) must stay on top
+      const below = !!own && own.width > 0 && own.top >= edge.bottom - 1
+      const probes = []
+      if (below) {
+        for (const tab of document.querySelectorAll('.ed-props .ed-tabs-band [role=tab]')) {
+          const r = tab.getBoundingClientRect(); if (r.width) probes.push([tab.textContent.trim(), r.left + r.width / 2, r.top + r.height / 2])
+        }
+        for (const [i, rz] of [...document.querySelectorAll('.ed-main > .ed-resizer')].entries()) {
+          const r = rz.getBoundingClientRect(); if (r.width) probes.push([`resizer ${i}`, r.left + r.width / 2, (own.top + own.bottom) / 2])
+        }
+      }
+      const covered = probes.filter(([, x, y]) => document.elementFromPoint(x, y)?.closest('.ed-insert-ctx, .ed-bool, .ed-pathbar')).map(([n]) => n)
       return {
-        shown: !!own && own.width > 0, fold: bar.classList.contains('ed-bar-fold'), hits,
+        shown: !!own && own.width > 0, fold: bar.classList.contains('ed-bar-fold'), hits, below, probes: probes.length, covered,
         inside: !!own && own.left >= edge.left - 0.5 && own.right <= edge.right + 0.5,
         bools: vis('.ed-bool [data-bool]').length, combine: vis('.ed-bool-more > button').length, path: vis('.ed-pathbar [data-node]').length,
       }
@@ -147,6 +164,19 @@ try {
     await q.waitForTimeout(150)
     at.path = await moveLeft()
     const sp = await strip()
+    // a real click on Animate with the path selected: the tab switches and the
+    // path is untouched (over the panel, the path bar used to take the click)
+    const dBefore = await q.evaluate(() => window.bento.doc.slides[0].elements.find((e) => e.id === 'tri').d)
+    const animate = q.locator('.ed-props .ed-tabs-band [role=tab]').nth(1)
+    const ab = await animate.boundingBox()
+    await q.mouse.click(ab.x + ab.width / 2, ab.y + ab.height / 2); await frame()
+    const tabNow = await animate.getAttribute('aria-selected')
+    const dAfter = await q.evaluate(() => window.bento.doc.slides[0].elements.find((e) => e.id === 'tri').d)
+    ok(tabNow === 'true' && dAfter === dBefore, `${tag}: a click on Animate with a path selected switches the tab and leaves the path alone (selected ${tabNow}, d ${dAfter === dBefore ? 'unchanged' : 'changed'})`)
+    await q.evaluate(() => document.querySelector('.ed-props .ed-tabs-band [role=tab]').click()); await frame() // back to Format (set-up, not under test)
+    for (const [what, st] of [['three shapes', s3], ['a path', sp]]) {
+      if (st.below) ok(st.covered.length === 0 && st.probes >= 4, `${tag}: with ${what} the strip hangs below the bar and covers no panel tab or resizer (${st.probes} probed, covered: ${st.covered.join(', ') || 'none'})`)
+    }
     const spread = Math.max(...Object.values(at)) - Math.min(...Object.values(at))
     ok(spread <= 0.5, `${tag}: Move stays put — nothing / one shape / three shapes / a path selected (${Object.entries(at).map(([k, v]) => `${k} ${v.toFixed(1)}`).join(', ')}; spread ${spread.toFixed(1)}px)`)
     ok(s3.shown && !s3.fold && s3.inside && s3.hits.length === 0, `${tag}: with three shapes the boolean strip is on the bar and lies over nothing (${JSON.stringify(s3)})`)
