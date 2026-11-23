@@ -38,6 +38,7 @@ import type { Catalog } from '../../i18n'
 export const label = 'Filipino'
 
 export const strings: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Hakbang ng pagpapakita {n} — i-click para ilipat sa mas huli, Shift-click para sa mas maaga; itakda ang numero sa I-animate",
   "View": "View",
   "Current slide": "Kasalukuyang slide",
   "Slide thumbnails": "Mga thumbnail ng slide",
@@ -721,7 +722,6 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Nakatago hanggang pindutin ang →, sabay-sabay",
   "Show with the slide again": "Ipakitang muli kasama ng slide",
   "Numbered badges on the canvas show the order; click one for the next step.": "Ipinapakita ng mga may-numerong badge sa canvas ang pagkakasunod; i-click ang isa para sa susunod na hakbang.",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "Hakbang ng pagpapakita {n} — i-click para sa susunod na hakbang; itakda ang numero sa Presenting",
   "Right-click ▸ Reveal in order": "Right-click ▸ Ipakita nang sunud-sunod",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Itinatago ang mga piniling elemento hanggang pindutin ang →, isa-isa sa pagkakasunod ng pagbasa — ipinapakita ng mga may-numerong badge sa canvas ang pagkakasunod",
   "This text box is already bold": "Makapal na ang text box na ito",

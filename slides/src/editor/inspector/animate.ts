@@ -403,7 +403,7 @@ export function buildPresentingProps(p: PropsPanel, el: SlideElement) {
   // "Animate on click": hidden until the n-th → on this slide (0 = with the
   // slide). The element's Enter plays when its step comes, or a plain fade.
   // The verbs come first (one click, no number to think about); the number
-  // row underneath is the precise control, and the canvas badge cycles it.
+  // row underneath is the precise control, and the canvas badge moves it.
   revealRow(p, [el])
   row(p, 'Appears on click', number(el.fx?.step ?? 0, 1,
     (v, fin) => { if (fin) setFx({ step: v >= 1 ? Math.floor(v) : undefined }) }))

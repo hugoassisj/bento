@@ -21,6 +21,7 @@ import type { Catalog } from '../../i18n'
 export const label = 'Русский'
 
 export const strings: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Шаг показа {n} — щёлкните, чтобы сдвинуть позже, Shift+щелчок — раньше; число задаётся на вкладке «Анимация»",
   "View": "Вид",
   "Current slide": "Текущий слайд",
   "Slide thumbnails": "Миниатюры слайдов",
@@ -704,7 +705,6 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Скрыты до нажатия →, все сразу",
   "Show with the slide again": "Снова показывать вместе со слайдом",
   "Numbered badges on the canvas show the order; click one for the next step.": "Нумерованные значки на холсте показывают порядок; щёлкните один для следующего шага.",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "Шаг показа {n} — щёлкните для следующего шага; число задаётся в разделе «Показ»",
   "Right-click ▸ Reveal in order": "Правый клик ▸ Показывать по порядку",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Скрывает выбранные элементы до нажатия →, один за другим в порядке чтения — нумерованные значки на холсте показывают порядок",
   "This text box is already bold": "Это текстовое поле уже полужирное",

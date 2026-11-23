@@ -20,6 +20,7 @@ import type { Catalog } from '../../i18n'
 export const label = 'Türkçe'
 
 export const strings: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Gösterim adımı {n} — sonraya almak için tıklayın, öne almak için Shift ile tıklayın; sayı Canlandır sekmesinde ayarlanır",
   "View": "Görünüm",
   "Current slide": "Geçerli slayt",
   "Slide thumbnails": "Slayt küçük resimleri",
@@ -703,7 +704,6 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "→ basılana dek gizli, hepsi bir arada",
   "Show with the slide again": "Slaytla birlikte yeniden göster",
   "Numbered badges on the canvas show the order; click one for the next step.": "Tuvaldeki numaralı rozetler sırayı gösterir; sonraki adım için birine tıklayın.",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "Gösterim adımı {n} — sonraki adım için tıklayın; sayı Sunum bölümünde ayarlanır",
   "Right-click ▸ Reveal in order": "Sağ tık ▸ Sırayla göster",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Seçili öğeleri → basılana dek gizler, okuma sırasıyla teker teker — tuvaldeki numaralı rozetler sırayı gösterir",
   "This text box is already bold": "Bu metin kutusu zaten kalın",

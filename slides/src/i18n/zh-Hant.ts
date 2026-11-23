@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "顯示步驟 {n} — 點一下往後移，Shift+點一下往前移；在「動畫」中設定數字",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",
@@ -697,7 +698,6 @@ export const zhHant: Catalog = {
   "Hide until → is pressed, all at once": "按下 → 之前隱藏，然後一起顯示",
   "Show with the slide again": "恢復隨投影片一起顯示",
   "Numbered badges on the canvas show the order; click one for the next step.": "畫布上的數字標記顯示順序；點一下即進入下一步。",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "顯示步驟 {n} — 點一下進入下一步；在「簡報」中設定數字",
   "Right-click ▸ Reveal in order": "右鍵 ▸ 按順序顯示",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "按下 → 之前隱藏所選元素，按閱讀順序逐一顯示——畫布上的數字標記顯示順序",
   "Insert field…": "插入欄位…",

@@ -45,6 +45,7 @@ import type { Catalog } from '../../i18n'
 export const label = 'Türkmen'
 
 export const strings: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Görkeziş ädimi {n} — soňa süýşürmek üçin basyň, öňe süýşürmek üçin Shift bilen basyň; sany Animasiýa bölüminde goýuň",
   "View": "Görnüş",
   "Current slide": "Häzirki slaýd",
   "Slide thumbnails": "Slaýdlaryň kiçi suratlary",
@@ -724,7 +725,6 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "→ basylýança gizlin, hemmesi bir wagtda",
   "Show with the slide again": "Slaýd bilen ýene görkez",
   "Numbered badges on the canvas show the order; click one for the next step.": "Kanwadaky belgili nyşanlar tertibi görkezýär; indiki ädim üçin birine basyň.",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "Görkeziş ädimi {n} — indiki ädim üçin basyň; sany Prezentasiýa bölüminde goýuň",
   "Right-click ▸ Reveal in order": "Sag basmak ▸ Tertip bilen görkez",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Saýlanan elementleri → basylýança gizleýär, okalyş tertibinde biri-biriniň yzyndan — kanwadaky belgili nyşanlar tertibi görkezýär",
   "This text box is already bold": "Bu tekst gutusy eýýäm galyň",

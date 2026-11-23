@@ -26,6 +26,7 @@ import type { Catalog } from '../../i18n'
 export const label = 'Suomi'
 
 export const strings: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Paljastusvaihe {n} — napsauta siirtääksesi myöhemmäksi, vaihto-napsautus aiemmaksi; numero asetetaan Animoi-välilehdellä",
   "View": "Näkymä",
   "Current slide": "Nykyinen dia",
   "Slide thumbnails": "Diojen pikkukuvat",
@@ -709,7 +710,6 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Piilossa kunnes → painetaan, kaikki kerralla",
   "Show with the slide again": "Näytä taas dian mukana",
   "Numbered badges on the canvas show the order; click one for the next step.": "Numeroidut merkit kankaalla näyttävät järjestyksen; napsauta yhtä seuraavaan vaiheeseen.",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "Paljastusvaihe {n} — napsauta seuraavaan vaiheeseen; numero asetetaan Esittäminen-osiossa",
   "Right-click ▸ Reveal in order": "Hiiren oikea ▸ Paljasta järjestyksessä",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Piilottaa valitut elementit kunnes → painetaan, yksi kerrallaan lukujärjestyksessä — numeroidut merkit kankaalla näyttävät järjestyksen",
   "This text box is already bold": "Tämä tekstilaatikko on jo lihavoitu",

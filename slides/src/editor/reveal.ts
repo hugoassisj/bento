@@ -17,7 +17,7 @@
  * elements and two runs give the same numbers.
  */
 
-import { stepOf, maxStep, type Stepped } from '../steps.ts'
+import { stepOf, maxStep, stepsOf, type Stepped } from '../steps.ts'
 
 export type Placed = Stepped & { x: number; y: number; w: number; h: number }
 
@@ -64,15 +64,39 @@ export const removeReveal = (selected: ReadonlyArray<Stepped>): StepPatch[] =>
   selected.filter((el) => stepOf(el) > 0).map((el) => ({ id: el.id, step: 0 }))
 
 /**
- * A click on a step badge walks the element through the slide's steps:
- * 1, 2, … up to one past the last step anyone else has, then back to 1.
- * Never to 0 — removing is a deliberate verb, not a click too many.
+ * A click on a step badge moves its element one place LATER in the build
+ * (`dir` -1, Shift-click: one place earlier). It never lands on a step another
+ * element holds — a click that made two things appear on one press, and left
+ * a hole later on, read as a broken build:
+ *  - alone on its step, the element swaps places with the step after it (one
+ *    element, or a whole "together" group, which stays together); from the
+ *    last place it goes back to the first and everything else moves one later,
+ *    so k clicks on a k-step slide give back the order it started with;
+ *  - sharing its step, it leaves the group for a step of its own right after
+ *    it (before it, going earlier), and the steps after move up by one.
+ * The slide comes out numbered 1..k with no gaps (gaps never meant anything
+ * while presenting: they are pressed through in one go), and only elements
+ * whose number changes get a patch. Never to 0, never from 0 — adding and
+ * removing are verbs, not a click too many. Sharing a step stays a choice:
+ * Reveal ▸ Together, or typing the number.
  */
-export function cycleStep(slide: ReadonlyArray<Stepped>, el: Stepped): number {
-  const others = slide.filter((e) => e.id !== el.id)
-  const top = maxStep(others) + 1
+export function advanceStep(slide: ReadonlyArray<Stepped>, el: Stepped, dir: 1 | -1 = 1): StepPatch[] {
   const cur = stepOf(el)
-  return cur >= top ? 1 : cur + 1
+  if (!cur) return []
+  const order = stepsOf(slide)
+  const groups = order.map((s) => slide.filter((e) => stepOf(e) === s).map((e) => e.id))
+  const i = order.indexOf(cur)
+  if (i < 0) return []
+  if (groups[i].length > 1) {
+    groups[i] = groups[i].filter((id) => id !== el.id)
+    groups.splice(dir > 0 ? i + 1 : i, 0, [el.id])
+  } else if (dir > 0) {
+    if (i < groups.length - 1) [groups[i], groups[i + 1]] = [groups[i + 1], groups[i]]
+    else groups.unshift(groups.pop()!)
+  } else if (i > 0) [groups[i - 1], groups[i]] = [groups[i], groups[i - 1]]
+  else groups.push(groups.shift()!)
+  const next = new Map(groups.flatMap((ids, k) => ids.map((id) => [id, k + 1] as const)))
+  return slide.filter((e) => next.has(e.id) && next.get(e.id) !== stepOf(e)).map((e) => ({ id: e.id, step: next.get(e.id)! }))
 }
 
 /** Does the canvas show badges for this slide? Only when there is a step to

@@ -16,6 +16,14 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Clicking a step badge reorders the build instead of doubling up a step.**
+  Clicking the numbered badge on an element now swaps it with the one after
+  it, and from the last place it comes back to the front, so the build never
+  ends up with two things on one click and a gap later on. Shift-click moves
+  it earlier. If the element shared its step with others, the click gives it a
+  step of its own right after them. It is one undo step, and Reveal ▸ Together
+  still puts elements on the same step on purpose. The badge's tooltip now
+  points at the Animate tab, where the number can be typed.
 
 ## [1.3.0] — 2026-11-22
 

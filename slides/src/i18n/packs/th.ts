@@ -23,6 +23,7 @@ import type { Catalog } from '../../i18n'
 export const label = 'ไทย'
 
 export const strings: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "ขั้นการแสดง {n} — คลิกเพื่อเลื่อนไปทีหลัง Shift-คลิกเพื่อเลื่อนมาก่อน ตั้งตัวเลขได้ในแท็บเคลื่อนไหว",
   "View": "มุมมอง",
   "Current slide": "สไลด์ปัจจุบัน",
   "Slide thumbnails": "ภาพขนาดย่อของสไลด์",
@@ -706,7 +707,6 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "ซ่อนจนกว่าจะกด → แล้วแสดงพร้อมกันทั้งหมด",
   "Show with the slide again": "แสดงพร้อมสไลด์อีกครั้ง",
   "Numbered badges on the canvas show the order; click one for the next step.": "ป้ายตัวเลขบนผืนผ้าใบแสดงลำดับ คลิกป้ายเพื่อไปขั้นถัดไป",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "ขั้นการแสดง {n} — คลิกเพื่อไปขั้นถัดไป ตั้งตัวเลขได้ในส่วนการนำเสนอ",
   "Right-click ▸ Reveal in order": "คลิกขวา ▸ แสดงตามลำดับ",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "ซ่อนองค์ประกอบที่เลือกจนกว่าจะกด → แล้วแสดงทีละรายการตามลำดับการอ่าน — ป้ายตัวเลขบนผืนผ้าใบแสดงลำดับ",
   "This text box is already bold": "กล่องข้อความนี้เป็นตัวหนาอยู่แล้ว",

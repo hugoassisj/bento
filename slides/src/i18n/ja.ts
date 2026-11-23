@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "表示ステップ {n} — クリックで後ろへ、Shift+クリックで前へ移動。番号は「アニメーション」で設定できます",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",
@@ -697,7 +698,6 @@ export const ja: Catalog = {
   "Hide until → is pressed, all at once": "→ を押すまで非表示。すべて同時に表示します",
   "Show with the slide again": "スライドと同時に表示に戻す",
   "Numbered badges on the canvas show the order; click one for the next step.": "キャンバスの番号バッジが順番を示します。クリックで次のステップへ。",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "表示ステップ {n} — クリックで次のステップへ。番号は「プレゼン」で設定できます",
   "Right-click ▸ Reveal in order": "右クリック ▸ 順番に表示",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "選択した要素を → を押すまで非表示にし、読み順にひとつずつ表示します — キャンバスの番号バッジが順番を示します",
   "Insert field…": "フィールドを挿入…",

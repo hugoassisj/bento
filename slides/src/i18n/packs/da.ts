@@ -21,6 +21,7 @@ import type { Catalog } from '../../i18n'
 export const label = 'Dansk'
 
 export const strings: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Visningstrin {n} — klik for at flytte det senere, Skift-klik tidligere; tallet sættes under Animér",
   "View": "Visning",
   "Current slide": "Aktuelt dias",
   "Slide thumbnails": "Diasminiaturer",
@@ -704,7 +705,6 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Skjult indtil der trykkes på →, alle på én gang",
   "Show with the slide again": "Vis igen sammen med diasset",
   "Numbered badges on the canvas show the order; click one for the next step.": "Nummererede mærker på lærredet viser rækkefølgen; klik på ét for næste trin.",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "Visningstrin {n} — klik for næste trin; tallet sættes under Præsentation",
   "Right-click ▸ Reveal in order": "Højreklik ▸ Vis i rækkefølge",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Skjuler de valgte elementer indtil der trykkes på →, ét ad gangen i læseretning — nummererede mærker på lærredet viser rækkefølgen",
   "This text box is already bold": "Denne tekstboks er allerede fed",

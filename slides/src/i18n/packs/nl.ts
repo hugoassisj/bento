@@ -17,6 +17,7 @@ import type { Catalog } from '../../i18n'
 export const label = 'Nederlands'
 
 export const strings: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Onthulstap {n} — klik om het later te zetten, Shift-klik eerder; het getal staat onder Animeren",
   "View": "Weergave",
   "Current slide": "Huidige dia",
   "Slide thumbnails": "Diaminiaturen",
@@ -700,7 +701,6 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Verborgen tot → wordt ingedrukt, allemaal tegelijk",
   "Show with the slide again": "Weer samen met de dia tonen",
   "Numbered badges on the canvas show the order; click one for the next step.": "Genummerde badges op het canvas tonen de volgorde; klik op een badge voor de volgende stap.",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "Onthulstap {n} — klik voor de volgende stap; het getal staat onder Presenteren",
   "Right-click ▸ Reveal in order": "Rechtsklik ▸ In volgorde onthullen",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Verbergt de geselecteerde elementen tot → wordt ingedrukt, een voor een in leesvolgorde — genummerde badges op het canvas tonen de volgorde",
   "This text box is already bold": "Dit tekstvak is al vet",

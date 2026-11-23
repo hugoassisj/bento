@@ -32,6 +32,7 @@ import type { Catalog } from '../../i18n'
 export const label = 'বাংলা'
 
 export const strings: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "দেখানোর ধাপ {n} — পরে সরাতে ক্লিক করুন, আগে আনতে Shift-ক্লিক; সংখ্যাটি অ্যানিমেটে সেট করুন",
   "View": "দৃশ্য",
   "Current slide": "বর্তমান স্লাইড",
   "Slide thumbnails": "স্লাইডের থাম্বনেইল",
@@ -715,7 +716,6 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "→ চাপা পর্যন্ত লুকানো, সব একসাথে",
   "Show with the slide again": "স্লাইডের সাথে আবার দেখান",
   "Numbered badges on the canvas show the order; click one for the next step.": "ক্যানভাসের সংখ্যাযুক্ত ব্যাজ ক্রম দেখায়; পরের ধাপের জন্য একটিতে ক্লিক করুন।",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "দেখানোর ধাপ {n} — পরের ধাপের জন্য ক্লিক করুন; সংখ্যাটি উপস্থাপনায় সেট করুন",
   "Right-click ▸ Reveal in order": "রাইট-ক্লিক ▸ ক্রমানুসারে দেখান",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "নির্বাচিত উপাদানগুলো → চাপা পর্যন্ত লুকায়, পড়ার ক্রমে একের পর এক — ক্যানভাসের সংখ্যাযুক্ত ব্যাজ ক্রম দেখায়",
   "This text box is already bold": "এই টেক্সট বক্সটি আগে থেকেই বোল্ড",

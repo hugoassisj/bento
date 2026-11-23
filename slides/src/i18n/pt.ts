@@ -7,6 +7,7 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Passo de revelação {n} — clique para movê-lo para depois, Shift-clique para antes; defina o número em Animar",
   "View": "Exibir",
   "Current slide": "Slide atual",
   "Slide thumbnails": "Miniaturas dos slides",
@@ -695,7 +696,6 @@ export const pt: Catalog = {
   "Hide until → is pressed, all at once": "Ocultos até pressionar →, todos de uma vez",
   "Show with the slide again": "Mostrar de novo com o slide",
   "Numbered badges on the canvas show the order; click one for the next step.": "Os selos numerados na tela mostram a ordem; clique em um deles para o próximo passo.",
-  "Reveal step {n} — click for the next step; set the number in Presenting": "Passo de revelação {n} — clique para o próximo passo; defina o número em Apresentação",
   "Right-click ▸ Reveal in order": "Clique com o botão direito ▸ Revelar em ordem",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Oculta os elementos selecionados até pressionar →, um após o outro na ordem de leitura — os selos numerados na tela mostram a ordem",
   "Insert field…": "Inserir campo…",
