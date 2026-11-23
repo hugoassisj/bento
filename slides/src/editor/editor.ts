@@ -467,11 +467,30 @@ export class Editor {
       b.setAttribute('aria-label', ui.label)
       boolBar.appendChild(b)
     }
+    // The compact form, for a window with no room past the group's end for all
+    // four (fitInsertCtx): one button that opens the same four as a list.
+    const boolMore = div('ed-dropdown ed-bool-more')
+    const boolMoreB = btn(boolUi('union').icon, '', () => boolMore.classList.toggle('open'), t('Combine shapes'))
+    boolMoreB.setAttribute('aria-label', t('Combine shapes'))
+    const boolMenu = div('ed-menu')
+    for (const op of BOOL_OPS) {
+      const ui = boolUi(op)
+      boolMenu.appendChild(btn(ui.icon, ui.label, () => {
+        boolMore.classList.remove('open')
+        combine(this.store, this.store.selectedElements, op)
+      }, `${ui.label} (${ui.key})`))
+    }
+    boolMore.append(boolMoreB, boolMenu)
+    boolBar.appendChild(boolMore)
+    document.addEventListener('pointerdown', (ev) => {
+      if (!boolMore.contains(ev.target as Node)) boolMore.classList.remove('open')
+    }, { signal: this.buildScope.signal })
     // a selection with a line or an open path in it shows the bar greyed, saying why
     const syncBool = () => {
       const els = this.store.selectedElements
       const blocked = boolBlocked(els)
       boolBar.hidden = this.store.readOnly || (!boolOperands(this.store, els) && !blocked)
+      if (boolBar.hidden) boolMore.classList.remove('open')
       boolBar.title = blocked ?? ''
       for (const b of boolBar.querySelectorAll('button')) b.disabled = !!blocked
     }
@@ -480,8 +499,16 @@ export class Editor {
       const off = this.store.on(e, syncBool)
       this.buildScope.signal.addEventListener('abort', off)
     }
-    insert.appendChild(boolBar)
-    insert.appendChild(this.pathBar())
+    // The contextual bars sit OUTSIDE the centring: the insert group is
+    // centred between two balanced zones, so anything that widened it moved
+    // every tool in it (selecting three shapes slid Move 83px under the
+    // pointer). The wrapper is still the group's last child — tab order and
+    // the phone fold, which carries it into ＋, are unchanged — but it is
+    // positioned past the group's end edge, out of flow (styles.css), and
+    // fitTopbar() measures it separately (fitInsertCtx).
+    const insertCtx = div('ed-insert-ctx')
+    insertCtx.append(boolBar, this.pathBar())
+    insert.appendChild(insertCtx)
 
     const actions = div('ed-group ed-group-right')
     // the update chip sits beside the wordmark and exists ONLY when an
@@ -1010,6 +1037,7 @@ export class Editor {
     if (window.innerWidth <= 700) {
       bar.classList.add(...tiers)
       this.applyPhoneChrome(true)
+      this.fitInsertCtx(bar)
       this.barMO?.takeRecords()
       return
     }
@@ -1043,6 +1071,11 @@ export class Editor {
     // step down while the title is squeezed badly, not only on true overflow.
     const title = bar.querySelector<HTMLElement>('.ed-title')
     const cramped = () => overflow() || (!!title && title.getBoundingClientRect().width < 120)
+    // The tiers are chosen WITHOUT the contextual bars (booleans, path): they
+    // come and go with the selection, and letting them pick a tier would hide
+    // the labels, and so move every tool, each time three shapes are selected.
+    // fitInsertCtx places them in whatever room the chosen tier leaves.
+    bar.classList.add('ed-ctx-measure')
     bar.classList.remove(...tiers)
     this.applyPhoneChrome(false)
     if (cramped()) bar.classList.add('ed-bar-compact')
@@ -1051,9 +1084,42 @@ export class Editor {
       bar.classList.add('ed-bar-fold')
       this.applyPhoneChrome(true)
     }
+    bar.classList.remove('ed-ctx-measure')
+    this.fitInsertCtx(bar)
     // the class flips and reparenting above queued mutation records of their
     // own; drop them, or the observer re-runs this forever
     this.barMO?.takeRecords()
+  }
+
+  /**
+   * Place the contextual bars that hang past the insert group's end edge (out
+   * of flow, so they never move a tool). Measured, like the tiers: full width
+   * when the gap before the output zone holds it; else the booleans collapse to
+   * one "Combine shapes" button; else the strip hangs just below the bar, at
+   * the same edge, rather than lie over Share or Save. Folded, they live in ＋
+   * and none of this applies.
+   */
+  private fitInsertCtx(bar: HTMLElement) {
+    const ctx = bar.querySelector<HTMLElement>('.ed-insert-ctx')
+    if (!ctx) return
+    ctx.classList.remove('ed-ctx-compact', 'ed-ctx-below')
+    ctx.style.removeProperty('top')
+    if (bar.classList.contains('ed-bar-fold')) return
+    const edge = bar.getBoundingClientRect()
+    const fits = () => {
+      const own = ctx.getBoundingClientRect()
+      if (own.width === 0) return true
+      if (own.left < edge.left || own.right > edge.right) return false
+      return ![...bar.querySelectorAll<HTMLElement>('button:not(.ed-avatar), .ed-avatars, .ed-title')]
+        .filter((b) => !ctx.contains(b) && !b.closest('.ed-menu'))
+        .map((b) => b.getBoundingClientRect())
+        .some((r) => r.width > 0 && r.left < own.right - 1 && own.left < r.right - 1 && r.top < own.bottom && own.top < r.bottom)
+    }
+    if (fits()) return
+    ctx.classList.add('ed-ctx-compact')
+    if (fits()) return
+    ctx.classList.add('ed-ctx-below')
+    ctx.style.top = `${edge.bottom - (ctx.parentElement ?? bar).getBoundingClientRect().top}px`
   }
 
   togglePanel(side: 'left' | 'right') {

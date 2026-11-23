@@ -3592,6 +3592,23 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-topbar .ed-group-right { flex: 1 1 0; justify-content: flex-end; margin-inline-start: 0; min-width: max-content; }
 .ed-topbar .ed-insert { padding-inline: 10px; border-inline: 1px solid var(--line); }
 .ed-topbar.ed-bar-fold .ed-insert { border-inline: 0; padding-inline: 0; }
+/* The contextual bars (booleans, path) hang past the insert group's end edge,
+   out of flow, so showing them never re-centres the group and no tool moves
+   under the pointer. Folded into ＋ they are an ordinary section of that menu
+   again (a menu is a scroll container: nothing floats inside it). */
+.ed-topbar .ed-insert { position: relative; }
+.ed-insert-ctx { position: absolute; inset-inline-start: 100%; top: 0; height: 100%; display: flex; align-items: center; gap: 2px; }
+.ed-insert-ctx:not(:has(> :not([hidden]))) { display: none; }
+.ed-insert-ctx > .ed-bool, .ed-insert-ctx > .ed-pathbar { margin-inline-start: 0; padding-inline: 6px; border-inline-start: 0; border-inline-end: 1px solid var(--line); }
+.ed-topbar.ed-bar-fold .ed-insert-ctx { display: contents; }
+.ed-topbar.ed-ctx-measure .ed-insert-ctx { display: none; }
+/* compact: the four booleans become one "Combine shapes" button and its list */
+.ed-bool-more { display: none; }
+.ed-insert-ctx.ed-ctx-compact .ed-bool > [data-bool] { display: none; }
+.ed-insert-ctx.ed-ctx-compact .ed-bool-more { display: block; }
+/* no room on the bar's row at all: hang below it, at the same edge, as a tab */
+.ed-insert-ctx.ed-ctx-below { height: auto; padding: 4px 0; background: var(--surface); border: 1px solid var(--line); border-top: 0; border-end-start-radius: var(--radius); border-end-end-radius: var(--radius); }
+.ed-insert-ctx.ed-ctx-below > .ed-bool, .ed-insert-ctx.ed-ctx-below > .ed-pathbar { border-inline-end: 0; }
 .bento-laser-dot.bento-remote:not(.visible) { transition: left 0.045s linear, top 0.045s linear, opacity 0.3s ease-out; }
 
 /* page sizes as tiles (panels.ts, Deck): each drawn at its proportions */

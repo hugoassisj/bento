@@ -17,6 +17,15 @@ pre-1.0.
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
 
+- **The top toolbar holds still when you select things.** Selecting two or
+  more shapes, or a path, used to slide every insert tool sideways to make
+  room for the Union, Subtract, Intersect and Exclude buttons (or the path
+  buttons), so the tool you reached for had moved. Those buttons now appear
+  past the end of the tools without moving any of them. In a narrower window
+  the four combine buttons become a single Combine shapes button with the
+  same four inside, and where even that has no room it hangs just below the
+  toolbar instead of covering Share or Save.
+
 ## [1.3.0] — 2026-11-22
 
 - **A new editor for people who design in Figma, Keynote or PowerPoint.**

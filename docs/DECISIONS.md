@@ -15396,3 +15396,29 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-23 — slides: contextual topbar controls never widen the insert group
+
+The insert group is centred between the document and output zones, so any
+change in its width moves every tool in it. The boolean buttons (two or more
+closed shapes) and the path bar (one path) used to be in-flow children of the
+group, and selecting three rectangles slid Move 83px at 1440×900.
+
+- **They live in `.ed-insert-ctx`**, still the group's last child (tab order
+  after Comment, and the phone fold carries it into ＋ unchanged), but
+  absolutely positioned past the group's end edge (`inset-inline-start:
+  100%`). Anything else that appears with the selection belongs there too,
+  not in the group's flow.
+- **The tiers are fitted without them** (`ed-ctx-measure` hides the wrapper
+  while `fitTopbar` measures), so a selection can never change the tier and
+  hide labels. `fitInsertCtx` then places the wrapper by measuring: full; else
+  the booleans collapse to one "Combine shapes" dropdown; else the strip
+  hangs just below the bar at the same edge. At 1024px there is about 4px
+  between the insert group and the output zone, so the compact button alone
+  does not fit there and hangs below.
+- Rejected: reserving the room with `visibility: hidden` (about 150px of every
+  bar), greying the buttons (the recorded intent is "not there", not "greyed").
+- **Guard.** `scripts/test-slides-steady-chrome-browser.mjs` reads Move's left
+  edge with nothing, one shape, three shapes (real marquee) and a path
+  selected at 1440, 1024 and 1024 RTL, checks the strip overlaps no other bar
+  control, the compact form at 1024 and Tab order after Comment.
