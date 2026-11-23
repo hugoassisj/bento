@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
+  "Same in every mode": "Igual en todos los modos",
+  "Theme colors are shared by every mode. To have a color differ by mode, make a color token from it.": "Los colores del tema son los mismos en todos los modos. Para que un color cambie según el modo, crea un token de color a partir de él.",
+  "Theme colors are shared by every mode, so this changed {first} too.": "Los colores del tema son los mismos en todos los modos, así que esto también cambió {first}.",
+  "Make a color token from this": "Crear un token de color a partir de este",
+  "{k} follow theme colors, which are the same in every mode": "{k} siguen colores del tema, que son iguales en todos los modos",
   "View": "Vista",
   "Current slide": "Diapositiva actual",
   "Slide thumbnails": "Miniaturas de diapositivas",

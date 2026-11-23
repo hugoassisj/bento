@@ -14,7 +14,7 @@
 import type { Store } from '../store'
 import type { DesignTokens, ShadowSpec, TokenType } from '../model'
 import { uid } from '../model'
-import { TOKEN_TYPES, activeMode, deleteToken, freeTokenName, modesOf, renameToken, tokenUses, tokenName, protoName, tokenNameError, tokenTargets } from '../tokens'
+import { TOKEN_TYPES, activeMode, addColorToken, deleteToken, freeTokenName, modesOf, renameToken, themeSharedByModes, tokenUses, tokenName, protoName, tokenNameError, tokenTargets } from '../tokens'
 import { components, instanceOf } from '../components'
 import { PALETTE_SLOTS, eachRef, paletteOf, slotIsSet } from '../palette'
 import { parseColor, slotLabel } from './inspector/controls'
@@ -38,6 +38,8 @@ const button = (cls: string, text: string, title = text) => {
   return b
 }
 let errSeq = 0
+/** decks (by docId) already told this session that a theme colour edit reaches every mode */
+const toldShared = new Set<string>()
 
 /** Say why a name was refused, under its field (aria-invalid + aria-describedby); '' clears it. */
 function sayInvalid(i: HTMLInputElement, why: string) {
@@ -144,8 +146,8 @@ function editing(text: string, label: string, check: (v: string) => string | nul
 }
 
 export interface TokensPaneHost {
-  /** a short confirmation where the editor shows its toasts */
-  toast(message: string): void
+  /** a short confirmation where the editor shows its toasts, with an optional action */
+  toast(message: string, action?: { label: string; run: () => void }): void
 }
 
 export class TokensPane {
@@ -205,10 +207,14 @@ export class TokensPane {
         if (['fill', 'stroke', 'color'].some((k) => typeof el[k] === 'string' && !/^(transparent|none)$/.test(el[k] as string) && parseColor(el[k] as string).a > 0 && !el.themeRefs?.[k])) stuck++
       }
     }
+    // nor do the properties that follow a theme colour: one value in every mode
+    let themed = 0
+    if (themeSharedByModes(doc)) eachRef(doc, ({ token }) => { if (!tokenName(token)) themed++ })
     this.edit((x) => { x.mode = to })
-    this.ui.toast(stuck
+    const said = stuck
       ? t('{n} properties changed · {m} hard-coded colors on these slides didn’t follow', { n: changed, m: stuck })
-      : t('{n} properties changed', { n: changed }))
+      : t('{n} properties changed', { n: changed })
+    this.ui.toast(themed ? `${said} · ${t('{k} follow theme colors, which are the same in every mode', { k: themed })}` : said)
   }
 
   private edit(fn: (tk: DesignTokens) => void) {
@@ -400,6 +406,15 @@ export class TokensPane {
     cap.textContent = t('Theme')
     sub.appendChild(cap)
     sub.title = t('The deck’s theme colors: every deck has them; anything that follows one changes when you edit it here')
+    if (themeSharedByModes(this.store.doc)) {
+      const same = document.createElement('span')
+      same.className = 'ed-tokens-shared'
+      same.textContent = t('Same in every mode')
+      same.setAttribute('role', 'note')
+      same.setAttribute('aria-label', same.textContent)
+      same.title = t('Theme colors are shared by every mode. To have a color differ by mode, make a color token from it.')
+      sub.appendChild(same)
+    }
     const missing = PALETTE_SLOTS.filter((s) => !slotIsSet(this.store.doc, s))
     if (missing.length) {
       const add = button('ed-tokens-subadd', '+', t('Add a theme color'))
@@ -421,7 +436,9 @@ export class TokensPane {
    * colour popover, the slot's name (fixed), its value (typed or picked), its
    * uses, and − on the optional slots. They write the palette — the format's
    * palette contract is unchanged.
-   * ponytail: one value in every mode; per-mode theme colours need a format addition.
+   * ponytail: one value in every mode; per-mode theme colours need a format
+   * addition. Until then the view says so (themeSharedByModes): a badge on the
+   * sub-heading, a toast on the first edit made from another mode.
    */
   private themeRows(): HTMLElement[] {
     const doc = this.store.doc
@@ -442,7 +459,11 @@ export class TokensPane {
         else if (slot === 'accent1') th.accent = v
         else (th.palette ??= {})[slot as 'accent2'] = v
       }
-      const set = (v: string) => this.store.commit(() => write(v))
+      // the stored value this row was built from (the row rebuilds after every commit)
+      const th0 = doc.theme
+      const was = slot === 'bg1' ? th0.background : slot === 'tx1' ? th0.color : slot === 'accent1' ? th0.accent : th0.palette?.[slot as 'accent2']
+      const done = () => this.sharedNote(was, write)
+      const set = (v: string) => { this.store.commit(() => write(v)); done() }
       const name = document.createElement('span')
       name.className = 'ed-token-name'
       name.textContent = slotLabel(slot)
@@ -453,8 +474,15 @@ export class TokensPane {
         const th = this.store.doc.theme
         delete th.palette?.[slot as 'accent2']
         if (th.palette && !Object.keys(th.palette).length) delete th.palette
-      }) : null, [])
-      row.append(this.swatch(palette[slot]!, t('Value of {name}', { name: label }), set, write), name,
+      }) : null, [
+        // something that does vary by mode, starting from this colour; what follows it is the user's call
+        { label: t('Make a color token from this'), run: () => {
+          const tname = freeTokenName(this.store.doc, `color.${SLOT_TOKEN[slot] ?? slot}`)
+          this.store.commit(() => addColorToken(this.store.doc, tname, palette[slot]!))
+          this.focusRow(tname, 'name')
+        } },
+      ])
+      row.append(this.swatch(palette[slot]!, t('Value of {name}', { name: label }), set, write, done), name,
         this.colorValue(palette[slot]!, label, set),
         this.usesButton(`slot:${slot}`, n.get(slot)?.length ?? 0, () => n.get(slot) ?? [], label), more)
       return row
@@ -469,6 +497,21 @@ export class TokensPane {
       const raw = v.trim()
       set(/^#?[0-9a-f]{3,8}$/i.test(raw) ? `#${raw.replace(/^#/, '')}` : raw)
     }, undefined, 'ed-token-value', true)
+  }
+
+  /**
+   * After a theme colour edit made while a mode other than the first shows:
+   * say, once per session for this deck, that the first mode changed too, with
+   * an Undo that writes the previous value back as one step.
+   */
+  private sharedNote(was: string | undefined, write: (v: string) => void) {
+    const doc = this.store.doc
+    const tk = doc.theme.tokens
+    const first = modesOf(tk)[0]
+    if (!themeSharedByModes(doc) || activeMode(tk) === first || was === undefined || toldShared.has(doc.docId)) return
+    toldShared.add(doc.docId)
+    this.ui.toast(t('Theme colors are shared by every mode, so this changed {first} too.', { first: first === 'default' ? t('Default') : first }),
+      { label: t('Undo'), run: () => this.store.commit(() => write(was)) })
   }
 
   /** A row's actions — − removes, ⋯ the rest — laid over the row's end and
@@ -501,7 +544,7 @@ export class TokensPane {
    * checkpoint at the first preview, in-place writes after it). Enter, Esc and
    * a click outside all keep it; the pick is one undo step.
    */
-  private swatch(value: string, label: string, set: (v: string) => void, write?: (v: string) => void): HTMLButtonElement {
+  private swatch(value: string, label: string, set: (v: string) => void, write?: (v: string) => void, done?: () => void): HTMLButtonElement {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'ed-token-swatch'
@@ -527,6 +570,7 @@ export class TokensPane {
         write!(literal(h, al))
         this.live = false
         this.store.touch()
+        done?.()
       },
       cancel: () => {
         b.style.background = cssColor(value, 'transparent')
@@ -677,3 +721,5 @@ const TYPE_LABEL: Record<TokenType, [string, string, string]> = {
   shadow: ['Shadows', 'New shadow token', 'shadow.card'],
 }
 const DEFAULT_NUM: Record<string, number> = { number: 16, fontSize: 24, opacity: 0.6 }
+/** A theme slot's name in a token made from it (`color.background`); the rest keep the slot's own. */
+const SLOT_TOKEN: Record<string, string> = { bg1: 'background', tx1: 'text', bg2: 'background2', tx2: 'text2', hlink: 'link', folHlink: 'link.visited' }

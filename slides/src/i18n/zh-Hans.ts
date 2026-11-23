@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Same in every mode": "所有模式相同",
+  "Theme colors are shared by every mode. To have a color differ by mode, make a color token from it.": "主题颜色由所有模式共用。若要让颜色随模式变化，请用它创建颜色令牌。",
+  "Theme colors are shared by every mode, so this changed {first} too.": "主题颜色由所有模式共用，因此 {first} 也已更改。",
+  "Make a color token from this": "用它创建颜色令牌",
+  "{k} follow theme colors, which are the same in every mode": "{k} 项跟随主题颜色，主题颜色在所有模式中相同",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",

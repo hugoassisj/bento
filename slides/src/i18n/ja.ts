@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Same in every mode": "すべてのモードで共通",
+  "Theme colors are shared by every mode. To have a color differ by mode, make a color token from it.": "テーマの色はすべてのモードで共通です。モードごとに色を変えるには、その色から色トークンを作成してください。",
+  "Theme colors are shared by every mode, so this changed {first} too.": "テーマの色はすべてのモードで共通のため、{first} も変更されました。",
+  "Make a color token from this": "これから色トークンを作成",
+  "{k} follow theme colors, which are the same in every mode": "{k} 件がテーマの色に従っています（テーマの色はすべてのモードで共通）",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

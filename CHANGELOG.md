@@ -16,6 +16,14 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **The Tokens view says when a theme colour is the same in every mode.**
+  Tokens keep a value per mode, but the deck's theme colours (Background,
+  Text, the accents) have one value for all of them. Once a deck has two or
+  more modes, the Theme heading says "Same in every mode". Recolour one while
+  another mode is showing and a message says the first mode changed too, with
+  an Undo. A theme colour's ⋯ menu now has "Make a color token from this",
+  which gives you a colour token that can differ by mode. Switching modes
+  also says how many properties follow theme colours and so stayed the same.
 
 ## [1.3.0] — 2026-11-22
 

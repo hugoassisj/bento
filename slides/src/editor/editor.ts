@@ -252,7 +252,7 @@ export class Editor {
     store.on('replace', () => { this.derived = deriveMemory(store.doc); derive(store.doc, this.derived) })
     store.on('doc', () => this.syncDerived())
     store.on('doc', () => this.offerMorph())
-    this.tokensPane = new TokensPane(store, { toast: (m) => this.toast(m) })
+    this.tokensPane = new TokensPane(store, { toast: (m, a) => this.toast(m, a) })
     this.tokensPane.mount(this.sideTokens)
     store.on('doc', () => this.tokensPane.refresh())
     store.on('current', () => this.tokensPane.refresh())

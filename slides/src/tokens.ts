@@ -242,6 +242,23 @@ export function adoptColor(doc: BentoDoc, hex: string, name: string): number {
   return n
 }
 
+/**
+ * The deck's theme colours (the palette) hold one value for every mode, while
+ * tokens hold one per mode: true when that difference shows, i.e. the deck has
+ * more than one mode. The Tokens view says so where it matters. The one place
+ * to change if the palette ever gains values per mode.
+ */
+export const themeSharedByModes = (doc: BentoDoc): boolean => modesOf(doc.theme.tokens).length > 1
+
+/** Add colour token `name` holding `value` in every mode; binds nothing.
+ *  False when the name is taken or not a token name. */
+export function addColorToken(doc: BentoDoc, name: string, value: string): boolean {
+  const tk = (doc.theme.tokens ??= { set: {} })
+  if (own(tk.set, name) || !tokenName(`$${name}`)) return false
+  tk.set[name] = { type: 'color', values: Object.fromEntries(modesOf(tk).map((m) => [m, value])) }
+  return true
+}
+
 /** A free token name: `base`, else `base.2`, `base.3`… */
 export function freeTokenName(doc: BentoDoc, base: string): string {
   const set = doc.theme.tokens?.set

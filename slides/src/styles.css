@@ -3182,6 +3182,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-tokens-sub { display: flex; align-items: center; justify-content: space-between; height: 22px; margin-top: 4px; font-size: 10.5px; font-weight: 500; color: var(--muted); }
 .ed-tokens-subadd { width: 20px; height: 20px; padding: 0; font: inherit; font-size: 14px; line-height: 1; color: var(--muted); background: none; border: 0; border-radius: 5px; cursor: pointer; }
 .ed-tokens-subadd:hover { color: var(--ink); background: var(--chrome-2); }
+/* "Same in every mode": right after Theme, the + stays at the end */
+.ed-tokens-shared { min-width: 0; margin-inline: 6px auto; padding: 1px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; border: 1px solid var(--line); border-radius: 999px; cursor: help; }
 /* the kinds of token the deck has none of yet: one quiet row, not five headers */
 .ed-components .ed-hint { margin: 2px 0 0; }
 /* text that edits in place (tokenspane.ts editing): looks like text, a click makes it a field */

@@ -13,6 +13,9 @@
 // a deck with no tokens is untouched; the palette derivation ignores `$` refs.
 // Components: a copy follows its main's edits, keeps its own offset, keeps a
 // property edited by hand as an override, and detach stops the following.
+// Theme colours hold one value for every mode: a mode switch leaves them and
+// what follows them alone, and a colour token made from one carries its value
+// in every mode without binding anything.
 
 // tokens.ts reaches the file gate (untrusted.ts), which imports app modules
 // without extensions: the resolve hooks go in before any app module loads
@@ -269,6 +272,30 @@ console.log('\ntoken types beyond colour and number\n')
   const out = sanitizeDoc(JSON.parse(JSON.stringify(d)))!.doc.theme.tokens!.set
   ok(!!out['font.ok']?.values.light && !!out['shadow.ok']?.values.light, 'the file gate keeps a font and a shadow token')
   ok(!out['shadow.bad']?.values.light && !out['opacity.bad']?.values.light && !out['type.bad'], 'and drops a non-shadow shadow, an opacity past 1 and an unknown type')
+}
+
+console.log('\ntheme colours and modes\n')
+{
+  // the palette holds one value for every mode (the format is unchanged): a
+  // mode switch moves tokens, never a theme colour or what follows one
+  const { addColorToken, themeSharedByModes } = await import('../slides/src/tokens.ts')
+  const d = deck()
+  el(d, 'b').fill = '#f7a600'; el(d, 'b').themeRefs = { fill: 'accent1' }
+  ok(themeSharedByModes(d), 'two modes: the theme colours are shared by both')
+  const one = deck(); one.theme.tokens!.modes = ['light']
+  ok(!themeSharedByModes(one) && !themeSharedByModes({ ...deck(), theme: { ...deck().theme, tokens: undefined } } as BentoDoc), 'one mode, or none: nothing to say')
+  d.theme.accent = '#123456'
+  resolveThemeRefs(d)
+  d.theme.tokens!.mode = 'dark'
+  syncTokenRefs(d, true)
+  ok(d.theme.accent === '#123456' && el(d, 'b').fill === '#123456' && el(d, 'b').themeRefs.fill === 'accent1', 'a theme colour edited in one mode is the value in every mode, and a mode switch leaves what follows it alone')
+  const refs = JSON.stringify(d.slides)
+  ok(addColorToken(d, 'color.accent', d.theme.accent), 'a colour token can be made from a theme colour')
+  ok(JSON.stringify(d.theme.tokens!.set['color.accent']) === JSON.stringify({ type: 'color', values: { light: '#123456', dark: '#123456' } }), 'it carries the value in every mode')
+  ok(JSON.stringify(d.slides) === refs, 'and binds nothing by itself')
+  ok(!addColorToken(d, 'color.accent', '#000000') && !addColorToken(d, 'toString', '#000000'), 'a taken or unsafe name is refused')
+  const bare = deck(); delete (bare.theme as any).tokens
+  ok(addColorToken(bare, 'color.bg', '#ffffff') && JSON.stringify(bare.theme.tokens!.set['color.bg'].values) === '{"default":"#ffffff"}', 'a deck with no tokens gets one in its default mode')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
