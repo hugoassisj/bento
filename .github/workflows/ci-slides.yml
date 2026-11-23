@@ -723,7 +723,8 @@ jobs:
       - name: Dropping files on the editor in Chromium
         if: ${{ !cancelled() }}
         # A dropped picture lands at the drop point, interned, in one undo
-        # step; several do not coincide and stay on the slide; a large photo is
+        # step; several do not coincide and stay on the slide, at every corner
+        # too; a large photo is
         # shrunk; an undecodable one and any other file are refused with a
         # toast; audio and video embed; the slide list drops onto the slide; a
         # .bento.html still opens; a read-only deck takes nothing; and every

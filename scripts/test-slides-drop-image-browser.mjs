@@ -132,6 +132,26 @@ try {
   ok(corner && corner.x >= 0 && corner.y >= 0 && corner.x + corner.w <= W + 0.5 && corner.y + corner.h <= H + 0.5,
     `a drop at the corner keeps the picture on the slide (${corner ? [corner.x, corner.y, corner.w, corner.h] : '-'})`)
 
+  // 4b: three at once at each corner, and three photo-sized ones (shown at
+  // the 640×480 cap) inside a corner quadrant: all on the slide, none on
+  // another. The clamp that keeps a picture on the slide must not fold the
+  // step that keeps them apart back onto one spot.
+  const onSlide = (e) => e.x >= 0 && e.y >= 0 && e.x + e.w <= W + 0.5 && e.y + e.h <= H + 0.5
+  const threeAt = async (label, size, pt) => {
+    const b = await count()
+    await drop([{ png: size, name: '1.png' }, { png: size, name: '2.png' }, { png: size, name: '3.png' }], { slide: pt })
+    const m = await waitCount(b + 3)
+    const got = (await els()).slice(b)
+    const spots = new Set(got.map((e) => `${e.x},${e.y}`))
+    ok(m === b + 3 && spots.size === 3 && got.every(onSlide),
+      `three dropped at ${label} land apart and on the slide (${got.map((e) => [e.x, e.y, e.w, e.h].join(',')).join(' | ')})`)
+  }
+  await threeAt('the top-left corner', [300, 200], [5, 5])
+  await threeAt('the top-right corner', [300, 200], [W - 5, 5])
+  await threeAt('the bottom-left corner', [300, 200], [5, H - 5])
+  await threeAt('the bottom-right corner', [300, 200], [W - 5, H - 5])
+  await threeAt('a corner quadrant, photo-sized', [1280, 960], [W - 200, H - 150])
+
   // 5: a large photo is shrunk, with the same toast as a pasted one
   const before5 = await count()
   await drop([{ jpeg: [3600, 2400] }], { slide: [640, 360] })
