@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Only pictures, video, audio and bento decks can be dropped here": "ここにドロップできるのは画像、動画、音声、bento のデッキだけです",
+  "{name} could not be read as a picture": "{name} を画像として読み込めませんでした",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

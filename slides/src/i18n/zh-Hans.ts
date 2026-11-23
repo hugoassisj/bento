@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Only pictures, video, audio and bento decks can be dropped here": "这里只能拖放图片、视频、音频和 bento 演示文稿",
+  "{name} could not be read as a picture": "无法将 {name} 读取为图片",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",

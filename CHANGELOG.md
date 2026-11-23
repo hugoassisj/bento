@@ -16,6 +16,13 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Drop a picture on the slide and it lands where you let go.** Pictures
+  dragged in from your computer are placed at the drop point, shrunk the same
+  way as a pasted one; several at once fan out instead of stacking. Video and
+  audio files drop the same way. A picture that cannot be read (dropped or
+  pasted), or a file the editor cannot use, now says so instead of doing
+  nothing or adding a broken box, and the browser no longer leaves the editor
+  to show the dropped file. Dropping a `.bento.html` still opens that deck.
 
 ## [1.3.0] — 2026-11-22
 

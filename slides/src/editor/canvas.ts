@@ -810,6 +810,14 @@ export class SlideCanvas {
     return { x: (clientX - r.left) / this.scale, y: (clientY - r.top) / this.scale }
   }
 
+  /** The slide-space point under a client point, when that point is over the
+   *  canvas area (the slide or the grey around it); null over the panels. */
+  canvasPointAt(clientX: number, clientY: number): { x: number; y: number } | null {
+    const view = this.scroller.getBoundingClientRect()
+    if (clientX < view.left || clientX > view.right || clientY < view.top || clientY > view.bottom) return null
+    return this.slidePointAt(clientX, clientY)
+  }
+
   zoomIn() { this.setZoom(this.zoom * 1.25) }
   zoomOut() { this.setZoom(this.zoom / 1.25) }
   zoomReset() { this.setZoom(1) }

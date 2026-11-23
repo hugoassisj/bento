@@ -2690,35 +2690,41 @@ export class Editor {
     input.accept = 'video/*,audio/*'
     input.addEventListener('change', () => {
       const file = input.files?.[0]
-      if (!file) return
-      const kind: 'video' | 'audio' = file.type.startsWith('audio') ? 'audio' : 'video'
-      if (file.size > MEDIA_EMBED_BUDGET) {
-        const mb = Math.round(file.size / (1024 * 1024))
-        const ok = confirm(t(
-          'This {kind} is {mb} MB. Embedding keeps it inside the .bento.html but makes the file large and slow to open and save.\n\nEmbed anyway? (Cancel, then paste a hosted URL in the panel to keep the deck small.)',
-          { kind: t(kind), mb }, // localise the noun — see promptMediaUrl
-        ))
-        if (!ok) { this.insertMedia(kind, ''); return } // empty element → panel URL field
-      }
-      const reader = new FileReader()
-      reader.onload = () => this.insertMedia(kind, String(reader.result))
-      reader.readAsDataURL(file)
+      if (file) this.insertMediaFile(file)
     })
     input.click()
   }
 
-  /** Insert a media element, sizing video to its intrinsic aspect when known. */
-  private insertMedia(kind: 'video' | 'audio', src: string) {
+  /** Embed a picked (or, with `at`, dropped) video or audio file. */
+  private insertMediaFile(file: File, at?: { x: number; y: number }) {
+    const kind: 'video' | 'audio' = file.type.startsWith('audio') ? 'audio' : 'video'
+    if (file.size > MEDIA_EMBED_BUDGET) {
+      const mb = Math.round(file.size / (1024 * 1024))
+      const ok = confirm(t(
+        'This {kind} is {mb} MB. Embedding keeps it inside the .bento.html but makes the file large and slow to open and save.\n\nEmbed anyway? (Cancel, then paste a hosted URL in the panel to keep the deck small.)',
+        { kind: t(kind), mb }, // localise the noun — see promptMediaUrl
+      ))
+      if (!ok) { this.insertMedia(kind, '', at); return } // empty element → panel URL field
+    }
+    const reader = new FileReader()
+    reader.onload = () => this.insertMedia(kind, String(reader.result), at)
+    reader.readAsDataURL(file)
+  }
+
+  /** Insert a media element, sizing video to its intrinsic aspect when known;
+   *  centred on `at` (kept on the slide) or on the slide. */
+  private insertMedia(kind: 'video' | 'audio', src: string, at?: { x: number; y: number }) {
     const { width: dw, height: dh } = this.store.doc.size
+    const box = (w: number, h: number) => at ? this.frameAt(w, h, at) : { w, h, x: (dw - w) / 2, y: (dh - h) / 2 }
     if (kind === 'audio' || !src) {
       const w = kind === 'audio' ? 460 : 560
       const h = kind === 'audio' ? 56 : 315
-      this.canvas.insert(defaultMedia(kind, src, { w, h, x: (dw - w) / 2, y: (dh - h) / 2 }))
+      this.canvas.insert(defaultMedia(kind, src, box(w, h)))
       return
     }
     const probe = document.createElement('video')
     const place = (w: number, h: number) =>
-      this.canvas.insert(defaultMedia('video', src, { w: Math.round(w), h: Math.round(h), x: (dw - w) / 2, y: (dh - h) / 2 }))
+      this.canvas.insert(defaultMedia('video', src, { ...box(w, h), w: Math.round(w), h: Math.round(h) }))
     probe.preload = 'metadata'
     probe.onloadedmetadata = () => {
       const ar = probe.videoWidth && probe.videoHeight ? probe.videoWidth / probe.videoHeight : 16 / 9
@@ -2840,11 +2846,17 @@ export class Editor {
 
   private wirePaste() {
     // A dropped .bento.html OPENS as a deck (and adopts a writable handle);
-    // anything else falls through to the existing image/media drop behaviour.
+    // pictures, video and audio are placed where they land (dropFiles), and
+    // any other file is refused out loud. Every file drop is cancelled, so the
+    // browser never navigates the tab away to show the file.
     document.addEventListener('dragover', (ev: DragEvent) => {
       if ([...(ev.dataTransfer?.items ?? [])].some((i) => i.kind === 'file')) ev.preventDefault()
     })
-    document.addEventListener('drop', (ev: DragEvent) => { void this.openDroppedDeck(ev) })
+    document.addEventListener('drop', (ev: DragEvent) => {
+      // a deck is claimed (preventDefault) before openDroppedDeck's first await
+      void this.openDroppedDeck(ev)
+      if (!ev.defaultPrevented) this.dropFiles(ev)
+    })
 
     document.addEventListener('paste', (ev: ClipboardEvent) => {
       if (this.presenting) return
@@ -2913,25 +2925,59 @@ export class Editor {
     return false
   }
 
-  private pasteImageFile(file: File) {
+  /**
+   * Files dropped anywhere in the editor that are not a deck. Pictures take
+   * the pasted-picture path (shrink, then interned), video and audio the
+   * Media button's embed; each is centred on the drop point, or on the slide
+   * when dropped over the slide list or a panel, and kept on the slide.
+   * Several files step down and right so none hides another.
+   */
+  private dropFiles(ev: DragEvent) {
+    const files = [...(ev.dataTransfer?.files ?? [])]
+    if (!files.length) return
+    ev.preventDefault()
+    if (this.presenting) return
+    if (this.store.readOnly) { this.toast(t('Read-only — viewing this live session. You can watch and present, but not edit.')); return }
+    const placeable = files.filter((f) => /^(image|video|audio)\//.test(f.type))
+    if (placeable.length < files.length) this.toast(t('Only pictures, video, audio and bento decks can be dropped here'))
+    if (!placeable.length) return
+    this.canvas.commitTextEdit()
+    const { width, height } = this.store.doc.size
+    const at = this.canvas.canvasPointAt(ev.clientX, ev.clientY) ?? { x: width / 2, y: height / 2 }
+    placeable.forEach((file, i) => {
+      const p = { x: at.x + i * 24, y: at.y + i * 24 }
+      if (file.type.startsWith('image/')) this.pasteImageFile(file, p)
+      else this.insertMediaFile(file, p)
+    })
+  }
+
+  /** A w×h box centred on a slide point and kept on the slide, or centred on
+   *  the slide when there is no point. */
+  private frameAt(w: number, h: number, at?: { x: number; y: number }) {
+    const { width, height } = this.store.doc.size
+    const fit = (c: number, size: number, room: number) => Math.round(Math.min(Math.max(c - size / 2, 0), Math.max(0, room - size)))
+    return at ? { x: fit(at.x, w, width), y: fit(at.y, h, height), w, h } : { x: Math.round((width - w) / 2), y: Math.round((height - h) / 2), w, h }
+  }
+
+  /** A pasted (or, with `at`, dropped) picture file. One that cannot be
+   *  decoded is named in a toast and inserts nothing — never a broken box. */
+  private pasteImageFile(file: File, at?: { x: number; y: number }) {
     void this.shrinkForInsert(file).then((r) => {
       const src = r.dataUrl
-      const place = (w: number, h: number) => {
-        const { width, height } = this.store.doc.size
-        const el = defaultImage(src, { x: Math.round((width - w) / 2), y: Math.round((height - h) / 2), w, h, fit: 'contain' })
+      const img = new Image()
+      img.onload = () => {
+        const w = img.naturalWidth || 400, h = img.naturalHeight || 300
+        const sc = Math.min(1, 640 / w, 480 / h)
+        const el = defaultImage(src, { ...this.frameAt(Math.round(w * sc), Math.round(h * sc), at), fit: 'contain' })
         // via canvas.insert, so a pasted photo is interned into doc.assets on
         // the same path as every other embed — otherwise it stays inline and
         // live collab can never send it.
         this.canvas.insert(el)
-        // the shrink toast, when there is one, already says a picture landed
-        if (!shrinkNote(r)) this.toast(t('Image pasted'))
+        // the shrink toast, when there is one, already says a picture landed;
+        // a dropped one is under the pointer and needs no word
+        if (!at && !shrinkNote(r)) this.toast(t('Image pasted'))
       }
-      const img = new Image()
-      img.onload = () => {
-        let w = img.naturalWidth || 400, h = img.naturalHeight || 300
-        const sc = Math.min(1, 640 / w, 480 / h); place(Math.round(w * sc), Math.round(h * sc))
-      }
-      img.onerror = () => place(400, 300)
+      img.onerror = () => this.toast(t('{name} could not be read as a picture', { name: file.name }))
       img.src = src
     })
   }
@@ -3268,11 +3314,11 @@ export class Editor {
    * a dropped file (Chromium only), so one permission prompt converts that deck
    * into one Bento can rewrite.
    *
-   * Guards, in order: images and everything else keep their existing paste/drop
-   * behaviour; an encrypted deck is refused rather than half-opened, because the
-   * password gate lives in boot and there is nothing here to prompt with; and
-   * unsaved work is confirmed before being replaced, since this is destructive
-   * in a way dropping a picture is not.
+   * Guards, in order: any other file is left to dropFiles (pictures and media
+   * are placed, the rest refused); an encrypted deck is refused rather than
+   * half-opened, because the password gate lives in boot and there is nothing
+   * here to prompt with; and unsaved work is confirmed before being replaced,
+   * since this is destructive in a way dropping a picture is not.
    */
   private async openDroppedDeck(ev: DragEvent): Promise<boolean> {
     const item = [...(ev.dataTransfer?.items ?? [])].find((i) => i.kind === 'file')

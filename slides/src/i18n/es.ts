@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
+  "Only pictures, video, audio and bento decks can be dropped here": "Aquí solo se pueden soltar imágenes, vídeo, audio y presentaciones de bento",
+  "{name} could not be read as a picture": "{name} no se pudo leer como imagen",
   "View": "Vista",
   "Current slide": "Diapositiva actual",
   "Slide thumbnails": "Miniaturas de diapositivas",
