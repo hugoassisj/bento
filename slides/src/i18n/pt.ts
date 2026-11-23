@@ -7,6 +7,13 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "New slide from layout…": "Novo slide a partir de um layout…",
+  "Move slide earlier": "Mover slide para antes",
+  "Move slide later": "Mover slide para depois",
+  "Show slide": "Mostrar slide",
+  "Apply layout…": "Aplicar layout…",
+  "Duplicate slide — when no element is selected": "Duplicar slide — quando nenhum elemento está selecionado",
+  "Delete slide — from the slide list, or with several slides selected there": "Excluir slide — na lista de slides, ou com vários slides selecionados nela",
   "View": "Exibir",
   "Current slide": "Slide atual",
   "Slide thumbnails": "Miniaturas dos slides",

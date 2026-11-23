@@ -64,7 +64,13 @@ try {
     const ids = await p.$$eval('.ed-cmdk-list li', (l) => l.map((x) => x.dataset.cmd).filter(Boolean))
     return ids
   }
+  // a thumbnail scrolled into the list's view, at rest
+  const reveal = async (i) => {
+    await p.locator(`.ed-thumb[data-index="${i}"]`).scrollIntoViewIfNeeded()
+    await p.waitForTimeout(150)
+  }
   const thumbMenu = async (i) => {
+    await reveal(i)
     const b = await p.locator(`.ed-thumb[data-index="${i}"]`).boundingBox()
     await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { button: 'right' })
     await p.waitForTimeout(100)
@@ -132,9 +138,11 @@ try {
     const parent = s0.stateOf.findIndex((x, i) => !x && s0.stateOf.some((y) => y === s0.ids[i]))
     ok(parent > 0, `the starter deck has a slide with states (${parent})`)
     if (parent > 0) {
+      await reveal(parent)
       const b = await p.locator(`.ed-thumb[data-index="${parent}"]`).boundingBox()
       await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2)
       await blank()
+      ok((await deck()).cur === parent, `the parent is the current slide (${(await deck()).cur})`)
       await p.keyboard.press(`${mod}+ArrowUp`)
       await settle()
       const s3 = await deck()
@@ -237,8 +245,12 @@ try {
     await p.keyboard.press('Delete')
     await settle()
     ok((await deck()).n === s0.n, 'a bare ⌫ / Delete on the canvas with nothing selected deletes no slide')
-    // in the slide list, ⌫ is the slide's
+    // in the slide list, ⌫ is the slide's: a thumbnail's own button focused
+    // (its tools show on hover), or several slides selected there
+    await reveal(1)
+    await p.hover('.ed-thumb[data-index="1"]')
     await p.evaluate(() => document.querySelector('.ed-thumb[data-index="1"] .ed-thumb-tools button')?.focus())
+    ok(await p.evaluate(() => !!document.activeElement?.closest('.ed-thumb')), 'a thumbnail’s button has focus')
     await p.keyboard.press('Delete')
     await settle()
     const s1 = await deck()
@@ -246,6 +258,24 @@ try {
     await p.keyboard.press(`${mod}+z`)
     await settle()
     ok((await deck()).ids.join() === s0.ids.join(), 'undo brings it back')
+    await blank()
+    for (const i of [2, 3]) {
+      await reveal(i)
+      const b = await p.locator(`.ed-thumb[data-index="${i}"]`).boundingBox()
+      await p.keyboard.down(mod)
+      await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2)
+      await p.keyboard.up(mod)
+    }
+    await p.mouse.move(5, 5)
+    await p.evaluate(() => document.activeElement?.blur?.())
+    const picked = await p.$$eval('.ed-thumb.selected', (l) => l.length)
+    await p.keyboard.press('Backspace')
+    await settle()
+    const s1b = await deck()
+    ok(picked > 1 && s1b.n < s0.n, `Backspace with ${picked} slides selected in the list deletes them (${s0.n} → ${s1b.n})`)
+    await p.keyboard.press(`${mod}+z`)
+    await settle()
+    ok((await deck()).ids.join() === s0.ids.join(), 'undo brings them back')
 
     // a text box being typed into
     await blank()

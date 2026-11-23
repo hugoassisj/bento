@@ -15396,3 +15396,35 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-23 — slides: slide actions are commands; New slide is ⌃M on a Mac
+
+The rule that keys are commands now covers the slides. New slide, New slide
+from layout…, Duplicate slide, Delete slide, Move slide earlier / later,
+Hide / Show slide, Apply layout…, Speaker notes and Bulleted / Numbered list
+are entries in the editor's one command list, so the keys, ⌘K, the ? sheet
+and the thumbnail menu read one name and one key each. The ids (`slide-*`,
+`layout-apply`, `notes-toggle`, `list-*`) are meant to stay stable: an
+in-editor assistant would call this list as its tools.
+
+- **New slide is ⌃M on a Mac, Ctrl+M elsewhere.** ⌘M minimises the window
+  before a page hears it, so it cannot be the editor's on macOS. It inserts
+  after the current slide and its states, on the layout the current slide
+  came from (recognised by its element ids), and on Title + content after a
+  title slide or when no layout is recognised, as PowerPoint does. The
+  layout picker stays the way to choose one (New slide from layout…, the
+  thumbnail menu, the sidebar's + and gaps).
+- **⌘D and ⌘↑/↓ are the slide's only while no element is selected.** The
+  condition is in the command's `match`, not its `when`: with an element
+  selected the key falls through to the element meaning (duplicate it, nudge
+  it) instead of being taken as an owned chord that does nothing. Element
+  Duplicate now applies only with a selection, so ⌘K no longer offers a
+  Duplicate that does nothing.
+- **⌫ deletes a slide only from the slide list**: a thumbnail's button has
+  focus, or several slides are selected there. Never from a bare canvas
+  keypress. ⌘K's Delete slide acts on the list's selection, else the current
+  slide, with the same confirm as before.
+- **Move slide earlier / later go through the drag's move** (`moveBlock`, via
+  `stepDrop` in slidesel.ts), one unit at a time, so states never leave their
+  parent and a list selection moves as a block.
+- Guard: `scripts/test-slides-slide-commands-browser.mjs`.

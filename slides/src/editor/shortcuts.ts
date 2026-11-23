@@ -23,7 +23,7 @@ function groupOf(id: string): Group {
   if (/^(align|distribute|flip|bool)-/.test(id) || id === 'group' || id === 'ungroup') return 'arrange'
   if (id === 'auto-layout') return 'frames'
   if (id.startsWith('zoom-') || id.startsWith('toggle-')) return 'view'
-  if (id.endsWith('-slide')) return 'slides'
+  if (id.endsWith('-slide') || id.startsWith('slide-')) return 'slides'
   if (id === 'present') return 'present'
   return 'edit'
 }
@@ -121,6 +121,8 @@ const HINT: Record<string, string> = {
   component: 'Create component — copies inserted from the Tokens view follow it',
   palette: 'Command palette — search every action by name',
   'auto-layout': 'Wrap the selection in an auto-layout frame',
+  'slide-duplicate': 'Duplicate slide — when no element is selected',
+  'slide-delete': 'Delete slide — from the slide list, or with several slides selected there',
 }
 
 export function openShortcuts(commands: Command[]) {

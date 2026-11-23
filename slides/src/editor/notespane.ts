@@ -23,7 +23,9 @@ import { t } from '../i18n'
 import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
 import { isMacOS } from '../screens'
 
-export function mountNotesPane(store: Store, into: HTMLElement, cluster: HTMLElement, signal: AbortSignal) {
+/** Mounts the pane; returns the Speaker notes command's toggle (it opens
+ *  with the caret in the notes). */
+export function mountNotesPane(store: Store, into: HTMLElement, cluster: HTMLElement, signal: AbortSignal): () => void {
   const pane = document.createElement('section')
   pane.className = 'ed-notespane'
   pane.id = 'ed-notespane'
@@ -159,4 +161,8 @@ export function mountNotesPane(store: Store, into: HTMLElement, cluster: HTMLEle
   const offs = [store.on('current', sync), store.on('doc', sync)]
   signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
   sync()
+  return () => {
+    flip()
+    if (!pane.classList.contains('closed')) area.focus({ preventScroll: true })
+  }
 }

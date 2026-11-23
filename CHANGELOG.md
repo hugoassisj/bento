@@ -11,6 +11,16 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Slide shortcuts, and every slide action in ⌘K.** Ctrl+M (⌃M on a Mac)
+  adds a slide after the current one, on the same layout. With nothing
+  selected on the slide, ⌘D duplicates the slide and ⌘↑ / ⌘↓ (Ctrl on Windows
+  and Linux) move it earlier or later, taking its interactive states along.
+  ⌫ deletes slides from the slide list, never from a bare canvas. ⌘K now finds
+  New slide, New slide from layout, Duplicate, Delete, Move, Hide or Show
+  slide, Apply layout, Speaker notes, and Bulleted or Numbered list for the
+  selected text box. A thumbnail's right-click menu adds Move earlier, Move
+  later and Hide slide, with the keys beside each, and the ? sheet lists the
+  new shortcuts.
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the

@@ -93,6 +93,20 @@ export function moveBlock<T extends SlideLike>(slides: T[], selected: Iterable<n
 }
 
 /**
+ * Where moveBlock must drop the selection to move it one unit earlier (-1) or
+ * later (1) — Move slide earlier / later, ⌘↑ / ⌘↓. A unit is jumped whole, so
+ * states are never split from their parent. null when there is no room.
+ */
+export function stepDrop(slides: SlideLike[], selected: Iterable<number>, dir: -1 | 1): number | null {
+  const moving = expand(slides, selected)
+  if (!moving.length) return null
+  const starts = slides.map((_, i) => i).filter((i) => !slides[i].stateOf && !moving.includes(i))
+  if (dir < 0) return starts.filter((i) => i < moving[0]).pop() ?? null
+  const next = starts.find((i) => i > moving[moving.length - 1])
+  return next === undefined ? null : starts.find((i) => i > next) ?? slides.length
+}
+
+/**
  * What deleting a selection removes and what it breaks: the doomed ids
  * (units), the element links into them, and whether a linear slide
  * survives — the same three the single delete checks.

@@ -62,7 +62,8 @@ import { parseDocInputReport } from '../compactload'
 import { gateRestored, guardOpenedDoc } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
-import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
+import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, stepDrop, toggle as selToggle } from './slidesel'
+import { execFormat } from './richtext'
 import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
@@ -194,6 +195,8 @@ export class Editor {
    *  is the anchor and the canvas slide; this set is what a drag moves and
    *  Delete removes. Empty = just the current slide, as before. */
   private thumbSel: number[] = []
+  /** the speaker-notes pane's toggle (notes-toggle), replaced on each build */
+  private toggleNotes = () => {}
   private sidebar!: HTMLElement
   /** the side column's two views: slide thumbnails, and the current slide's layers */
   private thumbs!: HTMLElement
@@ -663,7 +666,7 @@ export class Editor {
     // the canvas over its speaker notes, as in every slide editor
     const centre = div('ed-centre')
     centre.appendChild(canvasWrap)
-    mountNotesPane(this.store, centre, corner, this.buildScope.signal)
+    this.toggleNotes = mountNotesPane(this.store, centre, corner, this.buildScope.signal)
     main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
@@ -2411,7 +2414,13 @@ export class Editor {
     let from: number[]
     try { const v = JSON.parse(payload); from = Array.isArray(v) ? v.map(Number) : [Number(v)] } catch { from = [parseInt(payload)] }
     from = from.filter((n) => Number.isInteger(n) && n >= 0)
-    if (!from.length) return
+    if (from.length) this.moveUnits(from, index, true)
+  }
+
+  /** The drag's move, shared with Move slide earlier / later: the units at
+   *  `from` go as one block to sit where `index` is; the canvas stays on its
+   *  slide, and `select` re-selects the moved block in the list. */
+  private moveUnits(from: number[], index: number, select: boolean) {
     const before = this.store.doc.slides
     const after = moveBlock(before, from, index)
     if (after === before) return
@@ -2421,7 +2430,7 @@ export class Editor {
     // the selection follows the slides, by id; the canvas stays on its slide
     const at = after.findIndex((s) => s.id === currentId)
     if (at >= 0 && at !== this.store.currentIndex) this.store.goTo(at)
-    this.setThumbSel(after.map((s, i) => (movedIds.includes(s.id) ? i : -1)).filter((i) => i >= 0))
+    if (select) this.setThumbSel(after.map((s, i) => (movedIds.includes(s.id) ? i : -1)).filter((i) => i >= 0))
   }
 
   private highlightSidebar() {
@@ -2474,6 +2483,104 @@ export class Editor {
   }
 
   // --- slide ops ------------------------------------------------------------------
+
+  /** What a slide command acts on: the slide-list selection, else the current slide. */
+  private slideTargets(): number[] {
+    return this.thumbSel.length ? this.thumbSel : [this.store.currentIndex]
+  }
+
+  /** Where a new slide goes: after the current slide and its states. */
+  private afterCurrent(): number {
+    const unit = expand(this.store.doc.slides, [this.store.currentIndex])
+    return unit[unit.length - 1] + 1
+  }
+
+  /** New slide (⌃M / Ctrl+M): straight in after the current one, on the
+   *  layout the current slide came from (known by its element ids) — and, as
+   *  in PowerPoint, Title + content after a title slide or when none is known.
+   *  The picker stays the way to choose (New slide from layout…). */
+  private newSlide() {
+    const doc = this.store.doc
+    const layouts = [...builtinLayouts(doc.size), ...(doc.layouts ?? [])]
+    const ids = new Set(this.store.slide.elements.map((e) => e.id))
+    let from: Slide | undefined, most = 0
+    for (const ly of layouts) {
+      const n = ly.elements.filter((e) => ids.has(e.id)).length
+      if (n > most) { most = n; from = ly }
+    }
+    if (!from || from.id === 'layout-title') from = layouts.find((ly) => ly.id === 'layout-title-content') ?? layouts[0]
+    this.insertSlideFromLayout(from, this.afterCurrent())
+  }
+
+  /** The layout picker from ⌘K: beside the current thumbnail, or over the
+   *  canvas while the slide list is folded away. */
+  private layoutAnchor(): HTMLElement {
+    const th = this.thumbs.querySelector<HTMLElement>('.ed-thumb.active')
+    return th?.getBoundingClientRect().width ? th : document.querySelector<HTMLElement>('.ed-scroll') ?? this.root
+  }
+
+  /** Duplicate one slide, or several selected in the list as one step: the
+   *  copies go after the last of them, and become the selection. */
+  private duplicateSlides(indices: number[]) {
+    const slides = this.store.doc.slides
+    const ps = selParents(slides, indices)
+    if (indices.length < 2 || ps.length < 2) return this.duplicateSlide(indices[0] ?? this.store.currentIndex)
+    const copies = ps.map((i) => {
+      const c: Slide = JSON.parse(JSON.stringify(slides[i]))
+      c.id = uid('slide')
+      adoptComponents(c.elements, this.store.doc)
+      return c
+    })
+    const unit = expand(slides, [ps[ps.length - 1]])
+    const at = unit[unit.length - 1] + 1
+    this.store.commit(() => { this.store.doc.slides.splice(at, 0, ...copies) }, 'slides')
+    this.store.goTo(at)
+    this.setThumbSel(copies.map((_, k) => at + k))
+  }
+
+  /** Move slide earlier / later (⌘↑ / ⌘↓): one unit at a time, through the
+   *  drag's own move, so states and a multi-selection behave as they do there. */
+  private moveSlides(indices: number[], dir: -1 | 1) {
+    const to = stepDrop(this.store.doc.slides, indices, dir)
+    if (to !== null) this.moveUnits(indices, to, this.thumbSel.length > 0)
+  }
+
+  /** The ordinary slides among `indices` — a state cannot be hidden. */
+  private hideable(indices: number[]): number[] {
+    return indices.filter((i) => this.store.doc.slides[i] && !this.store.doc.slides[i].stateOf)
+  }
+
+  /** Hide slide, or Show slide when every one of them is already hidden. */
+  private hides(indices: number[]): boolean {
+    return this.hideable(indices).some((i) => !this.store.doc.slides[i].hidden)
+  }
+
+  private hideSlides(indices: number[]) {
+    const ids = this.hideable(indices).map((i) => this.store.doc.slides[i].id)
+    if (!ids.length) return
+    const hide = this.hides(indices)
+    const keep = this.thumbSel.slice()
+    // 'slides': the list redraws its dimmed thumbnails and numbers (and drops its selection)
+    this.store.commit(() => {
+      for (const id of ids) {
+        const s = this.store.slideById(id)
+        if (s && hide) s.hidden = true
+        else if (s) delete s.hidden
+      }
+    }, 'slides')
+    if (keep.length) this.setThumbSel(keep)
+  }
+
+  /** Bulleted / Numbered list from ⌘K on the selected text box: the whole box,
+   *  through the formatting bar's own command, as one undo step. */
+  private listSelectedText(cmd: 'insertUnorderedList' | 'insertOrderedList') {
+    const el = this.store.selectedElements[0]
+    if (!el) return
+    this.canvas.editElement(el.id) // opens with all of its text selected
+    if (!this.canvas.isEditingText) return
+    execFormat(cmd)
+    this.canvas.commitTextEdit()
+  }
 
   private duplicateSlide(i: number) {
     // Duplicated slides keep element ids → set transition to morph and you
@@ -3765,6 +3872,9 @@ export class Editor {
     const letter = (ev: KeyboardEvent, code: string) => /^[a-z]$/i.test(ev.key) ? `Key${ev.key.toUpperCase()}` === code : ev.code === code
     // a bare letter: no modifier, so ⌘R, ⇧A and ⌥⇧O stay theirs
     const tool = (k: string) => (ev: KeyboardEvent, mod: boolean) => !mod && !ev.altKey && !ev.shiftKey && key(ev) === k
+    // one text box selected (not open): what the list commands act on
+    const oneText = () => toolFree() && sel().length === 1 && sel()[0].type === 'text'
+    const editor = this // for the label getter, whose `this` is the command
     const list: Command[] = [
       { id: 'save', label: 'Save', keys: `${MOD}S`, scope: 'always', inField: true, match: (ev, mod) => mod && key(ev) === 's', run: () => this.save(false) },
       { id: 'zoom-in', label: 'Zoom in', keys: `${MOD}+`, scope: 'canvas', inField: true, match: (ev, mod) => mod && (ev.key === '=' || ev.key === '+'), run: () => this.canvas.zoomIn() },
@@ -3814,7 +3924,7 @@ export class Editor {
       { id: 'tokens-show', label: 'Show tokens and components', scope: 'always', run: () => this.showSideView('tokens') },
       { id: 'redo', label: 'Redo', keys: `⇧${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && ((ev.shiftKey && key(ev) === 'z') || key(ev) === 'y'), run: () => this.store.redo() },
       { id: 'undo', label: 'Undo', keys: `${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'z', run: () => this.store.undo() },
-      { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: writable, match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },
+      { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: () => writable() && sel().length > 0, match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },
       // Ghost Cut: the selection fades where it stands and ⌘V MOVES it (same
       // ids, one undo step); Esc cancels. Also copied, so pasting elsewhere
       // works as after ⌘C. Plain ⌘X is unchanged.
@@ -3832,6 +3942,28 @@ export class Editor {
       { id: 'toggle-right', label: 'Show or hide the Format panel', keys: ']', scope: 'always', when: canvasFree, match: (ev) => ev.key === ']', run: () => this.togglePanel('right') },
       { id: 'next-slide', label: 'Next slide', keys: 'PageDown', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageDown', run: () => this.store.goToLinear(1) },
       { id: 'prev-slide', label: 'Previous slide', keys: 'PageUp', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageUp', run: () => this.store.goToLinear(-1) },
+      // The slides. They act on the slide-list selection, else the current
+      // slide. ⌘D and ⌘↑/↓ are the slide's only while no element is selected
+      // (then they duplicate and nudge the elements, below and in keydown).
+      // New slide is ⌃M on a Mac: ⌘M minimises the window before a page hears it.
+      { id: 'slide-new', label: 'New slide', keys: `${MOD === '⌘' ? '⌃' : MOD}M`, scope: 'canvas', when: writable, match: (ev) => ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey && key(ev) === 'm', run: () => this.newSlide() },
+      { id: 'slide-new-layout', label: 'New slide from layout…', scope: 'canvas', when: writable, run: () => this.openLayoutPicker(this.layoutAnchor(), { kind: 'insert', at: this.afterCurrent() }) },
+      { id: 'slide-duplicate', label: 'Duplicate slide', keys: `${MOD}D`, scope: 'canvas', when: writable, match: (ev, mod) => mod && key(ev) === 'd' && !sel().length, run: () => this.duplicateSlides(this.slideTargets()) },
+      { id: 'slide-move-earlier', label: 'Move slide earlier', keys: `${MOD}↑`, scope: 'canvas', when: () => writable() && stepDrop(this.store.doc.slides, this.slideTargets(), -1) !== null, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && ev.key === 'ArrowUp' && !sel().length, run: () => this.moveSlides(this.slideTargets(), -1) },
+      { id: 'slide-move-later', label: 'Move slide later', keys: `${MOD}↓`, scope: 'canvas', when: () => writable() && stepDrop(this.store.doc.slides, this.slideTargets(), 1) !== null, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && ev.key === 'ArrowDown' && !sel().length, run: () => this.moveSlides(this.slideTargets(), 1) },
+      { id: 'slide-hide', get label() { return editor.hides(editor.slideTargets()) ? 'Hide slide' : 'Show slide' }, scope: 'canvas', when: () => writable() && this.hideable(this.slideTargets()).length > 0, run: () => this.hideSlides(this.slideTargets()) },
+      // ⌫ deletes slides only from the slide list (a thumbnail's button has
+      // focus) or with several selected there — never from a bare canvas
+      { id: 'slide-delete', label: 'Delete slide', keys: '⌫', scope: 'canvas', when: writable,
+        match: (ev, mod) => !mod && (ev.key === 'Delete' || ev.key === 'Backspace') && !sel().length && (this.thumbSel.length > 1 || (ev.target instanceof Node && this.thumbs.contains(ev.target))),
+        run: (ev) => {
+          const th = ev?.target instanceof Element ? ev.target.closest<HTMLElement>('.ed-thumb') : null
+          this.deleteSlides(th && this.thumbs.contains(th) ? this.thumbTargets(Number(th.dataset.index)) : this.slideTargets())
+        } },
+      { id: 'layout-apply', label: 'Apply layout…', scope: 'canvas', when: writable, run: () => this.openLayoutPicker(this.layoutAnchor(), { kind: 'apply' }) },
+      { id: 'notes-toggle', label: 'Speaker notes', scope: 'canvas', when: writable, run: () => this.toggleNotes() },
+      { id: 'list-bullets', label: 'Bulleted list', scope: 'text', when: oneText, run: () => this.listSelectedText('insertUnorderedList') },
+      { id: 'list-numbers', label: 'Numbered list', scope: 'text', when: oneText, run: () => this.listSelectedText('insertOrderedList') },
       // palette only: what the topbar inserts, and its other one-click actions
       { id: 'insert-image', when: toolFree, label: 'Add an image', scope: 'canvas', run: () => this.pickImage() },
       { id: 'insert-table', when: toolFree, label: 'Add a table', scope: 'canvas', run: () => this.canvas.insert(this.newTable()) },
@@ -3926,13 +4058,10 @@ export class Editor {
       // ⌘V is handled by the document 'paste' listener (wirePaste) so it can
       // also receive images and cross-deck payloads.
       if (ev.key === 'Delete' || ev.key === 'Backspace') {
+        // (slides: the slide-delete command, above)
         if (this.store.selection.length) {
           ev.preventDefault()
           this.deleteSelection()
-        } else if (this.thumbSel.length > 1 && !inField) {
-          // a sidebar multi-selection and nothing on the canvas: Delete means the slides
-          ev.preventDefault()
-          this.deleteSlides(this.thumbSel)
         }
         return
       }
@@ -4466,12 +4595,26 @@ export class Editor {
     ]
   }
 
+  /** The thumbnail menu: the slide commands, named and keyed by the command
+   *  list, acting on this thumbnail (or the selection it is part of). New
+   *  slide opens the layout picker here, after this slide and its states. */
   private slideMenuItems(i: number, thumb: HTMLElement): CtxItem[] {
+    const slides = this.store.doc.slides
+    const on = this.thumbTargets(i)
+    const row = (id: string, run: () => void, extra: Partial<Exclude<CtxItem, 'sep'>> = {}): CtxItem => {
+      const c = this.commands.find((x) => x.id === id)!
+      return { label: t(c.label), hint: c.keys, cmd: id, run, ...extra }
+    }
+    const unit = expand(slides, [i])
     return [
-      { label: t('New slide'), run: () => this.openLayoutPicker(thumb, { kind: 'insert', at: i + 1 }) },
-      { label: t('Duplicate slide'), run: () => this.duplicateSlide(i) },
+      row('slide-new', () => this.openLayoutPicker(thumb, { kind: 'insert', at: unit[unit.length - 1] + 1 })),
+      row('slide-duplicate', () => this.duplicateSlides(on)),
       'sep',
-      { label: t('Delete slide'), danger: true, run: () => this.deleteSlide(i) },
+      row('slide-move-earlier', () => this.moveSlides(on, -1), { disabled: stepDrop(slides, on, -1) === null }),
+      row('slide-move-later', () => this.moveSlides(on, 1), { disabled: stepDrop(slides, on, 1) === null }),
+      ...(this.hideable(on).length ? [row('slide-hide', () => this.hideSlides(on), { label: this.hides(on) ? t('Hide slide') : t('Show slide') })] : []),
+      'sep',
+      row('slide-delete', () => this.deleteSlides(on), { danger: true }),
     ]
   }
 

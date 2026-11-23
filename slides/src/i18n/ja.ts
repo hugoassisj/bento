@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "New slide from layout…": "レイアウトから新規スライド…",
+  "Move slide earlier": "スライドを前へ移動",
+  "Move slide later": "スライドを後ろへ移動",
+  "Show slide": "スライドを表示",
+  "Apply layout…": "レイアウトを適用…",
+  "Duplicate slide — when no element is selected": "スライドを複製 — 要素を選択していないとき",
+  "Delete slide — from the slide list, or with several slides selected there": "スライドを削除 — スライド一覧から、または一覧で複数のスライドを選択しているとき",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

@@ -413,8 +413,13 @@ anim, charts, i18n, sync), shared by every app.
   palette live in editor/commands.ts). keydown dispatches through it in list
   order; topbar tooltips, the insert buttons' letter badges, the element
   menu's hints and the ? sheet's one-command rows read their keys from it.
-  ⌘C, Delete/Backspace, the arrows and Esc stay hand-coded in the keydown
-  handler because they branch on canvas state.
+  The slide actions are commands too (`slide-*`, `layout-apply`,
+  `notes-toggle`, `list-*`), and the thumbnail menu builds its rows from
+  them; ⌘D and ⌘↑/↓ are the slide's only while no element is selected (the
+  condition sits in `match`, so the element meaning still runs), and ⌫ is
+  the slide's only from the slide list. ⌘C, element Delete/Backspace, the
+  plain arrows and Esc stay hand-coded in the keydown handler because they
+  branch on canvas state.
 - **Panel accordion**: every `.ed-section` header is retrofitted into a
   collapsible group after each rebuild (panels.applyAccordion) — open state
   persisted per title in localStorage; Presenting/Interactivity/Layout

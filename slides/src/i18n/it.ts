@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "New slide from layout…": "Nuova diapositiva da layout…",
+  "Move slide earlier": "Sposta diapositiva prima",
+  "Move slide later": "Sposta diapositiva dopo",
+  "Show slide": "Mostra diapositiva",
+  "Apply layout…": "Applica layout…",
+  "Duplicate slide — when no element is selected": "Duplica diapositiva — quando nessun elemento è selezionato",
+  "Delete slide — from the slide list, or with several slides selected there": "Elimina diapositiva — dall'elenco delle diapositive, o con più diapositive selezionate lì",
   "View": "Vista",
   "Current slide": "Diapositiva attuale",
   "Slide thumbnails": "Miniature delle diapositive",

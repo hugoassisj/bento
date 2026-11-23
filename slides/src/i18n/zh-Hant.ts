@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "New slide from layout…": "從版面配置新增投影片…",
+  "Move slide earlier": "將投影片前移",
+  "Move slide later": "將投影片後移",
+  "Show slide": "顯示投影片",
+  "Apply layout…": "套用版面配置…",
+  "Duplicate slide — when no element is selected": "複製投影片 — 未選取任何元素時",
+  "Delete slide — from the slide list, or with several slides selected there": "刪除投影片 — 在投影片清單中，或在清單中選取多張投影片時",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",

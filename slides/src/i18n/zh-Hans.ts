@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "New slide from layout…": "从版式新建幻灯片…",
+  "Move slide earlier": "将幻灯片前移",
+  "Move slide later": "将幻灯片后移",
+  "Show slide": "显示幻灯片",
+  "Apply layout…": "应用版式…",
+  "Duplicate slide — when no element is selected": "复制幻灯片 — 未选中任何元素时",
+  "Delete slide — from the slide list, or with several slides selected there": "删除幻灯片 — 在幻灯片列表中，或在列表中选中多张幻灯片时",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",
