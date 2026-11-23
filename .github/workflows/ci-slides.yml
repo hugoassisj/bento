@@ -738,3 +738,12 @@ jobs:
         # Shift+Tab un-bullets a first-level item and does nothing on a plain
         # line; nested bullets and table cells are unchanged.
         run: node scripts/test-slides-tab-in-text-browser.mjs
+      - name: The caret goes where you click in Chromium
+        if: ${{ !cancelled() }}
+        # A double-click (or a tap on the selected box) opens a text box with
+        # the caret at the point, through caretPositionFromPoint and through
+        # caretRangeFromPoint alone; a just-inserted box and the context
+        # menu's Edit text still select all; an empty placeholder gets a
+        # caret; typing at a selected box appends; a backtick after a click
+        # is a backtick; fields and maths open with a caret.
+        run: node scripts/test-slides-caret-entry-browser.mjs
