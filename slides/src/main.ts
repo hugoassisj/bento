@@ -138,7 +138,7 @@ function unreadableCard(why: DocParseError) {
   // the block exactly as the file carries it (readEmbeddedDoc trims)
   const text = document.getElementById('bento-doc')?.textContent ?? ''
   let compact = false
-  try { compact = isCompact(JSON.parse(text)) && !!parseDocInputReport(text, { fit: false }) } catch { /* not JSON */ }
+  try { compact = isCompact(JSON.parse(text.trim())) && !!parseDocInputReport(text.trim(), { fit: false }) } catch { /* not JSON */ }
   const reason = compact
     ? t('This is a compact document, the form agents write. It can be opened; saving writes it out in full.')
     : why.error === 'syntax'
@@ -187,7 +187,7 @@ function unreadableCard(why: DocParseError) {
     button(t('Open it'), false, () => {
       // after the fonts settle: text boxes without a height are measured on them
       void document.fonts.ready.then(() => {
-        const parsed = parseDocInputReport(text)
+        const parsed = parseDocInputReport(text.trim())
         if (!parsed) return
         gate.remove()
         bootWith(parsed.doc)

@@ -123,6 +123,7 @@ try {
     ['a pretty-printed block with a leading newline', PRETTY,
       { reason: new RegExp(`not valid JSON \\(line ${PRETTY_LINE}, column ${PRETTY_COLUMN}\\)`), error: 'syntax', line: PRETTY_LINE, column: PRETTY_COLUMN, mark: ']' }],
     ['a compact document', COMPACT, { reason: /compact document/, error: 'format', compact: true }],
+    ['a compact document after a no-break space', '\u00A0' + COMPACT, { reason: /compact document/, error: 'format', compact: true }],
   ]) {
     console.log(`\n${label}\n`)
     const path = fileWith(label.replace(/\W+/g, '-'), json)
