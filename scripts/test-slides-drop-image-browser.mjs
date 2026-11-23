@@ -19,7 +19,8 @@
 //      inserts nothing.
 //   7. Audio and video become media elements at the drop point.
 //   8. Any other file is refused with a toast and changes nothing.
-//   9. A drop on the slide list lands on the current slide, centred.
+//   9. A drop on the slide list, or on a row of the Layers tab, lands on the
+//      current slide, centred.
 //  10. A dropped .bento.html still opens as a deck.
 //  11. A read-only deck inserts nothing.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -202,6 +203,18 @@ try {
   const th = (await els())[before9]
   ok(r.drop && n === before9 + 1, `a picture dropped on the slide list lands on the slide (${before9} → ${n})`)
   ok(near(th, [W / 2, H / 2]), `…centred on the slide (${centre(th)})`)
+
+  // 9b: dropped on a row of the Layers tab → the current slide, centred (the
+  // row's own drop handler is for reordering layers, and must leave files be)
+  await p.click('.ed-side-tabs [data-view="layers"]')
+  await p.waitForSelector('.ed-side-layers .ed-layer')
+  const before9b = await count()
+  r = await drop([{ png: [300, 200] }], { selector: '.ed-side-layers .ed-layer' })
+  n = await waitCount(before9b + 1)
+  const ly = (await els())[before9b]
+  ok(r.drop && n === before9b + 1, `a picture dropped on a layer row lands on the slide (${before9b} → ${n})`)
+  ok(ly && near(ly, [W / 2, H / 2]), `…centred on the slide (${ly ? centre(ly) : 'none'})`)
+  await p.click('.ed-side-tabs [data-view="slides"]')
 
   // 10: a dropped .bento.html still opens as a deck
   const deck = await p.evaluate(() => {

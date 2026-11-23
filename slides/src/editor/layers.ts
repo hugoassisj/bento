@@ -260,8 +260,9 @@ export class LayersUI {
         row.classList.add(where === 'into' ? 'drop-into' : where === 'above' ? 'drop-above' : 'drop-below')
       })
       row.addEventListener('drop', (ev) => {
+        if (!this.dragId) return // not a layer being moved: a dropped file is the editor's
         ev.preventDefault()
-        const id = this.dragId ?? ev.dataTransfer?.getData('text/plain')
+        const id = this.dragId
         const where = this.dropWhere(ev, row, r)
         this.clearDropMarks()
         if (!id || this.dragIds.includes(r.id) || !where) return
