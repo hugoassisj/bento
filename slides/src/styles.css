@@ -938,6 +938,8 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
   cursor: pointer;
   user-select: none;
 }
+/* Present-only dialog: each choice's count, right-aligned against its box */
+.ed-po-count { margin-inline-start: auto; padding-inline-start: 16px; }
 
 /* About actions: buttons must read against the white box without hover */
 .ed-about .ed-btn-primary {

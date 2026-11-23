@@ -16,6 +16,13 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **A present-only file no longer hands out your speaker notes by
+  surprise.** Share ▸ Present-only file… now asks first: speaker notes,
+  comments and hidden slides are left out unless you tick them, and the
+  message after saving says what the file holds. Tick the notes when you
+  will present from the file yourself and want them in the speaker view;
+  your choice is remembered in this browser. A deck with none of the three
+  saves straight away, as before.
 
 ## [1.3.0] — 2026-11-22
 

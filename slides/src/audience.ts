@@ -60,16 +60,23 @@ export type AudienceTicket = {
   key: string
 }
 
-/** Driven by AUDIENCE_HIDDEN at call time — the rig empties that list as
- *  its negative control, and BOTH surfaces (doc and op) must go red. `notes`
- *  is a required string in the format, so it is blanked; anything optional
- *  is deleted. */
-function projectSlide(slide: Slide): Slide {
+/** A shallow copy of `slide` without the given slide-level keys. `notes` is a
+ *  required string in the format, so it is blanked; anything optional is
+ *  deleted. Shared with the present-only file (presentonly.ts), which drops
+ *  the subset of AUDIENCE_HIDDEN its author did not choose to include. */
+export function withoutSlideKeys(slide: Slide, keys: readonly (keyof Slide)[]): Slide {
   const out = { ...slide } as Record<string, unknown>
-  for (const k of AUDIENCE_HIDDEN) {
+  for (const k of keys) {
     if (k === 'notes') out.notes = ''
     else delete out[k]
   }
+  return out as unknown as Slide
+}
+
+/** Driven by AUDIENCE_HIDDEN at call time — the rig empties that list as
+ *  its negative control, and BOTH surfaces (doc and op) must go red. */
+function projectSlide(slide: Slide): Slide {
+  const out = withoutSlideKeys(slide, AUDIENCE_HIDDEN) as unknown as Record<string, unknown>
   if (Array.isArray(slide.elements)) out.elements = slide.elements.map(projectElement)
   return out as unknown as Slide
 }

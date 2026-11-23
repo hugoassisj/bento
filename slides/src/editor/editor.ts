@@ -56,11 +56,12 @@ import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 import { readerCopy, inviteCopy } from '../share'
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
+import { presentOnlyDoc, privateContent, PRESENT_ONLY_DEFAULTS, type PresentOnlyChoices, type PrivateCounts } from '../presentonly'
 import { stripCollabSecrets } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
 import { gateRestored, guardOpenedDoc } from '../restoregate'
-import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
+import { lsGet, lsJson, lsSet, lsSetJson } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
 import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
 import { dryRun, applyCompress, type DryRun } from './compressdeck'
@@ -1316,14 +1317,75 @@ export class Editor {
     }, 'slides')
   }
 
-  /** A sealed hand-out: present-only player file, no editor, no live session. */
-  private async savePresentationPackage() {
-    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+  /** Share ▸ Present-only file…: asks what of the author's own material goes
+   *  into the hand-out (speaker notes, comments, hidden slides — all left out
+   *  unless ticked; the last choice is remembered in this browser), then
+   *  saves. A deck with none of the three saves straight away. */
+  private choosePresentationPackage() {
+    const counts = privateContent(this.store.doc)
+    if (!counts.notes && !counts.comments && !counts.hidden) {
+      void this.savePresentationPackage(PRESENT_ONLY_DEFAULTS)
+      return
+    }
+    const saved = lsJson<Partial<PresentOnlyChoices>>('bento-presentonly-keep', {})
+    const body = document.createElement('div')
+    const boxes: Partial<Record<keyof PresentOnlyChoices, HTMLInputElement>> = {}
+    const row = (k: keyof PresentOnlyChoices, label: string, count: string) => {
+      const r = document.createElement('label')
+      r.className = 'ed-about-auto'
+      const cb = document.createElement('input')
+      cb.type = 'checkbox'
+      cb.checked = saved[k] === true
+      const txt = document.createElement('span')
+      txt.textContent = label
+      const n = document.createElement('span')
+      n.className = 'ed-po-count'
+      n.textContent = count
+      r.append(cb, txt, n)
+      body.appendChild(r)
+      boxes[k] = cb
+    }
+    if (counts.notes) row('notes', t('Include speaker notes'), t('Slides with notes: {n}', { n: counts.notes }))
+    if (counts.comments) row('comments', t('Include comments'), t('Comment threads: {n}', { n: counts.comments }))
+    if (counts.hidden) row('hidden', t('Include hidden slides'), t('Hidden slides: {n}', { n: counts.hidden }))
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Anyone who receives this file can read whatever is included.')
+    body.appendChild(hint)
+    const cancel = document.createElement('button')
+    cancel.className = 'ed-btn'
+    cancel.textContent = t('Cancel')
+    const go = document.createElement('button')
+    go.className = 'ed-btn ed-primary'
+    go.textContent = t('Save')
+    // the dialog hands focus back to what had it on open: the Share button,
+    // not a row of a popover that is about to close
+    this.shareWrap.classList.remove('open')
+    this.shareB.focus()
+    const dlg = createDialog({ title: t('Save a present-only file'), content: body, actions: [cancel, go] })
+    cancel.addEventListener('click', () => dlg.close())
+    go.addEventListener('click', () => {
+      const keep: PresentOnlyChoices = {
+        notes: !!boxes.notes?.checked, comments: !!boxes.comments?.checked, hidden: !!boxes.hidden?.checked,
+      }
+      // remember only what was asked; a kind this deck lacks keeps its old answer
+      lsSetJson('bento-presentonly-keep', { ...saved, ...Object.fromEntries(Object.entries(boxes).map(([k, cb]) => [k, cb.checked])) })
+      dlg.close()
+      void this.savePresentationPackage(keep, counts)
+    })
+    dlg.open()
+  }
+
+  /** A hand-out: present-only player file, no editor, no live session, and
+   *  only the private material the author chose (presentonly.ts). */
+  private async savePresentationPackage(keep: PresentOnlyChoices, counts?: PrivateCounts) {
+    this.canvas.commitTextEdit()
+    const clone = presentOnlyDoc(this.store.doc, keep)
     clone.readonly = true
     stripCollabSecrets(clone) // a sealed package must not join (or leak) the live room
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'presentonly' })
-      if (ok) this.toast(t('Presentation package saved — it opens straight into the show'))
+      if (ok) this.toast(presentOnlyToast(keep, counts))
     } catch {
       this.toast(t('Saving failed'))
     }
@@ -1814,8 +1876,8 @@ export class Editor {
         t('Saves a copy to send. Whoever opens it edits this deck live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.'))
       action(ICONS.eye, t('View-only copy…'), () => void this.saveReaderCopy(),
         t('A live viewer: follows every edit as it happens but can never change the deck — the relay enforces it.'))
-      action(ICONS.slideshow, t('Present-only file…'), () => void this.savePresentationPackage(),
-        t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
+      action(ICONS.slideshow, t('Present-only file…'), () => this.choosePresentationPackage(),
+        t('A hand-out that opens straight into the show — no editor, no live connection. Speaker notes, comments and hidden slides stay out unless you include them.'))
       action(ICONS.broadcast, t('Audience copy…'), () => void this.saveAudienceCopy(),
         t('A hand-out for a live show: opens into the presentation and follows your slides while you are live. Never carries your speaker notes or comments.'))
       if (this.store.doc.collab?.audience) {
@@ -5005,6 +5067,22 @@ function releaseNotes(notes: string): HTMLElement {
 }
 
 /** Deep-clone an element with a fresh id (same-slide duplicates must not share ids). */
+/** What a saved present-only file says it holds: of the private kinds this
+ *  deck has, the ones left out and the ones kept. */
+function presentOnlyToast(keep: PresentOnlyChoices, counts?: PrivateCounts): string {
+  const names: Record<keyof PresentOnlyChoices, string> = { notes: t('speaker notes'), comments: t('comments'), hidden: t('hidden slides') }
+  const kept: string[] = []
+  const dropped: string[] = []
+  for (const k of ['notes', 'comments', 'hidden'] as const) if (counts?.[k]) (keep[k] ? kept : dropped).push(names[k])
+  if (!kept.length && !dropped.length) return t('Presentation package saved — it opens straight into the show')
+  const list = (xs: string[], type: 'conjunction' | 'disjunction') => {
+    try { return new Intl.ListFormat(locale(), { type }).format(xs) } catch { return xs.join(', ') } // x-pseudo is no locale
+  }
+  if (!kept.length) return t('Presentation package saved without {list}', { list: list(dropped, 'disjunction') })
+  if (!dropped.length) return t('Presentation package saved with {list}', { list: list(kept, 'conjunction') })
+  return t('Presentation package saved with {kept}, without {dropped}', { kept: list(kept, 'conjunction'), dropped: list(dropped, 'disjunction') })
+}
+
 function cloneElement(el: SlideElement): SlideElement {
   return { ...JSON.parse(JSON.stringify(el)), id: uid(el.type[0]), x: el.x + 24, y: el.y + 24 }
 }
