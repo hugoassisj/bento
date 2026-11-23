@@ -15,7 +15,7 @@
  * null and keep the glyph path in markdown.ts, which commit still converts
  * (bullets.ts), as it does pasted text and decks saved before this.
  */
-import { offsetOf, placeAt, shiftList } from './listindent.ts'
+import { offsetOf, placeAt, rememberStep, shiftList } from './listindent.ts'
 
 const BLOCK = new Set(['DIV', 'P', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'PRE', 'TABLE'])
 const isZw = (n: Node) => n.nodeType === Node.TEXT_NODE && /^[​]*$/.test((n as Text).data)
@@ -128,4 +128,94 @@ export function enterInEmptyNested(root: HTMLElement): boolean {
   const r = document.createRange()
   r.selectNodeContents(li); r.collapse(true)
   return shiftList(root, r, -1, true)
+}
+
+/**
+ * Tab on a plain line (canvas.ts): the caret's line becomes a first-level
+ * bullet, exactly what typing "- " at its start makes, because that is what
+ * it does: the marker is put at the line's start and converted by
+ * typedListAtCaret. The caret stays where it was in the text, and ⌘Z
+ * straight after takes the step back (undoIndent). A line the typed marker
+ * would not convert (a heading, a table cell) is left alone.
+ */
+export function lineToList(root: HTMLElement): boolean {
+  const sel = document.getSelection()
+  if (!sel?.rangeCount) return false
+  const range = sel.getRangeAt(0)
+  if (!root.contains(range.startContainer)) return false
+  const before = root.innerHTML
+  const caret = offsetOf(root, range.startContainer, range.startOffset)
+  const keep = range.startContainer instanceof Text ? { node: range.startContainer, off: range.startOffset } : null
+  // the caret as a child index of its line's host: the box, or a line <div> in it
+  let host: Node = range.startContainer
+  let at = range.startOffset
+  const index = (n: Node) => Array.prototype.indexOf.call(n.parentNode!.childNodes, n) as number
+  if (host instanceof Text) { at = index(host); host = host.parentNode! }
+  while (host !== root && !(host instanceof HTMLDivElement && host.parentNode === root)) {
+    if (host instanceof HTMLElement && BLOCK.has(host.tagName)) return false
+    at = index(host)
+    host = host.parentNode!
+  }
+  // an empty line <div> holds only the <br> that gives it height
+  if (host !== root && [...host.childNodes].every((c) => c.nodeName === 'BR' || isZw(c))) {
+    (host as HTMLElement).replaceChildren()
+    at = 0
+  }
+  let start = at
+  const kids = host.childNodes
+  while (start > 0 && kids[start - 1] && kids[start - 1].nodeName !== 'BR' && !(kids[start - 1] instanceof HTMLElement && BLOCK.has((kids[start - 1] as HTMLElement).tagName))) start--
+  const marker = document.createTextNode('-\u00a0')
+  host.insertBefore(marker, kids[start] ?? null)
+  if (!typedListAtCaret(marker, 2)) {
+    root.innerHTML = before
+    placeAt(root, caret)
+    return false
+  }
+  if (keep && keep.node.isConnected && root.contains(keep.node)) {
+    const r = document.createRange()
+    r.setStart(keep.node, Math.min(keep.off, keep.node.data.length)); r.collapse(true)
+    sel.removeAllRanges(); sel.addRange(r)
+  }
+  rememberStep(root, before, caret)
+  return true
+}
+
+/**
+ * Shift+Tab on a first-level bullet (canvas.ts): the item becomes a plain
+ * line where it stood. The items after it carry on as a list of their own
+ * below, and a list nested in the item follows the line. ⌘Z straight after
+ * takes the step back. Anything but a top-level item is left alone.
+ */
+export function itemToLine(root: HTMLElement): boolean {
+  const sel = document.getSelection()
+  if (!sel?.rangeCount) return false
+  const range = sel.getRangeAt(0)
+  const start = range.startContainer
+  const li = (start instanceof Element ? start : start.parentElement)?.closest('li')
+  const list = li?.parentElement
+  if (!li || !list || !root.contains(li) || !/^(UL|OL)$/.test(list.tagName) || root.contains(list.parentElement?.closest('li') ?? null)) return false
+  const before = root.innerHTML
+  const caret = offsetOf(root, start, range.startOffset)
+  const keep = start instanceof Text ? { node: start, off: range.startOffset } : null
+  const line = document.createElement('div')
+  const nested: Node[] = []
+  for (const c of [...li.childNodes]) {
+    if (c.nodeName === 'UL' || c.nodeName === 'OL') nested.push(c)
+    else line.append(c)
+  }
+  if (![...line.childNodes].some((c) => !isZw(c))) line.append(document.createElement('br'))
+  const rest: Element[] = []
+  for (let s = li.nextElementSibling; s; s = s.nextElementSibling) rest.push(s)
+  const tail = rest.length ? document.createElement(list.tagName.toLowerCase()) : null
+  if (tail) tail.append(...rest)
+  list.after(line, ...nested, ...(tail ? [tail] : []))
+  li.remove()
+  if (!list.children.length) list.remove()
+  const r = document.createRange()
+  if (keep && keep.node.isConnected && line.contains(keep.node)) r.setStart(keep.node, Math.min(keep.off, keep.node.data.length))
+  else r.setStart(line, 0)
+  r.collapse(true)
+  sel.removeAllRanges(); sel.addRange(r)
+  rememberStep(root, before, caret)
+  return true
 }

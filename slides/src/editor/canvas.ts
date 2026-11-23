@@ -12,7 +12,7 @@ import { defaultShape, internAsset, ratioLocked, readableInk, uid, type ShapeEle
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
 import { cssColor, renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, autolinkAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
-import { enterInEmptyNested } from './typedlist'
+import { enterInEmptyNested, itemToLine, lineToList } from './typedlist'
 import { inList, shiftList, shiftListHtml, undoIndent } from './listindent'
 import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
@@ -2259,16 +2259,26 @@ export class SlideCanvas {
         this.commitTextEdit()
         return
       }
-      // Tab / Shift+Tab in a bullet indents / outdents it (listindent.ts);
-      // anywhere else Tab does what it always did
-      if (ev.key === 'Tab' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+      // Tab / Shift+Tab in a bullet indents / outdents it (listindent.ts).
+      // Tab never leaves an open text box (Esc does): letting the browser move
+      // focus committed the edit, and the next key, typed at the box still
+      // selected, reopened it with everything selected and replaced it. On a
+      // plain line Tab makes a first-level bullet, as typing "- " there does;
+      // Shift+Tab on a first-level bullet makes it a plain line again
+      // (typedlist.ts; ⌘Z straight after takes either back). Code is not
+      // text here.
+      if (ev.key === 'Tab' && !ev.metaKey && !ev.ctrlKey && !ev.altKey && model?.type !== 'code') {
+        ev.preventDefault()
+        this.editAutoSelected = false
         const sel = document.getSelection()
         const range = sel?.rangeCount ? sel.getRangeAt(0) : null
-        if (range && inList(inner, range)) {
-          ev.preventDefault()
-          shiftList(inner, range, ev.shiftKey ? -1 : 1, true)
-          return
+        if (!range) return
+        if (inList(inner, range)) {
+          if (!shiftList(inner, range, ev.shiftKey ? -1 : 1, true) && ev.shiftKey) itemToLine(inner)
+        } else if (!ev.shiftKey) {
+          lineToList(inner)
         }
+        return
       }
       // ` on a selection wraps each selected line as code (on code: unwraps);
       // with nothing selected it types a backtick as usual (codefence.ts).

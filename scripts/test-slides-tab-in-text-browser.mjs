@@ -103,12 +103,18 @@ try {
   await p.keyboard.type('!')
   ok(/<li>Beta!<\/li>/.test(norm(await live())), 'the caret stayed at the end of the line')
 
+  await commit()
+  ok(norm(await html('lines')) === 'Alpha<ul><li>Beta!</li></ul>', `committed, the bullet is saved (${norm(await html('lines'))})`)
+  await p.evaluate(() => window.bento.undo())
+  await p.waitForTimeout(200)
+
   console.log('\n⌘Z straight after\n')
-  await p.keyboard.press('Backspace')
-  const listed = norm(await live())
+  await edit('lines')
+  await caretAfter('Beta')
+  await p.keyboard.press('Tab')
   await p.keyboard.press(`${MOD}+z`)
   await p.waitForTimeout(100)
-  ok(norm(await live()) !== listed && !/<li>/.test(norm(await live())) && norm(await live()).includes('Beta'), `⌘Z after the Tab restores the plain line (${norm(await live())})`)
+  ok(norm(await live()) === 'Alpha<div>Beta</div>' && await focusIn(), `⌘Z after the Tab restores the plain line (${norm(await live())})`)
   await commit()
   ok(norm(await html('lines')) === 'Alpha<div>Beta</div>', `committed after the undo, the box is as it was (${norm(await html('lines'))})`)
 
@@ -130,6 +136,11 @@ try {
   ok(norm(await live()) === '<ul><li>One<ul><li>Two</li></ul></li></ul>' && await focusIn(), `Tab nests the second item (${norm(await live())})`)
   await p.keyboard.press('Shift+Tab')
   ok(norm(await live()) === '<ul><li>One</li><li>Two</li></ul>' && await focusIn(), 'Shift+Tab un-nests it')
+  await caretAfter('One')
+  await p.keyboard.press('Shift+Tab')
+  ok(norm(await live()) === '<div>One</div><ul><li>Two</li></ul>' && await focusIn(), `Shift+Tab on the first top-level item makes it a line above the rest of the list (${norm(await live())})`)
+  await p.keyboard.press(`${MOD}+z`)
+  ok(norm(await live()) === '<ul><li>One</li><li>Two</li></ul>', `and ⌘Z straight after puts it back (${norm(await live())})`)
   await commit()
 
   const panelW = () => p.evaluate(() => document.querySelector('.ed-props')?.getBoundingClientRect().width ?? 0)

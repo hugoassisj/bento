@@ -162,6 +162,12 @@ export function shiftList(root: HTMLElement, range: Range, dir: 1 | -1, keepCare
   return true
 }
 
+/** Let ⌘Z take back a list step made elsewhere (Tab on a plain line,
+ *  typedlist.ts), on the same one-shot terms as an indent. */
+export function rememberStep(root: HTMLElement, before: string, caret: number) {
+  last = { root, before, after: root.innerHTML, caret }
+}
+
 /** ⌘Z straight after an indent/outdent: put the box back. One-shot — it only
  *  applies while the box is exactly as the step left it. */
 export function undoIndent(root: HTMLElement): boolean {

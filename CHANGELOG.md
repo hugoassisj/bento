@@ -23,6 +23,13 @@ pre-1.0.
   is at full strength from the first letter), comes back when the box is left
   empty, and is never saved or shown in the show or in print. Slides already
   saved with the prompt as text keep it; delete it once and it stays gone.
+- **Fix: Tab in a text box no longer throws away what you typed.** Pressing
+  Tab on a line that was not a bullet used to end the edit, and the next keys
+  you typed replaced the whole box (or Enter pressed a button in the panel).
+  Tab now always stays in the box: on a plain line it makes the line a bullet,
+  just as typing "- " at its start does, and ⇧Tab on a top-level bullet makes
+  it a plain line again. ⌘Z straight after takes either back. Esc is still the
+  way out of the box, and Tab in a table still moves to the next cell.
 
 ## [1.3.0] — 2026-11-22
 

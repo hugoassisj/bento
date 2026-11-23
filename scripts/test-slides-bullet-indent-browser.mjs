@@ -6,8 +6,9 @@
 //
 // WHAT THIS PROVES, with real keys and clicks (slides/src/editor/listindent.ts):
 //   1. editing a list, Tab on item 2 nests it under item 1 and Shift+Tab puts
-//      it back; the caret stays in the box; Tab on the first item or Shift+Tab
-//      at the top level changes nothing and does NOT throw focus out;
+//      it back; the caret stays in the box; Tab on the first item changes
+//      nothing and does NOT throw focus out; Shift+Tab at the top level makes
+//      the item a plain line (test-slides-tab-in-text-browser.mjs has more);
 //   2. ⌘Z straight after a Tab restores the box;
 //   3. committed, the nesting is the format's own (<li>…<ul><li>…) and it is
 //      ONE undo step;
@@ -15,8 +16,8 @@
 //      of the first once committed;
 //   5. the panel's Indent / Outdent do the same: under the caret while editing
 //      (the caret stays), the whole box as one undo step when not;
-//   6. Tab outside a list is unchanged: a plain text box still lets focus go,
-//      and a table cell still moves to the next cell.
+//   6. Tab outside a list never throws focus out of a plain text box (it
+//      makes the line a bullet), and a table cell still moves to the next cell.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -86,7 +87,9 @@ try {
   await p.keyboard.press('Tab')
   ok(norm(await live('list')) === LIST && await focusedIn('list'), 'Tab on the first item changes nothing and keeps focus')
   await p.keyboard.press('Shift+Tab')
-  ok(norm(await live('list')) === LIST && await focusedIn('list'), 'Shift+Tab at the top level changes nothing and keeps focus')
+  ok(norm(await live('list')) === '<div>One</div><ul><li>Two</li><li>Three</li></ul>' && await focusedIn('list'), `Shift+Tab at the top level makes the item a plain line and keeps focus (${norm(await live('list'))})`)
+  await p.keyboard.press(`${MOD}+z`)
+  ok(norm(await live('list')) === LIST, '⌘Z straight after makes it a bullet again')
 
   console.log('\n⌘Z straight after\n')
   await caretAfter('list', 'Two')
@@ -135,12 +138,13 @@ try {
   await p.waitForTimeout(150)
   ok(norm(await html('list')) === LIST, 'and one undo takes it back')
 
-  console.log('\nTab outside a list is unchanged\n')
+  console.log('\nTab outside a list\n')
   await edit('plain')
   await p.keyboard.press('Tab')
   await p.waitForTimeout(150)
-  ok(!(await focusedIn('plain')), 'in a plain text box, Tab still lets focus go')
-  ok((await html('plain')) === 'Plain words', 'and the text is untouched')
+  ok(await focusedIn('plain'), 'in a plain text box, Tab keeps focus in the box')
+  await commit()
+  ok(norm(await html('plain')) === '<ul><li>Plain words</li></ul>', `and makes the line a bullet (${norm(await html('plain'))})`)
   const cell = await p.locator('.ed-stage-scale [data-el-id="tbl"] td').first().boundingBox()
   await p.mouse.dblclick(cell.x + cell.width / 2, cell.y + cell.height / 2)
   await p.waitForTimeout(200)

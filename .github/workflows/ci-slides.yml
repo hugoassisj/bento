@@ -352,8 +352,9 @@ jobs:
       - name: Bullet indent in Chromium
         # Tab / Shift+Tab nest and un-nest list items (and typed bullets) while
         # editing, with the caret kept and ⌘Z right after; the panel's Indent /
-        # Outdent do the same; committed, one undo step; Tab outside a list —
-        # a plain box, a table cell — is unchanged.
+        # Outdent do the same; committed, one undo step; Shift+Tab on a
+        # top-level item makes it a plain line; Tab in a plain box keeps focus
+        # and makes a bullet; a table cell still moves on Tab.
         run: node scripts/test-slides-bullet-indent-browser.mjs
       - name: Typed lists in Chromium
         # #711: "- " / "* " is a real list while the box is open, Enter
