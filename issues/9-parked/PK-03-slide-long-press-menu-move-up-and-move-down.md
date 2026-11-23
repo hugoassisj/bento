@@ -47,9 +47,9 @@ Upstream issue #20 ("Horizontal Slide List on Mobile view") is the nearest reque
 
 ## How others do it
 
-- **PowerPoint**: right-click a thumbnail ▸ Move Slide Up / Down is not present, but Ctrl+↑ / Ctrl+↓ moves it; mobile uses drag after long-press.
+- **PowerPoint**: Ctrl+↑ / Ctrl+↓ moves the selected slide in the thumbnail pane, so reordering never requires a drag; mobile uses drag after a long press.
 - **Keynote on iPhone**: touch and hold lifts the slide, then drag; the navigator is built for it.
-- **Google Slides**: right-click ▸ Move slide ▸ to beginning / to end / up / down. This is the model to copy.
+- **Google Slides**: the Slide menu and the thumbnail's context menu offer "Move slide" with up, down, to beginning and to end. This is the model to copy.
 
 ## Proposed change
 

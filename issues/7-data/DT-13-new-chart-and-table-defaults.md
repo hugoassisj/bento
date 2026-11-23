@@ -64,12 +64,12 @@ No format change: roles are existing string values on elements; confirm the gate
 - [ ] A new chart's tick and legend text renders at 16px or more at 100% zoom; charts in existing files are unchanged.
 - [ ] The layout picker offers Title + chart and Title + table; applying one and pressing Chart or Table fills the placeholder's box.
 - [ ] An empty placeholder is hidden in the show and print, like the existing ones.
-- [ ] `scripts/test-slides-compact-layouts.ts` and `scripts/test-slides-layout.ts` pass with the new layouts listed.
+- [ ] `scripts/test-slides-compact-layouts.ts` passes with the new layouts listed, and the layout table in `AGENTS.md` matches.
 - [ ] The Showcase deck renders identically (it sets explicit geometry).
 
 ## Tests
 
-- Extend `scripts/test-slides-layout.ts` and `scripts/test-slides-compact-layouts.ts` for the two layouts and roles.
+- Extend `scripts/test-slides-compact-layouts.ts` for the two layouts and roles (it checks the built-in layouts against the table in `AGENTS.md`). `scripts/test-layouts.ts` is the built-in layouts rig; read its header and extend it for the two new layouts. `scripts/test-slides-layout.ts` is the auto-layout frame rig and is not the place.
 - New node rig or case for `placeNew`: three deck sizes, the nudge, the placeholder fill.
 - Extend `scripts/test-slides-paste-position-browser.mjs` or add a small browser case asserting the inserted chart's `getBoundingClientRect` is inside the slide.
 

@@ -50,7 +50,7 @@ Expected: the remaining cards fill the row.
 1. **Three cards:** a row frame (`layout: { dir: 'row', gap: 41, pad: [0,0,0,0], align: 'stretch' }`, not hugging) spanning x 120…1480, y 220…780. Each card is a column frame child with `sizing: { w: 'fill' }`, the card's fill and radius, padding 32, holding its text placeholder with `sizing: { w: 'fill', h: 'fill' }`. Keep every existing id (`l3c-bg1`, `l3c-card1`, …) and role so `applyLayout`, morph pairing and the compact form keep working; the card rectangles become the frames (a frame is a rect with `layout`).
 2. **Two columns:** a row frame with two `fill` text children, gap 40, same ids (`l2c-left`, `l2c-right`) and roles.
 3. Write x/y/w/h in full for every child, as the format requires (`model.ts:153-157`): the values the solver would produce at 1600×900. A shell that predates frames then draws exactly today's picture.
-4. Check `builtinLayouts(size)` fitting: scaling must scale `gap` and `pad` too, or the frame will fight the scaled boxes. Add that to the fit function.
+4. Check the fitting: `scaleLayout(ly, sx, sy)` (`model.ts:1330`) scales each element's x/y/w/h and nothing inside `layout`. It must also scale `gap` and `pad`, or the frame will fight the scaled boxes.
 5. Drop the `groupId`s that existed only to move a card as one; the frame does that now. Confirm selection behaviour (click selects the card frame; double-click enters).
 6. Run the placeholders' text through whatever F-01 does to bind layouts to the theme; do F-01 first so this issue does not conflict with it.
 
@@ -71,7 +71,7 @@ No new strings.
 
 ## Tests
 
-- Extend `scripts/test-slides-compact-layouts.ts` and the layouts rig it sits beside with: ids and roles unchanged, boxes equal to the pre-change boxes at both sizes, and reflow after removing a child (`layoutSlide` from `slides/src/layout.ts:172`).
+- Extend `scripts/test-slides-compact-layouts.ts` with: ids and roles unchanged, boxes equal to the pre-change boxes at both sizes, and reflow after removing a child (`layoutSlide` from `slides/src/layout.ts:172`).
 - Extend `scripts/test-slides-frames-browser.mjs`: apply the layout from the inspector, delete a card with real input, measure the remaining cards.
 - The agent decks under `scripts/fixtures/agent-decks/` must still load clean (`scripts/test-slides-agent-decks.ts`).
 
@@ -83,7 +83,7 @@ No new strings.
 
 ## Notes for the implementer
 
-- Slides app only. Hot file: `slides/src/model.ts` (`ph`, `bar`, `card`, `builtinLayouts`, around `:1283-1440`). F-01 and AI-09 edit the same block: sequence them, do not parallelise.
+- Slides app only. Hot file: `slides/src/model.ts` (`ph` `:1283`, `bar` `:1305`, `card` `:1311`, `scaleLayout` `:1330`, `builtinLayouts` `:1357`). F-01 and AI-09 edit the same block: sequence them, do not parallelise.
 - Frames are derived geometry (`docs/DECISIONS.md:12052-12060`); order along the main axis is the children's current coordinate, ties by array order (`slides/src/layout.ts:15-17`), so write the children left to right in the array and in x.
 - AGENTS.md documents the layout and role table for agents and `scripts/test-slides-compact-layouts.ts:139-147` checks it; update the table if anything an agent can observe changes.
 - Record the byte cost (the layouts ship in every shell).
