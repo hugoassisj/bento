@@ -15427,3 +15427,22 @@ backtick rather than wrapping the box as code) is now set only for the two
 select-all entries; a pointer entry has no selection to wrap. Guard:
 `scripts/test-slides-caret-entry-browser.mjs` (real mouse, touch and keyboard;
 both caret APIs, the WebKit path by removing the standard one).
+
+## 2026-11-23 — slides: Tab never leaves an open text box; Shift+Tab on a top-level item makes it a line
+
+- **Decision.** While a text box (not a code block) is being edited, Tab and
+  Shift+Tab never move focus out of it. Inside a list they indent and outdent
+  as before. Tab on a plain line makes it a first-level bullet (exactly what
+  typing "- " there gives). Shift+Tab on a top-level item, which has no level
+  to outdent to, turns it into a plain line. Either conversion is taken back
+  by ⌘Z straight after, like an indent.
+- **Supersedes.** The rule from discussion #368 that Shift+Tab on a top-level
+  item does nothing. That rule left Tab free to walk focus out of a plain box
+  to the next control, so the next keystroke replaced the text or pressed a
+  panel button (FH-02). The Indent and Outdent buttons keep the old rule:
+  `shiftList` still treats a top-level outdent as a no-op; only the key falls
+  back to the line conversion.
+- **Code blocks** are left to their own Tab handling (indentation inside code).
+- **Guard.** `scripts/test-slides-tab-in-text-browser.mjs`;
+  `scripts/test-slides-bullet-indent-browser.mjs` asserts the new top-level
+  Shift+Tab.

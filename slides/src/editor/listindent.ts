@@ -13,7 +13,9 @@
  *    at the end of the item before it; outdent moves it back out, after the
  *    item it was nested in, taking the items that followed it along as its
  *    own children (the rule every word processor uses). The first item of a
- *    list cannot indent and a top-level item cannot outdent: both are no-ops.
+ *    list cannot indent and a top-level item cannot outdent: both are no-ops
+ *    here. The Shift+Tab key then falls back to itemToLine (typedlist.ts),
+ *    which makes the item a plain line; the Outdent button does not.
  *  - A typed bullet glyph not yet committed ("• " / indented "◦ " — see
  *    markdown.ts and bullets.ts): indent turns "•" into the indented "◦" form,
  *    outdent turns it back. Glyphs have the two levels bulletsToLists knows.
