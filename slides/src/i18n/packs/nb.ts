@@ -707,6 +707,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Skjult til → trykkes, alle på én gang",
   "Show with the slide again": "Vis igjen sammen med lysbildet",
   "Numbered badges on the canvas show the order; click one for the next step.": "Nummererte merker på lerretet viser rekkefølgen; klikk på ett for neste trinn.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "Visningstrinn {n} — klikk for neste trinn; tallet settes under Presentasjon",
   "Right-click ▸ Reveal in order": "Høyreklikk ▸ Vis i rekkefølge",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Skjuler de valgte elementene til → trykkes, ett om gangen i leseretning — nummererte merker på lerretet viser rekkefølgen",
   "This text box is already bold": "Denne tekstboksen er allerede fet",

@@ -709,6 +709,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "تا فشردن → پنهان، همه با هم",
   "Show with the slide again": "دوباره همراه اسلاید نمایش داده شود",
   "Numbered badges on the canvas show the order; click one for the next step.": "نشان‌های شماره‌دار روی بوم ترتیب را نشان می‌دهند؛ برای مرحلهٔ بعد روی یکی کلیک کنید.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "مرحلهٔ نمایش {n} — برای مرحلهٔ بعد کلیک کنید؛ عدد در «ارائه» تنظیم می‌شود",
   "Right-click ▸ Reveal in order": "راست‌کلیک ▸ نمایش به ترتیب",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "عناصر انتخاب‌شده را تا فشردن → پنهان می‌کند، یکی پس از دیگری به ترتیب خواندن — نشان‌های شماره‌دار روی بوم ترتیب را نشان می‌دهند",
   "This text box is already bold": "این جعبهٔ متن از قبل پررنگ است",

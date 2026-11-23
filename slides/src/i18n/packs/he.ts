@@ -706,6 +706,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "מוסתרים עד לחיצה על →, כולם בבת אחת",
   "Show with the slide again": "להציג שוב יחד עם השקופית",
   "Numbered badges on the canvas show the order; click one for the next step.": "תגים ממוספרים על הקנבס מציגים את הסדר; לחצו על אחד לשלב הבא.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "שלב חשיפה {n} — לחיצה לשלב הבא; המספר נקבע תחת הצגה",
   "Right-click ▸ Reveal in order": "לחיצה ימנית ▸ חשיפה לפי סדר",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "מסתיר את הרכיבים שנבחרו עד לחיצה על →, בזה אחר זה לפי סדר הקריאה — תגים ממוספרים על הקנבס מציגים את הסדר",
   "This text box is already bold": "תיבת הטקסט הזו כבר מודגשת",

@@ -704,6 +704,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Ukryte do naciśnięcia →, wszystkie naraz",
   "Show with the slide again": "Pokaż znów razem ze slajdem",
   "Numbered badges on the canvas show the order; click one for the next step.": "Numerowane plakietki na płótnie pokazują kolejność; kliknij jedną, by przejść do następnego kroku.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "Krok odsłaniania {n} — kliknij, by przejść do następnego; liczbę ustawisz w sekcji Prezentowanie",
   "Right-click ▸ Reveal in order": "Prawy przycisk ▸ Odsłaniaj po kolei",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Ukrywa zaznaczone elementy do naciśnięcia →, jeden po drugim w kolejności czytania — numerowane plakietki na płótnie pokazują kolejność",
   "This text box is already bold": "To pole tekstowe jest już pogrubione",

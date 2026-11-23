@@ -713,6 +713,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "مخفية حتى الضغط على →، كلها دفعة واحدة",
   "Show with the slide again": "إظهارها مع الشريحة مجددًا",
   "Numbered badges on the canvas show the order; click one for the next step.": "الشارات المرقّمة على اللوحة تُظهر الترتيب؛ انقر إحداها للخطوة التالية.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "خطوة الإظهار {n} — انقر للخطوة التالية؛ يُضبط الرقم في «العرض»",
   "Right-click ▸ Reveal in order": "نقر بزر الفأرة الأيمن ▸ إظهار بالترتيب",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "يخفي العناصر المحددة حتى الضغط على →، واحدًا تلو الآخر بترتيب القراءة — الشارات المرقّمة على اللوحة تُظهر الترتيب",
   "This text box is already bold": "مربع النص هذا عريض بالفعل",

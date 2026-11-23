@@ -725,6 +725,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "→ basylýança gizlin, hemmesi bir wagtda",
   "Show with the slide again": "Slaýd bilen ýene görkez",
   "Numbered badges on the canvas show the order; click one for the next step.": "Kanwadaky belgili nyşanlar tertibi görkezýär; indiki ädim üçin birine basyň.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "Görkeziş ädimi {n} — indiki ädim üçin basyň; sany Prezentasiýa bölüminde goýuň",
   "Right-click ▸ Reveal in order": "Sag basmak ▸ Tertip bilen görkez",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Saýlanan elementleri → basylýança gizleýär, okalyş tertibinde biri-biriniň yzyndan — kanwadaky belgili nyşanlar tertibi görkezýär",
   "This text box is already bold": "Bu tekst gutusy eýýäm galyň",

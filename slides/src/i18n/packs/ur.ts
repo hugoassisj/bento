@@ -723,6 +723,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "→ دبانے تک پوشیدہ، سب ایک ساتھ",
   "Show with the slide again": "سلائیڈ کے ساتھ دوبارہ دکھائیں",
   "Numbered badges on the canvas show the order; click one for the next step.": "کینوس پر نمبر والے بیج ترتیب دکھاتے ہیں؛ اگلے مرحلے کے لیے کسی ایک پر کلک کریں۔",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "دکھانے کا مرحلہ {n} — اگلے مرحلے کے لیے کلک کریں؛ نمبر پیشکش میں سیٹ کریں",
   "Right-click ▸ Reveal in order": "رائٹ کلک ▸ ترتیب سے دکھائیں",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "منتخب عناصر کو → دبانے تک چھپاتا ہے، پڑھنے کی ترتیب میں یکے بعد دیگرے — کینوس پر نمبر والے بیج ترتیب دکھاتے ہیں",
   "This text box is already bold": "یہ ٹیکسٹ باکس پہلے ہی بولڈ ہے",

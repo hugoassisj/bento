@@ -713,6 +713,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Приховані до натискання →, усі разом",
   "Show with the slide again": "Знову показувати разом зі слайдом",
   "Numbered badges on the canvas show the order; click one for the next step.": "Пронумеровані значки на полотні показують порядок; клацніть один для наступного кроку.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "Крок показу {n} — клацніть для наступного кроку; число задається в розділі «Показ»",
   "Right-click ▸ Reveal in order": "Правий клік ▸ Показувати по черзі",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Приховує вибрані елементи до натискання →, один за одним у порядку читання — пронумеровані значки на полотні показують порядок",
   "This text box is already bold": "Це текстове поле вже жирне",

@@ -706,6 +706,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Tersembunyi sehingga → ditekan, semua serentak",
   "Show with the slide again": "Tunjukkan semula bersama slaid",
   "Numbered badges on the canvas show the order; click one for the next step.": "Lencana bernombor pada kanvas menunjukkan urutan; klik satu untuk langkah seterusnya.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "Langkah pendedahan {n} — klik untuk langkah seterusnya; tetapkan nombor di Persembahan",
   "Right-click ▸ Reveal in order": "Klik kanan ▸ Dedahkan mengikut urutan",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Menyembunyikan elemen yang dipilih sehingga → ditekan, satu demi satu mengikut urutan bacaan — lencana bernombor pada kanvas menunjukkan urutan",
   "This text box is already bold": "Kotak teks ini sudah tebal",

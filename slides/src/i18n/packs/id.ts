@@ -703,6 +703,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Tersembunyi sampai → ditekan, semuanya sekaligus",
   "Show with the slide again": "Tampilkan lagi bersama slide",
   "Numbered badges on the canvas show the order; click one for the next step.": "Lencana bernomor di kanvas menunjukkan urutannya; klik salah satu untuk langkah berikutnya.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "Langkah tampil {n} — klik untuk langkah berikutnya; atur angkanya di Presentasi",
   "Right-click ▸ Reveal in order": "Klik kanan ▸ Tampilkan berurutan",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Menyembunyikan elemen terpilih sampai → ditekan, satu per satu sesuai urutan baca — lencana bernomor di kanvas menunjukkan urutannya",
   "This text box is already bold": "Kotak teks ini sudah tebal",

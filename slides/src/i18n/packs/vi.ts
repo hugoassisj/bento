@@ -703,6 +703,7 @@ export const strings: Catalog = {
   "Hide until → is pressed, all at once": "Ẩn cho đến khi nhấn →, tất cả cùng lúc",
   "Show with the slide again": "Hiện lại cùng trang chiếu",
   "Numbered badges on the canvas show the order; click one for the next step.": "Huy hiệu đánh số trên khung vẽ cho biết thứ tự; nhấp vào một huy hiệu để sang bước tiếp theo.",
+  "Reveal step {n} — click for the next step; set the number in Presenting": "Bước hiện {n} — nhấp để sang bước tiếp theo; đặt số trong mục Trình chiếu",
   "Right-click ▸ Reveal in order": "Nhấp chuột phải ▸ Hiện theo thứ tự",
   "Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order": "Ẩn các phần tử đã chọn cho đến khi nhấn →, lần lượt theo thứ tự đọc — huy hiệu đánh số trên khung vẽ cho biết thứ tự",
   "This text box is already bold": "Hộp văn bản này đã in đậm",
