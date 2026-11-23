@@ -1140,8 +1140,10 @@ export class Editor {
     const col = this.root.querySelector('.ed-scroll')?.getBoundingClientRect()
     if (!col?.width) return
     const own = ctx.getBoundingClientRect()
-    let dx = own.right > col.right ? col.right - own.right : 0
-    if (own.left + dx < col.left) dx = col.left - own.left
+    // a pixel inside each edge: hit-testing rounds a fractional box outward
+    const lo = Math.ceil(col.left) + 1, hi = Math.floor(col.right) - 1
+    let dx = own.right > hi ? hi - own.right : 0
+    if (own.left + dx < lo) dx = lo - own.left
     if (dx) ctx.style.transform = `translateX(${dx}px)`
   }
 
