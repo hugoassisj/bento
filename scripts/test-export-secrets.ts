@@ -315,6 +315,7 @@ console.log('\npresent-only file')
   ok(/\bpresentOnlyDoc\(this\.store\.doc,/.test(mask(pkg)),
     'savePresentationPackage() builds the copy with presentOnlyDoc(this.store.doc, …)')
   ok(/clone\.readonly = true/.test(pkg), 'and still marks it a player file (readonly)')
+  ok(/presentOnlyToast\(keptInFile\(clone,/.test(mask(pkg)), 'and its toast reports what the built file kept, not only what was ticked')
   const choose = mask(body('choosePresentationPackage'))
   ok(/\bprivateContent\(this\.store\.doc\)/.test(choose) && /\bcreateDialog\(/.test(choose),
     'choosePresentationPackage() counts what is private and asks in a dialog')
@@ -386,7 +387,11 @@ console.log('\npresent-only file')
     // a deck whose every slide in the walk is hidden keeps them: a hand-out
     // with nothing to show is not a hand-out
     const allHidden = { ...(deck as object), slides: [slide('a', { hidden: true }), slide('b', { hidden: true })] } as never as import('../slides/src/model.ts').BentoDoc
-    ok(presentOnlyDoc(allHidden, PRESENT_ONLY_DEFAULTS).slides.length === 2, 'a deck with every slide hidden keeps them rather than saving an empty show')
+    const allOut = presentOnlyDoc(allHidden, PRESENT_ONLY_DEFAULTS)
+    ok(allOut.slides.length === 2, 'a deck with every slide hidden keeps them rather than saving an empty show')
+    ok(mod.keptInFile(allOut, PRESENT_ONLY_DEFAULTS).hidden === true
+      && mod.keptInFile(presentOnlyDoc(deck, PRESENT_ONLY_DEFAULTS), PRESENT_ONLY_DEFAULTS).hidden === false,
+    'keptInFile reports hidden slides as kept exactly when the file still has them, so the toast cannot claim they were left out')
   }
 }
 

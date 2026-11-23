@@ -82,3 +82,10 @@ export function presentOnlyDoc(doc: BentoDoc, keep: PresentOnlyChoices): BentoDo
   }
   return copy
 }
+
+/** What the built file actually kept, for the message after saving: the
+ *  author's choices, except that hidden slides count as kept when the
+ *  all-hidden rule above left them in. */
+export function keptInFile(out: BentoDoc, keep: PresentOnlyChoices): PresentOnlyChoices {
+  return { ...keep, hidden: keep.hidden || out.slides.some((s) => s.hidden) }
+}

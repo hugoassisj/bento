@@ -56,7 +56,7 @@ import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 import { readerCopy, inviteCopy } from '../share'
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
-import { presentOnlyDoc, privateContent, PRESENT_ONLY_DEFAULTS, type PresentOnlyChoices, type PrivateCounts } from '../presentonly'
+import { presentOnlyDoc, privateContent, keptInFile, PRESENT_ONLY_DEFAULTS, type PresentOnlyChoices, type PrivateCounts } from '../presentonly'
 import { stripCollabSecrets } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
@@ -1385,7 +1385,7 @@ export class Editor {
     stripCollabSecrets(clone) // a sealed package must not join (or leak) the live room
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'presentonly' })
-      if (ok) this.toast(presentOnlyToast(keep, counts))
+      if (ok) this.toast(presentOnlyToast(keptInFile(clone, keep), counts))
     } catch {
       this.toast(t('Saving failed'))
     }
@@ -5066,7 +5066,6 @@ function releaseNotes(notes: string): HTMLElement {
   return box
 }
 
-/** Deep-clone an element with a fresh id (same-slide duplicates must not share ids). */
 /** What a saved present-only file says it holds: of the private kinds this
  *  deck has, the ones left out and the ones kept. */
 function presentOnlyToast(keep: PresentOnlyChoices, counts?: PrivateCounts): string {
@@ -5083,6 +5082,7 @@ function presentOnlyToast(keep: PresentOnlyChoices, counts?: PrivateCounts): str
   return t('Presentation package saved with {kept}, without {dropped}', { kept: list(kept, 'conjunction'), dropped: list(dropped, 'disjunction') })
 }
 
+/** Deep-clone an element with a fresh id (same-slide duplicates must not share ids). */
 function cloneElement(el: SlideElement): SlideElement {
   return { ...JSON.parse(JSON.stringify(el)), id: uid(el.type[0]), x: el.x + 24, y: el.y + 24 }
 }
