@@ -281,7 +281,13 @@ and chart options charts-lite does not implement.
 It only reads — it never changes the document, and a finding is advice, not a
 refusal. `severity: "info"` is deliberately quiet (a photo bleeding off the
 canvas is a design move, not a defect); `error` means something is broken, like
-a link to a slide that does not exist.
+a link to a slide that does not exist. A text box past the canvas edge is a
+warning when its words would be cropped, and info when every glyph still sits
+inside (a big decorative numeral hanging off the top): with a DOM, the check
+measures where the glyphs paint, not just the box. A rotated or mirrored box,
+or one holding a list or a picture, is not measured that way and keeps the
+warning. The starter deck checks with zero warnings, so a warning on your deck
+is yours.
 
 This does not replace looking at the deck. It catches what is checkable; the
 rest — whether a slide is any good — still needs eyes.

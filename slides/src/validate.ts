@@ -20,13 +20,15 @@
 // renderer the editor and present mode use. One path means the validator and
 // the measuring tool cannot disagree about whether a box fits its text. Without
 // a DOM (node tooling) the measured checks are skipped and `measured` reports
-// false, rather than guessing.
+// false, rather than guessing. The same render tells a text box that merely
+// overhangs the canvas (every glyph inside: info, a deliberate bleed) from one
+// whose words are cropped (a warning); without a DOM it stays a warning.
 
 import type { BentoDoc, CodeElement, Slide, SlideElement, TableElement, TextElement } from './model.ts'
 import { isWebUrl } from './model.ts'
 import { MODEL_KEYS } from './modelkeys.generated.ts'
 import { isRemoteUrl } from '../../kernel/src/net.ts'
-import { measureElements, measureTables } from './measure.ts'
+import { measureElements, measureInk, measureTables } from './measure.ts'
 import { fieldContext, type FieldContext } from './render.ts'
 import { BUILTIN_FONTS } from './fonts.ts'
 import { eachRef, keepAlpha, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
@@ -148,6 +150,8 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
   // way, so one with no inbound link is in the file and in nobody's path.
   const linkTargets = new Set<string>()
   for (const sl of doc.slides) for (const el of sl.elements) if (el.link) linkTargets.add(el.link)
+  // text boxes past the canvas edge, for the measured pass to look at the ink
+  const overhangs: Array<{ slide: Slide; el: TextElement; finding: Finding }> = []
 
   // ---- document level ------------------------------------------------------
   for (const k of Object.keys(doc)) {
@@ -332,10 +336,15 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       const bottom = el.y + el.h
       const fullBleed = el.w >= doc.size.width * 0.9 || el.h >= doc.size.height * 0.9
       if (right > doc.size.width || bottom > doc.size.height || el.x < 0 || el.y < 0) {
-        add({ ...at, code: 'out-of-canvas', severity: carriesText ? 'warning' : 'info',
+        const f: Finding = { ...at, code: 'out-of-canvas', severity: carriesText ? 'warning' : 'info',
           message: carriesText
             ? `Extends outside the ${doc.size.width}x${doc.size.height} canvas (x ${el.x}-${right}, y ${el.y}-${bottom}) — the text past the edge is cropped when presenting.`
-            : `Extends outside the ${doc.size.width}x${doc.size.height} canvas (x ${el.x}-${right}, y ${el.y}-${bottom}) — fine as a deliberate bleed, cropped either way.` })
+            : `Extends outside the ${doc.size.width}x${doc.size.height} canvas (x ${el.x}-${right}, y ${el.y}-${bottom}) — fine as a deliberate bleed, cropped either way.` }
+        add(f)
+        // A text box can overhang while every glyph sits inside (a big
+        // decorative numeral, short words centred in a wide box). Only the
+        // measured pass can see that; until it does, the warning stands.
+        if (measure && el.type === 'text') overhangs.push({ slide, el, finding: f })
       // A few px inside the margin is an optical adjustment, not crowding —
       // large type is routinely nudged left to hang its side bearing. Only
       // flag content that misses the margin by an amount a reader would see.
@@ -422,7 +431,10 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
   }
 
   // ---- measured checks -----------------------------------------------------
-  if (measure) measureOverflow(doc, add)
+  if (measure) {
+    measureOverflow(doc, add)
+    settleOverhangs(doc, overhangs)
+  }
 
   const counts = { error: 0, warning: 0, info: 0 }
   for (const f of findings) counts[f.severity]++
@@ -471,6 +483,29 @@ function validateChart(
       if (!CHART_KEYS.legend.includes(k)) note(`option.legend.${k}`, `"${k}" on the legend`)
     }
   }
+}
+
+/**
+ * A text box past the canvas edge whose glyphs all paint inside it is a
+ * deliberate bleed, like a shape's: nothing a reader needs is cropped, so the
+ * finding drops to info. Where any ink crosses the edge, or the ink could not
+ * be measured (rotated, mirrored, lists, pictures), the warning stands —
+ * nothing is cleared on a guess. Ink comes from measure.ts, the same render.
+ */
+function settleOverhangs(doc: BentoDoc, overhangs: Array<{ slide: Slide; el: TextElement; finding: Finding }>) {
+  if (!overhangs.length) return
+  const contexts = new Map<Slide, FieldContext>()
+  const ctxOf = (s: Slide) => contexts.get(s) ?? contexts.set(s, fieldContext(doc, s)).get(s)!
+  const ink = measureInk(overhangs.map(({ slide, el }) => ({ el, fields: ctxOf(slide) })), doc)
+  const W = doc.size.width
+  const H = doc.size.height
+  ink.forEach((b, i) => {
+    // half a pixel of slack: antialiasing at an exact edge crops nothing
+    if (!b || b.left < -0.5 || b.top < -0.5 || b.right > W + 0.5 || b.bottom > H + 0.5) return
+    const { el, finding } = overhangs[i]
+    finding.severity = 'info'
+    finding.message = `Extends outside the ${W}x${H} canvas (x ${el.x}-${el.x + el.w}, y ${el.y}-${el.y + el.h}), but every glyph stays inside it — fine as a deliberate bleed.`
+  })
 }
 
 /**

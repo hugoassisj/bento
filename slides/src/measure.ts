@@ -156,6 +156,77 @@ export function measureTables(els: TableElement[], doc: BentoDoc): TableMeasurem
   }))
 }
 
+/** Where an element's glyphs paint, in slide px (left/top/right/bottom). */
+export interface InkBox { left: number; top: number; right: number; bottom: number }
+
+/**
+ * Where each text element's glyphs actually paint — the ink, not the box and
+ * not the line boxes — in slide px, rendered at the element's own size through
+ * `renderElement` and in one host. What the out-of-canvas check uses to tell a
+ * deliberate bleed (box past the edge, every glyph inside) from cropped words.
+ *
+ * The DOM gives a glyph's advance and its font's ascent and descent (a Range
+ * over one character); a canvas measureText of that character in the same
+ * computed font gives how far its ink reaches from its origin and baseline.
+ * `null` means "not measured" and is never read as "inside": a rotated or
+ * mirrored element, content other than plain styled text (a list's markers, a
+ * picture, a formula), or a browser without glyph metrics.
+ */
+export function measureInk(els: Array<{ el: TextElement; fields?: FieldContext }>, doc: BentoDoc): Array<InkBox | null> {
+  if (!els.length) return []
+  const ctx = document.createElement('canvas').getContext('2d')
+  if (!ctx) return els.map(() => null)
+  return withHost((host) => els.map(({ el, fields }) => {
+    if (el.rotation || el.flipX || el.flipY) return null
+    const node = renderElement({ ...el, x: 0, y: 0 }, doc, { fields })
+    host.appendChild(node)
+    try {
+      const inner = node.querySelector<HTMLElement>('.bento-text-inner')
+      if (!inner || inner.querySelector('li, img, svg, math, canvas, video, iframe, object, table')) return null
+      const origin = node.getBoundingClientRect()
+      const walker = document.createTreeWalker(inner, NodeFilter.SHOW_TEXT)
+      const range = document.createRange()
+      let box: InkBox | null = null
+      for (let t = walker.nextNode() as Text | null; t; t = walker.nextNode() as Text | null) {
+        const cs = getComputedStyle(t.parentElement!)
+        ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
+        const s = t.data
+        for (let i = 0; i < s.length;) {
+          const ch = String.fromCodePoint(s.codePointAt(i)!)
+          const end = i + ch.length
+          if (!/\s/.test(ch)) {
+            range.setStart(t, i)
+            range.setEnd(t, end)
+            const r = range.getBoundingClientRect()
+            const m = ctx.measureText(ch)
+            if (typeof m.actualBoundingBoxAscent !== 'number' || typeof m.fontBoundingBoxAscent !== 'number') return null
+            if (r.width || r.height) {
+              const baseline = r.top + m.fontBoundingBoxAscent
+              const g = {
+                left: r.left - m.actualBoundingBoxLeft, right: r.left + m.actualBoundingBoxRight,
+                top: baseline - m.actualBoundingBoxAscent, bottom: baseline + m.actualBoundingBoxDescent,
+              }
+              box = box
+                ? { left: Math.min(box.left, g.left), top: Math.min(box.top, g.top), right: Math.max(box.right, g.right), bottom: Math.max(box.bottom, g.bottom) }
+                : g
+            }
+          }
+          i = end
+        }
+      }
+      if (!box) return null
+      // an outline stroke paints half its width outside the glyph
+      const pad = el.textStroke?.width ? el.textStroke.width / 2 : 0
+      return {
+        left: el.x + box.left - origin.left - pad, top: el.y + box.top - origin.top - pad,
+        right: el.x + box.right - origin.left + pad, bottom: el.y + box.bottom - origin.top + pad,
+      }
+    } finally {
+      node.remove()
+    }
+  }))
+}
+
 const specOf = (el: TextElement): TextMeasureSpec => ({
   html: el.html,
   w: el.w,
