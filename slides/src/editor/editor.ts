@@ -2696,7 +2696,7 @@ export class Editor {
   }
 
   /** Embed a picked (or, with `at`, dropped) video or audio file. */
-  private insertMediaFile(file: File, at?: { x: number; y: number }) {
+  private insertMediaFile(file: File, at?: { x: number; y: number; nth?: number }) {
     const kind: 'video' | 'audio' = file.type.startsWith('audio') ? 'audio' : 'video'
     if (file.size > MEDIA_EMBED_BUDGET) {
       const mb = Math.round(file.size / (1024 * 1024))
@@ -2713,7 +2713,7 @@ export class Editor {
 
   /** Insert a media element, sizing video to its intrinsic aspect when known;
    *  centred on `at` (kept on the slide) or on the slide. */
-  private insertMedia(kind: 'video' | 'audio', src: string, at?: { x: number; y: number }) {
+  private insertMedia(kind: 'video' | 'audio', src: string, at?: { x: number; y: number; nth?: number }) {
     const { width: dw, height: dh } = this.store.doc.size
     const box = (w: number, h: number) => at ? this.frameAt(w, h, at) : { w, h, x: (dw - w) / 2, y: (dh - h) / 2 }
     if (kind === 'audio' || !src) {
@@ -2930,7 +2930,7 @@ export class Editor {
    * the pasted-picture path (shrink, then interned), video and audio the
    * Media button's embed; each is centred on the drop point, or on the slide
    * when dropped over the slide list or a panel, and kept on the slide.
-   * Several files step down and right so none hides another.
+   * Several files step apart so none hides another (frameAt).
    */
   private dropFiles(ev: DragEvent) {
     const files = [...(ev.dataTransfer?.files ?? [])]
@@ -2944,24 +2944,33 @@ export class Editor {
     this.canvas.commitTextEdit()
     const { width, height } = this.store.doc.size
     const at = this.canvas.canvasPointAt(ev.clientX, ev.clientY) ?? { x: width / 2, y: height / 2 }
-    placeable.forEach((file, i) => {
-      const p = { x: at.x + i * 24, y: at.y + i * 24 }
+    placeable.forEach((file, nth) => {
+      const p = { ...at, nth }
       if (file.type.startsWith('image/')) this.pasteImageFile(file, p)
       else this.insertMediaFile(file, p)
     })
   }
 
   /** A w×h box centred on a slide point and kept on the slide, or centred on
-   *  the slide when there is no point. */
-  private frameAt(w: number, h: number, at?: { x: number; y: number }) {
+   *  the slide when there is no point. The `nth` file of one drop steps 24px
+   *  per file from where the first landed, down and right, or up and left on
+   *  an axis where that would leave the slide: stepping AFTER keeping the box
+   *  on the slide, so files dropped at a corner never clamp onto one spot. */
+  private frameAt(w: number, h: number, at?: { x: number; y: number; nth?: number }) {
     const { width, height } = this.store.doc.size
-    const fit = (c: number, size: number, room: number) => Math.round(Math.min(Math.max(c - size / 2, 0), Math.max(0, room - size)))
-    return at ? { x: fit(at.x, w, width), y: fit(at.y, h, height), w, h } : { x: Math.round((width - w) / 2), y: Math.round((height - h) / 2), w, h }
+    if (!at) return { x: Math.round((width - w) / 2), y: Math.round((height - h) / 2), w, h }
+    const step = (at.nth ?? 0) * 24
+    const fit = (c: number, size: number, room: number) => {
+      const max = Math.max(0, room - size)
+      const first = Math.min(Math.max(c - size / 2, 0), max)
+      return Math.round(Math.max(0, first + step <= max ? first + step : first - step))
+    }
+    return { x: fit(at.x, w, width), y: fit(at.y, h, height), w, h }
   }
 
   /** A pasted (or, with `at`, dropped) picture file. One that cannot be
    *  decoded is named in a toast and inserts nothing — never a broken box. */
-  private pasteImageFile(file: File, at?: { x: number; y: number }) {
+  private pasteImageFile(file: File, at?: { x: number; y: number; nth?: number }) {
     void this.shrinkForInsert(file).then((r) => {
       const src = r.dataUrl
       const img = new Image()
