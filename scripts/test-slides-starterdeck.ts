@@ -8,7 +8,7 @@
 //
 // WHAT THIS PROVES. The shipped deck is a derive fixed point (a boot changes
 // nothing, so no token binding or component override is lost on opening); it
-// validates without errors; every bound token exists and its literal agrees;
+// validates without errors or warnings; every bound token exists and its literal agrees;
 // every component copy has a main and kept its intended overrides; every
 // frame child sits inside its frame; and each invisible hit rect covers the
 // button it serves.
@@ -35,6 +35,11 @@ ok(JSON.stringify(doc) === before, 'document byte-identical after a boot derive'
 const v = validateDoc(doc, { measure: false })
 const errors = v.findings.filter((f) => f.severity === 'error')
 ok(!errors.length, `validates without errors: ${errors.map((f) => f.code + ' ' + f.message).join('; ')}`)
+// and without warnings: the deck an agent is told to check its work against
+// must check clean, or "validate and fix" never ends on the reference itself
+// (the measured checks run in scripts/test-slides-starter-clean-browser.mjs)
+const warnings = v.findings.filter((f) => f.severity === 'warning')
+ok(!warnings.length, `validates without warnings: ${warnings.map((f) => `${f.code} [${f.element ?? f.path}] ${f.message}`).join('; ')}`)
 
 let bound = 0
 for (const s of doc.slides) for (const h of [s, ...s.elements] as Array<{ themeRefs?: Record<string, string> }>) {
