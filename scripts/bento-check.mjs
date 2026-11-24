@@ -84,6 +84,7 @@ const esbuild = path.join(root, 'slides/node_modules/.bin/esbuild')
 if (pngDir && fs.existsSync(esbuild)) {
   const exportImagesPath = path.join(root, 'slides/src/editor/exportimages.ts')
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-check-legacy-'))
+  const removeDir = () => { try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }) } catch {} }
   try {
     fs.writeFileSync(path.join(dir, 'entry.js'), `
 import { rasterizeSlide } from ${JSON.stringify(exportImagesPath)}
@@ -95,10 +96,11 @@ if (typeof window.bento?.render !== 'function') {
 }
 `)
     const built = spawnSync(esbuild, [path.join(dir, 'entry.js'), '--bundle', '--format=esm', '--log-level=error', '--outfile=' + path.join(dir, 'legacy.js')], { stdio: ['ignore', 'pipe', 'pipe'] })
-    if (built.status !== 0) die(`could not bundle the probe:\n${built.stderr}`)
+    // die() exits, which skips the finally below: remove the directory first
+    if (built.status !== 0) { removeDir(); die(`could not bundle the probe:\n${built.stderr}`) }
     legacy = fs.readFileSync(path.join(dir, 'legacy.js'), 'utf8')
   } finally {
-    try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }) } catch {}
+    removeDir()
   }
 }
 

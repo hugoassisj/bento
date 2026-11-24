@@ -11,15 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **A command-line tool for agents ships inside the skill.**
-  `scripts/bento.mjs` needs only Node: `new` starts a deck from the bundled
-  app file, `extract` writes the document without its pictures and sharing
-  keys, `inspect` lists the design system the deck already has, `lint` checks
-  the JSON and reports any change an edit makes to the deck's tokens, theme,
-  components, layouts or fonts, `render` draws every slide to a PNG in the
-  deck's own runtime, and `apply` writes the document back. `bento check` is
-  now a thin wrapper over it, and neither one lets the headless browser reach
-  the network.
+- **A command-line tool for agents, in the skill's scripts folder.**
+  `scripts/bento.mjs` needs only Node: `extract` writes the document without
+  its pictures and sharing keys, `inspect` lists the design system the deck
+  already has, `lint` checks the JSON and reports any change an edit makes to
+  the deck's tokens, theme, components, layouts or fonts, `render` draws every
+  slide to a PNG in the deck's own runtime, and `apply` writes the document
+  back. `new` copies an app file, and `lint` checks the schema, from the files
+  a release packs into the skill's `assets/` folder, or from a repo checkout;
+  without them `new` says where to get the app file and `lint` says it skipped
+  the schema. `bento check` is now a thin wrapper over it, and neither one lets
+  the headless browser reach the network.
 
 - **Agents can look at a slide without a screenshot.**
   `window.bento.render()` draws any slide — by id or by number, state slides

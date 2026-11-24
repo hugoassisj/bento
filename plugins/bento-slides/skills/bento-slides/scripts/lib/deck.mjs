@@ -6,7 +6,7 @@
 //
 // The block is the splice contract (docs/PLATFORM.md §2): a plaintext
 // <script type="application/bento+json" id="bento-doc"> whose body is JSON with
-// every `<` escaped as <, so it can never close itself. A plain save
+// every `<` escaped as \u003c, so it can never close itself. A plain save
 // writes the JSON on one line with `"assets":` last on a line of its own
 // (kernel save.ts docText); this module writes exactly that.
 

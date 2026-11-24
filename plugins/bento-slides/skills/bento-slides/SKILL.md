@@ -130,7 +130,7 @@ node scripts/bento.mjs extract deck.bento.html -o doc.json   # no assets, no col
 node scripts/bento.mjs lint doc.json --base orig.json   # static checks + the design-system diff of your edit
 node scripts/bento.mjs apply deck.bento.html doc.json   # restores collab, docId, assets; escapes <
 node scripts/bento.mjs render deck.bento.html --png out # validate() findings + page-NN.png + contact.png
-node scripts/bento.mjs new Topic.bento.html             # an empty deck from the bundled app file
+node scripts/bento.mjs new Topic.bento.html             # an empty deck, when the skill carries assets/ (else: curl, above)
 ```
 
 Reuse what `inspect` lists; `lint --base` fails when an edit changes the
