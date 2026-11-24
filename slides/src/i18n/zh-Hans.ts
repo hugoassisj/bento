@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Shrink text to fit": "缩小文字直到放得下",
+  "The text needs more room than its box": "文字需要的空间超出了文本框",
+  "This text box runs past the edge of the slide": "此文本框超出了幻灯片边缘",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",

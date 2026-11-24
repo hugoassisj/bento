@@ -201,6 +201,8 @@ try {
     ok(!(await badgeShown()), 'nothing selected, no badge')
 
     // Shrink text to fit, on the box too short for its text
+    const eight = Array.from({ length: 8 }, (_, i) => `<p>Line ${i + 1}</p>`).join('')
+    await load([box('tall', { x: 600, y: 60, h: 260, html: eight })])
     await select('tall')
     const before = await byId('tall')
     ok(!(await measure('tall')).fits, `before: measure() says the text does not fit (${(await measure('tall')).height} > ${before.h})`)
@@ -227,7 +229,7 @@ try {
     ok((await byId('tiny'))?.fontSize === 10, `never below the floor (${(await byId('tiny')).fontSize}px)`)
 
     // Shrink on a box that runs off the bottom: fits what is on the slide
-    await load([box('long', { x: 100, y: 300, h: 1000, html: lines })])
+    await load([box('long', { x: 100, y: 300, h: 1000, html: Array.from({ length: 12 }, (_, i) => `<p>Line ${i + 1}</p>`).join('') })])
     await select('long')
     await fixVia('Shrink text to fit')
     const lg = await byId('long')
@@ -235,7 +237,7 @@ try {
     ok(!(await badgeShown()), 'and loses its badge')
 
     // Fit height to text grows the box instead
-    await load([box('tall', { x: 600, y: 60, html: Array.from({ length: 8 }, (_, i) => `<p>Line ${i + 1}</p>`).join('') })])
+    await load([box('tall', { x: 600, y: 60, html: eight })])
     await select('tall')
     await fixVia('Fit height to text')
     const grown = await byId('tall')
@@ -257,11 +259,21 @@ try {
   console.log('\na side handle stops the width hugging\n')
   await load([])
   {
-    const e = await placeText(200, 200, 'Hi')
+    // three lines, so the box is tall enough to be given side handles
+    const e = await placeText(200, 200)
+    await p.keyboard.type('Hello'); await p.keyboard.press('Enter'); await p.keyboard.type('there, everyone'); await p.keyboard.press('Enter'); await p.keyboard.type('and you')
+    await p.keyboard.press('Escape'); await p.waitForTimeout(300)
+    Object.assign(e, await byId(e.id))
     await select(e.id)
-    const handle = p.locator('.ed-stage-scale .moveable-control-box .moveable-control[data-direction="e"]').first()
-    const hb = await handle.boundingBox()
+    const hb = await p.evaluate(() => {
+      const c = [...document.querySelectorAll('.moveable-control-box .moveable-control.moveable-direction[data-direction="e"]')]
+        .find((h) => getComputedStyle(h).display !== 'none' && h.getBoundingClientRect().width > 0)
+      if (!c) return null
+      const r = c.getBoundingClientRect()
+      return { x: r.x, y: r.y, width: r.width, height: r.height }
+    })
     ok(!!hb, 'the right-hand side handle is there')
+    if (!hb) throw new Error('no side handle to drag')
     const st = await stage()
     await p.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2); await p.mouse.down()
     await p.mouse.move(hb.x + hb.width / 2 + 100 * st.s, hb.y + hb.height / 2, { steps: 4 })
@@ -274,6 +286,7 @@ try {
     await p.keyboard.press('Escape'); await p.waitForTimeout(300)
     const edited = await byId(e.id)
     ok(edited.w === resized.w, `after the resize, new text keeps the width the handle gave (${edited.w}, want ${resized.w})`)
+    ok(Math.abs(edited.h - (await measure(e.id)).height) <= 1, `and the height still follows the text (h ${edited.h})`)
   }
 
   console.log('\ninside an auto-layout frame, nothing changes\n')

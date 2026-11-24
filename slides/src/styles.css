@@ -1520,6 +1520,26 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
 }
 .ed-step-badge.sel { background: var(--accent); color: var(--accent-on); }
 .ed-step-badge:hover { transform: scale(1.15); }
+/* the overflow badge (editor/fitbadge.ts): beside a selected text box too
+   short for its text or past the slide's edge; it opens the two fixes */
+.ed-fit-badge {
+  position: absolute;
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: #d92d20;
+  color: #fff;
+  font: 700 12px/16px inherit;
+  font-family: inherit;
+  text-align: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgb(15 23 36 / 0.3);
+}
+.ed-fit-badge:hover { transform: scale(1.15); }
 .ed-comment-marker {
   position: absolute;
   pointer-events: auto;

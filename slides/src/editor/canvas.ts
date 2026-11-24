@@ -30,6 +30,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 type DrawKind = 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly' | 'pen'
 import { CommentsUI } from './comments'
 import { StepBadges } from './stepbadges'
+import { fitBadge } from './fitbadge'
+import { measureElement, measureHug } from '../measure'
 import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
@@ -93,6 +95,16 @@ export class SlideCanvas {
   private editingShowedRaw = false
   /** The selection is still the select-all that entering the box made. */
   private editAutoSelected = false
+  /** Text boxes that size themselves, keyed slide id + U+001F + element id.
+   *  'width': put down by a click — width and height follow the text;
+   *  'height': drawn by a drag — the width is the author's, the height follows.
+   *  `w`/`h` are what the hug last wrote: a box whose frame no longer matches
+   *  was resized by hand (a handle, the panel), which ends the hugging — a
+   *  changed width turns 'width' into 'height', a changed height ends both.
+   *  Session-only, never in the document: a reloaded box is a fixed box. */
+  private hugs = new Map<string, { mode: 'width' | 'height'; w: number; h: number }>()
+  /** the inline frame a hugging box had before editing let it grow */
+  private hugRestore: { node: HTMLElement; width: string; maxWidth: string; height: string } | null = null
   /** when editing a table cell, which cell (else null → text element edit) */
   private editingCell: { r: number; c: number } | null = null
   /** tears down the selection watcher that drives the formatting bar */
@@ -371,7 +383,7 @@ export class SlideCanvas {
     }) as EventListener)
 
     this.comments = new CommentsUI(store, this.stage, () => this.scale)
-    this.stepBadges = new StepBadges(store, this.stage, () => this.scale)
+    this.stepBadges = new StepBadges(store, this.stage, () => this.scale, () => fitBadge(store, this.scale, !!this.editing))
 
     // Alt/Option-click digs through overlapping elements: first click grabs
     // the topmost, each further alt-click steps one element deeper (wrapping).
@@ -2225,6 +2237,7 @@ export class SlideCanvas {
       if (code.closest('pre') || (next && next.nodeName !== 'BR')) continue
       code.after(document.createTextNode('\u200b'))
     }
+    this.hugWhileEditing(node)
     this.editing = node
     this.editListeners?.abort()
     this.editListeners = new AbortController()
@@ -2312,6 +2325,52 @@ export class SlideCanvas {
   /** collaborator presence: notified when text editing starts/stops */
   onTextEditChange: ((elId: string | undefined) => void) | null = null
 
+  /** The widest a hugging box at `x` grows: to the slide's right edge, but
+   *  never narrower than a short phrase (a click at the very edge). */
+  private hugMax(x: number) {
+    return Math.max(this.store.doc.size.width - x, 160)
+  }
+
+  /** The hug still in force for this box — after the rules in `hugs`. */
+  private liveHug(slideId: string, el: TextElement) {
+    const key = `${slideId}\u001f${el.id}`
+    const hug = this.hugs.get(key)
+    if (!hug) return null
+    const slide = this.store.doc.slides.find((s) => s.id === slideId)
+    const parent = el.parentId ? slide?.elements.find((e) => e.id === el.parentId) : undefined
+    if (el.h !== hug.h || isFrame(parent)) { this.hugs.delete(key); return null }
+    if (hug.mode === 'width' && el.w !== hug.w) hug.mode = 'height'
+    return hug
+  }
+
+  /** The frame a hugging box takes for `html`, recorded as the hug's own. */
+  private hugSize(slideId: string, el: TextElement, html: string) {
+    const hug = this.liveHug(slideId, el)
+    if (!hug) return null
+    const next = { ...el, html }
+    const size = hug.mode === 'width'
+      ? measureHug(next, this.store.doc, this.hugMax(el.x))
+      : { w: el.w, h: measureElement(next, this.store.doc).height }
+    hug.w = size.w
+    hug.h = size.h
+    return size
+  }
+
+  /** While a hugging box is edited it grows with what is typed — sideways to
+   *  the slide's edge when it hugs its width, downward either way. Commit puts
+   *  the inline frame back before it measures. */
+  private hugWhileEditing(node: HTMLElement) {
+    const el = this.store.element(node.dataset.elId ?? '')
+    const hug = el?.type === 'text' ? this.liveHug(this.store.slide.id, el) : null
+    if (!el || !hug) return
+    this.hugRestore = { node, width: node.style.width, maxWidth: node.style.maxWidth, height: node.style.height }
+    if (hug.mode === 'width') {
+      node.style.width = 'max-content'
+      node.style.maxWidth = `${this.hugMax(el.x)}px`
+    }
+    node.style.height = 'auto'
+  }
+
   commitTextEdit() {
     // Ahead of every early return below, and ahead of the delegation to
     // commitCellEdit: a watcher left running would keep the formatting bar up
@@ -2329,6 +2388,11 @@ export class SlideCanvas {
     const inner = node.querySelector<HTMLElement>('.bento-text-inner')
     const id = node.dataset.elId
     node.classList.remove('bento-editing')
+    if (this.hugRestore?.node === node) {
+      const { width, maxWidth, height } = this.hugRestore
+      Object.assign(node.style, { width, maxWidth, height })
+    }
+    this.hugRestore = null
     if (!inner || !id) return
     inner.contentEditable = 'false'
     // For code, we care about the raw innerText
@@ -2351,10 +2415,12 @@ export class SlideCanvas {
         return
       }
     }
-    if (el && el.type === 'text' && (el.html !== html || grownH > el.h)) {
+    const hugged = el?.type === 'text' && slideId && text.trim() ? this.hugSize(slideId, el, html) : null
+    if (el && el.type === 'text' && (el.html !== html || grownH > el.h || (hugged && (hugged.w !== el.w || hugged.h !== el.h)))) {
       this.store.commit(() => {
         el.html = html
-        if (grownH > el.h) el.h = Math.ceil(grownH)
+        if (hugged) { el.w = hugged.w; el.h = hugged.h }
+        else if (grownH > el.h) el.h = Math.ceil(grownH)
       })
     } else if (el && el.type === 'code' && (el.content !== text || grownH > el.h)) {
       this.store.commit(() => {
@@ -2916,18 +2982,28 @@ export class SlideCanvas {
         const el = make()
         const f = into ? this.store.element(into) : undefined
         const inF = isFrame(f) && a.x >= f.x && a.x <= f.x + f.w && a.y >= f.y && a.y <= f.y + f.h
+        let hug: 'width' | 'height' | null = null
         // a drag shorter than a few screen px was a click
         if (Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) * this.scale > 4) {
           if (!inF) { el.x = Math.round(Math.min(a.x, b.x)); el.y = Math.round(Math.min(a.y, b.y)) }
           el.w = Math.max(1, Math.round(Math.abs(b.x - a.x)))
           if (el.type !== 'text') el.h = Math.max(1, Math.round(Math.abs(b.y - a.y))) // a text box sizes its own height
+          else if (!inF) { el.h = measureElement(el, this.store.doc).height; hug = 'height' }
         } else if (inF) {
           const room = roomIn(this.store.slide, f)
           el.w = Math.min(el.w, Math.floor(room.w)); el.h = Math.min(el.h, Math.floor(room.h))
+        } else if (el.type === 'text') {
+          // a clicked text box starts AT the click and hugs its text
+          // (Figma's auto-width text); the drag above is fixed-width
+          el.x = Math.round(a.x); el.y = Math.round(a.y)
+          el.align = 'left'; el.valign = 'top'
+          Object.assign(el, measureHug(el, this.store.doc, this.hugMax(el.x)))
+          hug = 'width'
         } else {
           el.x = Math.round(a.x - el.w / 2); el.y = Math.round(a.y - el.h / 2)
         }
         if (inF) el.parentId = f.id
+        if (hug) this.hugs.set(`${this.store.slide.id}\u001f${el.id}`, { mode: hug, w: el.w, h: el.h })
         this.cancelDraw()
         this.insert(el, edit)
       }

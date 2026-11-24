@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Shrink text to fit": "縮小文字直到放得下",
+  "The text needs more room than its box": "文字需要的空間超出了文字方塊",
+  "This text box runs past the edge of the slide": "此文字方塊超出了投影片邊緣",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",

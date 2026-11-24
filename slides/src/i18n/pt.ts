@@ -7,6 +7,9 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Shrink text to fit": "Reduzir o texto até caber",
+  "The text needs more room than its box": "O texto precisa de mais espaço que sua caixa",
+  "This text box runs past the edge of the slide": "Esta caixa de texto passa da borda do slide",
   "View": "Exibir",
   "Current slide": "Slide atual",
   "Slide thumbnails": "Miniaturas dos slides",

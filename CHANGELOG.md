@@ -11,6 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Text boxes size themselves.** Press T and click: the box starts where you
+  clicked, left-aligned, and grows and shrinks with what you type, so short
+  labels line up by their words when you align them. Drag instead to choose
+  the width; the height then follows the text. A selected text box that is
+  too short for its text, or runs past the edge of the slide, shows a red
+  badge with two fixes: Fit height to text, or Shrink text to fit, which
+  steps the font size down until the text fits (one undo).
+
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the

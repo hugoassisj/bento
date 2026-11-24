@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Shrink text to fit": "収まるまで文字を縮小",
+  "The text needs more room than its box": "テキストがボックスに収まりきりません",
+  "This text box runs past the edge of the slide": "このテキストボックスはスライドの端からはみ出しています",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

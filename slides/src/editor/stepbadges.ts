@@ -26,6 +26,8 @@ export class StepBadges {
     private store: Store,
     stageParent: HTMLElement,
     private scaleOf: () => number,
+    /** the overflow badge for the selection, drawn in this layer (fitbadge.ts) */
+    private fitBadge?: () => HTMLElement | null,
   ) {
     this.layer = document.createElement('div')
     this.layer.className = 'ed-step-layer'
@@ -36,6 +38,8 @@ export class StepBadges {
   refresh() {
     this.layer.innerHTML = ''
     const slide = this.store.slide
+    const fit = slide && this.fitBadge?.()
+    if (fit) this.layer.appendChild(fit)
     if (!slide || !hasSteps(slide.elements)) return
     const scale = this.scaleOf()
     const selected = new Set(this.store.selection)

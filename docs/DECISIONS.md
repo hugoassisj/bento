@@ -15396,3 +15396,29 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — slides: a text box hugs its text for the session, without a format key
+
+The T tool's click now puts the box's corner at the click, left- and
+top-aligned, sized to its text; a drag keeps the dragged width and sizes the
+height. Every text commit re-measures such a box through `measure.ts`
+(`measureHug`, `measureElement`) and writes plain `w`/`h` numbers, so the
+document is unchanged and rendering never depends on measurement (the
+2026-08-02 "not a layout engine" rule).
+
+- **The hug intent is session-only.** It lives in the canvas (`hugs`, keyed
+  slide id + element id), not in the document. An `autoSize` key would carry
+  it across reloads and collaborators, but it is a format addition and
+  upstream has not agreed it; a reloaded box is a fixed box, which is what
+  every shell already draws.
+- **A hand resize ends it.** The hug remembers the frame it last wrote. A
+  changed width (a side handle, the panel) turns width-hugging into
+  height-hugging, as Figma's auto-width text becomes fixed-width; a changed
+  height ends hugging. Undo restores an older frame, so after an undo a box
+  may stop hugging.
+- **Frame children are untouched.** A box put down inside an auto-layout
+  frame is placed as before and never hugs: the frame sizes it.
+- **The overflow badge uses the validator's tests** (`text-overflow` past
+  1px, `out-of-canvas`), measured through the same module, so the badge and
+  `validate()` cannot disagree. Shrink text to fit fits the part of the box
+  that is on the slide and stops at 10px.

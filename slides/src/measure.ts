@@ -166,3 +166,53 @@ const specOf = (el: TextElement): TextMeasureSpec => ({
 export function measureElement(el: TextElement, doc: BentoDoc): TextMeasurement {
   return measureText(specOf(el), doc)
 }
+
+/** What a text box that hugs its text is sized to. */
+export interface HugSize {
+  /** the text's own width, on one line where it can be — held to `maxW` */
+  w: number
+  /** the height it needs at that width */
+  h: number
+}
+
+/**
+ * The box a text hugs: as wide as its longest line wants to be (held to
+ * `maxW`, where it wraps instead), and as tall as it then needs. What the T
+ * tool's click-placed box is sized to on every commit (editor/canvas.ts).
+ * Rendered, like everything here — `max-content` on the real renderer's node.
+ */
+export function measureHug(el: TextElement, doc: BentoDoc, maxW: number): HugSize {
+  const spec = specOf(el)
+  return withHost((host) => {
+    const node = renderElement(defaultText({ ...spec, id: 'bento-measure', x: 0, y: 0, w: maxW, h: 10 }), doc)
+    node.style.width = 'max-content'
+    node.style.maxWidth = `${maxW}px`
+    node.style.height = 'auto'
+    host.appendChild(node)
+    const w = Math.max(1, Math.min(maxW, Math.ceil(node.getBoundingClientRect().width)))
+    node.remove()
+    return { w, h: measureInto(host, { ...spec, w }, doc).height }
+  })
+}
+
+/**
+ * The largest whole font size, from the element's own down to `floor`, at
+ * which its text fits a `w`×`h` box — `floor` when even that does not fit,
+ * and the element's own size when it already fits (or is below the floor).
+ * Binary search: the height text needs only grows with its size.
+ */
+export function shrinkToFit(el: TextElement, w: number, h: number, doc: BentoDoc, floor: number): number {
+  return withHost((host) => {
+    const fits = (fontSize: number) => measureInto(host, { ...specOf(el), w, h, fontSize }, doc).fits
+    if (el.fontSize <= floor || fits(el.fontSize)) return el.fontSize
+    let lo = floor
+    let hi = Math.max(floor, Math.floor(el.fontSize))
+    if (fits(hi)) return hi
+    while (lo < hi - 1) {
+      const mid = Math.floor((lo + hi) / 2)
+      if (fits(mid)) lo = mid
+      else hi = mid
+    }
+    return lo
+  })
+}
