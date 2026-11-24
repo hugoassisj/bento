@@ -318,7 +318,9 @@ without them — and elements should carry the full field set shown.
   Optional, newer: `fillGradient.kind:"radial"` (+`cx`,`cy`,`r`),
   `strokeAlign` (`inside|center|outside`), `strokeDashes:[dash,gap]`, rect
   `radii:[tl,tr,br,bl]`, `flipX`/`flipY`, `hidden`, `alt`. A frame is a `rect`
-  with `layout`, and its children carry `parentId` (see format.md). Lines take
+  with `layout`, and its children carry `parentId` (see format.md); they flow
+  in order of their written x (row) or y (column), and children at the same
+  coordinate keep array order, so write them all at the frame's own x/y. Lines take
   their color from `fill` and draw horizontally across the box (rotate for
   vertical); `strokeStyle: solid|dashed|dotted`; tips `lineStart`/`lineEnd`
   = `arrow|dot|bar`. A `path` is a free vector: `d` (SVG path data) +

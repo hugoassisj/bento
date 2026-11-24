@@ -23,6 +23,19 @@ pre-1.0.
   findings (and the toast's warning count) are now taken after layout, tokens
   and components, and match `validate()` run straight afterwards. The report
   carries `derived: true` so an agent can tell.
+- **Loading a deck says what it changed.** Four things a deck can be written
+  with are changed when it loads, and nothing said so: a colour or size bound
+  to a design token but written with a different value loses the binding, a
+  component copy written without its `sig` keeps every difference from its
+  main for good, the children of an auto layout frame are placed by where they
+  were written rather than in list order, and a `parentId` that names no frame
+  is removed. The load report of `loadDoc` and Replace from JSON now lists each
+  one under `dropped`, with where it happened and how to write it instead, and
+  `validate()` reports the same on a file that was never loaded
+  (`token-stale`, `component-copy-unsynced`, `parent-not-frame`). A token
+  reference written without a value now takes the token's value on load and
+  stays bound, instead of picking up the editor's default colour and losing
+  the binding.
 
 ## [1.3.0] — 2026-11-22
 

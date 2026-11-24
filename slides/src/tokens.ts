@@ -146,6 +146,44 @@ export function syncTokenRefs(doc: BentoDoc, tokensMoved: boolean): boolean {
   return changed
 }
 
+/**
+ * How a bound literal disagrees with its token — the literal and the value the
+ * token gives that property (a colour keeps the literal's own opacity) — or
+ * null when they agree or the token has no value. The comparison
+ * syncTokenRefs makes, for the validator and the load report: with the tokens
+ * unmoved, a disagreement is dropped as a hand edit.
+ */
+export function tokenDrift(doc: BentoDoc, holder: Holder, path: string, name: string): { have: unknown; want: TokenValue } | null {
+  const w = want(doc, holder, path, name)
+  if (w === undefined) return null
+  const have = _readPath(holder, path)
+  return same(have, w) ? null : { have, want: w }
+}
+
+/**
+ * A token reference whose property the author left unwritten takes the
+ * token's value, so the binding holds instead of meeting a default (or
+ * nothing) and being dropped as a hand edit. `written` is the holder as the
+ * author wrote it, before any default was filled. For document text arriving
+ * through loadDoc / Replace from JSON (compact.ts, compactload.ts) — never
+ * part of the derive pass. Returns whether anything was written.
+ */
+export function fillUnwritten(doc: BentoDoc, holder: Holder, written: Record<string, unknown> = holder): boolean {
+  let changed = false
+  for (const [path, ref] of Object.entries(holder.themeRefs ?? {})) {
+    const name = tokenName(ref)
+    if (name && _readPath(written, path) === undefined && bindToken(doc, holder, path, name)) changed = true
+  }
+  return changed
+}
+
+/** fillUnwritten on every slide, layout and element of a (gated) document. */
+export function fillUnwrittenTokens(doc: BentoDoc): boolean {
+  let changed = false
+  eachHolder(doc, (h) => { if (fillUnwritten(doc, h)) changed = true })
+  return changed
+}
+
 /** Bind `path` on `holder` to token `name`: writes its value and the ref, one edit. */
 export function bindToken(doc: BentoDoc, holder: Holder, path: string, name: string): boolean {
   const v = want(doc, holder, path, name)

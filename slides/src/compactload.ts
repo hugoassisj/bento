@@ -30,6 +30,10 @@
 // children written at placeholder coordinates were otherwise reported where
 // they were written, not where layout puts them. The document reaches the
 // store already derived, so the editor's own pass on `replace` is a no-op.
+// What that pass changes in what the author wrote (a token binding dropped,
+// a copy's override added, frame children reordered, a dangling parentId
+// removed) is listed in `dropped` with the fix (derivelosses.ts); a token
+// reference with no literal takes the token's value first, so it holds.
 
 import { parseDoc, type BentoDoc, type Slide, type TextElement } from './model'
 import { sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
@@ -37,13 +41,15 @@ import { expandDocWithStats, isCompact, STACK_GAP, type ExpandStats } from './co
 import { measureElement } from './measure'
 import { validateDoc, type ValidateResult } from './validate'
 import { sanitizeDoc } from './restoregate'
-import { derive, deriveMemory } from './derive'
+import { deriveReported } from './derivelosses'
+import { fillUnwrittenTokens } from './tokens'
 
 export interface LoadReport {
   ok: true
   /** was the input compact (expanded here) or full (taken as is)? */
   compact: boolean
-  /** every key/value the gate discarded, with a JSON-pointer-ish path */
+  /** every key/value the gate discarded, with a JSON-pointer-ish path — and
+   *  what the derive pass changed in what was written (derivelosses.ts) */
   dropped: Dropped[]
   /** fields expansion filled from the editor's defaults */
   expanded: number
@@ -91,8 +97,9 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
     const gated = sanitizeDoc(base as unknown as Record<string, unknown>, o.live)
     if (!gated) return null
     const doc = gated.doc
-    derive(doc, deriveMemory(doc))
-    return { doc, report: { ok: true, compact: false, dropped: gated.dropped, expanded: 0, fitted: 0, findings: validateDoc(doc), derived: true, refit: [], laidOut: 0, stacks: [] } }
+    fillUnwrittenTokens(doc)
+    const derived = deriveReported(doc)
+    return { doc, report: { ok: true, compact: false, dropped: [...gated.dropped, ...derived], expanded: 0, fitted: 0, findings: validateDoc(doc), derived: true, refit: [], laidOut: 0, stacks: [] } }
   }
   const { doc: expanded, stats } = expandDocWithStats(raw)
   const ex = expanded as unknown as Record<string, unknown>
@@ -120,8 +127,10 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
   // a role the layout had no slot for is reported beside the gate's drops:
   // same shape, same loop for the agent (path → reason)
   const all = [...dropped, ...stats.notes.map((n) => ({ path: n.path, reason: n.reason } as Dropped))]
-  // after the fit, so a hugging frame lays out the measured heights
-  derive(doc, deriveMemory(doc))
+  // after the fit, so a hugging frame lays out the measured heights; what it
+  // changes in what the author wrote is reported beside the gate's drops
+  fillUnwrittenTokens(doc) // layouts are not expanded; elements were (compact.ts)
+  all.push(...deriveReported(doc))
   return { doc, report: { ok: true, compact: true, dropped: all, expanded: stats.expanded, fitted, findings: validateDoc(doc), derived: true, refit, laidOut: stats.laidOut, stacks: stats.stacks } }
 }
 

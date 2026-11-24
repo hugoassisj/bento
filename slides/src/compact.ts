@@ -82,6 +82,7 @@ import {
   readableInk, isLightBg, newDoc, builtinLayouts, applyLayout,
   type BentoDoc, type Slide, type SlideElement, type ShapeKind,
 } from './model.ts'
+import { fillUnwritten } from './tokens.ts'
 
 /** Marker on a compact document. Consumed by expandDoc; never stored. */
 export const COMPACT_FLAG = 'compact'
@@ -393,6 +394,10 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
           stats.autoHeight.push({ slide: slide.id as string, id: out.id as string })
         }
       }
+      // a token reference with no literal takes the token's value, not the
+      // default just filled, so the binding holds (a default would read as a
+      // hand edit and drop it)
+      fillUnwritten(doc as unknown as BentoDoc, out, el)
       return out as unknown as SlideElement
     })
     if (layout) {
@@ -404,6 +409,7 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
       stats.autoHeight = stats.autoHeight.filter((a) => a.slide !== slide.id || !before.has(a.id) || ids.has(a.id))
       slide.elements = laid as unknown as SlideElement[]
     }
+    fillUnwritten(doc as unknown as BentoDoc, slide, s0)
     return slide as unknown as Slide
   })
   return { doc: doc as unknown as BentoDoc, stats }

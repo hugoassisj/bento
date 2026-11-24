@@ -28,6 +28,7 @@ import { MODEL_KEYS } from './modelkeys.generated.ts'
 import { isRemoteUrl } from '../../kernel/src/net.ts'
 import { measureElements, measureTables } from './measure.ts'
 import { BUILTIN_FONTS } from './fonts.ts'
+import { bindingChecks } from './bindingchecks.ts'
 import { eachRef, keepAlpha, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
 import { tokenName } from './tokens.ts'
 
@@ -259,6 +260,8 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       }
     })
   }
+  // what opening the file changes silently: token-stale, component-copy-unsynced, parent-not-frame
+  bindingChecks(doc, add)
 
   for (const slide of doc.slides) {
     const sid = slide.id

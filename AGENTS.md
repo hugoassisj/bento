@@ -177,7 +177,15 @@ const r = window.bento.loadDoc(json)
 The loop is: load → read `dropped` and `findings` → fix the JSON → load
 again. A dropped key is one the format does not have (a typo, or a field that
 does not exist for that element type); an invalid value is the right key with
-the wrong type or range. The FILE is always saved full — the on-disk format is
+the wrong type or range. `dropped` also lists what loading changed in what you
+wrote, each with the fix: a token binding whose literal differs from its token
+(write the token's value, or leave the literal out and it is filled from the
+token), a component copy with no `sig` whose differences become permanent
+overrides (`"sig": "reset"` makes it follow its main), frame children laid out
+in another order than written (children at the same coordinate keep array
+order), and a `parentId` that names no frame. `validate()` reports the same
+on a file that was never loaded: `token-stale`, `component-copy-unsynced`,
+`parent-not-frame`. The FILE is always saved full — the on-disk format is
 unchanged and every shipped shell reads it as before. `slides/src/compact.ts`
 and `compactload.ts` are the whole mechanism; `scripts/test-slides-compact.ts`
 proves the round-trip on the starter deck and the gallery decks, and
