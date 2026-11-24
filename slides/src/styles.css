@@ -3096,6 +3096,14 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-ctxmenu-danger:not(:disabled) { color: var(--danger); }
 .ed-ctxmenu-danger:hover:not(:disabled) { background: var(--danger-tint); }
 .ed-ctxmenu-sep { height: 1px; margin: 4px 2px; background: var(--line); }
+/* a row reads icon, words, then its keys or its submenu chevron at the end */
+.ed-ctxmenu-icon { display: inline-flex; flex: none; margin-inline-end: -8px; }
+.ed-ctxmenu-label { flex: 1; }
+.ed-ctxmenu-chev { display: inline-flex; flex: none; margin-inline-start: -8px; opacity: 0.6; }
+[dir="rtl"] .ed-ctxmenu-chev svg { transform: scaleX(-1); }
+/* the row whose submenu is open stays lit, as does the row the keyboard is on */
+.ed-ctxmenu-parent.open, .ed-ctxmenu-item:focus-visible:not(:disabled) { background: var(--chrome-2); }
+.ed-ctxmenu-item:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
 
 /* A long press on the canvas or the slide list is the context-menu gesture
    (editor.ts). iOS answers the same press with its own callout bubble — "Copy /
