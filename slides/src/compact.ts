@@ -108,8 +108,7 @@ import {
   readableInk, isLightBg, newDoc, builtinLayouts, applyLayout, slotTakes, textHasContent,
   type BentoDoc, type Slide, type SlideElement, type ShapeKind,
 } from './model.ts'
-import { PALETTE_SLOTS, paletteOf, parseThemeRef, resolveRef, formatThemeRef, keepAlpha, type Palette } from './palette.ts'
-import { layoutSlide } from './layout.ts'
+import { PALETTE_SLOTS, paletteOf, parseThemeRef, resolveRef, formatThemeRef } from './palette.ts'
 import { tokenName, tokenValue, bindToken, tokenAgrees } from './tokens.ts'
 import { TOKEN_KEYS, SLIDE_TOKEN_KEYS } from './untrusted.ts'
 import { components, mainSig, type ComponentInfo } from './components.ts'
@@ -340,10 +339,6 @@ export const LAYOUT_ALIASES: Record<string, string> = {
   'title-body': 'layout-title-content',
   'two-column': 'layout-two-col',
   'cards': 'layout-three-cards',
-  'statistics': 'layout-stats',
-  'big-stat': 'layout-big-number',
-  'roadmap': 'layout-timeline',
-  'chart': 'layout-chart-figures',
 }
 
 const hasFrame = (el: Obj) => ['x', 'y', 'w', 'h'].every((k) => typeof el[k] === 'number')
@@ -366,7 +361,7 @@ export const LAYOUT_NOTE = 'layout: '
  * element that carried content comes out exactly once — what cannot sit in a
  * slot keeps its own (default) frame, with a note.
  */
-function layOut(layout: Slide, els: Obj[], raw: Obj[], slideId: string, si: number, stats: ExpandStats, palette: Palette): Obj[] {
+function layOut(layout: Slide, els: Obj[], raw: Obj[], slideId: string, si: number, stats: ExpandStats): Obj[] {
   const roles = layoutRoles(layout)
   const have = Object.keys(roles).join(', ') || 'none'
   const extras: Obj[] = []
@@ -422,37 +417,8 @@ function layOut(layout: Slide, els: Obj[], raw: Obj[], slideId: string, si: numb
     })
     stats.stacks.push({ slide: slideId, ids, slot: frame })
   }
-  let laid = out
-  if (out.some(isFrameEl)) {
-    // a frame layout: an item whose slots all stayed empty goes, and the frame reflows, leaving no hole
-    const filled = new Set([...firsts.map((f) => f.id as string), ...stats.stacks.filter((st) => st.slide === slideId).flatMap((st) => st.ids)])
-    const byId = new Map(out.map((e) => [e.id, e]))
-    const subtree = (e: Obj): Obj[] => [e, ...out.filter((k) => k.parentId === e.id).flatMap(subtree)]
-    const drop = new Set<Obj>()
-    for (const e of out) {
-      if (!isFrameEl(byId.get(e.parentId) ?? {})) continue
-      const t = subtree(e)
-      const slots = t.filter((x) => typeof x.role === 'string')
-      if (slots.length && !slots.some((x) => filled.has(x.id as string))) t.forEach((x) => drop.add(x))
-    }
-    laid = out.filter((e) => !drop.has(e))
-    layoutSlide({ elements: laid } as unknown as Slide)
-  }
-  // the layout's own palette refs, resolved against this deck now rather than at open
-  for (const e of laid) resolveOwnRefs(e, palette)
   stats.laidOut++
-  return [...laid, ...extras]
-}
-
-const isFrameEl = (e: Obj) => e.type === 'shape' && isObj(e.layout)
-
-/** Write the literal of each top-level palette ref on `holder` from `palette`. */
-function resolveOwnRefs(holder: Obj, palette: Palette): void {
-  for (const [k, tok] of Object.entries(isObj(holder.themeRefs) ? holder.themeRefs : {})) {
-    if (k.includes('.') || typeof tok !== 'string' || typeof holder[k] !== 'string') continue
-    const lit = resolveRef(tok, palette)
-    if (lit !== null) holder[k] = keepAlpha(holder[k], lit)
-  }
+  return [...out, ...extras]
 }
 
 // --- round four: the deck's own names ------------------------------------------
@@ -634,12 +600,10 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
     // …and `like` the named earlier slide's, over the layout's
     const like = typeof s0.like === 'string' ? built.find((b) => b.id === s0.like) : undefined
     if (typeof s0.like === 'string' && !like) stats.notes.push({ path: `/slides/${si}/like`, reason: `no slide \`${s0.like}\` before this one; slides before it: ${nameList(built.map((b) => String(b.id)))}` })
-    // the slide-level bindings of whatever supplied the background (like, else the layout)
-    const from = (like ?? layout) as Obj | undefined
-    const inheritedRefs: Obj = { ...(from && isObj(from.themeRefs) ? from.themeRefs : {}) }
-    if ('background' in s0) delete inheritedRefs.background
+    const likeRefs: Obj = { ...(like && isObj(like.themeRefs) ? like.themeRefs : {}) }
+    if ('background' in s0) delete likeRefs.background
     const given: Obj = { ...s0 }
-    if (Object.keys(inheritedRefs).length) given.themeRefs = { ...inheritedRefs, ...(isObj(s0.themeRefs) ? s0.themeRefs : {}) }
+    if (Object.keys(likeRefs).length) given.themeRefs = { ...likeRefs, ...(isObj(s0.themeRefs) ? s0.themeRefs : {}) }
     const slide: Obj = {
       ...sd,
       ...(layout ? { background: layout.background, transition: layout.transition } : {}),
@@ -686,7 +650,7 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
     })
     if (layout) {
       const before = new Set(stats.autoHeight.filter((a) => a.slide === slide.id).map((a) => a.id))
-      const laid = layOut(layout, slide.elements as unknown as Obj[], flat, slide.id as string, si, stats, paletteOf(bdoc))
+      const laid = layOut(layout, slide.elements as unknown as Obj[], flat, slide.id as string, si, stats)
       // donors that became slot content no longer exist under their own id:
       // their provisional heights are the slot's, not to be measured
       const ids = new Set(laid.map((e) => e.id as string))
