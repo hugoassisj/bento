@@ -9,8 +9,9 @@
  * badge and validate() never disagree about a box.
  *
  * Its menu offers the two fixes: Fit height to text (the inspector's button)
- * and Shrink text to fit (the font steps down until the text fits what of the
- * box is on the slide, never below SHRINK_FLOOR), each one undo step.
+ * and Shrink text to fit (the box is cut back to the part of it on the slide
+ * and the font steps down until the text fits there, never below
+ * SHRINK_FLOOR), each one undo step.
  *
  * EDITOR-ONLY, in the step-badge layer (stepbadges.ts) beside the rendered
  * slide; nothing here reaches render.ts. A frame child is its frame's to size,
@@ -53,7 +54,7 @@ export function fitBadge(store: Store, scale: number, editing: boolean): HTMLEle
     const r = b.getBoundingClientRect()
     openCtxMenu(r.left, r.bottom + 4, [
       { label: t('Fit height to text'), disabled: !short, run: () => fitHeight(store, el.id) },
-      { label: t('Shrink text to fit'), run: () => shrinkText(store, el.id) },
+      { label: t('Shrink text to fit'), disabled: !onSlide(el, W, H), run: () => shrinkText(store, el.id) },
     ])
   })
   return b
@@ -66,15 +67,23 @@ function fitHeight(store: Store, id: string) {
   if (h !== el.h) store.commit(() => { el.h = h })
 }
 
-/** The font steps down until the text fits the part of the box on the slide;
- *  a box past the right or bottom edge is cut back to it. One undo step. */
+/** The part of a box that is on the slide, or null when none of it is. */
+function onSlide(el: { x: number; y: number; w: number; h: number }, W: number, H: number) {
+  const x = Math.max(el.x, 0), y = Math.max(el.y, 0)
+  // a side that is not cut keeps its exact size
+  const w = el.x >= 0 && el.x + el.w <= W ? el.w : Math.floor(Math.min(el.x + el.w, W) - x)
+  const h = el.y >= 0 && el.y + el.h <= H ? el.h : Math.floor(Math.min(el.y + el.h, H) - y)
+  return w >= 1 && h >= 1 ? { x, y, w, h } : null
+}
+
+/** The box is cut back to its part on the slide, past any edge, and the font
+ *  steps down until the text fits there. One undo step. */
 function shrinkText(store: Store, id: string) {
   const el = store.element(id)
   if (el?.type !== 'text') return
-  const { width: W, height: H } = store.doc.size
-  const w = el.x < W && el.x + el.w > W ? Math.max(1, Math.floor(W - el.x)) : el.w
-  const h = el.y < H && el.y + el.h > H ? Math.max(1, Math.floor(H - el.y)) : el.h
-  const fontSize = shrinkToFit(el, w, h, store.doc, SHRINK_FLOOR)
-  if (fontSize === el.fontSize && w === el.w && h === el.h) return
-  store.commit(() => { el.fontSize = fontSize; el.w = w; el.h = h })
+  const box = onSlide(el, store.doc.size.width, store.doc.size.height)
+  if (!box) return
+  const fontSize = shrinkToFit(el, box.w, box.h, store.doc, SHRINK_FLOOR)
+  if (fontSize === el.fontSize && box.x === el.x && box.y === el.y && box.w === el.w && box.h === el.h) return
+  store.commit(() => { el.fontSize = fontSize; Object.assign(el, box) })
 }

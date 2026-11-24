@@ -15411,14 +15411,18 @@ document is unchanged and rendering never depends on measurement (the
   it across reloads and collaborators, but it is a format addition and
   upstream has not agreed it; a reloaded box is a fixed box, which is what
   every shell already draws.
-- **A hand resize ends it.** The hug remembers the frame it last wrote. A
-  changed width (a side handle, the panel) turns width-hugging into
-  height-hugging, as Figma's auto-width text becomes fixed-width; a changed
-  height ends hugging. Undo restores an older frame, so after an undo a box
-  may stop hugging.
+- **Only a hand resize ends it.** A resize handle or the panel's W turns
+  width-hugging into height-hugging, as Figma's auto-width text becomes
+  fixed-width; a hand-set height ends hugging. Nothing else does: an undo,
+  a redo or a collaborator moves the frame without changing the mode, and the
+  next commit measures the text afresh. (Reading any frame change as a hand
+  resize made an undo followed by an edit wrap the text into the old, narrow
+  width — one letter per line.) A document loaded over the deck clears it.
 - **Frame children are untouched.** A box put down inside an auto-layout
   frame is placed as before and never hugs: the frame sizes it.
 - **The overflow badge uses the validator's tests** (`text-overflow` past
   1px, `out-of-canvas`), measured through the same module, so the badge and
-  `validate()` cannot disagree. Shrink text to fit fits the part of the box
-  that is on the slide and stops at 10px.
+  `validate()` cannot disagree. Shrink text to fit cuts the box back to its
+  part on the slide, past any edge, fits the text there and stops at 10px.
+  Field tokens are measured as written, not as their values, until
+  `measure.ts` takes a field context.

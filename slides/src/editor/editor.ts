@@ -760,6 +760,7 @@ export class Editor {
     this.panel.onListIndent = (dir) => { this.canvas.indentList(dir) }
     this.panel.onMorphPreview = (t) => this.canvas.previewMorph(t)
     this.panel.onPlayTransition = () => this.playTransition()
+    this.panel.onHandSized = (id, w, h) => this.canvas.handSized(id, w, h)
 
     if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }

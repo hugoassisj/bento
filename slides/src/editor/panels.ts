@@ -56,6 +56,9 @@ export class PropsPanel {
   onMorphPreview: ((t: number | null) => void) | null = null
   /** Present from the slide before and step into this one (editor.ts). */
   onPlayTransition: (() => void) | null = null
+  /** W or H typed or scrubbed for an element — set by the editor to the
+   *  canvas, whose text boxes stop hugging their text when sized by hand. */
+  onHandSized: ((id: string, w: boolean, h: boolean) => void) | null = null
 
   constructor(
     readonly host: HTMLElement,
