@@ -17,6 +17,16 @@ let restore: (() => void) | null = null
 /** Stop any preview and put the node back as it was. */
 export function endPreview() { restore?.(); restore = null }
 
+/** The element outlined on the canvas while its Build order row is pointed
+ *  at or focused (inspector/buildorder.ts): a class on the live node, no edit. */
+export function peekElement(id: string) {
+  endPreview()
+  const n = node(id)
+  if (!n) return
+  n.classList.add('ed-peek')
+  restore = () => n.classList.remove('ed-peek')
+}
+
 /** The element as it would look with this shadow: the renderer's own filter. */
 export function previewShadow(el: SlideElement, doc: BentoDoc, shadow: ShadowSpec | ShadowSpec[]) {
   endPreview()

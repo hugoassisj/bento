@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Build order": "出现顺序",
+  "With the slide": "与幻灯片一起",
+  "Click {n}": "单击 {n}",
+  "Stagger": "错开",
+  "Show build order": "显示出现顺序",
   "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "显示步骤 {n} — 点击后移，Shift+点击前移；在“动画”中设置数字",
   "View": "视图",
   "Current slide": "当前幻灯片",

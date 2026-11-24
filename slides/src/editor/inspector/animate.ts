@@ -8,7 +8,8 @@ import { ICONS } from '../../icons'
 import { t } from '../../i18n'
 import { UNPAIR } from './controls'
 import { endPreview, previewEnter } from '../fxpreview'
-import type { StepPatch } from '../reveal'
+import { hasSteps, type StepPatch } from '../reveal'
+import { showBuildOrder } from './buildorder'
 import { stepOf } from '../../steps'
 import { morphPartners, morphSource, walkSource, wouldPair } from '../morph'
 import { labelIn } from '../layerrows'
@@ -692,6 +693,14 @@ export function revealRow(p: PropsPanel, els: SlideElement[]) {
   hint.className = 'ed-hint'
   hint.textContent = t('Numbered badges on the canvas show the order; click one for the next step.')
   p.host.appendChild(hint)
+  if (hasSteps(p.store.slide.elements)) {
+    const show = document.createElement('button')
+    show.type = 'button'
+    show.className = 'ed-link-btn ed-build-show'
+    show.textContent = t('Show build order')
+    show.addEventListener('click', () => showBuildOrder(p))
+    p.host.appendChild(show)
+  }
 }
 
 /** A number in the element's text, the thing Count up animates. */

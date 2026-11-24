@@ -7,6 +7,11 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Build order": "Ordem de entrada",
+  "With the slide": "Com o slide",
+  "Click {n}": "Clique {n}",
+  "Stagger": "Escalonamento",
+  "Show build order": "Mostrar ordem de entrada",
   "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Passo de revelação {n} — clique para movê-lo para depois, Shift-clique para antes; defina o número em Animar",
   "View": "Exibir",
   "Current slide": "Slide atual",

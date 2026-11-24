@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Build order": "表示順",
+  "With the slide": "スライドと同時",
+  "Click {n}": "クリック {n}",
+  "Stagger": "時間差",
+  "Show build order": "表示順を表示",
   "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "表示ステップ {n} — クリックで後ろへ、Shift+クリックで前へ移動。番号は「アニメーション」で設定できます",
   "View": "表示",
   "Current slide": "現在のスライド",

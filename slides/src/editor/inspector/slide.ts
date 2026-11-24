@@ -8,6 +8,7 @@ import { color } from './color'
 import { type Slide, uid, type TransitionKind } from '../../model'
 import { ROW_TIPS } from './controls'
 import { slideLabel, syncStateFromParent } from './animate'
+import { buildBuildOrder } from './buildorder'
 import { ICONS } from '../../icons'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../../code'
 
@@ -189,6 +190,7 @@ export function buildSlidePanel(p: PropsPanel) {
     hint.innerHTML = t('<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).')
     p.host.appendChild(hint)
   }
+  buildBuildOrder(p)
 
   section(p, t('Interactivity'))
   const name = document.createElement('input')

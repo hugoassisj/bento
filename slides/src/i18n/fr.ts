@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "Build order": "Ordre d’apparition",
+  "With the slide": "Avec la diapositive",
+  "Click {n}": "Clic {n}",
+  "Stagger": "Décalage",
+  "Show build order": "Afficher l’ordre d’apparition",
   "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Étape de révélation {n} — cliquez pour la reculer, Maj-clic pour l’avancer ; le nombre se règle dans Animer",
   "View": "Affichage",
   "Current slide": "Diapositive actuelle",

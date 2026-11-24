@@ -4,6 +4,11 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Build order": "Einblendreihenfolge",
+  "With the slide": "Mit der Folie",
+  "Click {n}": "Klick {n}",
+  "Stagger": "Versatz",
+  "Show build order": "Einblendreihenfolge zeigen",
   "Reveal step {n} — click to move it later, Shift-click earlier; set the number in Animate": "Einblendschritt {n} — Klick verschiebt ihn nach hinten, Umschalt-Klick nach vorn; die Zahl steht unter Animieren",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",

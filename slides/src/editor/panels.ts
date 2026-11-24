@@ -20,8 +20,9 @@ import { buildExport } from './inspector/export'
 import { buildSlidePanel } from './inspector/slide'
 import { fitTabNames, iconTab, roving, slidingPill } from './inspector/controls'
 import { layerBlock, buildLayoutRole } from './inspector/arrange'
-import { section, opBtn } from './inspector/fields'
+import { section, opBtn, row } from './inspector/fields'
 import { revealRow, buildPresentingProps, buildMorphProps, applySteps } from './inspector/animate'
+import { enterPicker, setEnter } from './inspector/buildorder'
 import { buildTextProps, buildTextFill, buildTextStroke } from './inspector/text'
 import { buildShapeProps, buildShapeFill, buildShapeStroke, buildSharedPaint } from './inspector/shape'
 import { buildImageProps, buildMediaProps, buildCodeProps, buildEmbedProps } from './inspector/media'
@@ -207,7 +208,7 @@ export class PropsPanel {
    *  things look. Animate is how they move; Interact is what they do when the
    *  audience points at them. */
   private static TAB_SECTIONS: Record<'animate' | 'interact', string[]> = {
-    animate: ['Animation', 'Morph', 'Transition'],
+    animate: ['Animation', 'Morph', 'Transition', 'Build order'],
     interact: ['Interactivity'],
   }
 
@@ -399,6 +400,9 @@ export class PropsPanel {
     layerBlock(this, els)
     buildSharedPaint(this, els)
     section(this, t('Animation'))
+    // one Entrance for the whole selection; Mixed until one is chosen
+    const enters = new Set(els.map((e) => e.fx?.enter))
+    row(this, 'Entrance', enterPicker(enters.size > 1 ? 'mixed' : els[0].fx?.enter, (v) => setEnter(this, els.map((e) => e.id), v)))
     revealRow(this, els)
   }
 

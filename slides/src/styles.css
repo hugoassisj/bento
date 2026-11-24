@@ -1520,6 +1520,31 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
 }
 .ed-step-badge.sel { background: var(--accent); color: var(--accent-on); }
 .ed-step-badge:hover { transform: scale(1.15); }
+
+/* Build order (inspector/buildorder.ts): the slide's reveal steps, one group
+   per press of →; rows drag between groups (a line) or onto one (a tint) */
+.ed-build { display: flex; flex-direction: column; margin: 2px 0 8px; }
+.ed-build-still { padding: 3px 6px 5px; font-size: 12px; color: var(--muted); }
+.ed-build-group { padding: 2px 0 4px; border-radius: 6px; }
+.ed-build-head { padding: 2px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.ed-build-row {
+  display: flex; align-items: center; gap: 5px; box-sizing: border-box; min-height: 28px;
+  padding: 2px 2px 2px 8px; border-radius: 6px; border: 1px solid transparent;
+  font-size: 12px; cursor: grab; user-select: none; touch-action: none;
+}
+.ed-build-row:hover { background: rgb(94 118 153 / 0.10); }
+.ed-build-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ed-build-row.dragging { opacity: 0.4; }
+.ed-props .ed-build-row select { flex: none; width: 84px; height: 24px; font-size: 11.5px; }
+.ed-props .ed-build-row .ed-num { flex: none; width: 34px; }
+.ed-build-row .ed-build-remove { flex: none; padding: 3px; color: var(--muted); }
+.ed-build-row .ed-build-remove svg { width: 12px; height: 12px; }
+.ed-build-group.drop-before { box-shadow: 0 -2px 0 0 var(--accent); }
+.ed-build-group.drop-after { box-shadow: 0 2px 0 0 var(--accent); }
+.ed-build-group.drop-into { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.ed-build-show { display: block; margin: -2px 0 8px; font-size: 12px; }
+/* the element a Build order row points at (fxpreview.ts peekElement) */
+.ed-stage-scale .ed-peek { outline: 3px solid var(--blue); outline-offset: 3px; }
 .ed-comment-marker {
   position: absolute;
   pointer-events: auto;

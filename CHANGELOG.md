@@ -24,6 +24,19 @@ pre-1.0.
   step of its own right after them. It is one undo step, and Reveal ▸ Together
   still puts elements on the same step on purpose. The badge's tooltip now
   points at the Animate tab, where the number can be typed.
+- **A Build order list shows how a slide builds, and reorders it.** With
+  nothing selected, the Animate tab lists every element that appears on a
+  click, grouped by click ("Click 1", "Click 2" …), with a count of what is
+  shown with the slide. Drag a row between groups to give it its own click
+  there, or onto a group to reveal it with that group; the clicks stay
+  numbered 1, 2, 3 with no gaps, and each change is one undo step. Each row
+  sets the element's entrance and has a button to show it with the slide
+  again; elements sharing a click get a Stagger number for the order they
+  enter in. Pointing at a row outlines its element on the canvas, and a click
+  selects it. From the keyboard, Alt+↑/↓ moves a row and Delete removes its
+  click. An element's Reveal buttons link to the list ("Show build order"),
+  and several selected elements can now get one entrance in one go. Nothing
+  changes in the file.
 
 ## [1.3.0] — 2026-11-22
 
