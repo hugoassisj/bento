@@ -720,4 +720,10 @@ jobs:
         # clipped frame child exports clipped, a hidden selection cannot be
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
+      - name: Start from scratch asks which fresh start in Chromium
+        if: ${{ !cancelled() }}
+        # A kernel dialog, not a confirm: Keep this look or Blank, Escape,
+        # Cancel and ⌘Z behind it change nothing, the ⌘K entry opens it; one
+        # ⌘Z restores the deck; docId and collab never change; German strings.
+        run: node scripts/test-slides-start-scratch-browser.mjs
 
