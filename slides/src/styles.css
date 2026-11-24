@@ -1880,6 +1880,22 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 14px;
   background: #1a2029;
 }
+/* speaker view: the audience screen is black (B) while this preview moves on */
+.sv-black-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  padding: 6px 12px;
+  background: #000;
+  color: #fff;
+  border-bottom: 2px solid var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+.sv-black-strip[hidden] { display: none; }
 .sv-side { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, min(30vh + 18px, 45%)) 16px minmax(0, 1fr); }
 .sv-side.sv-single-pane { grid-template-rows: minmax(0, 1fr); }
 .sv-label {
@@ -1984,6 +2000,9 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   inset: 0;
   z-index: 60;
   background: #000;
+  /* the same as the .reveal beneath it: a horizontal swipe on the black screen
+     reaches our swipe handler instead of the browser's back gesture */
+  touch-action: pinch-zoom;
 }
 .bento-blackout[hidden] { display: none; }
 /* Reveal steps (fx.step): an element whose step has not come yet. Visibility,

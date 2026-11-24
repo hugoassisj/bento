@@ -5,6 +5,7 @@ import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
   "Press ? for keyboard shortcuts": "Pulse ? para ver los atajos de teclado",
+  "Audience screen is black": "La pantalla del público está en negro",
   "View": "Vista",
   "Current slide": "Diapositiva actual",
   "Slide thumbnails": "Miniaturas de diapositivas",

@@ -689,6 +689,14 @@ export function startPresentation(
     updateSpeakerControls()
   }
   const toggleBlack = () => setBlack(!blacked)
+  // On the audience screen nobody can see where the deck is while it is black,
+  // so a clicker press there wakes it and does nothing else (as PowerPoint and
+  // Keynote do). The speaker view keeps navigating: the presenter sees it.
+  const wakeIfBlack = () => {
+    if (!blacked) return false
+    setBlack(false)
+    return true
+  }
 
   // ——— reduced motion (a VIEWER/PRESENTER preference, never in the doc) ———
   // Defaults to the OS 'prefers-reduced-motion'; an explicit toggle (M, or the
@@ -874,6 +882,17 @@ export function startPresentation(
     nav('next')?.toggleAttribute('disabled', !hasNext())
     nav('last')?.toggleAttribute('disabled', !hasNext())
     nav('black')?.classList.toggle('active', blacked)
+    // the audience is black while the presenter keeps navigating here: say so
+    // over the current-slide preview (re-rendered on every slide change)
+    const curFrame = d.querySelector('.sv-current > .sv-frame')
+    if (curFrame && !curFrame.querySelector('.sv-black-strip')) {
+      const strip = d.createElement('div')
+      strip.className = 'sv-black-strip'
+      strip.setAttribute('role', 'status')
+      strip.textContent = t('Audience screen is black')
+      curFrame.appendChild(strip)
+    }
+    d.querySelector('.sv-black-strip')?.toggleAttribute('hidden', !blacked)
     nav('laser')?.classList.toggle('active', laserEnabled)
     nav('laser')?.setAttribute('aria-pressed', String(laserEnabled))
     nav('reduce')?.classList.toggle('active', reduceMotion)
@@ -1290,7 +1309,8 @@ export function startPresentation(
   // editor shortcut sheet's own Present rows, so both sheets say the same.
   const SHOW_KEYS: Array<{ label?: string; does: Array<[keys: string[], run: (ev: KeyboardEvent) => void]> }> = [
     { label: 'Previous · next slide, or the next reveal step on a slide that has them',
-      does: [[['ArrowLeft', 'PageUp', 'p'], goPrev], [['ArrowRight', 'PageDown', ' ', 'n'], goNext]] },
+      // a press on a black screen only wakes it (wakeIfBlack): nobody can see the deck move
+      does: [[['ArrowLeft', 'PageUp', 'p'], () => { if (!wakeIfBlack()) goPrev() }], [['ArrowRight', 'PageDown', ' ', 'n'], () => { if (!wakeIfBlack()) goNext() }]] },
     { label: 'First slide', does: [[['Home'], goFirst]] },
     { label: 'Last slide', does: [[['End'], goLast]] },
     { label: 'Speaker view — notes on a second screen if you have one', does: [[['s'], () => openSpeaker()]] },
@@ -1410,6 +1430,7 @@ export function startPresentation(
     const dx = t0.clientX - touchX
     const dy = t0.clientY - touchY
     if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.2) return // a tap or a scroll
+    if (wakeIfBlack()) return
     if (dx < 0) {
       if (hasNext()) goNext()
       else exit()

@@ -720,6 +720,13 @@ jobs:
         # clipped frame child exports clipped, a hidden selection cannot be
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
+      - name: A clicker press on a black screen wakes it in Chromium
+        if: ${{ !cancelled() }}
+        # Audience window, black: →, PageDown, Space, ←, PageUp and a swipe lift
+        # the blackout without moving the slide or a reveal step; the next press
+        # navigates. Speaker window: → still navigates under black, and a strip
+        # over the current-slide preview says the audience screen is black.
+        run: node scripts/test-slides-black-wake-browser.mjs
       - name: The show's own keys in Chromium
         if: ${{ !cancelled() }}
         # Reveal's keyboard is off: / . ; : V J K G C A do nothing (no pause,
