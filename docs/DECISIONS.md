@@ -15428,8 +15428,10 @@ fixtures (scripts/fixtures/agent-decks/) and the gallery decks
 - **An uncomputable backdrop is skipped, never guessed.** Contrast is judged
   only against the slide colour and the shapes beneath, in colours it can
   read (hex and comma rgb() as written; names, hsl() and the rest through the
-  browser's parser when there is a DOM). Text over a picture, chart, table,
-  embed, code block, a blended layer, a paint server or an unreadable colour
-  is not judged at all.
+  browser's parser when there is a DOM). Text over a picture, svg artwork,
+  chart, table, embed, code block, a blended layer, a paint server or an
+  unreadable colour is not judged at all. That includes nearly every slide of
+  the starter deck, which lays a full-slide svg under its text, so the
+  starter's clean contrast result says little: it is skipped, not passed.
 - **Without a DOM, whole boxes; with one, glyphs.** The chart check needs the
   renderer and is skipped without one, as overflow is.
