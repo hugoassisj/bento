@@ -20,6 +20,8 @@
 // text layout changed, and drift in a measuring tool is worse than no tool: it
 // reads as authoritative and is quietly wrong.
 
+import type { Area } from './contrast.ts'
+import type { SlideElement } from './model.ts'
 import type { BentoDoc, TableElement, TextElement } from './model.ts'
 import { defaultText } from './model.ts'
 import { renderElement } from './render.ts'
@@ -146,6 +148,79 @@ export function measureTables(els: TableElement[], doc: BentoDoc): TableMeasurem
     node.remove()
     return { height, overflow: Math.max(0, height - el.h) }
   }))
+}
+
+/**
+ * The boxes a rendered text's glyphs fill, one per line run, in slide px of
+ * the element's own frame — the areas a reader actually reads, since a text
+ * box larger than its words has corners with nothing in them. A turned text's
+ * line boxes come back as screen-axis bounds, so the node is measured unturned:
+ * its transform is lifted for the read and restored at once (no paint).
+ * `fallbackScale` is screen px per slide px when the node's own width cannot
+ * say (a zero-width box). Shared by the Export section's contrast reading
+ * (on the canvas node) and validate() (on an off-screen render).
+ */
+export function glyphAreas(node: HTMLElement, el: Pick<SlideElement, 'x' | 'y' | 'w'>, fallbackScale = 1): Area[] | undefined {
+  const prev = node.style.transform
+  node.style.transform = 'none'
+  try {
+    const box = node.getBoundingClientRect()
+    const k = box.width / (el.w || 1) || fallbackScale
+    // text nodes only: a range over the whole node also returns its block
+    // wrappers' full-width boxes, which are exactly the empty corners
+    const rects: DOMRect[] = []
+    const walk = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+    const range = document.createRange()
+    for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+      if (!t.textContent?.trim()) continue
+      range.selectNodeContents(t)
+      rects.push(...range.getClientRects())
+    }
+    const areas = rects
+      .filter((r) => r.width > 0.5 && r.height > 0.5)
+      .map((r) => ({ x: el.x + (r.left - box.left) / k, y: el.y + (r.top - box.top) / k, w: r.width / k, h: r.height / k }))
+    return areas.length ? areas : undefined
+  } finally {
+    node.style.transform = prev
+  }
+}
+
+/**
+ * The glyph areas of many text elements, rendered through ONE host at their
+ * own size: every node goes in first and is read after, so the whole batch
+ * costs one layout. undefined for a text that draws no glyphs.
+ */
+export function measureGlyphs(els: TextElement[], doc: BentoDoc): Array<Area[] | undefined> {
+  if (!els.length) return []
+  return withHost((host) => {
+    const nodes = els.map((el) => host.appendChild(renderElement(el, doc)))
+    return nodes.map((node, i) => glyphAreas(node, els[i]))
+  })
+}
+
+/**
+ * How far each chart's text runs outside its own box, in slide px — 0 when it
+ * all fits. The chart is rendered as the canvas and thumbnails draw it (the
+ * static snapshot, whose viewBox is the element's box), and every <text> in it
+ * is compared with that box: the svg viewport cuts off whatever lies outside,
+ * so an axis label wider than its margin reads ") MWh".
+ */
+export function measureChartText(els: SlideElement[], doc: BentoDoc): Array<{ px: number; text: string }> {
+  if (!els.length) return []
+  return withHost((host) => {
+    const nodes = els.map((el) => host.appendChild(renderElement({ ...el, x: 0, y: 0, rotation: 0 }, doc)))
+    return nodes.map((node, i) => {
+      const { w, h } = els[i]
+      let worst = { px: 0, text: '' }
+      for (const t of node.querySelectorAll<SVGTextElement>('svg text')) {
+        if (!t.textContent?.trim()) continue
+        const b = t.getBBox()
+        const px = Math.max(-b.x, -b.y, b.x + b.width - w, b.y + b.height - h)
+        if (px > worst.px) worst = { px: Math.round(px), text: t.textContent.trim() }
+      }
+      return worst
+    })
+  })
 }
 
 const specOf = (el: TextElement): TextMeasureSpec => ({

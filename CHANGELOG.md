@@ -25,6 +25,14 @@ pre-1.0.
   misspelled property now comes with a suggestion: `fil` asks "did you mean
   `fill`?". Values are judged by the same rules a paste uses, so the two never
   disagree, and the starter and gallery decks stay clean.
+- **Checking a deck now sees what people see.** `window.bento.validate()`
+  (and `bento check`) reports text too faint to read against what is behind
+  it, with the measured ratio and the one it needs (4.5:1, or 3:1 for large
+  text); two text boxes drawn over each other; an element in an auto-layout
+  frame that ends up past the frame's edge (cut off, when the frame clips);
+  and chart labels cut off at the chart's edge. These are advice, never
+  changes: a faint ghost numeral or a muted page number is left alone, and so
+  is text over a picture, whose background cannot be worked out.
 
 ## [1.3.0] — 2026-11-22
 

@@ -31,6 +31,14 @@
 // Colour syntax is the browser's to decide (`CSS.supports`); node tooling does
 // not guess at it. An element whose type or geometry is invalid skips the
 // geometry and measured checks, which would only report nonsense derived from it.
+//
+// WHAT PEOPLE SEE. visualchecks.ts adds the defects a person notices at a
+// glance: `low-contrast` (text against what is behind it, WCAG thresholds),
+// `text-overlap` (two texts drawn over each other), `outside-frame` (a frame
+// child that, laid out, runs past its frame) and `chart-label-clipped` (chart
+// text cut off at the chart's edge). Advice only — warnings and infos with the
+// measured number. With a DOM, text is judged on its glyphs and the chart is
+// rendered; without one, whole boxes are used and the chart check is skipped.
 
 import type { BentoDoc, CodeElement, Slide, SlideElement, TableElement, TextElement } from './model.ts'
 import { isWebUrl } from './model.ts'
@@ -43,6 +51,7 @@ import { tokenName } from './tokens.ts'
 import { checkElementProp, ELEMENT_CHECKS, type JsonSchema } from './untrusted.ts'
 import { isFrame } from './layout.ts'
 import { REQUIRED_ELEMENT_KEYS } from './model.ts'
+import { visualChecks } from './visualchecks.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
 
@@ -630,6 +639,9 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
 
   // ---- measured checks -----------------------------------------------------
   if (measure) measureOverflow(withoutElements(doc, skipMeasure), add)
+  // contrast, text on text, frame children, chart labels (visualchecks.ts):
+  // advice about what a person sees, never a fix
+  visualChecks(withoutElements(doc, skipMeasure), add, measure)
 
   const counts = { error: 0, warning: 0, info: 0 }
   for (const f of findings) counts[f.severity]++

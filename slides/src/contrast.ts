@@ -7,7 +7,7 @@
 // gradient evaluated AT that point — and the element's own colour is
 // composited over it the same way. The worst point is the answer, and where it
 // is. Pure model maths: no DOM, so the rig checks it directly.
-import type { GradientFill, ShapeElement, Slide, SlideElement } from '../../model'
+import type { GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { parseColor } from './colorvalue'
 
 type RGBA = [number, number, number, number] // 0..255, alpha 0..1

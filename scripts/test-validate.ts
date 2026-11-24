@@ -439,5 +439,87 @@ const rect = (extra: Record<string, unknown> = {}) =>
   ok(shaped, 'every finding keeps the shape { code, severity, message, slide, element, path }')
 }
 
+// ------------------------------------------------- what people see
+// Contrast, text on text and frame children, judged without a DOM: on whole
+// boxes, with the colours this rig can read without a browser. Advice only.
+const slideOf = (els: unknown[], background = '#F2F0EA'): BentoDoc => ({
+  ...clean,
+  slides: [{ id: 's1', name: 'one', background, transition: 'fade', notes: '', elements: els }],
+} as any)
+const seen = (d: BentoDoc, code: string) => validateDoc(d, { measure: false }).findings.filter((f) => f.code === code)
+const txt = (extra: Record<string, unknown> = {}) =>
+  ({ id: 'a', type: 'text', x: 100, y: 100, w: 400, h: 60, html: '<p>hello</p>', color: '#F2F0EA', fontSize: 20, ...extra })
+{
+  const low = seen(slideOf([txt()]), 'low-contrast')
+  ok(low.length === 1 && low[0].severity === 'warning' && low[0].path === 'color' && low[0].element === 'a' && /1:1 against/.test(low[0].message) && /whole box/.test(low[0].message),
+    `cream text on a cream slide is low-contrast, with the ratio, measured on the whole box (${low[0]?.message.slice(0, 60) ?? 'nothing'})`)
+  ok(seen(slideOf([txt({ color: '#0D1B2E' })]), 'low-contrast').length === 0, 'the same text in #0D1B2E is not')
+  // #949494 on white is 3.03:1 — enough for large text, not for small
+  const grey = (extra: Record<string, unknown>) => seen(slideOf([txt({ color: '#949494', ...extra })], '#FFFFFF'), 'low-contrast')
+  ok(grey({ fontSize: 20 }).length === 1 && /needs 4\.5:1 at 20px/.test(grey({ fontSize: 20 })[0].message), '3:1 at 20px needs 4.5:1 and says so')
+  ok(grey({ fontSize: 24 }).length === 0, '3:1 at 24px is enough (large text)')
+  ok(grey({ fontSize: 19, fontWeight: 700 }).length === 0, '3:1 at 19px bold is enough (large bold text)')
+  ok(grey({ fontSize: 18, fontWeight: 700 }).length === 1, '3:1 at 18px bold is not')
+  ok(seen(slideOf([txt({ color: '#D0D0D0', fontSize: 60 })], '#FFFFFF'), 'low-contrast').length === 1, 'under 3:1 fails at any size')
+  ok(seen(slideOf([txt({ opacity: 0.05, color: '#000000', fontSize: 300 })]), 'low-contrast').length === 0, 'a ghost numeral at 5% opacity is decoration, not judged')
+  ok(seen(slideOf([txt({ color: 'rgba(0,0,0,0.1)' })]), 'low-contrast').length === 0, 'so is text whose colour alpha is under 0.15')
+  ok(seen(slideOf([txt({ html: '{{page:2}}', color: '#E8E4DA' })]), 'low-contrast').length === 0, 'furniture made only of fields (a muted page number) is not judged')
+  const card = { id: 'card', type: 'shape', shape: 'rect', x: 80, y: 80, w: 460, h: 100, fill: '#0D1B2E' }
+  ok(seen(slideOf([card, txt({ color: '#FFFFFF' })], '#FFFFFF'), 'low-contrast').length === 0, 'white text on a navy card on a white slide reads')
+  ok(seen(slideOf([card, txt({ color: '#FFFFFF', x: 700 })], '#FFFFFF'), 'low-contrast').length === 1, 'the same text off the card does not')
+  ok(seen(slideOf([{ ...card, fill: 'rgba(13,27,46,0.04)' }, txt({ color: '#FFFFFF' })], '#FFFFFF'), 'low-contrast').length === 1, 'a card at 4% alpha hardly changes the backdrop')
+  ok(seen(slideOf([{ id: 'img', type: 'image', x: 0, y: 0, w: 1280, h: 720, src: 'data:image/png;base64,AA==' }, txt({ color: '#FFFFFF' })], '#FFFFFF'), 'low-contrast').length === 0,
+    'text over a picture is not judged — its backdrop cannot be computed')
+  ok(seen(slideOf([txt({ color: 'white' })], '#FFFFFF'), 'low-contrast').length === 0, 'a named colour is not guessed at without a browser')
+}
+{
+  const t = (id: string, x: number, y: number, html: string, extra: Record<string, unknown> = {}) =>
+    ({ id, type: 'text', x, y, w: 400, h: 80, html: `<p>${html}</p>`, fontSize: 30, color: '#111111', ...extra })
+  const over = seen(slideOf([t('a', 100, 100, 'hello there'), t('b', 110, 110, 'overlapping')]), 'text-overlap')
+  ok(over.length === 1 && over[0].element === 'b' && over[0].severity === 'warning' && /"a"/.test(over[0].message),
+    `two overlapping text boxes give exactly one text-overlap, on the upper one (${over.map((f) => f.element).join(', ') || 'none'})`)
+  ok(seen(slideOf([t('a', 100, 100, 'hello there'), t('b', 501, 100, 'overlapping')]), 'text-overlap').length === 0, 'side by side with a 1px gap: none')
+  ok(seen(slideOf([t('a', 100, 100, 'hello there'), t('b', 100, 175, 'overlapping')]), 'text-overlap').length === 0, 'a 5px overlap (under a tenth of the box): none')
+  ok(seen(slideOf([t('a', 100, 100, 'hello there', { showOnHover: 'one' }), t('b', 110, 110, 'overlapping', { showOnHover: 'two' })]), 'text-overlap').length === 0,
+    'texts in different hover sets are never shown together: none')
+  ok(seen(slideOf([t('a', 100, 100, 'hello there', { groupId: 'g' }), t('b', 110, 110, 'overlapping', { groupId: 'g' })]), 'text-overlap').length === 1,
+    'two different texts in one group still collide')
+  ok(seen(slideOf([t('a', 104, 104, 'Title', { color: '#999999', groupId: 'g' }), t('b', 100, 100, 'Title', { groupId: 'g' })]), 'text-overlap').length === 0,
+    'a shadow copy of the same words is an effect: none')
+  ok(seen(slideOf([t('a', 100, 100, '48', { opacity: 0.05, fontSize: 300, w: 600, h: 400 }), t('b', 110, 110, 'overlapping')]), 'text-overlap').length === 0,
+    'a ghost numeral behind a title: none')
+  ok(seen(slideOf([t('a', 100, 100, 'hello there', { hidden: true }), t('b', 110, 110, 'overlapping')]), 'text-overlap').length === 0, 'a hidden text: none')
+  const table = { id: 'tb', type: 'table', x: 120, y: 120, w: 400, h: 100, columns: [{ w: 1 }], header: false, rows: [{ cells: [{ html: 'x' }] }], style: {} }
+  ok(seen(slideOf([table, t('b', 110, 110, 'over the table')]), 'text-overlap').length === 1, 'text over a table collides too')
+}
+{
+  // a column frame that clips, 140 tall: with padding 10 and gap 10, two
+  // children of 60 fill it to its edge and the third lands 70px below it
+  const frame = (clip: boolean, h = 140) => ({ id: 'f', type: 'shape', shape: 'rect', x: 100, y: 100, w: 300, h, fill: '#EEEEEE',
+    layout: { dir: 'col', gap: 10, pad: [10, 10, 10, 10], clip } })
+  const kid = (id: string) => ({ id, type: 'shape', shape: 'rect', x: 0, y: 0, w: 100, h: 60, fill: '#333333', parentId: 'f' })
+  const cut = seen(slideOf([frame(true), kid('k1'), kid('k2'), kid('k3')]), 'outside-frame')
+  ok(cut.length === 1 && cut[0].severity === 'warning' && cut[0].path === 'parentId' && cut[0].element === 'k3' && /70px past the bottom/.test(cut[0].message) && /clips/.test(cut[0].message),
+    `a child laid out past the bottom of a clipping frame is an outside-frame warning (${cut.map((f) => `${f.element}: ${f.message.slice(0, 50)}`).join('; ') || 'none'})`)
+  const shown = seen(slideOf([frame(false), kid('k1'), kid('k2'), kid('k3')]), 'outside-frame')
+  ok(shown.length === 1 && shown[0].severity === 'info', 'past a frame that does not clip, it is info')
+  ok(seen(slideOf([frame(true, 220), kid('k1'), kid('k2'), kid('k3')]), 'outside-frame').length === 0, 'a frame tall enough for its children: none')
+  const raw = slideOf([frame(true), kid('k1'), kid('k2'), kid('k3')])
+  const before = JSON.stringify(raw)
+  validateDoc(raw, { measure: false })
+  ok(JSON.stringify(raw) === before, 'the frame check lays out a copy: the document is not moved')
+}
+{
+  const NEW = ['low-contrast', 'text-overlap', 'outside-frame', 'chart-label-clipped']
+  const s = validateDoc(starterDoc(), { measure: false }).findings.filter((f) => NEW.includes(f.code) && f.severity !== 'info')
+  ok(s.length === 0, `the starter deck gains no visual warnings on whole boxes (${s.map((f) => `${f.code}@${f.element}`).join(', ') || 'none'})`)
+  for (const name of readdirSync(fixtureDir).filter((n) => n.endsWith('.json'))) {
+    const loaded = parseDocInputReport(readFileSync(join(fixtureDir, name), 'utf8'), { fit: false })
+    const f = loaded ? validateDoc(loaded.doc, { measure: false }).findings.filter((v) => NEW.includes(v.code)) : null
+    ok(f?.length === 0, `agent fixture ${name}: no visual findings (${f?.map((v) => `${v.code}@${v.element}`).join(', ') || 'none'})`)
+  }
+  ok(!validateDoc(starterDoc(), { measure: false }).findings.some((f) => f.code === 'chart-label-clipped'), 'the chart check needs the renderer: skipped without a DOM')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

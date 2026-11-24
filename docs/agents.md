@@ -273,7 +273,14 @@ values a property does not take (`invalid-value`: `"x": "10"` instead of
 `10`, a colour the browser cannot parse, an enum word that is not one of its
 values, judged by the same checks the paste gate uses), a `parentId` that names
 no frame on the slide (`dangling-parent`: the element is free, and the layout
-pass drops the link), text that overflows its box (measured against the real renderer), elements off
+pass drops the link), what a person sees at a glance — text too faint against
+what is behind it (`low-contrast`, with the measured ratio and the WCAG ratio
+it needs; decoration under 0.15 opacity, page-number furniture and text over a
+picture are not judged), two texts drawn over each other (`text-overlap`), a
+frame child that, once laid out, runs past its frame (`outside-frame`: a
+warning when the frame clips it, info otherwise; judged on a laid-out copy, so
+a raw document is checked as it will be drawn) and chart text cut off at the
+chart's edge (`chart-label-clipped`) — text that overflows its box (measured against the real renderer), elements off
 the canvas, entrances that can never run, `dash-march` without a dashed stroke,
 broken `link` and `asset:` references, duplicate ids and morph-key collisions,
 and chart options charts-lite does not implement.

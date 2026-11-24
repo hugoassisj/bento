@@ -5,7 +5,7 @@
 //
 //   esbuild scripts/test-slides-contrast.ts --bundle --platform=node --format=esm --outfile=/tmp/c.mjs && node /tmp/c.mjs
 //
-// WHAT THIS PROVES (editor/inspector/contrast.ts, pure model maths):
+// WHAT THIS PROVES (contrast.ts, pure model maths):
 //   1. a flat text on a flat slide reads the textbook ratio (white on black 21:1);
 //   2. the backdrop is what lies BEHIND each point: a card under half the text
 //      makes that half the weak one, and the reading says where;
@@ -16,7 +16,7 @@
 //   6. text is judged where its glyphs are (line boxes from the caller), not
 //      in the empty corners of a box larger than its words;
 //   7. pictures have no colour of their own to judge (null).
-import { measureContrast } from '../slides/src/editor/inspector/contrast.ts'
+import { measureContrast } from '../slides/src/contrast.ts'
 
 let checks = 0, failures = 0
 function ok(cond: unknown, msg: string) { checks++; if (!cond) { failures++; console.log(`  FAIL  ${msg}`) } else console.log(`  ok    ${msg}`) }

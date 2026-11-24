@@ -663,7 +663,7 @@ runs:
         node "$RUNNER_TEMP/test-slides-stacks.mjs"
 
     - name: Contrast reading rig
-      # editor/inspector/contrast.ts, DOM-free: the Export section's WCAG
+      # slides/src/contrast.ts, DOM-free: the Export section's WCAG
       # reading is the WORST of a grid of points, each against what lies
       # behind it there — opacity, a fill's alpha, gradients evaluated at the
       # point, rotated cards — and it says where the weak point is.

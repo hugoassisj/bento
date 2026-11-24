@@ -11,7 +11,8 @@ import { labelIn } from '../layerrows'
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import type { Slide, SlideElement } from '../../model'
-import { measureContrast, type Area } from './contrast'
+import { measureContrast, type Area } from '../../contrast'
+import { glyphAreas } from '../../measure'
 import { rasterizeSlide, downloadBlob, type Box } from '../exportimages'
 import type { ImageScale } from '../../exportimages'
 import { nativeSlideSvg } from '../svgexport'
@@ -137,38 +138,12 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
   if (els.length === 1) accessibility(p, els[0], slide)
 }
 
-/**
- * The boxes a text's glyphs fill, one per rendered line, in slide px of the
- * element's own frame — read off the canvas render. A turned text's line
- * boxes come back as screen-axis bounds, so it is measured unturned: the
- * canvas node is un-rotated for the read and restored at once (no paint).
- */
-function glyphAreas(el: SlideElement, slideW: number): Area[] | undefined {
+/** The boxes a text's glyphs fill on the canvas (measure.ts glyphAreas). */
+function canvasGlyphAreas(el: SlideElement, slideW: number): Area[] | undefined {
   const node = document.querySelector<HTMLElement>(`.ed-stage-scale [data-el-id="${CSS.escape(el.id)}"]`)
   const stage = document.querySelector<HTMLElement>('.ed-stage-scale')
   if (!node || !stage) return undefined
-  const prev = node.style.transform
-  node.style.transform = 'none'
-  try {
-    const box = node.getBoundingClientRect()
-    const k = box.width / (el.w || 1) || stage.getBoundingClientRect().width / slideW
-    // text nodes only: a range over the whole node also returns its block
-    // wrappers' full-width boxes, which are exactly the empty corners
-    const rects: DOMRect[] = []
-    const walk = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
-    const range = document.createRange()
-    for (let t = walk.nextNode(); t; t = walk.nextNode()) {
-      if (!t.textContent?.trim()) continue
-      range.selectNodeContents(t)
-      rects.push(...range.getClientRects())
-    }
-    const areas = rects
-      .filter((r) => r.width > 0.5 && r.height > 0.5)
-      .map((r) => ({ x: el.x + (r.left - box.left) / k, y: el.y + (r.top - box.top) / k, w: r.width / k, h: r.height / k }))
-    return areas.length ? areas : undefined
-  } finally {
-    node.style.transform = prev
-  }
+  return glyphAreas(node, el, stage.getBoundingClientRect().width / slideW)
 }
 
 /** Where the weakest point sits: rows top → bottom, columns left → right. Translated at render. */
@@ -180,7 +155,7 @@ const WHERE = [
 
 /** The selection's contrast against what is behind it, graded, and its alt text. */
 function accessibility(p: PropsPanel, el: SlideElement, slide: Slide) {
-  const glyphs = el.type === 'text' ? glyphAreas(el, p.store.doc.size.width) : undefined
+  const glyphs = el.type === 'text' ? canvasGlyphAreas(el, p.store.doc.size.width) : undefined
   // a text with no words has nothing to read against its backdrop
   const reading = el.type === 'text' && !glyphs ? null : measureContrast(el, slide, 5, glyphs)
   if (reading) {

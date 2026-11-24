@@ -729,3 +729,12 @@ jobs:
         # for typos; every colour syntax the browser draws stays quiet, and the
         # starter and fixture decks gain none of the new codes.
         run: node scripts/test-slides-validate-values-browser.mjs
+
+      - name: validate() sees what people see in Chromium
+        if: ${{ !cancelled() }}
+        # low-contrast with the measured ratio, judged on the glyphs (a tall box
+        # hanging off its card is not failed for its empty corner), one
+        # text-overlap per pair and none where only empty box space meets,
+        # outside-frame after the real layout pass, chart labels cut off at the
+        # chart's edge; the starter and the agent fixtures gain no false finding.
+        run: node scripts/test-slides-validate-visual-browser.mjs

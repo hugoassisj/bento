@@ -509,7 +509,7 @@ export const SEG_ICONS: Record<string, string> = {
   top: ICONS.valignTop, middle: ICONS.valignMiddle, bottom: ICONS.valignBottom,
 }
 
-export { parseColor, combineColor } from './colorvalue'
+export { parseColor, combineColor } from '../../colorvalue'
 
 /** Aesthetic shadow presets offered in the panel (custom values stay 'custom'). */
 export const SHADOW_PRESETS: Record<string, { x?: number; y?: number; blur: number; color: string }> = {
