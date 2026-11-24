@@ -104,7 +104,7 @@ try {
     await load(rowDeck())
     await pick('a'); await pick('b', true)
     const note = await p.evaluate(() => { const n = document.querySelector('.ed-props .ed-frame-placed'); return n?.offsetParent ? n.textContent : '' })
-    ok(/frame/i.test(note) && await p.locator('.ed-props .ed-frame-placed .ed-link-btn').count() === 1, `they say the frame places them, with a way to it ("${note.slice(0, 40)}…")`)
+    ok(/frame/i.test(note) && await p.locator('.ed-props .ed-frame-placed .ed-link-btn', { hasText: 'Select the frame' }).count() === 1, `they say the frame places them, with a way to it ("${note.slice(0, 40)}…")`)
     ok(await p.locator('.ed-props .ed-toolbar .ed-tool[aria-label="Align left"]').count() === 0, 'and offer no align tools that would do nothing')
   })
 
