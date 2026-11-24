@@ -17,6 +17,7 @@ import { uid } from '../model'
 import { TOKEN_TYPES, activeMode, deleteToken, freeTokenName, modesOf, renameToken, tokenUses, tokenName, protoName, tokenNameError, tokenTargets } from '../tokens'
 import { components, instanceOf } from '../components'
 import { PALETTE_SLOTS, eachRef, paletteOf, slotIsSet } from '../palette'
+import { writeAccent } from '../accent'
 import { parseColor, slotLabel } from './inspector/controls'
 import { openColorPopover } from './inspector/colorpopover'
 import { colorGroups } from './inspector/color'
@@ -439,7 +440,7 @@ export class TokensPane {
         const th = this.store.doc.theme
         if (slot === 'bg1') th.background = v
         else if (slot === 'tx1') th.color = v
-        else if (slot === 'accent1') th.accent = v
+        else if (slot === 'accent1') writeAccent(th, v) // a derived chart palette moves with it, as setAccent's does
         else (th.palette ??= {})[slot as 'accent2'] = v
       }
       const set = (v: string) => this.store.commit(() => write(v))

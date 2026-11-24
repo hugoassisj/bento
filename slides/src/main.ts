@@ -31,6 +31,7 @@ function reportGuard(dropped: Dropped[]) {
   if (dropped.length) console.info('[bento] opened file: neutralised', dropped)
 }
 import { validateDoc, type ValidateOpts } from './validate'
+import { isAccentColour, setAccent, type AccentReport } from './accent'
 import { buildSchema } from './schema'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
@@ -397,6 +398,24 @@ dismissSplash()
       })
     }
     return parsed.report
+  },
+  /**
+   * Change the deck's accent colour (palette slot accent1) as ONE operation
+   * and one undo step: sets theme.accent, re-derives every literal bound to
+   * the palette, and re-derives theme.chartPalette only when it is the one
+   * the old accent derives (a hand-chosen one stays). Returns the report —
+   * `{ from, to, followed, chartPalette: 'follows'|'rederived'|'kept',
+   * nearby: [{ path, slide?, element?, value, distance }], notes }` — where
+   * `nearby` lists unbound values close to the old accent, which are NEVER
+   * rewritten. Returns null and changes nothing for a colour that is not
+   * #rgb or #rrggbb, or in a read-only copy. Change a colour at its slot,
+   * never by replacing its literals (src/accent.ts).
+   */
+  setAccent(colour: string): AccentReport | null {
+    let report: AccentReport | null = null
+    if (!isAccentColour(colour)) return null // no empty undo step for a refusal
+    store.commit(() => { report = setAccent(store.doc, colour) })
+    return report
   },
   /**
    * The document as compact JSON: every field equal to what the editor would

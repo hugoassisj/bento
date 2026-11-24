@@ -11,6 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Changing the accent colour is one step, and nothing is left behind.**
+  Scripts and AI agents can call `window.bento.setAccent('#0A7F5A')`: every
+  colour linked to the accent changes at once, the saved file holds no old
+  copies of it, and one undo puts everything back. A chart palette that was
+  worked out from the old accent follows the new one, in Tokens too; one you
+  picked by hand stays as it is, and the answer says so. Colours that only
+  look like the old accent are listed for you to check and never changed.
+
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the

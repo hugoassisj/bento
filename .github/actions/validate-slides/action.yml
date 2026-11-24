@@ -751,3 +751,11 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Changing the accent is one operation with no stale bound value
+      # setAccent on the starter deck: no theme-ref-stale afterwards and a
+      # derive fixed point; a chart palette derived from the old accent is
+      # re-derived, a hand-chosen one kept and reported; unbound look-alikes
+      # are listed and byte-identical (a find-and-replace changes them);
+      # only bound literals move; one undo step through the store.
+      shell: bento-step {0}
+      run: node scripts/test-slides-set-accent.ts
