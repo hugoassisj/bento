@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Theme: {name}": "Design: {name}",
+  "{n}×": "{n}×",
+  "1 property follows {name} — click to select it": "1 Eigenschaft folgt {name} — klicken, um sie auszuwählen",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",

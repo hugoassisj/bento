@@ -227,11 +227,14 @@ export class TokensPane {
     this.store.select(elementId ? [elementId] : [])
   }
 
-  /** The uses count as a button that walks them. */
+  /** The uses count as a button that walks them: it reads as a count (39×),
+   *  and its name says what it counts and what a click does. */
   private usesButton(key: string, used: number, targets: () => Array<{ slideId: string; elementId?: string }>, label: string) {
-    const count = button('ed-token-uses', String(used), used
-      ? t('{n} properties follow {name} — click to select the next', { n: used, name: label })
-      : t('Nothing follows {name} yet', { name: label }))
+    const count = button('ed-token-uses', t('{n}×', { n: used }), used === 1
+      ? t('1 property follows {name} — click to select it', { name: label })
+      : used
+        ? t('{n} properties follow {name} — click to select the next', { n: used, name: label })
+        : t('Nothing follows {name} yet', { name: label }))
     count.disabled = !used
     if (!used) count.classList.add('ed-token-unused') // no "0" on every row
     count.addEventListener('click', () => this.step(key, targets()))

@@ -160,7 +160,7 @@ try {
   await p.locator('.ed-tokpick-opt[data-key="radius.card"]').click(); await p.waitForTimeout(300)
   let ea = await el('a')
   ok(ea.radius === 12 && ea.themeRefs?.radius === '$radius.card', 'the dot binds the field to a number token and writes its value')
-  ok(await radiusField().locator('.ed-token-pill-name').textContent() === 'radius.card', 'the bound field shows the token as a pill')
+  ok(await radiusField().locator('.ed-token-pill-name').textContent() === '12·radius.card', 'the bound field shows the token as a pill, its value first')
   await p.locator('.ed-side-tabs [data-view="tokens"]').click(); await p.waitForTimeout(200)
   // a token's value is text until clicked; Enter commits it
   const setValue = async (v) => {

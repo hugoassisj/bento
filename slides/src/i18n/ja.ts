@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Theme: {name}": "テーマ: {name}",
+  "{n}×": "{n}件",
+  "1 property follows {name} — click to select it": "1 個のプロパティが {name} に追従しています — クリックで選択",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

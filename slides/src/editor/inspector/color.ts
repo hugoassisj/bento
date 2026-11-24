@@ -10,8 +10,8 @@ import type { BentoDoc, GradientFill, Slide } from '../../model'
 import { setColor, refAt, keepAlpha, PALETTE_SLOTS } from '../../palette'
 import { cssColor, cssGradient, radialGeom, safeGradient } from '../../render'
 import { adoptColor, bindToken, colorUses, freeTokenName, tokenName, tokenValue } from '../../tokens'
-import { choices, openTokenPicker, slotOf, type Choice } from './tokenpicker'
-import { bindUses, madeToken, usesFollow } from './tokenbind'
+import { choices, openTokenPicker, shownValue, slotOf, type Choice } from './tokenpicker'
+import { bindUses, madeToken, tokenLabel, usesFollow } from './tokenbind'
 import { openColorPopover } from './colorpopover'
 import { gradientBar } from './gradientbar'
 import { gradTarget } from '../gradientoverlay'
@@ -379,7 +379,7 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
   open.setAttribute('aria-haspopup', 'dialog')
   open.addEventListener('click', () => pick(open))
   // a bound field shows the name as a pill (Figma's)
-  if (linkedLabel) field.querySelector<HTMLElement>('.ed-color-hex')?.replaceWith(boundPill(linkedLabel, !!tok, () => pick(open), detach))
+  if (linkedLabel) field.querySelector<HTMLElement>('.ed-color-hex')?.replaceWith(boundPill(linkedLabel, !!tok, input.value, () => pick(open), detach))
   field.appendChild(open)
   outer.append(field)
   colorPickers.set(outer, pick)
@@ -435,7 +435,8 @@ export function sharedLink(p: PropsPanel, ids: string[], path: string, field: HT
   open.setAttribute('aria-label', t('Colors & tokens'))
   open.setAttribute('aria-haspopup', 'dialog')
   open.addEventListener('click', () => pick(open))
-  if (bound) field.querySelector<HTMLElement>('.ed-color-hex')?.replaceWith(boundPill(tok ?? slotLabel(bound), !!tok, () => pick(open), detach))
+  const shown = field.querySelector<HTMLInputElement>('input[type=color]')?.value ?? ''
+  if (bound) field.querySelector<HTMLElement>('.ed-color-hex')?.replaceWith(boundPill(tok ?? slotLabel(bound), !!tok, shown, () => pick(open), detach))
   // the popover's theme swatches bind every element too
   const col = field.querySelector<HTMLInputElement>('input[type=color]')
   if (col) choosers.set(col, (c) => p.edit(() => followChoice(p.store.doc, holders().map((holder) => ({ holder, path })), c), true))
@@ -443,18 +444,51 @@ export function sharedLink(p: PropsPanel, ids: string[], path: string, field: HT
   return field
 }
 
-/** The name a bound colour field shows instead of its hex: a click reopens
- *  the picker, the detach icon (on hover or focus) lets go and keeps the value. */
-function boundPill(label: string, isToken: boolean, reopen: () => void, detach: () => void): HTMLElement {
+/** What a bound colour field shows instead of its hex: the name, then the
+ *  hex muted while there is room (Theme: Text · 0d1b2e), after a dot in the
+ *  colour itself. A theme colour says so, so that a Background field reading
+ *  "Text" is not taken for "the background is text". A click reopens the
+ *  picker, the detach icon (on hover or focus) lets go and keeps the value. */
+function boundPill(label: string, isToken: boolean, color: string, reopen: () => void, detach: () => void): HTMLElement {
   const token = document.createElement('span')
   token.className = 'ed-color-token'
+  token.style.setProperty('--dot', cssColor(color, 'transparent'))
   const name = document.createElement('button')
   name.type = 'button'
   name.className = 'ed-color-token-name'
-  name.textContent = label
-  name.title = isToken
+  let shown: string
+  if (isToken) { shown = label; name.append(tokenLabel(label)) } else {
+    shown = t('Theme: {name}', { name: label })
+    // in a narrow row the prefix gives way first: "Th… Accent 1", never "Theme: Ac…"
+    const role = document.createElement('span')
+    role.className = 'ed-color-token-role'
+    const parts = t('Theme: {name}', { name: '\u0001' }).split('\u0001')
+    if (parts.length === 2) {
+      const pre = document.createElement('span')
+      pre.className = 'ed-color-token-pre'
+      pre.textContent = parts[0]
+      const slot = document.createElement('span')
+      slot.className = 'ed-color-token-slot'
+      slot.textContent = label + parts[1]
+      role.append(pre, slot)
+    } else role.textContent = shown
+    name.append(role)
+  }
+  const value = color ? shownValue('color', color) : ''
+  if (value) {
+    const hex = document.createElement('span')
+    hex.className = 'ed-color-token-hex'
+    const sep = document.createElement('span')
+    sep.className = 'ed-token-pill-sep'
+    sep.textContent = '·'
+    sep.setAttribute('aria-hidden', 'true')
+    hex.append(sep, value)
+    name.append(hex)
+  }
+  const why = isToken
     ? t('Follows the token “{name}”. Click to change.', { name: label })
     : t('Follows the theme color “{name}”. Click to change.', { name: label })
+  name.title = value ? `${shown} · ${value}\n${why}` : why
   name.addEventListener('click', reopen)
   const off = document.createElement('button')
   off.type = 'button'

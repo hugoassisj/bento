@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Theme: {name}": "主题：{name}",
+  "{n}×": "{n}处",
+  "1 property follows {name} — click to select it": "1 个属性跟随 {name} — 点击选择它",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",

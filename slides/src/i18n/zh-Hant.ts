@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Theme: {name}": "主題：{name}",
+  "{n}×": "{n}處",
+  "1 property follows {name} — click to select it": "1 個屬性跟隨 {name} — 按一下選取它",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",

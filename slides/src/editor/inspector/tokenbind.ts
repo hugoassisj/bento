@@ -2,14 +2,14 @@
 // Copyright (c) 2026 The Bento authors
 // Binding a field to a design token: a small dot at the field's end opens the
 // token picker (tokenpicker.ts — the same popover colour fields use) with the
-// deck's tokens of the field's types; a bound field shows the token's name as
-// a pill that reopens the picker, with a detach icon that lets go and keeps
-// the value. See tokens.ts.
+// deck's tokens of the field's types; a bound field shows the value and the
+// token's name as a pill (14 · radius.md) that reopens the picker, with a
+// detach icon that lets go and keeps the value. See tokens.ts.
 import type { PropsPanel } from '../panels'
 import type { SlideElement, TokenType } from '../../model'
 import { bindToken, freeTokenName, modesOf, tokenName, unbindToken } from '../../tokens'
 import { ICONS } from '../../icons'
-import { choices, openTokenPicker } from './tokenpicker'
+import { choices, openTokenPicker, shownValue } from './tokenpicker'
 import { t } from '../../i18n'
 
 /** A new token's name stem, by type — what is left when the field says nothing. */
@@ -77,8 +77,25 @@ export function tokenBind(p: PropsPanel, field: HTMLElement, el: SlideElement, p
     const name = document.createElement('button')
     name.type = 'button'
     name.className = 'ed-token-pill-name'
-    name.textContent = bound
-    name.title = t('Follows the token “{name}”. Click to change.', { name: bound })
+    // the value first (it never truncates usefully from the right), then the
+    // name; the literal always sits in the model beside the ref, so it is the
+    // value the canvas draws. Font stacks and shadows are the field itself.
+    const type = p.store.doc.theme.tokens?.set[bound]?.type
+    const v = readAt(el, path)
+    const value = type && SHOWS_VALUE.has(type) && v !== undefined ? shownValue(path === 'opacity' ? 'opacity' : type, v) : ''
+    if (value) {
+      const val = document.createElement('span')
+      val.className = 'ed-token-pill-value'
+      val.textContent = value
+      const sep = document.createElement('span')
+      sep.className = 'ed-token-pill-sep'
+      sep.textContent = '·'
+      sep.setAttribute('aria-hidden', 'true')
+      name.append(val, sep)
+    }
+    name.append(tokenLabel(bound))
+    const why = t('Follows the token “{name}”. Click to change.', { name: bound })
+    name.title = value ? `${value} · ${bound}\n${why}` : why
     name.addEventListener('click', (ev) => { ev.preventDefault(); pick(name) })
     const off = document.createElement('button')
     off.type = 'button'
@@ -102,6 +119,32 @@ export function tokenBind(p: PropsPanel, field: HTMLElement, el: SlideElement, p
   field.classList.add('ed-has-token')
   field.appendChild(dot)
   return field
+}
+
+/** The token types whose value a bound pill shows beside the name. */
+const SHOWS_VALUE = new Set<TokenType>(['number', 'fontSize', 'opacity'])
+
+/**
+ * A token's name as a pill shows it, cut in the MIDDLE when it must be: the
+ * leaf after the last dot stays whole and the stem before it ellipsises
+ * (radi…md), so the part that tells radius.md from radius.lg survives a narrow
+ * field. Its own direction (dir=auto): an RTL interface keeps a Latin name
+ * reading left to right.
+ */
+export function tokenLabel(name: string): HTMLElement {
+  const box = document.createElement('span')
+  box.className = 'ed-token-label'
+  box.dir = 'auto'
+  const dot = name.lastIndexOf('.')
+  const cut = dot > 0 && name.length - dot <= 9 ? dot + 1 : Math.max(0, name.length - 3)
+  const head = document.createElement('span')
+  head.className = 'ed-token-label-head'
+  head.textContent = name.slice(0, cut)
+  const tail = document.createElement('span')
+  tail.className = 'ed-token-label-tail'
+  tail.textContent = name.slice(cut)
+  box.append(head, tail)
+  return box
 }
 
 /** A control that cannot hold the dot itself (a select, a row of tiles), boxed so it can. */

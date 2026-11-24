@@ -3160,12 +3160,12 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-token-uses.ed-token-unused { visibility: hidden; }
 /* the value is ONE fixed column (--tok-val), so values line up down the view
    and a long one (a font stack, a shadow) ellipsises instead of eating the name */
-.ed-tokens-body > .ed-token-row:not(.ed-token-adding) { grid-template-columns: 20px minmax(0, 1fr) var(--tok-val) 20px; }
+.ed-tokens-body > .ed-token-row:not(.ed-token-adding) { grid-template-columns: 20px minmax(0, 1fr) var(--tok-val) 22px; }
 .ed-tokens-body > .ed-token-row > .ed-token-value { justify-self: stretch; text-align: end; }
-.ed-tokens-body > .ed-token-row > .ed-token-uses { justify-self: stretch; }
+.ed-tokens-body > .ed-token-row > .ed-token-uses { justify-self: end; min-width: 100%; }
 /* the hover − and ⋯ end where the name does: over the value they would block
    its edit, and over the count they would take the click that walks the uses */
-.ed-tokens-body > .ed-token-row > .ed-token-acts { inset-inline-end: calc(var(--tok-val) + 32px); }
+.ed-tokens-body > .ed-token-row > .ed-token-acts { inset-inline-end: calc(var(--tok-val) + 34px); }
 /* a narrow column never breaks a row onto two lines (two uneven lines per
    token was the bug): the value column narrows to 52px — what a hex needs —
    and the name truncates. The value never steps aside: it is the only way to
@@ -3212,8 +3212,11 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-tokens-group[data-type="fontFamily"] .ed-token-preview, .ed-tokens-group[data-type="fontSize"] .ed-token-preview { background: none; color: var(--ink); }
 .ed-tokens-group[data-type="shadow"] .ed-token-preview { background: var(--surface); border-color: transparent; margin: 4px; width: 18px; height: 18px; }
 .ed-tokens-group[data-type="shadow"] .ed-token-row > input[type="number"] { width: 38px; }
-.ed-token-uses { flex: none; min-width: 22px; height: 20px; padding: 0 4px; font: inherit; font-size: 10.5px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
-.ed-token-uses:not(:disabled):hover, .ed-token-uses:focus-visible { color: var(--ink); border-color: var(--line); }
+/* a count reads as one (39×, tokenspane.ts usesButton); its column holds two
+   digits (no border: the hover ring is drawn inside), and 100× grows into the
+   gap before it, never past the panel's edge */
+.ed-token-uses { flex: none; min-width: 22px; height: 20px; padding: 0; white-space: nowrap; font: inherit; font-size: 10.5px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.ed-token-uses:not(:disabled):hover, .ed-token-uses:focus-visible { color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
 .ed-token-uses:disabled { cursor: default; }
 /* a bound numeric field (inspector/tokenbind.ts): the dot binds, the pill detaches */
 .ed-mini.ed-has-token input { padding-inline-end: 18px; }
@@ -3222,11 +3225,43 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-mini:hover .ed-token-dot, .ed-has-token:focus-within .ed-token-dot, .ed-token-dot:focus-visible { opacity: 1; }
 .ed-token-pill { position: absolute; inset: 1px; display: flex; align-items: center; gap: 4px; padding-inline: 8px 2px; font-size: 11.5px; color: var(--ink); background: var(--chrome-2); border-radius: 5px; overflow: hidden; white-space: nowrap; }
 .ed-token-pill::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+/* over the in-field label's rule (.ed-mini > span), which made the pill a
+   55%-wide sliver (● ra…): the pill covers the field. On the radius field the
+   corners button takes the end, where the token dot was before binding. */
+.ed-has-token > .ed-token-pill { inset: 1px; transform: none; max-width: none; font-size: 11.5px; color: var(--ink); container-type: inline-size; }
+.ed-mini:has(> .ed-token-pill) > .ed-corners-btn { inset-inline-end: 2px; }
+.ed-mini:has(> .ed-corners-btn) > .ed-token-pill { inset-inline-end: 29px; }
+/* the detach floats over the pill's end, so at rest the name has the whole width */
+.ed-color-token { position: relative; }
+.ed-token-pill > .ed-color-detach, .ed-color-token > .ed-color-detach { position: absolute; inset-inline-end: 2px; top: 50%; translate: 0 -50%; margin: 0; background: var(--chrome-2); }
 /* the pill's name reopens the picker; its detach shows on hover or focus */
 .ed-token-pill-name, .ed-color-token-name {
-  flex: 1 1 0; min-width: 0; padding: 0; font: inherit; color: inherit; text-align: start; background: none; border: 0; cursor: pointer;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 4px; padding: 0; font: inherit; color: inherit; text-align: start; background: none; border: 0; cursor: pointer;
+  overflow: hidden; white-space: nowrap;
 }
+/* value · name (14 · radius.md); the name is cut in the middle (radi…md, tokenbind.ts tokenLabel).
+   The value takes the bound-dot's place: the tinted pill already says the field follows a token. */
+.ed-token-pill:has(> .ed-token-pill-name > .ed-token-pill-value) { padding-inline-start: 6px; }
+.ed-token-pill:has(> .ed-token-pill-name > .ed-token-pill-value)::before { display: none; }
+.ed-token-pill-name { gap: 3px; }
+.ed-token-pill-value { flex: none; font-variant-numeric: tabular-nums; }
+.ed-token-pill-sep { flex: none; color: var(--muted); }
+.ed-token-label { display: flex; min-width: 0; overflow: hidden; }
+.ed-token-label-head { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ed-token-label-tail { flex: none; }
+/* too narrow for both (the panel dragged to its narrowest): the name alone, the value in the title */
+@container (max-width: 72px) { .ed-token-pill-value, .ed-token-pill-value + .ed-token-pill-sep { display: none; } }
+/* a colour: the name, then the hex muted only where it fits WHOLE — a hex that
+   no longer fits wraps onto a second line the button clips */
+.ed-color-token-name { flex-wrap: wrap; align-content: flex-start; height: 24px; column-gap: 6px; }
+.ed-color-token-name > * { line-height: 24px; }
+.ed-color-token-role { display: flex; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ed-color-token-pre { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.ed-color-token-slot { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* a paint row's chip has room for the slot's name only: "Accent 1", not "T…Accen…" */
+.ed-color-token { container-type: inline-size; }
+@container (max-width: 140px) { .ed-color-token-pre { display: none; } }
+.ed-color-token-hex { display: flex; gap: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .ed-token-pill .ed-color-detach, .ed-color-token .ed-color-detach { opacity: 0; }
 .ed-token-pill:hover .ed-color-detach, .ed-token-pill:focus-within .ed-color-detach,
 .ed-color-token:hover .ed-color-detach, .ed-color-token:focus-within .ed-color-detach { opacity: 1; }
@@ -3459,7 +3494,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   padding-block: 0; padding-inline: 8px 4px; font-size: 12px; color: var(--ink); background: var(--chrome-2);
   border: 1px solid var(--line); border-radius: 6px; overflow: hidden; white-space: nowrap;
 }
-.ed-color-token::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+/* the dot is the colour itself (--dot, through cssColor), ringed so white shows on the chip */
+.ed-color-token::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dot, var(--accent)); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); }
 .ed-color-detach { margin-inline-start: auto; flex: none; width: 20px; height: 20px; padding: 0; display: grid; place-items: center; color: var(--muted); background: none; border: 0; border-radius: 4px; cursor: pointer; }
 .ed-color-detach:hover { color: var(--ink); background: var(--chrome); }
 .ed-color-detach svg { width: 13px; height: 13px; }
