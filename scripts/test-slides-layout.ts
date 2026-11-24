@@ -198,6 +198,56 @@ console.log('\nreachable bad input still settles\n')
   layoutSlide(s)
   ok(at(s, 'i').w === 600 && at(s, 'i').h === 50 && !layoutSlide(s), 'a hugging frame that fills its parent takes the fill width, hugs the other axis, and settles')
 }
+console.log('\nstretch and hug: equal-height cards\n')
+{
+  // a hugging row that stretches its hugging column cards. Each card's content
+  // is 2 boxes; the file carries a placeholder 100px for every card. The row
+  // takes the TALLEST card's content (16+60+12+200+16 = 304), never the
+  // placeholder, and every card is stretched to it.
+  const card = (i: number, x: number, hs: [number, number], extra: Record<string, unknown> = {}) => [
+    box(`c${i}`, x, 0, 200, 100, { parentId: 'f', layout: { dir: 'col', gap: 12, pad: [16, 16, 16, 16], hug: true }, ...extra }),
+    box(`c${i}a`, 0, 0, 168, hs[0], { parentId: `c${i}` }), box(`c${i}b`, 0, 50, 168, hs[1], { parentId: `c${i}` }),
+  ]
+  const cards = (align: string | undefined, extra: Record<string, unknown> = {}) => slide(
+    box('f', 0, 0, 100, 100, { layout: { dir: 'row', gap: 24, pad: [24, 24, 24, 24], hug: true, ...(align ? { align } : {}) } }),
+    ...card(0, 0, [60, 200], extra), ...card(1, 300, [40, 30], extra), ...card(2, 600, [60, 120], extra))
+  const hs = (s: any) => ['c0', 'c1', 'c2'].map((id) => at(s, id).h).join(',')
+  {
+    const s = cards('stretch')
+    layoutSlide(s)
+    ok(hs(s) === '304,304,304', `a hugging row stretching hugging cards makes them all as tall as the tallest card's content (${hs(s)})`)
+    ok(at(s, 'f').h === 24 + 304 + 24, `the row hugs the tallest card's content, not the height in the file (${at(s, 'f').h})`)
+    ok(at(s, 'c1a').y === at(s, 'c1').y + 16 && at(s, 'c1b').y === at(s, 'c1a').y + 40 + 12, 'a shorter card keeps its content at the top')
+    ok(!layoutSlide(s), 'equal-height cards are a fixed point')
+    at(s, 'c0b').h = 50; layoutSlide(s) // the tallest card's text got shorter
+    ok(hs(s) === '224,224,224' && !layoutSlide(s), `when the tallest content shrinks the cards shrink with it (${hs(s)})`)
+  }
+  {
+    const s = cards(undefined)
+    layoutSlide(s)
+    ok(hs(s) === '304,114,224' && at(s, 'f').h === 24 + 304 + 24, `without stretch each card keeps its own hugged height (${hs(s)})`)
+  }
+  {
+    const s = cards(undefined, { sizing: { h: 'fill' } })
+    layoutSlide(s)
+    ok(hs(s) === '304,304,304' && !layoutSlide(s), `cards that fill the cross axis of a hugging row match the tallest too (${hs(s)})`)
+  }
+  {
+    const s = cards('stretch')
+    s.elements.push(box('tall', 900, 0, 50, 400, { parentId: 'f' }))
+    layoutSlide(s)
+    ok(hs(s) === '400,400,400' && !layoutSlide(s), `a plain child taller than every card's content sets the height (${hs(s)})`)
+  }
+  {
+    // a hugging WRAPPING row keeps its width, so cards can fill it and still
+    // get equal heights from their content
+    const s = cards('stretch', { sizing: { w: 'fill' } })
+    Object.assign(at(s, 'f'), { w: 1000 }); at(s, 'f').layout.wrap = true
+    layoutSlide(s)
+    ok(at(s, 'f').w === 1000 && hs(s) === '304,304,304' && !layoutSlide(s), `a hugging wrapping row stretches fill cards to the tallest content (${hs(s)})`)
+    ok(Math.abs(at(s, 'c0').w - (1000 - 48 - 48) / 3) < 0.01, `and the cards share its width (${at(s, 'c0').w})`)
+  }
+}
 {
   // fuzz: random nested frames settle after one pass
   let seed = 7
