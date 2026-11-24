@@ -5,7 +5,7 @@ import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
   "Draw or drop here": "Disegna o rilascia qui",
-  "Alt: draw on top of a frame instead of inside it": "Alt: disegna sopra una cornice invece che al suo interno",
+  "{alt}: draw on top of a frame instead of inside it": "{alt}: disegna sopra una cornice invece che al suo interno",
   "View": "Vista",
   "Current slide": "Diapositiva attuale",
   "Slide thumbnails": "Miniature delle diapositive",

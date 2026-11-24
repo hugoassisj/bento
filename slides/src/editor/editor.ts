@@ -102,6 +102,8 @@ const LONG_PRESS_SLOP = 10
 
 /** Shape-menu rows that are also one-letter tools (commands.ts), by label. */
 const SHAPE_TOOL: Record<string, string> = { Rectangle: 'tool-rect', Ellipse: 'tool-ellipse', Line: 'tool-line', Pen: 'tool-pen' }
+/** The Alt key by its name on this platform (Option on a Mac, as MOD is ⌘). */
+const ALT_KEY = MOD === '⌘' ? 'Option' : 'Alt'
 /** The tools that put a box down where you click or drag (canvas.armPlace). */
 const PLACE_TOOLS = ['tool-frame', 'tool-rect', 'tool-ellipse', 'insert-text']
 /** The topbar's tools: one of them is pressed at any time (refreshTools). */
@@ -4305,9 +4307,11 @@ export class Editor {
    *  are the command's (commands.ts), and data-cmd names it. */
   private cmdButton(id: string, icon: string, label: string, tip?: string): HTMLElement {
     const c = this.commands.find((x) => x.id === id)!
-    // the box tools say how to draw over a frame without going into it
-    const alt = PLACE_TOOLS.includes(id) ? `\n${t('Alt: draw on top of a frame instead of inside it')}` : ''
-    const b = btn(icon, label, () => c.run(), titleFor(this.commands, id, tip) + alt)
+    // the box tools say how to draw over a frame without going into it — a
+    // line of the tip, ahead of the key, which hints.ts draws as a chip only
+    // while the title ends in it
+    const text = tip ?? t(c.label)
+    const b = btn(icon, label, () => c.run(), titleFor(this.commands, id, PLACE_TOOLS.includes(id) ? `${text}\n${t('{alt}: draw on top of a frame instead of inside it', { alt: ALT_KEY })}` : tip))
     b.dataset.cmd = id
     if (c.keys && /^[A-Z]$/.test(c.keys)) {
       const k = document.createElement('kbd')

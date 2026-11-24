@@ -17,13 +17,22 @@ import { t } from '../i18n'
 
 type Frame = ShapeElement & { layout: NonNullable<ShapeElement['layout']> }
 
+/** Part of a component (its main or a copy): carries component info, or sits
+ *  in a component's group. What such a frame lays out is the component's, so
+ *  nothing drawn joins it — a copy would reflow and split from its main. */
+function inComponent(slide: Slide, f: SlideElement): boolean {
+  return !!f.component || (!!f.groupId && slide.elements.some((e) => e.groupId === f.groupId && !!e.component))
+}
+
 /** The frame that takes an element drawn (or dropped) with its start point at
- *  slide point `pt`: the innermost auto-layout frame whose box holds it,
- *  visible and unlocked in effect (a hidden or locked frame it sits in counts,
- *  layout.ts flagged). Among frames as deep as each other, `prefer` (the
- *  frame the selection is in) wins, then the one painted on top. */
+ *  slide point `pt`: the innermost visible auto-layout frame whose box holds
+ *  it (a hidden frame, or one inside a hidden frame, is passed over). Among
+ *  frames as deep as each other, `prefer` (the frame the selection is in)
+ *  wins, then the one painted on top. When that frame is locked in effect
+ *  (layout.ts flagged) or part of a component, nothing takes the element: it
+ *  is drawn on top, never handed to the frame around it. */
 export function adoptingFrame(slide: Slide, pt: { x: number; y: number }, prefer?: string): Frame | undefined {
-  const hidden = flagged(slide, 'hidden'), locked = flagged(slide, 'locked')
+  const hidden = flagged(slide, 'hidden')
   const byId = new Map(slide.elements.map((e) => [e.id, e]))
   const depth = (e: SlideElement) => {
     let d = 0
@@ -33,27 +42,29 @@ export function adoptingFrame(slide: Slide, pt: { x: number; y: number }, prefer
   let best: Frame | undefined, bestDepth = -1
   // topmost first, so a tie keeps the one painted on top
   for (const f of [...slide.elements].reverse()) {
-    if (!isFrame(f) || hidden.has(f.id) || locked.has(f.id)) continue
+    if (!isFrame(f) || hidden.has(f.id)) continue
     if (pt.x < f.x || pt.x > f.x + f.w || pt.y < f.y || pt.y > f.y + f.h) continue
     const d = depth(f)
     if (d > bestDepth || (d === bestDepth && f.id === prefer)) { best = f; bestDepth = d }
   }
+  if (!best || flagged(slide, 'locked').has(best.id) || inComponent(slide, best)) return undefined
   return best
 }
 
 /** "Draw or drop here", dimmed and centred in every visible, unlocked frame
- *  that has no children yet. `view` as for drawFrameOverlay. */
-export function drawFrameHints(host: HTMLElement, store: Store, scale: () => number, view?: Slide) {
-  host.querySelector(':scope > .ed-frame-hints')?.remove()
+ *  that has no children yet and is not part of a component. Each hint goes
+ *  into the canvas surface right after its frame's node, so whatever is
+ *  painted above the frame covers the hint too. `view` as for
+ *  drawFrameOverlay. The canvas keeps --hint-k (1 / zoom) on the stage host. */
+export function drawFrameHints(surface: HTMLElement | null, store: Store, view?: Slide) {
+  if (!surface) return
+  surface.querySelectorAll(':scope > .ed-frame-hint').forEach((n) => n.remove())
   const slide = view ?? store.slide
   const hidden = flagged(slide, 'hidden'), locked = flagged(slide, 'locked')
-  const empty = slide.elements.filter((f) => isFrame(f) && !hidden.has(f.id) && !locked.has(f.id) && !frameChildren(slide, f).length)
-  if (!empty.length) return
-  const layer = document.createElement('div')
-  layer.className = 'ed-frame-hints'
-  layer.style.setProperty('--k', String(1 / (scale() || 1)))
-  for (const f of empty) {
-    if (!isFrame(f)) continue
+  for (const f of slide.elements) {
+    if (!isFrame(f) || hidden.has(f.id) || locked.has(f.id) || frameChildren(slide, f).length || inComponent(slide, f)) continue
+    const node = surface.querySelector<HTMLElement>(`:scope > [data-el-id="${CSS.escape(f.id)}"]`)
+    if (!node || node.style.display === 'none') continue // a hover set not being previewed
     const hint = document.createElement('div')
     hint.className = 'ed-frame-hint'
     hint.dataset.frame = f.id
@@ -64,9 +75,8 @@ export function drawFrameHints(host: HTMLElement, store: Store, scale: () => num
     hint.style.color = isLightBg(bg) ? '#1E2A3A' : '#F5F7FA'
     Object.assign(hint.style, { left: `${f.x}px`, top: `${f.y}px`, width: `${f.w}px`, height: `${f.h}px` })
     if (f.rotation) hint.style.transform = `rotate(${Number(f.rotation) || 0}deg)`
-    layer.appendChild(hint)
+    node.after(hint)
   }
-  host.appendChild(layer)
 }
 
 /** `view` draws from a laid-out copy of the slide instead of the model: the

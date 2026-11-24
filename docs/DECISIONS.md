@@ -15403,11 +15403,18 @@ A box tool (F R O T) whose gesture STARTS inside an auto-layout frame puts the
 new element in that frame, whatever is selected (it used to need the frame
 itself selected, so the second rectangle drawn — with the first child now the
 selection — floated on top, outside the layout).
-- **Which frame:** the innermost one under the start point that is visible
-  and unlocked in effect (a hidden or locked frame it sits in counts). The
-  selection only breaks a tie between frames as deep as each other, then
-  paint order; a selected OUTER frame does not beat the inner one the press
-  landed in. `frameoverlay.ts adoptingFrame` is the one rule — a future
+- **Which frame:** the innermost visible one under the start point (a hidden
+  frame, or one inside a hidden frame, is passed over). The selection only
+  breaks a tie between frames as deep as each other, then paint order; a
+  selected OUTER frame does not beat the inner one the press landed in.
+- **When that innermost frame is locked (in effect) or part of a component**
+  (carries `component`, or sits in a component's group), the element is drawn
+  FREE — never handed to the frame around it, which would reflow a locked
+  frame or a whole row of cards. Adopting into a copy reflowed it and split it
+  from its main; adopting into a main gave the main a child with no component
+  key. A component's frames show no hint either.
+- **Groups:** an element adopted by a frame in a plain group takes the frame's
+  `groupId` (canvas.insert), or Layers splits the group around it. `frameoverlay.ts adoptingFrame` is the one rule — a future
   drop path (picture files, paste at the pointer) should call it rather than
   grow its own.
 - **The slot** is still the one the element's default position reads as
@@ -15417,6 +15424,10 @@ selection — floated on top, outside the layout).
 - **Feedback:** the frame wears the drag path's drop-target outline from the
   press until release (it lives in the place overlay, so Esc and V clear it;
   a gesture stood down mid-drag now draws nothing). An empty frame shows
-  "Draw or drop here" as editor chrome in the scaled stage host — never an
-  element, so it is absent from the document, thumbnails, the show and print.
+  "Draw or drop here" as editor chrome — a node in the canvas surface right
+  after its frame's (so what covers the frame covers it), never an element, so
+  it is absent from the document, thumbnails, the show and print. It holds
+  13px on screen through `--hint-k`, which relayout keeps on the stage host.
+- **Tooltip:** the Alt line ("Option" on a Mac) goes INSIDE the tip, ahead of
+  the key: hints.ts draws the key as a chip only while the title ends in it.
 - **Guard:** `scripts/test-slides-frame-drop-browser.mjs`, "drawing into a frame".

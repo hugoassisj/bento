@@ -5,7 +5,7 @@ import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
   "Draw or drop here": "在此绘制或拖放",
-  "Alt: draw on top of a frame instead of inside it": "Alt:在框架上方绘制，而不是放入其中",
+  "{alt}: draw on top of a frame instead of inside it": "{alt}:在框架上方绘制，而不是放入其中",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",

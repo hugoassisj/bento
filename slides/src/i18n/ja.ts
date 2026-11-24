@@ -5,7 +5,7 @@ import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
   "Draw or drop here": "ここに描画またはドロップ",
-  "Alt: draw on top of a frame instead of inside it": "Alt: フレームの中ではなく上に描画",
+  "{alt}: draw on top of a frame instead of inside it": "{alt}: フレームの中ではなく上に描画",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

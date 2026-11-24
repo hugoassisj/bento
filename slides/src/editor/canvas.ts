@@ -614,6 +614,7 @@ export class SlideCanvas {
     if (padX !== wasX) this.scroller.scrollLeft += padX - wasX
     if (padY !== wasY) this.scroller.scrollTop += padY - wasY
     this.scaleHost.style.transform = `scale(${this.scale})`
+    this.scaleHost.style.setProperty('--hint-k', String(1 / (this.scale || 1))) // an empty frame's hint keeps its size on screen
     this.moveable.zoom = 1 / this.scale
     this.moveable.updateRect()
     this.fitHandles()
@@ -1524,7 +1525,7 @@ export class SlideCanvas {
     }
     // the padding and gap bands follow too
     drawFrameOverlay(this.scaleHost, this.store, () => this.scale, false, clone)
-    drawFrameHints(this.scaleHost, this.store, () => this.scale, clone)
+    drawFrameHints(this.surface, this.store, clone)
   }
 
   private unfollow() {
@@ -1566,7 +1567,7 @@ export class SlideCanvas {
     // an editor may decline (a compound path): then Moveable's box takes it
     const handled = this.bezierEditor.active || this.lineEditor.active
     drawFrameOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active)
-    drawFrameHints(this.scaleHost, this.store, () => this.scale)
+    drawFrameHints(this.surface, this.store)
     drawGradientOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active || handled)
     const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes().filter((n) => !n.dataset.locked)
     // snap against slide bounds/center and every non-selected element
@@ -3025,6 +3026,10 @@ export class SlideCanvas {
     if (preview && slide.hover?.type === 'reveal' && preview !== slide.hover.default) {
       el.showOnHover = preview
     }
+    // drawn into a frame that sits in a group: it joins the group too, or
+    // Layers would split the group around it
+    const frame = el.parentId ? this.store.element(el.parentId) : undefined
+    if (frame?.groupId && !el.groupId) el.groupId = frame.groupId
     this.store.commit(() => {
       // Embedded binary belongs in doc.assets, never inline on the element —
       // that is what makes it reachable by the live-collab blob offload. Done
