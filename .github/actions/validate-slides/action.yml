@@ -754,3 +754,16 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+
+    - name: Skill CLI rig (bento new / extract / inspect / lint / render / apply)
+      # The skill's zero-dependency tool, run from a copy of the skill folder
+      # alone in an empty directory with no network: extract never prints a
+      # collab value and apply after it is byte for byte; apply restores
+      # collab and docId, escapes <, refuses another docId; inspect reports
+      # the starter deck's 18 tokens, 7 slots and 3 components; lint flags
+      # each defect class and lint --base the design-system diff; render
+      # writes N PNGs and contact.png (needs Chrome, fails here without it)
+      # and exits 3 naming where it looked when there is none; every error
+      # ends with the next action. Needs the single-file build above.
+      shell: bento-step {0}
+      run: node scripts/test-skill-cli.ts

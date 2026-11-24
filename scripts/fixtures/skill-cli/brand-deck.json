@@ -1,0 +1,45 @@
+{
+  "format": "bento/slides",
+  "version": 1,
+  "title": "Northwind brand deck",
+  "size": { "width": 1280, "height": 720 },
+  "theme": {
+    "background": "#F7F3EA",
+    "color": "#1B2430",
+    "accent": "#D9480F",
+    "fontFamily": "system-ui, sans-serif",
+    "palette": { "bg2": "#1B2430", "tx2": "#F7F3EA", "accent2": "#2F6F8F" },
+    "tokens": {
+      "modes": ["light", "dark"],
+      "mode": "light",
+      "set": {
+        "color.surface": { "type": "color", "values": { "light": "#FFFFFF", "dark": "#26303D" } },
+        "color.ink": { "type": "color", "values": { "light": "#1B2430", "dark": "#F7F3EA" } },
+        "radius.card": { "type": "number", "values": { "light": 16, "dark": 16 } },
+        "space.pad": { "type": "number", "values": { "light": 24, "dark": 24 } },
+        "size.body": { "type": "fontSize", "values": { "light": 22, "dark": 22 } }
+      }
+    }
+  },
+  "layouts": [
+    { "id": "nw-title-body", "name": "Northwind title + body", "background": "#F7F3EA", "transition": "fade", "notes": "", "elements": [
+      { "id": "nw-l-title", "type": "text", "role": "title", "x": 96, "y": 80, "w": 1088, "h": 90, "rotation": 0, "opacity": 1, "html": "", "placeholder": "Title", "fontSize": 48, "fontFamily": "system-ui, sans-serif", "fontWeight": 700, "color": "#1B2430", "align": "left", "valign": "top", "lineHeight": 1.2 },
+      { "id": "nw-l-body", "type": "text", "role": "body", "x": 96, "y": 200, "w": 1088, "h": 400, "rotation": 0, "opacity": 1, "html": "", "placeholder": "Body", "fontSize": 22, "fontFamily": "system-ui, sans-serif", "fontWeight": 400, "color": "#1B2430", "align": "left", "valign": "top", "lineHeight": 1.4 }
+    ] }
+  ],
+  "slides": [
+    { "id": "s1", "background": "#F7F3EA", "transition": "fade", "notes": "Opening.", "themeRefs": { "background": "bg1" }, "elements": [
+      { "id": "title", "type": "text", "x": 96, "y": 80, "w": 1088, "h": 90, "rotation": 0, "opacity": 1, "html": "Quarterly review", "fontSize": 48, "fontFamily": "system-ui, sans-serif", "fontWeight": 700, "color": "#1B2430", "align": "left", "valign": "top", "lineHeight": 1.2, "themeRefs": { "color": "$color.ink" } },
+      { "id": "card", "type": "shape", "shape": "rect", "x": 96, "y": 220, "w": 520, "h": 300, "rotation": 0, "opacity": 1, "fill": "#FFFFFF", "stroke": "none", "strokeWidth": 0, "radius": 16, "groupId": "g-card", "groupName": "Stat card", "component": { "id": "cmp-stat", "key": "k0", "main": true }, "themeRefs": { "fill": "$color.surface", "radius": "$radius.card" } },
+      { "id": "card-label", "type": "text", "x": 120, "y": 244, "w": 472, "h": 60, "rotation": 0, "opacity": 1, "html": "Revenue up 12%", "fontSize": 22, "fontFamily": "system-ui, sans-serif", "fontWeight": 400, "color": "#1B2430", "align": "left", "valign": "top", "lineHeight": 1.4, "groupId": "g-card", "component": { "id": "cmp-stat", "key": "k1", "main": true }, "themeRefs": { "fontSize": "$size.body", "color": "$color.ink" } }
+    ] },
+    { "id": "s2", "background": "#F7F3EA", "transition": "fade", "notes": "", "themeRefs": { "background": "bg1" }, "elements": [
+      { "id": "card-2", "type": "shape", "shape": "rect", "x": 664, "y": 220, "w": 520, "h": 300, "rotation": 0, "opacity": 1, "fill": "#FFFFFF", "stroke": "none", "strokeWidth": 0, "radius": 16, "groupId": "g-card-2", "groupName": "Stat card", "component": { "id": "cmp-stat", "key": "k0", "off": [568, 0], "sig": "x1" }, "themeRefs": { "fill": "$color.surface", "radius": "$radius.card" } },
+      { "id": "card-2-label", "type": "text", "x": 688, "y": 244, "w": 472, "h": 60, "rotation": 0, "opacity": 1, "html": "Churn down 3%", "fontSize": 22, "fontFamily": "system-ui, sans-serif", "fontWeight": 400, "color": "#1B2430", "align": "left", "valign": "top", "lineHeight": 1.4, "groupId": "g-card-2", "component": { "id": "cmp-stat", "key": "k1", "off": [568, 0], "sig": "x1", "over": ["html"] }, "themeRefs": { "fontSize": "$size.body", "color": "$color.ink" } },
+      { "id": "accent-bar", "type": "shape", "shape": "rect", "x": 96, "y": 600, "w": 200, "h": 8, "rotation": 0, "opacity": 1, "fill": "#D9480F", "stroke": "none", "strokeWidth": 0, "themeRefs": { "fill": "accent1" } }
+    ] },
+    { "id": "s2-detail", "stateOf": "s2", "background": "#1B2430", "transition": "morph", "notes": "", "themeRefs": { "background": "bg2" }, "elements": [
+      { "id": "detail", "type": "text", "x": 96, "y": 80, "w": 1088, "h": 90, "rotation": 0, "opacity": 1, "html": "The detail", "fontSize": 40, "fontFamily": "system-ui, sans-serif", "fontWeight": 700, "color": "#F7F3EA", "align": "left", "valign": "top", "lineHeight": 1.2, "themeRefs": { "color": "tx2" } }
+    ] }
+  ]
+}
