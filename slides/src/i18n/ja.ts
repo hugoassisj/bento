@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Pasted as code": "コードとして貼り付けました",
+  "Paste as text": "テキストとして貼り付け",
+  "Code replaced": "コードを置き換えました",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

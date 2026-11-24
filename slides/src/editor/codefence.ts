@@ -6,6 +6,7 @@
 // 1. A fence. Lines between ``` and ``` (optionally ```js, ```python…) become
 //    a real Code element when the edit is committed, or when such text is
 //    pasted onto the canvas: highlighted, language-aware, and able to morph.
+//    A fence with no tag gets the language its code suggests (codepaste.ts).
 //    A box that is ONLY a fence turns into the Code element in place (same id,
 //    so its morph pairing survives); a box with text around the fence splits
 //    into text / code / text, stacked where the parts were.
@@ -16,6 +17,7 @@
 // toggleCodeOnSelection touches the document.
 
 import { LANGS } from '../../../kernel/src/tokenize.ts'
+import { guessLanguage } from './codepaste.ts'
 import { defaultCode, uid, type CodeElement, type SlideElement, type TextElement } from '../model.ts'
 
 /** A fence line: ``` with an optional info string (the language). Spaces and
@@ -80,8 +82,11 @@ export function splitFences(text: string): FencePart[] {
       while (j < lines.length && !isClose(lines[j])) j++
       if (j < lines.length) {
         flush()
-        const lang = codeLanguage(m[1])
-        parts.push({ kind: 'code', lines: lines.slice(i + 1, j), ...(lang ? { lang } : {}) })
+        const code = lines.slice(i + 1, j)
+        // no tag: the language the code itself suggests; a tag that names
+        // nothing built in is the author's word, and is not second-guessed
+        const lang = m[1] ? codeLanguage(m[1]) : guessLanguage(code.join('\n'))
+        parts.push({ kind: 'code', lines: code, ...(lang ? { lang } : {}) })
         i = j
         continue
       }

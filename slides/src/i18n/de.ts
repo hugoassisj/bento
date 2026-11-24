@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Pasted as code": "Als Code eingefügt",
+  "Paste as text": "Als Text einfügen",
+  "Code replaced": "Code ersetzt",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",

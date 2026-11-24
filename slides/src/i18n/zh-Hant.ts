@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Pasted as code": "已貼上為程式碼",
+  "Paste as text": "貼上為文字",
+  "Code replaced": "程式碼已取代",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",

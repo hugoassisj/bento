@@ -103,6 +103,10 @@ try {
   ok(await focusIn() && await live() === 'function f() {\nreturn x\ny!', `Shift+Tab twice outdents them as a block (${JSON.stringify(await live())})`)
   await p.keyboard.press('Tab')
   ok(await live() === '  function f() {\n  return x\n  y!', 'the lines stay selected between presses')
+  await p.keyboard.press(`${MOD}+z`)
+  ok(await focusIn() && await live() === 'function f() {\nreturn x\ny!', `⌘Z undoes the last indent (${JSON.stringify(await live())})`)
+  await p.keyboard.press(`${MOD}+a`)
+  await p.keyboard.press('Tab')
   await p.keyboard.press('ArrowDown')
   await p.keyboard.press('End')
   await p.keyboard.press('Escape')
@@ -113,6 +117,7 @@ try {
   await p.keyboard.press('Escape')
 
   console.log('\n2 · code pasted onto the canvas\n')
+  let got0
   for (const [what, html] of [['plain text', null], ['plain text and html', PY_HTML]]) {
     await fresh()
     await p.waitForTimeout(250)
@@ -132,6 +137,19 @@ try {
   await p.evaluate(() => window.bento.undo())
   await p.waitForTimeout(150)
   ok((await els()).map((e) => e.type).join(',') === 'code', '⌘Z after Paste as text brings the Code element back')
+
+  await fresh()
+  await p.waitForTimeout(250)
+  await paste('npm install bento', '<meta charset="utf-8"><code style="font-family: ui-monospace, monospace">npm install bento</code>')
+  await p.waitForTimeout(250)
+  got0 = await els()
+  ok(got0.length === 1 && got0[0].type === 'code' && got0[0].content === 'npm install bento', `one line the html paints as code → a Code element (${got0.map((e) => e.type).join(',')})`)
+  await fresh()
+  await p.waitForTimeout(250)
+  await paste('Revenue grew.\nCosts held.', '<div style="white-space: pre-wrap; font-family: Inter, sans-serif">Revenue grew.<br>Costs held.</div>')
+  await p.waitForTimeout(250)
+  got0 = await els()
+  ok(got0.length === 1 && got0[0].type === 'text', `prose in pre-wrap html (a text box copied off a slide) stays text (${got0.map((e) => e.type).join(',')})`)
 
   for (const [what, text] of [['a sentence', 'Revenue grew in every region this quarter.'], ['a bulleted list', '- Goals:\n  - ship (on time)\n  - hire']]) {
     await fresh()

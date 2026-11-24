@@ -40,7 +40,8 @@ import type { SaveQueue } from '../../../kernel/src/savequeue.ts'
 import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, onRecoveryOff, pruneOld, putRecovery, recoveryLooksOlder, type Snapshot } from '../autosave'
 import { freshGroups, insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
-import { estimatedFrames, fencedElements, splitFences } from './codefence'
+import { estimatedFrames, fencedElements, splitFences, type FencePart } from './codefence'
+import { guessLanguage, htmlLooksLikeCode, textLooksLikeCode } from './codepaste'
 import { keepSpaces } from './markdown'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
@@ -2859,7 +2860,7 @@ export class Editor {
         const file = imgItem.getAsFile()
         if (file) { ev.preventDefault(); this.pasteImageFile(file); return }
       }
-      if (this.pasteFromText(dt.getData('text/plain'))) ev.preventDefault()
+      if (this.pasteFromText(dt.getData('text/plain'), dt.getData('text/html'))) ev.preventDefault()
     })
   }
 
@@ -2869,9 +2870,11 @@ export class Editor {
    *
    * Split out of the paste EVENT so the context menu's Paste is the same code
    * rather than a second, drifting copy — the menu has to fetch the clipboard
-   * itself (`readText`), because a click carries no clipboardData.
+   * itself (`readText`), because a click carries no clipboardData. `html` is
+   * the clipboard's html flavour when there is one: it only ever decides
+   * whether the text is code (codepaste.ts), never what is inserted.
    */
-  private pasteFromText(text: string): boolean {
+  private pasteFromText(text: string, html?: string): boolean {
     // 2) Bento elements / slides copied from this or another deck
     const clip = parseClip(text)
     if (clip?.kind === 'elements') {
@@ -2903,14 +2906,63 @@ export class Editor {
         this.toast(made.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: made.length }))
         return true
       }
-      const esc = text.replace(/^\s*\n/, '').trimEnd().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').split('\n').map(keepSpaces).join('<br>')
-      const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
-      this.store.commit(() => this.store.slide.elements.push(el))
-      this.store.select([el.id])
-      this.toast(t('Text pasted'))
+      // 4) code: onto a selected Code element it replaces the code (the toast
+      // offers Undo); otherwise a Code element of its own, placed as a fenced
+      // paste is, with the toast offering the text box instead
+      const code = text.slice(0, 20000).replace(/\r\n?/g, '\n').replace(/^(?:[ \t]*\n)+/, '').trimEnd()
+      const picked = this.store.selectedElements
+      if (picked.length === 1 && picked[0].type === 'code') {
+        const el = picked[0]
+        const was = { content: el.content, grammarName: el.grammarName, h: el.h }
+        const lang = el.grammarName ? undefined : guessLanguage(code)
+        const needH = Math.ceil(code.split('\n').length * el.fontSize * (el.lineHeight || 1.25) + el.fontSize)
+        this.store.commit(() => {
+          el.content = code
+          if (lang) el.grammarName = lang
+          if (needH > el.h) el.h = needH
+        })
+        this.toast(t('Code replaced'), { label: t('Undo'), run: () => {
+          const now = this.store.doc.slides.flatMap((sl) => sl.elements).find((e) => e.id === el.id)
+          if (now?.type !== 'code') return
+          this.store.commit(() => {
+            now.content = was.content
+            now.h = was.h
+            if (was.grammarName === undefined) delete now.grammarName
+            else now.grammarName = was.grammarName
+          })
+        } })
+        return true
+      }
+      if (htmlLooksLikeCode(html) || textLooksLikeCode(code)) {
+        const lang = guessLanguage(code)
+        const part: FencePart = { kind: 'code', lines: code.split('\n'), ...(lang ? { lang } : {}) }
+        const src = defaultText({ html: '', color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 400), y: 120, w: 800 })
+        const made = fencedElements(src, [part], estimatedFrames(src, [part]))
+        this.store.commit(() => this.store.slide.elements.push(...made))
+        this.store.select(made.map((e) => e.id))
+        this.toast(t('Pasted as code'), { label: t('Paste as text'), run: () => this.pasteAsText(text, made.map((e) => e.id)) })
+        return true
+      }
+      this.pasteAsText(text)
       return true
     }
     return false
+  }
+
+  /** Plain text as a text box (what every non-code text paste makes). With
+   *  `replace`, those elements go in the same undo step: "Paste as text"
+   *  swapping the Code element a paste made for the text box. */
+  private pasteAsText(text: string, replace: string[] = []) {
+    const { width } = this.store.doc.size
+    const slide = this.store.doc.slides.find((sl) => sl.elements.some((e) => replace.includes(e.id))) ?? this.store.slide
+    const esc = text.replace(/^\s*\n/, '').trimEnd().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').split('\n').map(keepSpaces).join('<br>')
+    const el = defaultText({ html: esc, color: readableInk(slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
+    this.store.commit(() => {
+      if (replace.length) slide.elements = slide.elements.filter((e) => !replace.includes(e.id))
+      slide.elements.push(el)
+    })
+    if (slide === this.store.slide) this.store.select([el.id])
+    this.toast(t('Text pasted'))
   }
 
   private pasteImageFile(file: File) {

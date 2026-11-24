@@ -30,6 +30,17 @@ pre-1.0.
   just as typing "- " at its start does, and ⇧Tab on a top-level bullet makes
   it a plain line again. ⌘Z straight after takes either back. Esc is still the
   way out of the box, and Tab in a table still moves to the next cell.
+- **Fix: code blocks behave like a code editor.** Tab in a code block used to
+  leave it, so the letters you typed next fired editor shortcuts instead
+  (typing `return` picked the rectangle tool). Now Tab indents by two spaces,
+  ⇧Tab outdents, a selection over several lines indents or outdents them all,
+  and Enter starts the next line at the same indent. Esc is still the way out.
+  Code you copy from an editor and paste onto a slide now becomes a code block
+  with its indentation kept, in the language it looks like (Python, JS,
+  TypeScript, SQL and more), instead of a centred text box; the message offers
+  "Paste as text" if you wanted text. A fenced block with no language named
+  gets the same guess. With a code block selected, pasting replaces its code,
+  and the message offers Undo.
 
 ## [1.3.0] — 2026-11-22
 

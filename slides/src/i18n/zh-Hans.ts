@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Pasted as code": "已粘贴为代码",
+  "Paste as text": "粘贴为文本",
+  "Code replaced": "代码已替换",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",

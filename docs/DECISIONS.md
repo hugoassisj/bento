@@ -15415,3 +15415,29 @@ replaced before this shipped.
 - **Guard.** `scripts/test-slides-tab-in-text-browser.mjs`;
   `scripts/test-slides-bullet-indent-browser.mjs` asserts the new top-level
   Shift+Tab.
+
+## 2026-11-24 — slides: Tab indents in a code block; code pasted onto the canvas becomes a Code element
+
+- **Decision.** While a Code element is being edited, Tab inserts two spaces
+  at a caret and indents every line a selection touches; Shift+Tab outdents
+  (a tab or up to two spaces); Enter starts the next line at the caret line's
+  indent. Focus never leaves on Tab; Esc does (`editor/codeedit.ts`, writing
+  through `insertText` so the browser's ⌘Z undoes each step).
+- **Code on paste.** A canvas paste is code when every piece of text in the
+  html flavour is in `<pre>`/`<code>`/`<kbd>`/`<samp>` or under a monospace
+  font-family, or when the plain text (two or more lines, not a list) is
+  mostly indented with code punctuation somewhere, or mostly ends in braces
+  or semicolons (`editor/codepaste.ts`). `white-space: pre*` alone is NOT a
+  signal: a text box copied off a slide carries it. The Code element holds
+  the plain text verbatim and is placed as a fenced paste is; the toast
+  offers "Paste as text", which swaps it for the old text box in one undo
+  step. With one Code element selected, a text paste replaces its code
+  (toast with Undo); a fence still goes the fence path.
+- **Language.** `guessLanguage` scores a few high-signal patterns per
+  built-in grammar and names one only when it scores 3+ and leads the
+  runner-up by 2+; otherwise `grammarName` stays unset (the menu's `js`).
+  It runs for pasted code, for a fence with no tag (an unknown tag is kept as
+  the author's word, so stays unset) and, on a replace, only when the element
+  had no language. No format change.
+- **Guard.** `scripts/test-slides-code-paste.ts` (the case tables),
+  `scripts/test-slides-code-tab-browser.mjs` (real keys on the built shell).
