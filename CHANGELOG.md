@@ -16,6 +16,16 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Decks written by an assistant follow your design system.** In the compact
+  form an agent loads with *Replace from JSON…* or `window.bento.loadDoc`, a
+  colour, size or font can name one of your theme colours or tokens
+  (`"fill": "accent1"`, `"radius": "$radius.md"`), and the element stays
+  linked to it, so changing the theme later recolours it too. A shape the
+  agent left uncoloured takes your accent instead of orange, text it left
+  without a font uses your theme font, `use` places a copy of one of your
+  components, and `like` starts a slide from an earlier one. A name that does
+  not exist is listed in the load report with the ones that do. Saved files
+  are unchanged.
 
 ## [1.3.0] — 2026-11-22
 

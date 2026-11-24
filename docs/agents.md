@@ -465,6 +465,26 @@ without them — and elements should carry the full field set shown.
   Always write a full stack (`"'Fraunces', Georgia, serif"`), never a bare
   family name.
 
+## Compact input: name the deck's design system
+
+`window.bento.loadDoc(json)` and *Replace from JSON…* also take the compact
+form (`"compact": true`; omitted fields are filled on load, the file is always
+saved full). In it, reuse what the deck defines instead of copying values:
+
+- name a palette slot or a token as the value — `"fill": "accent1"`,
+  `"color": "tx1 -20%"`, `"background": "bg2"`, `"fill": "$color.card"`,
+  `"radius": "$radius.md"` — and the literal and its `themeRefs` binding are
+  written together, so a later palette or token change moves the element;
+- `{ "use": "<component id or name>", "x": …, "y": …, "over": { "<member>": { "html": "…" } } }`
+  places a copy of a component that follows its main;
+- `"like": "<slide id>"` starts a slide from an earlier one (background,
+  transition, recurring furniture);
+- leave a text's `fontFamily` out and it uses the theme font; leave a shape's
+  `fill` out and it is the deck's accent (bound to `accent1`).
+
+A name that does not resolve is listed in the load report's `dropped`, with the
+names that exist. The repository's `AGENTS.md` has the full compact reference.
+
 ## Layouts and `role`
 
 `doc.layouts` is a supported top-level key: an array of Slide-shaped templates

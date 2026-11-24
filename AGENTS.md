@@ -95,9 +95,9 @@ are in `docs/DECISIONS.md` — don't reopen them.
 The JSON in `#bento-doc` is the full document: every element carries every
 field, including a dozen defaults no author chose. Write the **compact** form
 instead — `"compact": true` at the top level, and leave out every field that
-equals what the editor would insert (rotation 0, opacity 1, the font stack,
-weight 400, centre/middle, line height 1.25, a shape's transparent stroke, a
-slide's theme background, `transition: "fade"` …). `x y w h` and the type's
+equals what the editor would insert (rotation 0, opacity 1, weight 400,
+centre/middle, line height 1.25, a shape's transparent stroke,
+`transition: "fade"` …). `x y w h` and the type's
 content (`html`, `shape`, `src`, `option`, `content`, `columns`/`rows`) are
 always written. Two conveniences: `elements` may nest arrays (a helper that
 returns a card as `[bg, title, body]` needs no spread), and `id` may be
@@ -157,6 +157,42 @@ The built-in layouts and their roles (this list is generated from the code by
 
 A deck's own `layouts` (full Slide objects, the shape *Save slide as layout*
 writes) may be named the same way.
+
+**Use the deck's own design system; it is the shortest thing to write.** A
+deck's palette slots, tokens and components are the user's, and what you leave
+out follows them:
+
+- A text element with no `fontFamily` renders in the theme font (none is
+  written). A shape with no `fill` is the deck's accent, bound to `accent1`. A
+  slide with no `background` is the theme's, bound to `bg1`.
+- Name a slot or a token as the value: `"fill": "accent2"`,
+  `"color": "tx1 -20%"`, `"background": "bg2"` (slots: `bg1 tx1 bg2 tx2
+  accent1`…`accent6 hlink folHlink`, with an optional lightness shift), or
+  `"fill": "$color.card"`, `"radius": "$radius.md"`, `"fontFamily":
+  "$font.body"` (a token in `theme.tokens.set`). The value AND the binding are
+  written, so changing the accent or the token later moves the element. Never
+  copy `theme.color` or a token's value in as a literal. A name that does not
+  exist lands in `dropped` with the names that do, and the property takes its
+  default. A `$token` binding written beside a literal that disagrees with it is
+  dropped when the deck opens; `dropped` says so.
+- `{ "use": "<component id or name>", "x": …, "y": …, "over": { "<member>":
+  { "html": "…" } } }` is a copy of a component (members named by
+  `component.key`, `id` or `name`; `md` works in `over`). It follows later edits
+  to the main except on the keys `over` lists. A main is a set of elements
+  sharing one `groupId`, each with `"component": { "id": …, "key": …, "main":
+  true }`.
+- `"like": "<slide id>"` on a slide starts it from an earlier slide: its
+  background (and binding), transition and recurring furniture (elements whose
+  ids recur on other slides, such as a logo or footer).
+
+```json
+{ "compact": true, "slides": [
+  { "id": "a", "elements": [
+    { "type": "shape", "shape": "rect", "x": 96, "y": 220, "w": 500, "h": 300, "fill": "$color.card" },
+    { "type": "text", "x": 120, "y": 240, "w": 452, "h": 60, "html": "Revenue", "color": "accent1" },
+    { "use": "Offer card", "x": 640, "y": 220, "over": { "title": { "html": "Growth" } } } ] },
+  { "like": "a", "elements": [ { "type": "text", "x": 96, "y": 80, "w": 1088, "html": "Next" } ] } ] }
+```
 
 Load it with `window.bento.loadDoc(json)` or *Save ▾ Replace from JSON…*;
 `window.bento.compact()` (or *Save ▾ Copy compact JSON*) gives a deck back in

@@ -132,6 +132,14 @@ looked at is not finished.
   data URI in `src` (self-contained) or references a URL for big files (keeps
   the deck small). `autoplay` runs only in present mode and needs `muted:true`
   for video. Don't embed large videos — they bloat the file.
+- **The deck's design system wins.** Reuse its palette slots, tokens and
+  components; never copy `theme.color` or a token's value in as a literal.
+  In compact input (`window.bento.loadDoc`) name them as values —
+  `"fill": "accent1"`, `"fill": "$color.card"` — and the binding is written
+  with the value; `{ "use": "<component>" }` places a copy and `"like":
+  "<slide id>"` starts a slide from an earlier one. Leave `fontFamily` and a
+  shape's `fill` out and they follow the theme. Details in AGENTS.md /
+  agents.md, "compact form".
 - **Never regenerate `docId`** when editing an existing deck; it is the
   document's identity. (Fresh decks omit it — the app mints one.)
 - `template:true` → every open mints a fresh deck; `readonly:true` → the
