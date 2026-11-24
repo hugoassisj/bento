@@ -747,3 +747,12 @@ jobs:
         # findings match it with every field typed in, and validate() and
         # measure() agree on every text element.
         run: node scripts/test-slides-measure-fields-browser.mjs
+
+      - name: Check deck panel in Chromium
+        if: ${{ !cancelled() }}
+        # validate()'s findings in the editor: a chip with the count (never the
+        # tips), rows "Slide N · Table · Rows run past the box" that jump to the
+        # element, Fit box to text / rows and Remove link as one undo step each,
+        # no check while typing with the panel closed, keyboard and Escape,
+        # Replace from JSON opening on what it brought in, no fixes read-only.
+        run: node scripts/test-slides-check-deck-browser.mjs

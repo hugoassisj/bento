@@ -65,7 +65,10 @@ try {
     const hit = document.elementsFromPoint(t.left + t.width / 2, t.top + t.height / 2)[0]
     const clash = ['.ed-present-pill', '.ed-zoombar'].map((s) => [s, r(s)]).filter(([, q]) => q && t.left < q.right && q.left < t.right && t.top < q.bottom && q.top < t.bottom).map(([s]) => s)
     return { pane: r('.ed-notespane').height, canvas: r('.ed-centre > .ed-canvas-wrap').height, centre: r('.ed-centre'), wrap: r('.ed-canvas-wrap'), row: r('.ed-corner-br'),
-      btn: t, pill: r('.ed-present-pill'), zoom: r('.ed-zoombar'), onTop: btn.contains(hit), clash, first: row.firstElementChild === btn,
+      btn: t, pill: r('.ed-present-pill'), zoom: r('.ed-zoombar'), onTop: btn.contains(hit), clash,
+      // the Check deck chip, when the deck has findings, leads the row; the toggle comes next
+      chip: !!document.querySelector('.ed-check-chip:not([hidden])'),
+      first: ((kids) => kids[0] === btn || (kids[0]?.classList.contains('ed-check-chip') && kids[1] === btn))([...row.children].filter((k) => !k.hidden)),
       shown: getComputedStyle(btn).visibility === 'visible', expanded: btn.getAttribute('aria-expanded'), tag: btn.tagName, name: btn.getAttribute('aria-label'),
       controls: !!btn.getAttribute('aria-controls') && btn.getAttribute('aria-controls') === document.querySelector('.ed-notespane').id,
       // the dot is a pseudo-element: read whether it is DRAWN, and what the description says
@@ -92,7 +95,10 @@ try {
       `${w}px: at the head of the bottom-end cluster, on the pills' line, 10px before Slideshow (${Math.round(g.pill.left - g.btn.right)}px; tops ${g.btn.top} / ${g.pill.top})`)
     ok(g.wrap.right - g.row.right < 40 && g.wrap.bottom - g.row.bottom < 40, `${w}px: the cluster is the canvas's bottom-end corner (${Math.round(g.wrap.right - g.row.right)}px in, ${Math.round(g.wrap.bottom - g.row.bottom)}px up)`)
     ok(!g.clash.length && g.row.left >= g.wrap.left && g.row.right <= g.wrap.right, `${w}px: clear of the Slideshow and zoom pills, the whole row inside the canvas (${g.clash.join(', ') || 'clear'}; row ${Math.round(g.row.left)}–${Math.round(g.row.right)} in ${Math.round(g.wrap.left)}–${Math.round(g.wrap.right)})`)
-    ok(!g.tight && g.word > 20, `${w}px: with room for the row, Slideshow keeps its word (${g.word.toFixed(1)}px)`)
+    // a deck with findings adds the Check deck chip to the row; where that
+    // leaves no room, Slideshow drops its word by the same measured rule
+    if (!g.chip) ok(!g.tight && g.word > 20, `${w}px: with room for the row, Slideshow keeps its word (${g.word.toFixed(1)}px)`)
+    else ok(g.tight === (g.word <= 1) && g.row.left >= g.wrap.left, `${w}px: with the Check deck chip in the row, Slideshow keeps its word only where the row has room (${g.word.toFixed(1)}px, tight ${g.tight})`)
     const sizes = [g.btn.height, g.pill.height, g.zoom.height]
     ok(sizes.every((x) => Math.abs(x - 32) < 0.5) && Math.abs(g.btn.width - 32) < 0.5, `${w}px: the toggle is a circle as tall as the Slideshow and zoom pills (${g.btn.width}×${sizes.join(' / ')}px)`)
     ok(g.dot && g.says === 'This slide has notes' && g.title === 'Show speaker notes · This slide has notes', `${w}px: its dot says the slide has notes, and so do its description and its tooltip (dot ${g.dot}, "${g.says}", "${g.title}")`)
@@ -135,7 +141,8 @@ try {
     ok(Math.abs(g.btn.top - g.pill.top) < 1 && Math.abs(g.btn.height - g.pill.height) < 0.5, `320px: on one line (tops ${g.btn.top} / ${g.pill.top})`)
     await q.setViewportSize({ width: 390, height: 844 }); await q.waitForTimeout(300)
     const back = await geom(q)
-    ok(!back.tight && back.word > 20, `and at 390px the word is back (${back.word.toFixed(1)}px)`)
+    if (!back.chip) ok(!back.tight && back.word > 20, `and at 390px the word is back (${back.word.toFixed(1)}px)`)
+    else ok(back.tight === (back.word <= 1) && back.row.left >= back.wrap.left, `and at 390px, with the Check deck chip in the row, the row still fits (${back.word.toFixed(1)}px, tight ${back.tight})`)
     await c.close()
   }
   {
