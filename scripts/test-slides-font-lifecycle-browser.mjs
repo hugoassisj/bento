@@ -23,6 +23,7 @@ try {
     await p.locator('.ed-about-json').fill(JSON.stringify(doc));
     // the first press reviews (the summary of the change), the second applies
     await p.locator('[role=dialog]').getByRole('button',{name:'Review changes',exact:true}).click();
+    await p.waitForTimeout(700); // a press applies only once the summary has been on screen a moment
     await p.locator('[role=dialog]').getByRole('button',{name:'Apply changes',exact:true}).click();
   }
   await replace(custom);

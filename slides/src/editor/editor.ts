@@ -1498,8 +1498,16 @@ export class Editor {
     let json = ''
     let report: string[] = []
     let timer = 0
+    // when the summary on show armed Apply; a click from before that moment
+    // (or within a beat of it) was aimed at "Review changes", not at it
+    let armedAt = Infinity
+    // when the press on Apply began (mousedown / keydown): a click's own time
+    // is its release, which can be delivered long after a press made early
+    let pressedAt = 0
     const stale = () => {
       reviewed = null
+      armedAt = Infinity
+      pressedAt = 0
       applyB.textContent = t('Review changes')
       applyB.disabled = false
     }
@@ -1511,11 +1519,14 @@ export class Editor {
       list.replaceChildren()
       confirmRow.hidden = true
       tick.checked = false
-      const say = (text: string, err = false) => {
+      // `ids`: slide ids, set apart so a right-to-left line cannot reorder them
+      const say = (text: string, err = false, ids?: string) => {
         const d = div(err ? 'ed-replace-err' : '')
-        d.textContent = text
+        const [a, b = ''] = text.split('\u0001')
+        d.append(a)
+        if (ids !== undefined) { const i = document.createElement('bdi'); i.textContent = ids; d.append(i, b) }
         status.append(d)
-        report.push(text)
+        report.push(a + (ids ?? '') + b)
       }
       const item = (text: string) => {
         const li = document.createElement('li')
@@ -1524,6 +1535,7 @@ export class Editor {
         report.push('- ' + text)
       }
       const ids = (xs: string[]) => xs.slice(0, 8).join(', ') + (xs.length > 8 ? ', …' : '')
+      const slidesLine = (line: (v: Record<string, string>) => string, xs: string[], err = false) => say(line({ n: String(xs.length), ids: '\u0001' }), err, ids(xs))
       const c = cleanPastedJson(ta.value)
       for (const r of c.repaired) {
         say(r === 'fence' ? t('Repaired: took the JSON out of a Markdown code fence')
@@ -1547,9 +1559,9 @@ export class Editor {
       const r = parsed.report
       const sum = summarizeReplace(this.store.doc, parsed.doc)
       say(t('Slides: {before} → {after}', { before: String(sum.before), after: String(sum.after) }))
-      if (sum.added.length) say(t('Slides added ({n}): {ids}', { n: String(sum.added.length), ids: ids(sum.added) }))
-      if (sum.removed.length) say(t('Slides removed ({n}): {ids}', { n: String(sum.removed.length), ids: ids(sum.removed) }), true)
-      if (sum.changed.length) say(t('Slides changed ({n}): {ids}', { n: String(sum.changed.length), ids: ids(sum.changed) }))
+      if (sum.added.length) slidesLine((v) => t('Slides added ({n}): {ids}', v), sum.added)
+      if (sum.removed.length) slidesLine((v) => t('Slides removed ({n}): {ids}', v), sum.removed, true)
+      if (sum.changed.length) slidesLine((v) => t('Slides changed ({n}): {ids}', v), sum.changed)
       if (sum.elements) say(t('Elements changed: {n}', { n: String(sum.elements) }))
       if (!sum.added.length && !sum.removed.length && !sum.changed.length) say(t('No changes to the slides'))
       say(t('Fields dropped: {n}', { n: String(r.dropped.length) }))
@@ -1563,14 +1575,26 @@ export class Editor {
       reviewed = ta.value
       json = c.json
       applyB.textContent = t('Apply changes')
-      applyB.disabled = sum.removed.length > 0
+      armedAt = performance.now()
+      if (sum.removed.length) {
+        // a disabled button drops keyboard focus on the page behind the scrim
+        if (document.activeElement === applyB) tick.focus()
+        applyB.disabled = true
+      }
     }
-    ta.addEventListener('input', () => {
+    ta.addEventListener('input', (ev) => {
       stale()
+      status.replaceChildren()
+      list.replaceChildren()
+      confirmRow.hidden = true
       clearTimeout(timer)
-      timer = window.setTimeout(review, 400)
+      // a paste is reviewed by itself (typing waits for the press); a very
+      // large one waits for the press too, so the page never stalls unasked
+      const kind = (ev as InputEvent).inputType ?? ''
+      if ((kind === 'insertFromPaste' || kind === 'insertFromDrop') && ta.value.length <= 2_000_000) timer = window.setTimeout(review, 100)
     })
     tick.addEventListener('change', () => { applyB.disabled = !tick.checked })
+    for (const k of ['mousedown', 'keydown']) applyB.addEventListener(k, (ev) => { pressedAt = ev.timeStamp })
     copyB.addEventListener('click', () => {
       if (reviewed !== ta.value) review()
       navigator.clipboard.writeText(report.join('\n')).then(
@@ -1578,9 +1602,14 @@ export class Editor {
         () => { copyB.textContent = t('Couldn’t access the clipboard') })
       setTimeout(() => { copyB.textContent = t('Copy report') }, 1800)
     })
-    applyB.addEventListener('click', () => {
+    applyB.addEventListener('click', (ev) => {
       // nothing is applied that the summary on show does not describe
       if (reviewed !== ta.value) { review(); return }
+      // …nor by a press begun before that summary was on screen: one queued
+      // while a review ran, or landing as the label changed under it
+      const at = pressedAt && pressedAt <= ev.timeStamp ? pressedAt : ev.timeStamp
+      pressedAt = 0
+      if (at < armedAt + 500) return
       // The pasted text is foreign input, full or compact (src/compact.ts):
       // the gate rebuilds it (restoregate.ts sanitizeDoc), and with `live` the
       // identity and capability stay THIS document's — its docId (recovery
@@ -1604,7 +1633,11 @@ export class Editor {
         dlg.close()
       } else review()
     })
-    const dlg = createDialog({ title: t('Replace from JSON'), content: body, actions: [copyB, cancelB, applyB], dismissOnBackdrop: false, onClose: () => clearTimeout(timer) })
+    const dlg = createDialog({ title: t('Replace from JSON'), content: body, actions: [copyB, cancelB, applyB], dismissOnBackdrop: false, onClose: () => {
+      clearTimeout(timer)
+      // the opener is gone (the ⌘K palette): the File menu's button, not the page
+      if (document.activeElement === document.body) (document.querySelector('.ed-logo') as HTMLElement | null)?.focus()
+    } })
     cancelB.addEventListener('click', () => dlg.close())
     confirmRow.hidden = true
     // opened from a menu row that is now hidden: Escape returns focus to the

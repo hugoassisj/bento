@@ -21,6 +21,14 @@
 //      copies them.
 //   6. Applying is one undo step, and the deck keeps its own docId and collab
 //      when the reply carries foreign ones.
+//   7. A click aimed at "Review changes" that the page receives only after a
+//      (slow) review has turned the button into "Apply changes" applies
+//      nothing — trusted mouse input, queued behind a review held at 1.5 s.
+//   8. Keyboard only: when the review disables the focused button (a reply
+//      that removes slides), focus moves to the tick and stays in the dialog;
+//      opened from ⌘K, Escape puts focus on the File button, not the page.
+// Every press waits for a known state first: the dialog reviews a paste by
+// itself, so a press racing that review would test the timing, not the dialog.
 // No network: http(s) aborted, WebSockets closed, offline mode on.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -60,19 +68,35 @@ try {
   const full = JSON.stringify(deck)
   const pretty = JSON.stringify(deck, null, 2)
   const openDialog = async () => {
+    if (await p.$('[role=dialog]')) { await p.keyboard.press('Escape'); await p.waitForTimeout(100) }
     await p.click('.ed-logo'); await p.waitForTimeout(100)
     await p.click('.ed-file-menu [data-cmd="replace-json"]')
     await p.waitForSelector('[role=dialog] textarea', { timeout: 3000 })
   }
   const dialogOpen = () => p.evaluate(() => !!document.querySelector('[role=dialog] textarea'))
   const primary = '[role=dialog] .ed-btn-primary'
-  // a paste: the value and the input event it fires (page.fill types a 280 KB
-  // reply through the editing pipeline, which takes minutes)
-  const paste = (text) => p.evaluate((v) => {
+  // the value and the input event it fires (page.fill types a 280 KB reply
+  // through the editing pipeline, which takes minutes). 'insertFromPaste' is
+  // reviewed by the dialog by itself; 'insertText' (typing) waits for a press.
+  const input = (text, inputType) => p.evaluate(([v, k]) => {
     const ta = document.querySelector('[role=dialog] textarea')
-    ta.focus(); ta.value = v; ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' }))
-  }, text)
-  const press = async () => { await p.click(primary); await p.waitForTimeout(80) }
+    ta.focus(); ta.value = v; ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: k }))
+  }, [text, inputType])
+  const reviewedState = () => p.waitForFunction(() => document.querySelector('[role=dialog] [role=status]')?.textContent !== '', null, { timeout: 15000 })
+  // a paste, then its automatic review on show
+  const paste = async (text) => { await input(text, 'insertFromPaste'); await reviewedState() }
+  // typed text, then a press of "Review changes"
+  const typeAndReview = async (text) => {
+    await input(text, 'insertText')
+    ok(await p.$eval(primary, (b) => b.textContent) === 'Review changes', 'typing does not review by itself: the button still reads Review changes')
+    await p.click(primary); await reviewedState()
+  }
+  // the second press, once the summary has been on screen for a moment
+  const apply = async () => {
+    await p.waitForFunction(() => document.querySelector('[role=dialog] .ed-btn-primary')?.textContent === 'Apply changes', null, { timeout: 15000 })
+    await p.waitForTimeout(700)
+    await p.click(primary); await p.waitForTimeout(150)
+  }
   const state = () => p.evaluate(() => {
     const d = document.querySelector('[role=dialog]')
     const b = d?.querySelector('.ed-btn-primary')
@@ -118,7 +142,6 @@ try {
     ]
     for (const [name, text, want, loads] of cases) {
       await paste(text)
-      await press()
       const s = await state()
       ok(want.test(s.status), `${name}: "${s.lines.join(' | ').slice(0, 140)}"`)
       if (loads) ok(s.button === 'Apply changes' && !s.invalid && new RegExp(`Slides: ${n} → ${n}`).test(s.status) && /No changes to the slides/.test(s.status), `${name}: reviewed — ${n} → ${n} slides, no changes, button reads "${s.button}"`)
@@ -127,7 +150,7 @@ try {
     }
     const syntax = pretty.replace(/\n  "title"/, '\n  "title" "x",\n  "title"')
     const line = syntax.slice(0, syntax.indexOf('"title" "x"')).split('\n').length
-    await paste(syntax); await press()
+    await typeAndReview(syntax)
     ok(new RegExp(`line ${line}, column 11`).test((await state()).status), `the syntax error is placed where it is in the text: line ${line}, column 11`)
     await p.keyboard.press('Escape')
   })
@@ -140,20 +163,17 @@ try {
     target.html = 'Tidied by a chatbot'
     await openDialog()
     await paste('```json\n' + JSON.stringify(edited) + '\n```')
-    await press()
     let s = await state()
     ok(s.button === 'Apply changes' && new RegExp(`Slides changed \\(1\\): ${s2.id}`).test(s.status) && /Elements changed: 1/.test(s.status), `the summary names the slide and counts the element ("${s.lines.slice(1).join(' | ')}")`)
     ok(await docJson() === original, 'still nothing applied after the review')
     // edit after the review: the summary on show no longer describes the text
-    await paste('```json\n' + full + '\n```')
-    await press()
+    await typeAndReview('```json\n' + full + '\n```')
     s = await state()
     ok(await docJson() === original && /No changes to the slides/.test(s.status), 'text edited after a review: the press reviews again instead of applying')
     await paste('```json\n' + JSON.stringify(edited) + '\n```')
-    await p.waitForTimeout(700) // the review also runs by itself after typing stops
     s = await state()
-    ok(s.button === 'Apply changes' && /Slides changed \(1\)/.test(s.status), 'a paste is reviewed by itself after a pause')
-    await press()
+    ok(s.button === 'Apply changes' && /Slides changed \(1\)/.test(s.status), 'a paste is reviewed by itself')
+    await apply()
     const now = await p.evaluate(() => window.bento.doc)
     ok(!(await dialogOpen()) && now.slides[1].elements.find((e) => e.id === target.id)?.html === 'Tidied by a chatbot', 'the second press applies and closes')
     await p.click('.ed-scroll', { position: { x: 5, y: 5 } }).catch(() => {})
@@ -169,7 +189,6 @@ try {
     const gone = n - half.slides.length
     await openDialog()
     await paste('Here is the tidied deck:\n```json\n' + JSON.stringify(half, null, 2) + '\n```')
-    await press()
     let s = await state()
     ok(new RegExp(`Slides: ${n} → ${half.slides.length}`).test(s.status) && new RegExp(`Slides removed \\(${gone}\\): ${deck.slides[half.slides.length].id}`).test(s.status), `the summary says ${gone} slides go, by id`)
     ok(s.tick && new RegExp(`removes ${gone} of ${n} slides`).test(s.tickText), `an explicit confirmation line: "${s.tickText}"`)
@@ -179,7 +198,7 @@ try {
     await p.click('[role=dialog] .ed-replace-confirm input')
     s = await state()
     ok(!s.disabled, 'ticked: Apply changes is enabled')
-    await press()
+    await apply()
     ok((await state()).slides === half.slides.length && !(await dialogOpen()), `applied: ${half.slides.length} slides`)
     await p.keyboard.press(UNDO); await p.waitForTimeout(150)
     ok(await docJson() === original, `one undo step: ${n} slides again`)
@@ -190,7 +209,6 @@ try {
     const compact = { compact: true, slides: [{ id: 'r1', elements: [{ type: 'text', x: 96, y: 80, w: 400, h: 60, html: 'Hi', fontSze: 40 }] }] }
     await openDialog()
     await paste(JSON.stringify(compact))
-    await press()
     const s = await state()
     ok(/Fields dropped: 1/.test(s.status) && s.report.some((x) => /\/slides\/0\/elements\/0\/fontSze/.test(x)), `the dropped path is listed (${s.report[0]})`)
     ok(/Warnings: \d+/.test(s.status), 'warnings are counted')
@@ -211,12 +229,81 @@ try {
     foreign.title = 'Foreign title'
     await openDialog()
     await paste(JSON.stringify(foreign))
-    await press(); await press()
+    await apply()
     const after = await p.evaluate(() => ({ docId: window.bento.doc.docId, collab: JSON.stringify(window.bento.doc.collab ?? null), title: window.bento.doc.title }))
     ok(after.title === 'Foreign title', 'the content was applied')
     ok(after.docId === before.docId && after.collab === before.collab, `docId and collab are still the deck’s own (${after.docId})`)
     await p.keyboard.press(UNDO); await p.waitForTimeout(150)
     ok(await docJson() === original, 'one undo step restores it')
+  })
+
+  console.log('\n7. A click queued behind a slow review applies nothing\n')
+  await run(async () => {
+    const mk = (s) => { const d = JSON.parse(full); d.slides[1].elements.find((e) => e.type === 'text').html = s; return '```json\n' + JSON.stringify(d, null, 2) + '\n```' }
+    await openDialog()
+    await paste(mk('Version A'))
+    await p.waitForTimeout(400)
+    const box = await p.locator(primary).boundingBox()
+    await p.evaluate(() => {
+      // hold the next review on the main thread for 1.5 s, once
+      const parse = JSON.parse
+      window.__slow = true
+      JSON.parse = function (...a) {
+        if (window.__slow) {
+          window.__slow = false
+          console.log('bento-rig: review held') // reaches the rig while the page is busy
+          const t0 = performance.now(); while (performance.now() - t0 < 1500) { /* a big deck */ }
+        }
+        return parse.apply(this, a)
+      }
+      // the decision, instrumented: what the button said when the click arrived
+      window.__clicks = []
+      document.addEventListener('click', (e) => {
+        const b = e.target.closest?.('.ed-btn-primary')
+        if (b) window.__clicks.push(b.textContent)
+      }, true)
+    })
+    const held = p.waitForEvent('console', { predicate: (m) => m.text() === 'bento-rig: review held', timeout: 15000 })
+    await input(mk('Version B'), 'insertFromPaste') // reviewed by itself 100 ms on, for 1.5 s
+    await held
+    await p.waitForTimeout(200)
+    await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2) // trusted, queued behind the review
+    await p.waitForFunction(() => window.__clicks.length > 0 && !window.__slow, null, { timeout: 15000 })
+    await p.waitForTimeout(600)
+    const r = await p.evaluate(() => ({ clicks: window.__clicks, open: !!document.querySelector('[role=dialog] textarea'), b: window.bento.doc.slides[1].elements.some((e) => e.html === 'Version B'), label: document.querySelector('[role=dialog] .ed-btn-primary')?.textContent }))
+    ok(r.clicks[0] === 'Apply changes', `the race is staged: the click reached the button after it read "Apply changes" (${JSON.stringify(r.clicks)})`)
+    ok(!r.b && r.open && await docJson() === original, 'that click applied nothing; the dialog stays open on the summary')
+    await apply()
+    ok(await p.evaluate(() => window.bento.doc.slides[1].elements.some((e) => e.html === 'Version B')), 'a click made with the summary on screen applies it')
+    await p.keyboard.press(UNDO); await p.waitForTimeout(150)
+    ok(await docJson() === original, 'one undo step restores it')
+  })
+
+  console.log('\n8. Keyboard only\n')
+  await run(async () => {
+    const half = JSON.parse(full)
+    half.slides = half.slides.slice(0, 3)
+    await openDialog()
+    await input(JSON.stringify(half), 'insertText')
+    for (let i = 0; i < 6 && !(await p.evaluate(() => document.activeElement?.classList.contains('ed-btn-primary'))); i++) await p.keyboard.press('Tab')
+    ok(await p.evaluate(() => document.activeElement?.textContent) === 'Review changes', 'Tab reaches Review changes')
+    await p.keyboard.press('Enter'); await reviewedState()
+    const f = await p.evaluate(() => ({ type: document.activeElement?.type, inDialog: !!document.activeElement?.closest('[role=dialog]'), disabled: document.querySelector('[role=dialog] .ed-btn-primary').disabled }))
+    ok(f.disabled && f.type === 'checkbox' && f.inDialog, `the button disabled itself; focus moved to the tick (${JSON.stringify(f)})`)
+    await p.keyboard.press('Space')
+    ok(await p.evaluate(() => !document.querySelector('[role=dialog] .ed-btn-primary').disabled), 'Space ticks it and enables Apply changes')
+    let inside = true
+    for (let i = 0; i < 6; i++) { await p.keyboard.press('Tab'); inside &&= await p.evaluate(() => !!document.activeElement?.closest('[role=dialog]')) }
+    ok(inside, 'Tab keeps cycling inside the dialog')
+    await p.keyboard.press('Escape'); await p.waitForTimeout(100)
+    ok(await docJson() === original, 'Escape: nothing applied')
+    await p.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k'); await p.waitForTimeout(150)
+    await p.keyboard.type('Replace from JSON'); await p.waitForTimeout(150)
+    await p.keyboard.press('Enter')
+    await p.waitForSelector('[role=dialog] textarea', { timeout: 3000 })
+    await p.keyboard.press('Escape'); await p.waitForTimeout(100)
+    const back = await p.evaluate(() => document.activeElement?.className ?? '')
+    ok(/ed-logo/.test(back), `opened from ⌘K, Escape puts focus on the File button (${back || 'body'})`)
   })
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)

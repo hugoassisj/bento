@@ -235,7 +235,8 @@ try {
     // the first press shows what will change, the second applies it
     const press = () => page.evaluate(() => document.querySelector('[role=dialog] .ed-btn-primary')?.click())
     await press()
-    await page.waitForTimeout(200)
+    // the summary must be on screen a moment before a press can apply it
+    await page.waitForTimeout(700)
     // replacing the one-slide deck removes its slide: that takes the explicit tick
     await page.evaluate(() => { const c = document.querySelector('[role=dialog] .ed-replace-confirm'); if (c && !c.hidden) c.querySelector('input').click() })
     await press()
