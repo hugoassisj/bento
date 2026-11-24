@@ -83,21 +83,42 @@ function rgb(c: string): { r: number; g: number; b: number; a: number } | null {
 }
 
 const sameColours = (a: readonly string[], b: readonly string[]) =>
-  a.length === b.length && a.every((c, i) => typeof c === 'string' && c.toLowerCase() === b[i].toLowerCase())
+  a.length === b.length && a.every((c, i) => typeof c === 'string' && canonicalHex(c).toLowerCase() === canonicalHex(b[i]).toLowerCase())
 
 /**
- * The theme half of the operation: set the accent and move a derived chart
- * palette with it. No derive pass (the editor runs its own after the edit);
- * the tokens pane writes the accent through here so a person's edit and an
- * agent's agree.
+ * A short hex written out in full (`#0a7` → `#00aa77`, `#0a7c` → `#00aa77cc`),
+ * case kept; anything else unchanged. The chart palette derivation reads six
+ * hex digits, so a short accent stored as typed derived `#NaNNaNNaN`.
+ */
+export function canonicalHex(c: string): string {
+  const m = /^#([0-9a-f]{3,4})$/i.exec(c.trim())
+  return m ? `#${m[1].split('').map((x) => x + x).join('')}` : c
+}
+
+/** The opaque `#rrggbb` a hex colour of any length paints with (alpha dropped), or null. */
+function hex6(c: unknown): string | null {
+  if (typeof c !== 'string') return null
+  const m = /^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/i.exec(canonicalHex(c))
+  return m ? `#${m[1]}` : null
+}
+
+/**
+ * The theme half of the operation: set the accent (a short hex written out in
+ * full) and move a derived chart palette with it. The palette is derived from
+ * the accent's opaque colour, so an accent with an alpha of its own (a swatch
+ * dragged below 100%) still has a palette that follows it. No derive pass (the
+ * editor runs its own after the edit); the tokens pane writes the accent
+ * through here so a person's edit and an agent's agree.
  */
 export function writeAccent(theme: BentoDoc['theme'], colour: string): ChartPaletteOutcome {
-  const was = theme.accent
+  const was = hex6(theme.accent)
+  colour = canonicalHex(colour)
   theme.accent = colour
   const cp = theme.chartPalette
   if (!Array.isArray(cp) || !cp.length) return 'follows'
-  if (!isAccentColour(was) || !isAccentColour(colour) || !sameColours(cp, deriveChartPalette(was))) return 'kept'
-  theme.chartPalette = deriveChartPalette(colour)
+  const now = hex6(colour)
+  if (!was || !now || !sameColours(cp, deriveChartPalette(was))) return 'kept'
+  theme.chartPalette = deriveChartPalette(now)
   return 'rederived'
 }
 
@@ -164,14 +185,15 @@ export function nearAccent(doc: BentoDoc, accent: string, skipTheme: readonly st
 /**
  * Change the accent as one operation (see the top of this file). MUTATES the
  * document; returns null and changes nothing for a colour that is not
- * `#rgb` or `#rrggbb`. In the editor, run it inside one `store.commit` so it
- * is one undo step.
+ * `#rgb` or `#rrggbb` (`#rgb` is stored as `#rrggbb`). In the editor, run it
+ * inside one `store.commit` so it is one undo step.
  */
 export function setAccent(doc: BentoDoc, colour: string): AccentReport | null {
   if (!isAccentColour(colour)) return null
   const from = doc.theme.accent
   const before = boundLiterals(doc)
   const chartPalette = writeAccent(doc.theme, colour)
+  colour = doc.theme.accent // as stored: a short hex written out in full
   // the pass the app runs on opening a deck, so a file written now is what
   // opening it and saving again would have written
   derive(doc, deriveMemory(doc))

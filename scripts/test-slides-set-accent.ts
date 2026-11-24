@@ -13,6 +13,7 @@
 //     theme-ref-stale), and the result is a derive fixed point;
 //   - re-derives a chart palette that the old accent derived, keeps a
 //     hand-chosen one byte for byte and says so, and leaves an absent one absent;
+//     a short (#0a7) or translucent accent derives only valid #rrggbb entries;
 //   - lists unbound values near the old accent and leaves them byte-identical,
 //     where the find-and-replace variant changes them;
 //   - changes nothing but the accent, the derived chart palette and bound
@@ -95,6 +96,23 @@ const ab = setAccent(absent, GREEN)!
 ok(ab.chartPalette === 'follows' && absent.theme.chartPalette === undefined, `no chart palette stays absent: new charts derive from the accent (${ab.chartPalette})`)
 const t = { ...clone(base.theme), chartPalette: deriveChartPalette('#ABCDEF') }
 ok(writeAccent(t, GREEN) === 'kept' && t.chartPalette[0] === '#ABCDEF', 'a palette derived from some OTHER colour counts as hand-chosen and is kept')
+
+const hex6 = (cp: unknown) => Array.isArray(cp) && cp.length > 0 && cp.every((c) => /^#[0-9a-f]{6}$/i.test(c))
+const short = clone(base)
+short.theme.chartPalette = deriveChartPalette(OLD)
+const sh = setAccent(short, '#0a7')!
+ok(sh.to === '#00aa77' && short.theme.accent === '#00aa77' && sh.chartPalette === 'rederived' && hex6(short.theme.chartPalette) &&
+  JSON.stringify(short.theme.chartPalette) === JSON.stringify(deriveChartPalette('#00aa77')),
+  `a short accent (#0a7) is stored in full and the derived chart palette is every one a #rrggbb (${short.theme.accent}: ${short.theme.chartPalette})`)
+ok(stale(short).length === 0, 'and leaves no stale bound literal')
+const al = { ...clone(base.theme), chartPalette: deriveChartPalette(OLD) }
+const a1 = writeAccent(al, '#0a7f5a80')
+const cpAlpha = al.chartPalette.slice()
+const a2 = writeAccent(al, '#123456')
+ok(a1 === 'rederived' && hex6(cpAlpha) && JSON.stringify(cpAlpha) === JSON.stringify(deriveChartPalette('#0a7f5a')) && a2 === 'rederived' && JSON.stringify(al.chartPalette) === JSON.stringify(deriveChartPalette('#123456')),
+  `an accent with its own alpha (a swatch below 100%) derives from its opaque colour, and the palette keeps following (${a1}, ${a2})`)
+const a4 = { ...clone(base.theme), chartPalette: deriveChartPalette(OLD) }
+ok(writeAccent(a4, '#0a78') === 'rederived' && a4.accent === '#00aa7788' && hex6(a4.chartPalette), `#rgba is written out in full too (${a4.accent})`)
 
 // --- look-alikes: listed, never rewritten -------------------------------------
 ok(report.nearby.length > 0, `unbound values near ${OLD} are listed (${report.nearby.length}, within ${NEAR_ACCENT})`)

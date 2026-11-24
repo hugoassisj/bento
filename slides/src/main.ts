@@ -31,7 +31,7 @@ function reportGuard(dropped: Dropped[]) {
   if (dropped.length) console.info('[bento] opened file: neutralised', dropped)
 }
 import { validateDoc, type ValidateOpts } from './validate'
-import { isAccentColour, setAccent, type AccentReport } from './accent'
+import { canonicalHex, isAccentColour, setAccent, type AccentReport } from './accent'
 import { buildSchema } from './schema'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
@@ -412,8 +412,10 @@ dismissSplash()
    * never by replacing its literals (src/accent.ts).
    */
   setAccent(colour: string): AccentReport | null {
-    let report: AccentReport | null = null
     if (!isAccentColour(colour)) return null // no empty undo step for a refusal
+    // the colour it already is (in any case): nothing to undo, nothing to save — report on a copy
+    if (canonicalHex(colour).toLowerCase() === canonicalHex(store.doc.theme.accent).toLowerCase()) return setAccent(structuredClone(store.doc), store.doc.theme.accent)
+    let report: AccentReport | null = null
     store.commit(() => { report = setAccent(store.doc, colour) })
     return report
   },

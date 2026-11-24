@@ -9,7 +9,9 @@
 // literal, and one undo puts the old accent and every bound literal back
 // (one redo returns them). A refused colour changes nothing. Typing a new
 // accent in Tokens ▸ Theme moves a chart palette that was derived from the
-// old accent with it, also as one undo step. Node twin (the rules on the
+// old accent with it, also as one undo step, and a typed short hex (0a7) is
+// stored in full so the palette never gets a #NaN entry. Setting the accent it
+// already has is no undo step. Node twin (the rules on the
 // starter deck): scripts/test-slides-set-accent.ts.
 import { fileURLToPath } from 'node:url'
 import { register } from 'node:module'
@@ -64,6 +66,9 @@ try {
   })
   ok(disk.accent === GREEN && disk.stale === 0, `the saved file has the new accent and no stale bound literal (${disk.accent}, ${disk.stale} theme-ref-stale)`)
   const after = await p.evaluate(() => JSON.stringify(window.bento.read()))
+  const again = await p.evaluate((c) => window.bento.setAccent(c.toLowerCase()), GREEN)
+  ok(again && again.followed === 0 && await p.evaluate(() => JSON.stringify(window.bento.read())) === after,
+    'setting the accent it already has reports and changes nothing (no undo step: the next undo is the real change)')
 
   await p.evaluate(() => window.bento.undo())
   await p.waitForTimeout(300)
@@ -94,6 +99,15 @@ try {
   await p.waitForTimeout(300)
   const back = await p.evaluate(() => ({ accent: window.bento.doc.theme.accent, cp: window.bento.doc.theme.chartPalette }))
   ok(back.accent === OLD && JSON.stringify(back.cp) === JSON.stringify(deriveChartPalette(OLD)), 'one undo restores the accent and the chart palette together')
+  // a short hex, as the field accepts it: the palette derives from it written out in full, never #NaN
+  await p.click('.ed-token-row[data-slot="accent1"] .ed-token-value')
+  await p.keyboard.press('ControlOrMeta+A')
+  await p.keyboard.type('0a7')
+  await p.keyboard.press('Enter')
+  await p.waitForTimeout(400)
+  const short = await p.evaluate(() => ({ accent: window.bento.doc.theme.accent, cp: window.bento.doc.theme.chartPalette }))
+  ok(short.accent === '#00aa77' && short.cp.every((c) => /^#[0-9a-f]{6}$/i.test(c)) && JSON.stringify(short.cp) === JSON.stringify(deriveChartPalette('#00aa77')),
+    `typing a short accent (0a7) stores ${short.accent} and every chart palette entry is a #rrggbb (${short.cp})`)
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

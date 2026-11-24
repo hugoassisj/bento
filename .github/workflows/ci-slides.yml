@@ -725,5 +725,6 @@ jobs:
         if: ${{ !cancelled() }}
         # window.bento.setAccent repaints the bound tiles, the saved file has no
         # stale bound literal, and it is one undo step; typing the accent in
-        # Tokens moves a derived chart palette with it, also one undo step.
+        # Tokens moves a derived chart palette with it, also one undo step; a
+        # typed short hex (0a7) never puts a #NaN colour in the chart palette.
         run: node scripts/test-slides-set-accent-browser.mjs
