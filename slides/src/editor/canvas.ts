@@ -10,6 +10,7 @@ import type { Store } from '../store'
 import { t } from '../i18n'
 import { defaultShape, internAsset, ratioLocked, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
+import { indentCode, newlineInCode } from './codeedit'
 import { cssColor, renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, autolinkAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
 import { enterInEmptyNested, itemToLine, lineToList } from './typedlist'
@@ -2266,7 +2267,16 @@ export class SlideCanvas {
       // plain line Tab makes a first-level bullet, as typing "- " there does;
       // Shift+Tab on a first-level bullet makes it a plain line again
       // (typedlist.ts; ⌘Z straight after takes either back). Code is not
-      // text here.
+      // text here: in a Code element Tab indents and Shift+Tab outdents (a
+      // selection's lines as a block), and Enter carries the line's
+      // indentation to the next (codeedit.ts).
+      if (model?.type === 'code' && (ev.key === 'Tab' || ev.key === 'Enter') && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !ev.isComposing) {
+        ev.preventDefault()
+        this.editAutoSelected = false
+        if (ev.key === 'Enter') newlineInCode(inner)
+        else indentCode(inner, ev.shiftKey ? -1 : 1)
+        return
+      }
       if (ev.key === 'Tab' && !ev.metaKey && !ev.ctrlKey && !ev.altKey && model?.type !== 'code') {
         ev.preventDefault()
         this.editAutoSelected = false
