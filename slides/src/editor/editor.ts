@@ -1329,6 +1329,15 @@ export class Editor {
       ? t('Replace this slide with a new one. {undo} undoes it.', { undo })
       : t('Replace all {n} slides with one new slide. {undo} undoes it.', { n: String(n), undo })
     const list = div('ed-scratch-choices')
+    // ↑/↓ walk the choices, as in a menu
+    list.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return
+      const all = [...list.querySelectorAll<HTMLElement>('.ed-scratch-choice')]
+      const at = all.indexOf(document.activeElement as HTMLElement)
+      if (at < 0) return
+      ev.preventDefault()
+      all[(at + (ev.key === 'ArrowDown' ? 1 : all.length - 1)) % all.length].focus()
+    })
     body.append(lead, list)
     const cancel = document.createElement('button')
     cancel.type = 'button'
@@ -3966,6 +3975,11 @@ export class Editor {
       if (!inField && this.typeIntoText(ev)) return
       if (dispatch(this.commands, ev, inField)) return
       if (inField) return
+      // A kernel dialog (Start from scratch, Compress pictures, Export images)
+      // is modal: Delete, the arrows and the rest of the hand-coded keys below
+      // must not reach the slide behind it. Only .bkd-overlay, not MODAL — a
+      // context menu or an open dropdown still lets those keys through.
+      if (document.querySelector('.bkd-overlay')) return
       // Crop mode owns the keyboard: Enter/Esc are its (cropedit.ts), and a
       // Delete meant for the picture being cropped must not remove it.
       if (this.canvas.isCropEditing) return

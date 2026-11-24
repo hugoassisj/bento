@@ -914,6 +914,7 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
   padding: 8px 10px;
 }
 .ed-hint code { font-size: 10.5px; word-break: break-all; }
+.ed-morph-warn { color: #C0392B; background: rgba(192, 57, 43, 0.08); }
 
 /* File ▸ Start from scratch: the choices are a list of cards, not a button
    row, so theme presets can join them without a new dialog. */
@@ -936,7 +937,6 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
 .ed-scratch-choice span { font-size: 12px; line-height: 1.4; color: var(--muted); }
 .ed-scratch-choice:hover { background: var(--chrome); border-color: var(--field-line-hot); }
 .ed-scratch-choice:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
-.ed-morph-warn { color: #C0392B; background: rgba(192, 57, 43, 0.08); }
 
 .ed-btn-update {
   background: #FF9E8A !important;
