@@ -86,11 +86,10 @@ try { sj = JSON.parse(starter.out) } catch {}
 ok(!!sj && sj.ok === true && Array.isArray(sj.findings), '--json parses into { ok, findings, … }')
 ok(sj?.slides === 19 && sj?.shown === 15, `19 slides, 15 shown — states and hidden slides excluded (${sj?.slides}/${sj?.shown})`)
 ok(sj?.counts?.error === 0, `the starter deck has no errors (${sj?.counts?.error})`)
-// its known warnings: the showcase's deliberate bleeds, a few tight boxes and
-// two chart labels it cuts off ("Engagement", "Growth") — pinned by kind, not
-// count, so a starter-deck edit does not fail this rig
-ok((sj?.findings ?? []).every((f: any) => ['text-overflow', 'out-of-canvas', 'chart-label-clipped', 'collab-secrets-present', 'font-not-embedded'].includes(f.code) || f.severity !== 'warning'),
-  'every starter-deck warning is a known kind (text-overflow / out-of-canvas / chart-label-clipped)')
+// its known warnings: the showcase's deliberate bleeds and a few tight boxes —
+// pinned by kind, not count, so a starter-deck edit does not fail this rig
+ok((sj?.findings ?? []).every((f: any) => ['text-overflow', 'out-of-canvas', 'collab-secrets-present', 'font-not-embedded'].includes(f.code) || f.severity !== 'warning'),
+  'every starter-deck warning is a known kind (text-overflow / out-of-canvas)')
 ok(sj?.measured === true, 'text was measured (the shell had layout)')
 ok(starterMs < 30_000, `the whole run took ${starterMs} ms (budget: a 30-slide deck under 15 s; this one has 19)`)
 
