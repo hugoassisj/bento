@@ -240,7 +240,28 @@ console.log('\nlayouts decks are made of: stats, big number, timeline, chart + f
   // bound to the deck's theme
   const sl = s3 as unknown as X
   ok(sl.background === '#101820' && sl.themeRefs?.background === 'bg1', 'the slide takes the deck background, bound to bg1 (not the layout\'s white)')
-  ok(at(s3, 'lst-title')!.color === '#F5F7FA' && at(s3, 'lst-title')!.themeRefs?.color === 'tx1' && at(s3, 'lst-stat1')!.color === '#FF9E8A' && at(s3, 'lst-stat1')!.themeRefs?.color === 'accent1' && at(s3, 'lst-rule')!.fill === '#FF9E8A', 'text and rules are the deck\'s colours, bound to tx1 / accent1')
+  ok(at(s3, 'lst-title')!.color === '#F5F7FA' && at(s3, 'lst-title')!.themeRefs?.color === 'tx1' && at(s3, 'lst-stat1')!.color === '#F5F7FA' && at(s3, 'lst-stat1')!.themeRefs?.color === 'tx1' && at(s3, 'lst-rule')!.fill === '#FF9E8A' && at(s3, 'lst-rule')!.themeRefs?.fill === 'accent1', 'text is the deck\'s text colour (tx1), the rule its accent (accent1)')
+
+  // every text slot of the new layouts reads on its background, in more than the theme they were drawn in
+  // (review: accent-coloured stats were 2.02:1 on the default theme, 1.75:1 on the starter deck's)
+  const lum = (hex: string) => { const n = parseInt(hex.slice(1, 7), 16); const f = (v: number) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255) }
+  const cr = (a: string, b: string) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) }
+  const palettes: Record<string, Obj> = {
+    default: {},
+    starter: { background: '#F2F0EA', color: '#0D1B2E', accent: '#FF9E8A' },
+    'mid grey': { background: '#FFFFFF', color: '#767676', accent: '#F7A600' },
+    'cream and brown': { background: '#F5EBDC', color: '#4E342E', accent: '#C08A3E' },
+    'saturated brand': { background: '#0033A0', color: '#FFFFFF', accent: '#00B5E2' },
+    dark: { background: '#101820', color: '#F5F7FA', accent: '#FF9E8A' },
+  }
+  const fill = (l: Slide) => Object.keys(layoutRoles(l)).map((role) => role === 'chart' ? { type: 'chart', role, option: {} } : { role, html: '8' })
+  const newOnes = builtinLayouts().filter((l) => ['layout-stats', 'layout-big-number', 'layout-timeline', 'layout-chart-figures'].includes(l.id))
+  for (const [name, theme] of Object.entries(palettes)) {
+    const r = expandDocWithStats({ compact: true, theme, slides: newOnes.map((l) => ({ layout: l.id, elements: fill(l) })) })
+    const worst = r.doc.slides.flatMap((sl) => sl.elements.filter((e) => e.type === 'text' && (e as TextElement).html).map((e) => ({ id: e.id, c: cr((e as TextElement).color, sl.background) })))
+      .sort((a, b) => a.c - b.c)[0]
+    ok(!!worst && worst.c >= 4.5, `${name} palette: every filled text slot of the four new layouts reads at 4.5:1 or better (weakest ${worst?.id} ${worst?.c.toFixed(2)}:1)`)
+  }
   ok(s3.elements.filter((e) => e.type === 'text').every((e) => !('fontFamily' in e)), 'the new layouts\' text carries no font: it renders in the theme font')
 }
 
@@ -254,6 +275,16 @@ const cfl = byId['layout-chart-figures']
 const appliedChart = applyLayout(chartDonor, cfl, new Set(ids))
 const ac = appliedChart.find((x) => x.id === 'lcf-chart')
 ok(ac?.type === 'chart' && frame(ac) === frame(cfl.elements.find((x) => x.id === 'lcf-chart')) && !appliedChart.some((x) => x.id === 'mine') && (appliedChart.find((x) => x.id === 'lcf-stat2') as TextElement).html === '7', 'the editor\'s Apply layout puts a chart with role "chart" in the chart slot too, and a stat in its slot')
+// …and applying another layout afterwards keeps it (review: the chart now carries lcf-chart, a known layout id,
+// and the leftover rule dropped every non-text element with such an id — a picture in an image slot too)
+const reapplied = applyLayout({ id: 'c', elements: appliedChart } as unknown as Slide, byId['layout-title-content'], new Set(ids))
+ok(reapplied.filter((x) => x.type === 'chart').length === 1 && (reapplied.find((x) => x.type === 'chart') as Obj).id === 'lcf-chart', 'Apply layout → Title + content afterwards keeps the chart that sat in the chart slot')
+const tableSlide = applyLayout({ id: 'c', elements: [{ id: 'tb', type: 'table', role: 'chart', x: 0, y: 0, w: 10, h: 10, columns: [{ w: 1 }], rows: [{ cells: [{ html: 'x' }] }] }] } as unknown as Slide, cfl, new Set(ids))
+ok(applyLayout({ id: 'c', elements: tableSlide } as unknown as Slide, byId['layout-quote'], new Set(ids)).some((x) => x.type === 'table'), '…and a table that sat in it')
+const picSlide = applyLayout({ id: 'c', elements: [{ id: 'pic', type: 'image', role: 'image', src: 'data:,p', x: 0, y: 0, w: 10, h: 10 }] } as unknown as Slide, byId['layout-image-left'], new Set(ids))
+const picAgain = applyLayout({ id: 'c', elements: picSlide } as unknown as Slide, byId['layout-title-content'], new Set(ids))
+ok(picSlide.some((x) => x.id === 'lil-image' && x.type === 'image') && picAgain.some((x) => x.type === 'image' && (x as ImageElement).src === 'data:,p'), 'a picture that sat in an image slot survives the next Apply layout too (lost before this change)')
+ok(!applyLayout({ id: 'c', elements: JSON.parse(JSON.stringify(byId['layout-title-content'].elements)) } as unknown as Slide, byId['layout-quote'], new Set(ids)).some((x) => x.id === 'ltc-rule' || x.id === 'ltc-body'), 'layout chrome and empty placeholders are still dropped')
 ok(!/layout\?:/.test(read('slides/src/model.ts').slice(read('slides/src/model.ts').indexOf('export interface Slide '))), 'the Slide model gains no `layout` field — input only')
 
 console.log('\nAGENTS.md cannot drift\n')

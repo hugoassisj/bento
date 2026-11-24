@@ -11,7 +11,8 @@
 // editor: the New-slide picker lists Statistics, Big number, Timeline and
 // Chart + figures, and a Timeline inserted by clicks wears the deck's colours;
 // Apply layout (clicks) puts a slide's chart into the chart slot of Chart +
-// figures, and one undo takes it back.
+// figures, applying Title + content after that keeps the chart, and two undos
+// take both back. Stats are drawn in the text colour, readable on the slide.
 //
 // The network is closed: http(s) aborted, WebSockets answered by a closed mock.
 //
@@ -90,7 +91,7 @@ try {
   const row = await rect('lst-row'), i1 = await rect('lst-item1'), i2 = await rect('lst-item2')
   ok(!!row && !!i2 && Math.abs(i2.r - row.r) < 2 && Math.abs(i1.w - i2.w) < 2 && !(await rect('lst-item3')), `two stats fill the row on the canvas, no hole where the third would be (row right ${Math.round(row?.r)}, item 2 right ${Math.round(i2?.r)})`)
   const statColor = await p.evaluate(() => { const n = document.querySelector('.ed-stage-scale [data-el-id="lst-stat1"]'); const leaf = n && [...n.querySelectorAll('*')].find((x) => x.textContent === '40%' && !x.children.length); return leaf ? getComputedStyle(leaf).color : null })
-  ok(statColor === 'rgb(255, 158, 138)', `the stat is drawn in the deck's accent (${statColor})`)
+  ok(statColor === 'rgb(245, 247, 250)', `the stat is drawn in the deck's text colour, readable on its background (${statColor})`)
 
   console.log('\nthe picker (real input)\n')
   await p.locator('.ed-sidebar .ed-add-slide').click(); await p.waitForTimeout(300)
@@ -119,8 +120,15 @@ try {
   const chartBox = await rect('lcf-chart'), stage = await p.evaluate(() => { const r = document.querySelector('.ed-stage-scale').getBoundingClientRect(); return { x: r.left, w: r.width } })
   const scale = stage.w / d2.size.width
   ok(!!chartBox && Math.abs((chartBox.x - stage.x) / scale - slot.x) < 3, `the chart is drawn on the slot's frame (x ${Math.round((chartBox?.x - stage.x) / scale)} vs ${slot?.x})`)
+  // another layout afterwards keeps the chart (it carries the chart slot's id now)
+  if (!(await applyBtn.isVisible())) { await p.locator('.ed-props .ed-section', { hasText: /^Layout$/ }).first().click(); await p.waitForTimeout(250) }
+  await applyBtn.click(); await p.waitForTimeout(300)
+  await p.locator('.ed-layoutpick-item', { hasText: 'Title + content' }).click(); await p.waitForTimeout(500)
+  const again = (await doc()).slides[3].elements
+  ok(again.filter((e) => e.type === 'chart').length === 1 && again.find((e) => e.type === 'chart')?.option?.series?.[0]?.data?.join() === '3,5,8' && again.find((e) => e.id === 'ltc-title')?.html === 'Growth', `Apply layout → Title + content afterwards keeps the chart (${again.map((e) => e.id).join(', ')})`)
   await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(300)
-  ok((await doc()).slides[3].elements.some((e) => e.id === 'mychart'), 'one undo puts the slide back')
+  await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(300)
+  ok((await doc()).slides[3].elements.some((e) => e.id === 'mychart'), 'two undos put the slide back')
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

@@ -1311,12 +1311,14 @@ const bar = (id: string, frame: { x: number; y: number; w: number; h: number }):
 
 /** A placeholder that follows the deck: no font of its own (the theme font)
  *  and its colour bound to a palette slot (the literal is the default
- *  theme's; the derive pass and compact expansion resolve it). */
+ *  theme's; the derive pass and compact expansion resolve it). Text is tx1,
+ *  the slot drawn to be read on bg1: an accent is decoration (rules, ticks),
+ *  and on the default and starter themes it reads at 2:1 or less as text. */
 const tph = (
   id: string, placeholder: string, frame: { x: number; y: number; w: number; h: number },
-  type: Partial<TextElement> = {}, slot = 'tx1',
+  type: Partial<TextElement> = {},
 ): TextElement => {
-  const el: Partial<TextElement> = ph(id, placeholder, frame, { color: slot === 'accent1' ? '#F7A600' : '#1E2A3A', ...type, themeRefs: { color: slot } })
+  const el: Partial<TextElement> = ph(id, placeholder, frame, { ...type, themeRefs: { color: 'tx1' } })
   delete el.fontFamily
   return el as TextElement
 }
@@ -1480,8 +1482,9 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
       ],
     },
     // Four layouts decks are made of (AI-09), built as auto-layout frames
-    // bound to the theme: text in the theme font, colours bound to tx1 and
-    // accent1, the background to bg1. A slot compact input leaves out is
+    // bound to the theme: text in the theme font and bound to tx1 (readable
+    // on bg1 in any palette), rules and ticks bound to accent1, the
+    // background to bg1. A slot compact input leaves out is
     // removed with its item and the frame reflows. Ids are lineage: never
     // rename them.
     {
@@ -1491,7 +1494,7 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
         flow('lst-row', { x: 120, y: 260, w: 1360, h: 440 }, { dir: 'row', gap: 64, pad: [0, 0, 0, 0], align: 'stretch' }),
         ...items(3, (i) => [
           flow(`lst-item${i}`, { x: 120 + (i - 1) * 475, y: 260, w: 411, h: 440 }, { dir: 'col', gap: 12, pad: [0, 0, 0, 0], align: 'stretch' }, { parentId: 'lst-row', sizing: { w: 'fill' } }),
-          tph(`lst-stat${i}`, 'Number', { x: 120 + (i - 1) * 475, y: 260, w: 411, h: 170 }, { fontSize: 112, fontWeight: 700, lineHeight: 1, valign: 'bottom', role: `stat${i}`, parentId: `lst-item${i}` }, 'accent1'),
+          tph(`lst-stat${i}`, 'Number', { x: 120 + (i - 1) * 475, y: 260, w: 411, h: 170 }, { fontSize: 112, fontWeight: 700, lineHeight: 1, valign: 'bottom', role: `stat${i}`, parentId: `lst-item${i}` }),
           tph(`lst-label${i}`, 'What it counts', { x: 120 + (i - 1) * 475, y: 442, w: 411, h: 120 }, { fontSize: 26, lineHeight: 1.4, role: `label${i}`, parentId: `lst-item${i}` }),
         ]),
       ],
@@ -1499,8 +1502,8 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
     {
       id: 'layout-big-number', name: 'Big number', background: '#FFFFFF', themeRefs: { background: 'bg1' }, transition: 'fade', notes: '', elements: [
         flow('lbn-col', { x: 200, y: 120, w: 1200, h: 660 }, { dir: 'col', gap: 24, pad: [0, 0, 0, 0], justify: 'center', align: 'stretch' }),
-        tph('lbn-kicker', 'KICKER', { x: 200, y: 182, w: 1200, h: 40 }, { fontSize: 20, fontWeight: 600, letterSpacing: 3, align: 'center', valign: 'middle', role: 'kicker', parentId: 'lbn-col' }, 'accent1'),
-        tph('lbn-figure', 'Big number', { x: 200, y: 246, w: 1200, h: 240 }, { fontSize: 200, fontWeight: 700, lineHeight: 1, align: 'center', valign: 'middle', role: 'figure', parentId: 'lbn-col' }, 'accent1'),
+        tph('lbn-kicker', 'KICKER', { x: 200, y: 182, w: 1200, h: 40 }, { fontSize: 20, fontWeight: 600, letterSpacing: 3, align: 'center', valign: 'middle', role: 'kicker', parentId: 'lbn-col' }),
+        tph('lbn-figure', 'Big number', { x: 200, y: 246, w: 1200, h: 240 }, { fontSize: 200, fontWeight: 700, lineHeight: 1, align: 'center', valign: 'middle', role: 'figure', parentId: 'lbn-col' }),
         tph('lbn-caption', 'What it means', { x: 200, y: 510, w: 1200, h: 64 }, { fontSize: 40, fontWeight: 600, align: 'center', valign: 'middle', role: 'caption', parentId: 'lbn-col' }),
         tph('lbn-body', 'Supporting detail', { x: 200, y: 598, w: 1200, h: 120 }, { fontSize: 26, lineHeight: 1.5, align: 'center', role: 'body', parentId: 'lbn-col' }),
       ],
@@ -1512,7 +1515,7 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
         ...items(4, (i) => [
           flow(`ltl-item${i}`, { x: 120 + (i - 1) * 350, y: 240, w: 310, h: 560 }, { dir: 'col', gap: 16, pad: [0, 0, 0, 0], align: 'stretch' }, { parentId: 'ltl-row', sizing: { w: 'fill' } }),
           tbar(`ltl-tick${i}`, { x: 120 + (i - 1) * 350, y: 240, w: 310, h: 6 }, { parentId: `ltl-item${i}` }),
-          tph(`ltl-step${i}`, `Step ${i}`, { x: 120 + (i - 1) * 350, y: 262, w: 310, h: 56 }, { fontSize: 30, fontWeight: 700, valign: 'middle', role: `step${i}`, parentId: `ltl-item${i}` }, 'accent1'),
+          tph(`ltl-step${i}`, `Step ${i}`, { x: 120 + (i - 1) * 350, y: 262, w: 310, h: 56 }, { fontSize: 30, fontWeight: 700, valign: 'middle', role: `step${i}`, parentId: `ltl-item${i}` }),
           tph(`ltl-stepbody${i}`, 'What happens', { x: 120 + (i - 1) * 350, y: 334, w: 310, h: 360 }, { fontSize: 22, lineHeight: 1.45, role: `stepbody${i}`, parentId: `ltl-item${i}` }),
         ]),
       ],
@@ -1526,7 +1529,7 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
         flow('lcf-col', { x: 1064, y: 220, w: 416, h: 600 }, { dir: 'col', gap: 24, pad: [0, 0, 0, 0], align: 'stretch' }),
         ...items(3, (i) => [
           flow(`lcf-item${i}`, { x: 1064, y: 220 + (i - 1) * 208, w: 416, h: 184 }, { dir: 'col', gap: 4, pad: [0, 0, 0, 0], align: 'stretch' }, { parentId: 'lcf-col', sizing: { h: 'fill' } }),
-          tph(`lcf-stat${i}`, 'Number', { x: 1064, y: 220 + (i - 1) * 208, w: 416, h: 84 }, { fontSize: 64, fontWeight: 700, lineHeight: 1, valign: 'bottom', role: `stat${i}`, parentId: `lcf-item${i}` }, 'accent1'),
+          tph(`lcf-stat${i}`, 'Number', { x: 1064, y: 220 + (i - 1) * 208, w: 416, h: 84 }, { fontSize: 64, fontWeight: 700, lineHeight: 1, valign: 'bottom', role: `stat${i}`, parentId: `lcf-item${i}` }),
           tph(`lcf-label${i}`, 'What it counts', { x: 1064, y: 308 + (i - 1) * 208, w: 416, h: 56 }, { fontSize: 22, lineHeight: 1.35, role: `label${i}`, parentId: `lcf-item${i}` }),
         ]),
       ],
@@ -1611,8 +1614,11 @@ export function applyLayout(
   for (const e of donors) {
     if (consumed.has(e)) continue
     // layout-owned leftovers: drop chrome and EMPTY placeholders, but text
-    // someone actually wrote is never silently lost — it rides along as-is
-    if (knownLayoutElementIds.has(e.id) && !(e.type === 'text' && textHasContent(e))) continue
+    // someone actually wrote is never silently lost — it rides along as-is.
+    // Nor is a picture, chart or table that took an image or chart slot: it
+    // carries that slot's id now, and it is content, not chrome.
+    const placed = !!e.role && Object.hasOwn(SLOT_TAKES, e.role) && SLOT_TAKES[e.role].includes(e.type)
+    if (knownLayoutElementIds.has(e.id) && !(e.type === 'text' && textHasContent(e)) && !placed) continue
     out.push(e) // survives, painted above the layout
   }
   return out

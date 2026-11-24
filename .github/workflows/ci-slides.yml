@@ -736,5 +736,6 @@ jobs:
         # `left` no longer swaps them; the stats layout closes up without its
         # third stat. The New-slide picker lists Statistics, Big number,
         # Timeline and Chart + figures (a Timeline inserted by clicks wears the
-        # deck's colours), and Apply layout puts a chart in the chart slot.
+        # deck's colours), and Apply layout puts a chart in the chart slot and
+        # a later Apply layout keeps it.
         run: node scripts/test-slides-compact-layout-roles-browser.mjs
