@@ -4,6 +4,15 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Start from scratch": "从头开始",
+  "Replace this slide with a new one. {undo} undoes it.": "将此幻灯片替换为一张新幻灯片。{undo} 可撤销。",
+  "Replace all {n} slides with one new slide. {undo} undoes it.": "将全部 {n} 张幻灯片替换为一张新幻灯片。{undo} 可撤销。",
+  "Keep this look": "保留此外观",
+  "One title slide in this deck’s colours and fonts. Theme, tokens, fonts and saved layouts stay.": "一张使用本演示文稿颜色和字体的标题幻灯片。主题、令牌、字体和已保存的版式都会保留。",
+  "Blank": "空白",
+  "One empty slide on the default theme. Tokens, saved layouts and unused fonts go.": "一张使用默认主题的空白幻灯片。令牌、已保存的版式和未使用的字体会被移除。",
+  "Untitled deck": "未命名演示文稿",
+  "Replace every slide with one new slide — keep this deck’s look, or start blank. ⌘Z undoes.": "将所有幻灯片替换为一张新幻灯片——保留本演示文稿的外观，或从空白开始。⌘Z 可撤销。",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",
@@ -555,8 +564,6 @@ export const zhHans: Catalog = {
   "Set how fast the element moves through that point": "设置元素通过该点的速度",
   "Scroll a point": "滚动某点",
   "Start from scratch…": "从头开始…",
-  "Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.": "将所有幻灯片替换为一张空白幻灯片。演示文稿的主题、名称和实时协作会话都会保留 — ⌘Z 可撤销。",
-  "Replace all {n} slides with one blank slide? ⌘Z undoes this.": "将全部 {n} 张幻灯片替换为一张空白幻灯片？⌘Z 可撤销。",
   "Languages": "语言",
   "Available to add": "可添加",
   "Adding…": "正在添加…",

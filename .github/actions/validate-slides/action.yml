@@ -751,3 +751,10 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Start from scratch leaves what each choice promises
+      # Keep this look: one Title-layout slide bound to the palette (a slot
+      # edit recolours it), theme, tokens, fonts and saved layouts kept.
+      # Blank: default theme, no tokens, layouts or unused fonts. Both: no
+      # unreferenced asset, identity untouched, the Showcase's title renamed.
+      shell: bento-step {0}
+      run: node scripts/test-slides-start-scratch.ts

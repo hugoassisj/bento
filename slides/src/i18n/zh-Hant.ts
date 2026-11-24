@@ -4,6 +4,15 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Start from scratch": "從頭開始",
+  "Replace this slide with a new one. {undo} undoes it.": "將此投影片取代為一張新投影片。{undo} 可復原。",
+  "Replace all {n} slides with one new slide. {undo} undoes it.": "將全部 {n} 張投影片取代為一張新投影片。{undo} 可復原。",
+  "Keep this look": "保留此外觀",
+  "One title slide in this deck’s colours and fonts. Theme, tokens, fonts and saved layouts stay.": "一張使用本簡報色彩與字型的標題投影片。主題、權杖、字型與已儲存的版面配置都會保留。",
+  "Blank": "空白",
+  "One empty slide on the default theme. Tokens, saved layouts and unused fonts go.": "一張使用預設主題的空白投影片。權杖、已儲存的版面配置與未使用的字型會被移除。",
+  "Untitled deck": "未命名簡報",
+  "Replace every slide with one new slide — keep this deck’s look, or start blank. ⌘Z undoes.": "將所有投影片取代為一張新投影片——保留本簡報的外觀，或從空白開始。⌘Z 可復原。",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",
@@ -555,8 +564,6 @@ export const zhHant: Catalog = {
   "Set how fast the element moves through that point": "設定元素通過該點的速度",
   "Scroll a point": "捲動某點",
   "Start from scratch…": "從頭開始…",
-  "Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.": "將所有投影片取代為一張空白投影片。簡報的主題、名稱與即時協作工作階段都會保留 — ⌘Z 可復原。",
-  "Replace all {n} slides with one blank slide? ⌘Z undoes this.": "將全部 {n} 張投影片取代為一張空白投影片？⌘Z 可復原。",
   "Languages": "語言",
   "Available to add": "可新增",
   "Adding…": "正在新增…",

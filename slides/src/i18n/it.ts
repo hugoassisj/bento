@@ -4,6 +4,15 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Start from scratch": "Ricomincia da capo",
+  "Replace this slide with a new one. {undo} undoes it.": "Sostituire questa diapositiva con una nuova. {undo} annulla l’operazione.",
+  "Replace all {n} slides with one new slide. {undo} undoes it.": "Sostituire tutte le {n} diapositive con una nuova diapositiva. {undo} annulla l’operazione.",
+  "Keep this look": "Mantieni questo stile",
+  "One title slide in this deck’s colours and fonts. Theme, tokens, fonts and saved layouts stay.": "Una diapositiva del titolo con i colori e i caratteri di questa presentazione. Tema, token, caratteri e layout salvati restano.",
+  "Blank": "Vuota",
+  "One empty slide on the default theme. Tokens, saved layouts and unused fonts go.": "Una diapositiva vuota con il tema predefinito. Token, layout salvati e caratteri inutilizzati vengono rimossi.",
+  "Untitled deck": "Presentazione senza titolo",
+  "Replace every slide with one new slide — keep this deck’s look, or start blank. ⌘Z undoes.": "Sostituisce tutte le diapositive con una nuova: con lo stile di questa presentazione o vuota. ⌘Z annulla.",
   "View": "Vista",
   "Current slide": "Diapositiva attuale",
   "Slide thumbnails": "Miniature delle diapositive",
@@ -555,8 +564,6 @@ export const it: Catalog = {
   "Set how fast the element moves through that point": "Imposta la velocità con cui l’elemento attraversa quel punto",
   "Scroll a point": "Scorri un punto",
   "Start from scratch…": "Ricomincia da capo…",
-  "Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.": "Sostituisce tutte le diapositive con una sola diapositiva vuota. Mantiene tema, nome e sessione dal vivo della presentazione — ⌘Z annulla.",
-  "Replace all {n} slides with one blank slide? ⌘Z undoes this.": "Sostituire tutte le {n} diapositive con una diapositiva vuota? ⌘Z annulla l’operazione.",
   "Languages": "Lingue",
   "Available to add": "Disponibili da aggiungere",
   "Adding…": "Aggiunta…",

@@ -4,6 +4,15 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Start from scratch": "最初から始める",
+  "Replace this slide with a new one. {undo} undoes it.": "このスライドを新しいスライドに置き換えます。{undo} で元に戻せます。",
+  "Replace all {n} slides with one new slide. {undo} undoes it.": "{n} 枚すべてのスライドを 1 枚の新しいスライドに置き換えます。{undo} で元に戻せます。",
+  "Keep this look": "この見た目を残す",
+  "One title slide in this deck’s colours and fonts. Theme, tokens, fonts and saved layouts stay.": "このプレゼンテーションの色とフォントを使ったタイトルスライド 1 枚。テーマ、トークン、フォント、保存したレイアウトは残ります。",
+  "Blank": "空白",
+  "One empty slide on the default theme. Tokens, saved layouts and unused fonts go.": "既定のテーマの空のスライド 1 枚。トークン、保存したレイアウト、使われていないフォントは削除されます。",
+  "Untitled deck": "無題のプレゼンテーション",
+  "Replace every slide with one new slide — keep this deck’s look, or start blank. ⌘Z undoes.": "すべてのスライドを新しいスライド 1 枚に置き換えます。このプレゼンテーションの見た目を残すか、空白から始めます。⌘Z で元に戻せます。",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",
@@ -555,8 +564,6 @@ export const ja: Catalog = {
   "Set how fast the element moves through that point": "その点を通過する速さを設定",
   "Scroll a point": "点をスクロール",
   "Start from scratch…": "最初から始める…",
-  "Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.": "すべてのスライドを 1 枚の空白スライドに置き換えます。プレゼンテーションのテーマ、名前、ライブセッションはそのまま残ります — ⌘Z で元に戻せます。",
-  "Replace all {n} slides with one blank slide? ⌘Z undoes this.": "{n} 枚すべてのスライドを 1 枚の空白スライドに置き換えますか？ ⌘Z で元に戻せます。",
   "Languages": "言語",
   "Available to add": "追加できる言語",
   "Adding…": "追加中…",

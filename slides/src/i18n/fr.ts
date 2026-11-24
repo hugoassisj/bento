@@ -4,6 +4,15 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "Start from scratch": "Repartir de zéro",
+  "Replace this slide with a new one. {undo} undoes it.": "Remplacer cette diapositive par une nouvelle. {undo} annule l’opération.",
+  "Replace all {n} slides with one new slide. {undo} undoes it.": "Remplacer les {n} diapositives par une nouvelle diapositive. {undo} annule l’opération.",
+  "Keep this look": "Garder ce style",
+  "One title slide in this deck’s colours and fonts. Theme, tokens, fonts and saved layouts stay.": "Une diapositive de titre aux couleurs et polices de cette présentation. Le thème, les jetons, les polices et les dispositions enregistrées sont conservés.",
+  "Blank": "Vierge",
+  "One empty slide on the default theme. Tokens, saved layouts and unused fonts go.": "Une diapositive vide avec le thème par défaut. Les jetons, les dispositions enregistrées et les polices inutilisées sont supprimés.",
+  "Untitled deck": "Présentation sans titre",
+  "Replace every slide with one new slide — keep this deck’s look, or start blank. ⌘Z undoes.": "Remplace toutes les diapositives par une nouvelle : au style de cette présentation, ou vierge. ⌘Z annule.",
   "View": "Affichage",
   "Current slide": "Diapositive actuelle",
   "Slide thumbnails": "Miniatures des diapositives",
@@ -555,8 +564,6 @@ export const fr: Catalog = {
   "Set how fast the element moves through that point": "Définit la vitesse à laquelle l'élément passe par ce point",
   "Scroll a point": "Faites défiler un point",
   "Start from scratch…": "Repartir de zéro…",
-  "Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.": "Remplace toutes les diapositives par une seule diapositive vierge. Conserve le thème, le nom et la session en direct de la présentation — ⌘Z annule.",
-  "Replace all {n} slides with one blank slide? ⌘Z undoes this.": "Remplacer les {n} diapositives par une diapositive vierge ? ⌘Z annule cette action.",
   "Languages": "Langues",
   "Available to add": "Disponibles à l’ajout",
   "Adding…": "Ajout…",

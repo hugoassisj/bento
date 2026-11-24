@@ -914,6 +914,28 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
   padding: 8px 10px;
 }
 .ed-hint code { font-size: 10.5px; word-break: break-all; }
+
+/* File ▸ Start from scratch: the choices are a list of cards, not a button
+   row, so theme presets can join them without a new dialog. */
+.ed-scratch-lead { margin: 0 0 12px; font-size: 13px; }
+.ed-scratch-choices { display: grid; gap: 8px; }
+.ed-scratch-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: start;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.ed-scratch-choice span { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.ed-scratch-choice:hover { background: var(--chrome); border-color: var(--field-line-hot); }
+.ed-scratch-choice:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .ed-morph-warn { color: #C0392B; background: rgba(192, 57, 43, 0.08); }
 
 .ed-btn-update {

@@ -7,6 +7,15 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Start from scratch": "Começar do zero",
+  "Replace this slide with a new one. {undo} undoes it.": "Substituir este slide por um novo. {undo} desfaz isso.",
+  "Replace all {n} slides with one new slide. {undo} undoes it.": "Substituir todos os {n} slides por um slide novo. {undo} desfaz isso.",
+  "Keep this look": "Manter este visual",
+  "One title slide in this deck’s colours and fonts. Theme, tokens, fonts and saved layouts stay.": "Um slide de título com as cores e fontes desta apresentação. Tema, tokens, fontes e layouts salvos continuam.",
+  "Blank": "Em branco",
+  "One empty slide on the default theme. Tokens, saved layouts and unused fonts go.": "Um slide vazio com o tema padrão. Tokens, layouts salvos e fontes não usadas são removidos.",
+  "Untitled deck": "Apresentação sem título",
+  "Replace every slide with one new slide — keep this deck’s look, or start blank. ⌘Z undoes.": "Substitui todos os slides por um slide novo — com o visual desta apresentação ou em branco. ⌘Z desfaz.",
   "View": "Exibir",
   "Current slide": "Slide atual",
   "Slide thumbnails": "Miniaturas dos slides",
@@ -550,8 +559,6 @@ export const pt: Catalog = {
   "What’s new →": "Novidades →",
   "Read the release notes for v{v} (opens in a new tab)": "Ler as notas de versão da v{v} (abre em uma nova aba)",
   "Start from scratch…": "Começar do zero…",
-  "Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.": "Substitui todos os slides por um único slide em branco. Mantém o tema, o nome e a sessão ao vivo da apresentação — ⌘Z desfaz.",
-  "Replace all {n} slides with one blank slide? ⌘Z undoes this.": "Substituir todos os {n} slides por um slide em branco? ⌘Z desfaz isso.",
   "Languages": "Idiomas",
   "Available to add": "Disponíveis para adicionar",
   "Adding…": "Adicionando…",

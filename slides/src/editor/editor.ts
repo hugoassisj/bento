@@ -64,6 +64,7 @@ import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
 import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
 import { dryRun, applyCompress, type DryRun } from './compressdeck'
+import { startOver, type ScratchChoice } from '../scratch'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
@@ -81,7 +82,7 @@ const i18nT = t
  *  the return gate, a context menu or an open topbar menu. (The ⌘K palette
  *  keeps its keys to itself — its field stops them — and must still list
  *  the commands, so it is not one of these.) */
-const MODAL = '.ed-about-overlay, .ed-gate-overlay, .ed-ctxmenu, .ed-dropdown.open, dialog[open]'
+const MODAL = '.ed-about-overlay, .ed-gate-overlay, .bkd-overlay, .ed-ctxmenu, .ed-dropdown.open, dialog[open]'
 
 const SAVE_NOTICE_KEY = 'bento-save-notice'
 
@@ -1206,7 +1207,7 @@ export class Editor {
     // every group under a caption — all or none
     cap(t('New'))
     item(ICONS.template, t('Start from scratch…'),
-      t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
+      t('Replace every slide with one new slide — keep this deck’s look, or start blank. ⌘Z undoes.'),
       () => this.startFromScratch(), 'start-scratch')
     item(ICONS.importDoc, t('Import PowerPoint…'),
       t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
@@ -1295,25 +1296,89 @@ export class Editor {
   }
 
   /**
-   * Clear the deck back to a single blank slide (issue #31). Starting a fresh
-   * presentation meant deleting every slide by hand, then stripping the one
-   * the deck refuses to delete.
+   * Start the deck over (issue #31): one new slide in place of all of them.
+   * Starting a fresh presentation meant deleting every slide by hand, then
+   * stripping the one the deck refuses to delete.
    *
-   * CONTENT ONLY: docId, theme, size, layouts and the live session all stay.
-   * "Duplicate as new deck…" (above) is the action that changes IDENTITY, and
-   * conflating the two here would be the surprising choice — under collab this
-   * lands as an ordinary edit everyone sees, which is what "let's start over
-   * on this deck" means. One commit, so ⌘Z brings the whole deck back.
+   * The dialog asks WHICH fresh start, because "one white slide, every
+   * leftover kept" was neither: Keep this look leaves one title slide in the
+   * deck's own palette and fonts (theme, tokens, fonts, saved layouts stay);
+   * Blank resets the theme and drops tokens, saved layouts and fonts nothing
+   * uses. Both drop assets nothing references, and a deck still carrying the
+   * Showcase's name becomes "Untitled deck" with the caret in the title field
+   * (names are typed where they appear, never in prompt()). scratch.ts holds
+   * the document half.
+   *
+   * CONTENT ONLY: docId and the live session stay. "Duplicate as new deck…"
+   * (above) is the action that changes IDENTITY, and conflating the two here
+   * would be the surprising choice — under collab this lands as an ordinary
+   * edit everyone sees, which is what "let's start over on this deck" means.
+   * One commit, so ⌘Z brings the whole deck back, title included, and peers
+   * receive the whole change in one diff.
+   *
+   * The choices sit in a list so theme presets can join them later.
    */
   private startFromScratch() {
+    if (this.store.readOnly) return
     const n = this.store.doc.slides.length
-    if (!window.confirm(t('Replace all {n} slides with one blank slide? ⌘Z undoes this.', { n: String(n) }))) return
-    const blank = builtinLayouts().find((l) => l.id === 'layout-blank')
-    if (!blank) return
+    const undo = MOD === '⌘' ? '⌘Z' : 'Ctrl+Z'
+    const body = document.createElement('div')
+    const lead = document.createElement('p')
+    lead.className = 'ed-scratch-lead'
+    lead.textContent = n === 1
+      ? t('Replace this slide with a new one. {undo} undoes it.', { undo })
+      : t('Replace all {n} slides with one new slide. {undo} undoes it.', { n: String(n), undo })
+    const list = div('ed-scratch-choices')
+    body.append(lead, list)
+    const cancel = document.createElement('button')
+    cancel.type = 'button'
+    cancel.className = 'ed-btn'
+    cancel.textContent = t('Cancel')
+    const dlg = createDialog({ title: t('Start from scratch'), content: body, actions: [cancel] })
+    const choice = (kind: ScratchChoice, label: string, note: string) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-scratch-choice'
+      b.dataset.choice = kind
+      const name = document.createElement('b')
+      name.textContent = label
+      const desc = document.createElement('span')
+      desc.textContent = note
+      b.append(name, desc)
+      b.addEventListener('click', () => { dlg.close(); this.applyScratch(kind) })
+      list.appendChild(b)
+    }
+    choice('keep', t('Keep this look'), t('One title slide in this deck’s colours and fonts. Theme, tokens, fonts and saved layouts stay.'))
+    choice('blank', t('Blank'), t('One empty slide on the default theme. Tokens, saved layouts and unused fonts go.'))
+    cancel.addEventListener('click', () => dlg.close())
+    dlg.open()
+  }
+
+  private applyScratch(kind: ScratchChoice) {
     this.canvas.commitTextEdit() // a live text edit would commit ONTO the new slide
+    let renamed = false
     this.store.commit(() => {
-      this.store.doc.slides = [instantiateLayout(blank)]
+      renamed = startOver(this.store.doc, kind, t('Untitled deck')).renamed
     }, 'slides')
+    if (!renamed) return
+    const title = document.querySelector<HTMLInputElement>('.ed-topbar .ed-title')
+    if (!title?.offsetParent) return
+    title.focus()
+    title.select()
+    // The caret is in the title now, where ⌘Z is the field's own (and it has
+    // nothing to undo). Until the name is typed, ⌘Z still means "bring my
+    // deck back".
+    const done = new AbortController()
+    const off = () => done.abort()
+    title.addEventListener('keydown', (ev) => {
+      if (!(ev.metaKey || ev.ctrlKey) || ev.shiftKey || ev.key.toLowerCase() !== 'z' || title.value !== this.store.doc.title) return
+      ev.preventDefault()
+      off()
+      title.blur()
+      this.store.undo()
+    }, { signal: done.signal })
+    title.addEventListener('input', off, { signal: done.signal })
+    title.addEventListener('blur', off, { signal: done.signal })
   }
 
   /** A sealed hand-out: present-only player file, no editor, no live session. */

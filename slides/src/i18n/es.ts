@@ -4,6 +4,15 @@
 import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
+  "Start from scratch": "Empezar de cero",
+  "Replace this slide with a new one. {undo} undoes it.": "Reemplazar esta diapositiva por una nueva. {undo} lo deshace.",
+  "Replace all {n} slides with one new slide. {undo} undoes it.": "Reemplazar las {n} diapositivas por una diapositiva nueva. {undo} lo deshace.",
+  "Keep this look": "Mantener este estilo",
+  "One title slide in this deck’s colours and fonts. Theme, tokens, fonts and saved layouts stay.": "Una diapositiva de título con los colores y las fuentes de esta presentación. Se conservan el tema, los tokens, las fuentes y los diseños guardados.",
+  "Blank": "En blanco",
+  "One empty slide on the default theme. Tokens, saved layouts and unused fonts go.": "Una diapositiva vacía con el tema predeterminado. Se eliminan los tokens, los diseños guardados y las fuentes sin usar.",
+  "Untitled deck": "Presentación sin título",
+  "Replace every slide with one new slide — keep this deck’s look, or start blank. ⌘Z undoes.": "Reemplaza todas las diapositivas por una nueva: con el estilo de esta presentación o en blanco. ⌘Z lo deshace.",
   "View": "Vista",
   "Current slide": "Diapositiva actual",
   "Slide thumbnails": "Miniaturas de diapositivas",
@@ -555,8 +564,6 @@ export const es: Catalog = {
   "Set how fast the element moves through that point": "Ajusta la velocidad con que el elemento pasa por ese punto",
   "Scroll a point": "Desplázate sobre un punto",
   "Start from scratch…": "Empezar de cero…",
-  "Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.": "Reemplaza todas las diapositivas por una diapositiva en blanco. Conserva el tema, el nombre y la sesión en vivo de la presentación — ⌘Z lo deshace.",
-  "Replace all {n} slides with one blank slide? ⌘Z undoes this.": "¿Reemplazar las {n} diapositivas por una diapositiva en blanco? ⌘Z lo deshace.",
   "Languages": "Idiomas",
   "Available to add": "Disponibles para añadir",
   "Adding…": "Añadiendo…",

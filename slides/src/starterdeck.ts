@@ -684,12 +684,15 @@ const DOTS_PAPER =
   '<circle cx="1.5" cy="1.5" r="1.4" fill="#0D1B2E" opacity="0.07"/></pattern></defs>' +
   '<rect width="1280" height="720" fill="url(#bp-dots-p)"/></svg>'
 
+/** The DECK's title, not the app's — it reads as a document name (window
+ *  title, suggested filename), so it stays in title case. The lowercase
+ *  `bento/slides` wordmark is app chrome and is unaffected. Start from scratch
+ *  (scratch.ts) reads it to tell a deck nobody has named yet. */
+export const STARTER_TITLE = 'Bento Slides Showcase'
+
 export function starterDoc(): BentoDoc {
   const doc = newDoc()
-  // The DECK's title, not the app's — it reads as a document name (window title,
-  // suggested filename), so it stays in title case. The lowercase `bento/slides`
-  // wordmark is app chrome and is unaffected.
-  doc.title = 'Bento Slides Showcase'
+  doc.title = STARTER_TITLE
   doc.theme.fontFamily = BODY
   // new charts (＋ Chart, table→chart) inherit the deck's midnight-&-peach family
   doc.theme.chartPalette = [PEACH, STEEL, PEACH_SOFT, STEEL_SOFT, MIST, PEACH_DEEP]

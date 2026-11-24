@@ -16,6 +16,15 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Start from scratch asks how you want to start.** File ▸ Start from
+  scratch… now offers two choices. *Keep this look* gives you one title slide
+  in the deck's own colours and fonts, and keeps its theme, tokens, fonts and
+  saved layouts. *Blank* gives you one empty slide on the default theme and
+  clears the tokens, saved layouts and unused fonts. Either way the old
+  slides go, along with pictures nothing uses any more. A deck still named
+  "Bento Slides Showcase" becomes "Untitled deck", with the cursor in the
+  title so you can name it. One ⌘Z brings everything back. The deck stays
+  the same document, so its backups and any live session carry on.
 
 ## [1.3.0] — 2026-11-22
 

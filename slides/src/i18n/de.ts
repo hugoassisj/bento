@@ -4,6 +4,15 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Start from scratch": "Von vorne beginnen",
+  "Replace this slide with a new one. {undo} undoes it.": "Diese Folie durch eine neue ersetzen. {undo} macht es rückgängig.",
+  "Replace all {n} slides with one new slide. {undo} undoes it.": "Alle {n} Folien durch eine neue Folie ersetzen. {undo} macht es rückgängig.",
+  "Keep this look": "Dieses Aussehen behalten",
+  "One title slide in this deck’s colours and fonts. Theme, tokens, fonts and saved layouts stay.": "Eine Titelfolie in den Farben und Schriften dieser Präsentation. Design, Tokens, Schriften und gespeicherte Layouts bleiben.",
+  "Blank": "Leer",
+  "One empty slide on the default theme. Tokens, saved layouts and unused fonts go.": "Eine leere Folie im Standarddesign. Tokens, gespeicherte Layouts und ungenutzte Schriften werden entfernt.",
+  "Untitled deck": "Unbenannte Präsentation",
+  "Replace every slide with one new slide — keep this deck’s look, or start blank. ⌘Z undoes.": "Ersetzt alle Folien durch eine neue Folie — mit dem Aussehen dieser Präsentation oder leer. ⌘Z macht es rückgängig.",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",
@@ -555,8 +564,6 @@ export const de: Catalog = {
   "Set how fast the element moves through that point": "Legt fest, wie schnell das Element diesen Punkt durchläuft",
   "Scroll a point": "Punkt scrollen",
   "Start from scratch…": "Von vorne beginnen…",
-  "Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.": "Ersetzt alle Folien durch eine einzige leere Folie. Design, Name und Live-Sitzung der Präsentation bleiben erhalten — ⌘Z macht es rückgängig.",
-  "Replace all {n} slides with one blank slide? ⌘Z undoes this.": "Alle {n} Folien durch eine leere Folie ersetzen? ⌘Z macht dies rückgängig.",
   "Languages": "Sprachen",
   "Available to add": "Zum Hinzufügen verfügbar",
   "Adding…": "Wird hinzugefügt…",
