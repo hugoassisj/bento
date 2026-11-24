@@ -29,9 +29,9 @@ pre-1.0.
   numeral: its box started above the slide and was shorter than its line. The
   numeral now sits in a box on the slide with a line that fits (it looks
   exactly the same), and the check measures where a text box's glyphs actually
-  paint: a box that hangs off the edge with every letter inside is reported as
-  information, a deliberate bleed, while text that is really cut off by the
-  edge still warns. The starter now reports zero warnings, and CI keeps it
+  paint: a box that hangs off the edge with every letter (and its outline,
+  shadow or blur) inside is reported as information, a deliberate bleed,
+  while text that is really cut off by the edge still warns, in any script. The starter now reports zero warnings, and CI keeps it
   that way.
 
 ## [1.3.0] — 2026-11-22

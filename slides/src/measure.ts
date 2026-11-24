@@ -27,7 +27,7 @@
 // now — this viewer's locale, this moment — not a worst case.
 
 import type { BentoDoc, TableElement, TextElement } from './model.ts'
-import { defaultText } from './model.ts'
+import { defaultText, visiblePaint } from './model.ts'
 import { renderElement, type FieldContext } from './render.ts'
 
 /** What to measure. Anything omitted falls back to the deck's text defaults. */
@@ -156,75 +156,154 @@ export function measureTables(els: TableElement[], doc: BentoDoc): TableMeasurem
   }))
 }
 
-/** Where an element's glyphs paint, in slide px (left/top/right/bottom). */
+/** Where an element paints, in slide px (left/top/right/bottom). */
 export interface InkBox { left: number; top: number; right: number; bottom: number }
 
+/** Whitespace CSS collapses under white-space normal / nowrap / pre-line. */
+const COLLAPSIBLE = /[ \t\n\r\f]+/g
+
 /**
- * Where each text element's glyphs actually paint — the ink, not the box and
- * not the line boxes — in slide px, rendered at the element's own size through
- * `renderElement` and in one host. What the out-of-canvas check uses to tell a
- * deliberate bleed (box past the edge, every glyph inside) from cropped words.
+ * Where each text element actually paints — its glyphs, plus whatever its
+ * outline stroke, shadows and blur spread around them — in slide px, rendered
+ * at the element's own size through `renderElement` and in one host. What the
+ * out-of-canvas check uses to tell a deliberate bleed (box past the edge,
+ * everything drawn inside) from cropped words.
  *
- * The DOM gives a glyph's advance and its font's ascent and descent (a Range
- * over one character); a canvas measureText of that character in the same
- * computed font gives how far its ink reaches from its origin and baseline.
- * `null` means "not measured" and is never read as "inside": a rotated or
- * mirrored element, content other than plain styled text (a list's markers, a
- * picture, a formula), or a browser without glyph metrics.
+ * HOW. A line of text is measured as a RUN, never character by character: a
+ * flag is two code points and one glyph, a Thai or combining mark stacks on
+ * the letter before it, Arabic letters change shape with their neighbours,
+ * and a ligature or a kerned pair is not the sum of its parts. Grapheme
+ * clusters (Intl.Segmenter) are only used to find where each line of a text
+ * node starts and ends (a Range per cluster gives its line box); the run on
+ * that line is then shaped by a canvas measureText in the same computed font,
+ * which reports how far its ink reaches from its origin and baseline.
+ *
+ * TRUST. Two cross-checks decide whether canvas and DOM shaped the same run:
+ * the run's advance must equal the width the DOM laid it out at, and the
+ * line box the Range reports must be the font's ascent plus descent (what
+ * places the baseline). Either failing, or anything this cannot attribute — a
+ * rotated or mirrored element, a list's markers, a picture or formula, text
+ * transforms or font features, no Intl.Segmenter or no glyph metrics — gives
+ * `null`, "not measured", which a caller must never read as "inside".
  */
 export function measureInk(els: Array<{ el: TextElement; fields?: FieldContext }>, doc: BentoDoc): Array<InkBox | null> {
   if (!els.length) return []
+  const Segmenter = (Intl as unknown as { Segmenter?: new (l?: string, o?: { granularity: string }) => { segment(s: string): Iterable<{ segment: string; index: number }> } }).Segmenter
   const ctx = document.createElement('canvas').getContext('2d')
-  if (!ctx) return els.map(() => null)
+  if (!ctx || !Segmenter) return els.map(() => null)
+  const graphemes = new Segmenter(undefined, { granularity: 'grapheme' })
+  const c2 = ctx as CanvasRenderingContext2D & { letterSpacing?: string; fontKerning?: string }
   return withHost((host) => els.map(({ el, fields }) => {
     if (el.rotation || el.flipX || el.flipY) return null
     const node = renderElement({ ...el, x: 0, y: 0 }, doc, { fields })
     host.appendChild(node)
     try {
-      const inner = node.querySelector<HTMLElement>('.bento-text-inner')
-      if (!inner || inner.querySelector('li, img, svg, math, canvas, video, iframe, object, table')) return null
-      const origin = node.getBoundingClientRect()
-      const walker = document.createTreeWalker(inner, NodeFilter.SHOW_TEXT)
-      const range = document.createRange()
-      let box: InkBox | null = null
-      for (let t = walker.nextNode() as Text | null; t; t = walker.nextNode() as Text | null) {
-        const cs = getComputedStyle(t.parentElement!)
-        ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
-        const s = t.data
-        for (let i = 0; i < s.length;) {
-          const ch = String.fromCodePoint(s.codePointAt(i)!)
-          const end = i + ch.length
-          if (!/\s/.test(ch)) {
-            range.setStart(t, i)
-            range.setEnd(t, end)
-            const r = range.getBoundingClientRect()
-            const m = ctx.measureText(ch)
-            if (typeof m.actualBoundingBoxAscent !== 'number' || typeof m.fontBoundingBoxAscent !== 'number') return null
-            if (r.width || r.height) {
-              const baseline = r.top + m.fontBoundingBoxAscent
-              const g = {
-                left: r.left - m.actualBoundingBoxLeft, right: r.left + m.actualBoundingBoxRight,
-                top: baseline - m.actualBoundingBoxAscent, bottom: baseline + m.actualBoundingBoxDescent,
-              }
-              box = box
-                ? { left: Math.min(box.left, g.left), top: Math.min(box.top, g.top), right: Math.max(box.right, g.right), bottom: Math.max(box.bottom, g.bottom) }
-                : g
-            }
-          }
-          i = end
-        }
-      }
-      if (!box) return null
-      // an outline stroke paints half its width outside the glyph
-      const pad = el.textStroke?.width ? el.textStroke.width / 2 : 0
-      return {
-        left: el.x + box.left - origin.left - pad, top: el.y + box.top - origin.top - pad,
-        right: el.x + box.right - origin.left + pad, bottom: el.y + box.bottom - origin.top + pad,
-      }
+      const glyphs = glyphBox(node, c2, graphemes)
+      if (!glyphs) return null
+      return spread(glyphs, visiblePaint(el), el.x, el.y)
     } finally {
       node.remove()
     }
   }))
+}
+
+/** The glyphs' box relative to the element's origin, or null (see measureInk). */
+function glyphBox(
+  node: HTMLElement,
+  ctx: CanvasRenderingContext2D & { letterSpacing?: string; fontKerning?: string },
+  graphemes: { segment(s: string): Iterable<{ segment: string; index: number }> },
+): InkBox | null {
+  const inner = node.querySelector<HTMLElement>('.bento-text-inner')
+  if (!inner || inner.querySelector('li, img, svg, math, canvas, video, iframe, object, table')) return null
+  const origin = node.getBoundingClientRect()
+  const walker = document.createTreeWalker(inner, NodeFilter.SHOW_TEXT)
+  const range = document.createRange()
+  let box: InkBox | null = null
+  for (let t = walker.nextNode() as Text | null; t; t = walker.nextNode() as Text | null) {
+    const cs = getComputedStyle(t.parentElement!)
+    if (cs.textTransform !== 'none' || cs.fontVariant !== 'normal' || cs.fontFeatureSettings !== 'normal'
+      || cs.writingMode !== 'horizontal-tb' || (cs.hyphens === 'auto')) return null
+    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontStretch === '100%' ? '' : cs.fontStretch} ${cs.fontSize} ${cs.fontFamily}`
+    const spacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing
+    if ('letterSpacing' in ctx) ctx.letterSpacing = spacing
+    else if (parseFloat(spacing)) return null
+    if ('fontKerning' in ctx) ctx.fontKerning = cs.fontKerning === 'none' ? 'none' : cs.fontKerning === 'normal' ? 'normal' : 'auto'
+    ctx.direction = cs.direction === 'rtl' ? 'rtl' : 'ltr'
+    ctx.textAlign = 'left'
+    const collapse = /^(normal|nowrap|pre-line)$/.test(cs.whiteSpace)
+    // one line at a time: consecutive clusters that share a line box
+    type Cluster = { start: number; end: number; ws: boolean; r: DOMRect }
+    const lines: Cluster[][] = []
+    for (const { segment, index } of graphemes.segment(t.data)) {
+      range.setStart(t, index)
+      range.setEnd(t, index + segment.length)
+      const r = range.getBoundingClientRect()
+      const ws = /^\s+$/.test(segment)
+      if (!r.width && !r.height) {
+        if (ws) continue // collapsed away
+        return null // ink with no box: nothing to attribute it to
+      }
+      const line = lines[lines.length - 1]
+      const last = line?.[line.length - 1]
+      if (last && Math.abs(last.r.top - r.top) < 0.5 && Math.abs(last.r.height - r.height) < 0.5) line.push({ start: index, end: index + segment.length, ws, r })
+      else lines.push([{ start: index, end: index + segment.length, ws, r }])
+    }
+    for (const line of lines) {
+      while (line.length && line[0].ws) line.shift()
+      while (line.length && line[line.length - 1].ws) line.pop()
+      if (!line.length) continue
+      let text = t.data.slice(line[0].start, line[line.length - 1].end)
+      if (collapse) text = text.replace(COLLAPSIBLE, ' ')
+      const m = ctx.measureText(text)
+      if (typeof m.actualBoundingBoxAscent !== 'number' || typeof m.fontBoundingBoxAscent !== 'number') return null
+      let left = Infinity
+      let right = -Infinity
+      for (const c of line) { left = Math.min(left, c.r.left); right = Math.max(right, c.r.right) }
+      const laid = right - left
+      // canvas and DOM must have shaped the same run in the same font
+      if (Math.abs(m.width - laid) > Math.max(0.75, laid * 0.002)) return null
+      const r0 = line[0].r
+      if (Math.abs(r0.height - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) > 1) return null
+      const baseline = r0.top + m.fontBoundingBoxAscent
+      const g = {
+        left: left - m.actualBoundingBoxLeft, right: left + m.actualBoundingBoxRight,
+        top: baseline - m.actualBoundingBoxAscent, bottom: baseline + m.actualBoundingBoxDescent,
+      }
+      box = box
+        ? { left: Math.min(box.left, g.left), top: Math.min(box.top, g.top), right: Math.max(box.right, g.right), bottom: Math.max(box.bottom, g.bottom) }
+        : g
+    }
+  }
+  if (!box) return null
+  return { left: box.left - origin.left, top: box.top - origin.top, right: box.right - origin.left, bottom: box.bottom - origin.top }
+}
+
+/**
+ * Grow the glyph box by everything else the element paints around its
+ * glyphs, then place it on the slide. An outline stroke paints at least half
+ * its width outside the glyph (more at a mitred corner). Each drop shadow is the box so far, offset and
+ * blurred — CSS filters chain, so a second shadow shadows the first — and a
+ * blur spreads the result. A blur is taken to reach three times its value
+ * (three standard deviations, reading the value as the larger of the two
+ * conventions), past which nothing visible is left.
+ */
+function spread(b: InkBox, el: TextElement, x: number, y: number): InkBox {
+  const grow = (k: number) => { b = { left: b.left - k, top: b.top - k, right: b.right + k, bottom: b.bottom + k } }
+  // half the width by geometry; a full width covers the corners a mitred
+  // join pushes further out
+  if (el.textStroke?.width) grow(Math.abs(el.textStroke.width))
+  const shadows = Array.isArray(el.shadow) ? el.shadow : el.shadow ? [el.shadow] : []
+  for (const s of shadows) {
+    const dx = Number(s.x) || 0
+    const dy = Number(s.y) || 0
+    const k = 3 * Math.max(0, Number(s.blur) || 0) + 1
+    b = {
+      left: Math.min(b.left, b.left + dx - k), top: Math.min(b.top, b.top + dy - k),
+      right: Math.max(b.right, b.right + dx + k), bottom: Math.max(b.bottom, b.bottom + dy + k),
+    }
+  }
+  if (el.blur) grow(3 * Math.max(0, Number(el.blur) || 0) + 1)
+  return { left: x + b.left, top: y + b.top, right: x + b.right, bottom: y + b.bottom }
 }
 
 const specOf = (el: TextElement): TextMeasureSpec => ({

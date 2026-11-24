@@ -486,11 +486,12 @@ function validateChart(
 }
 
 /**
- * A text box past the canvas edge whose glyphs all paint inside it is a
- * deliberate bleed, like a shape's: nothing a reader needs is cropped, so the
- * finding drops to info. Where any ink crosses the edge, or the ink could not
- * be measured (rotated, mirrored, lists, pictures), the warning stands —
- * nothing is cleared on a guess. Ink comes from measure.ts, the same render.
+ * A text box past the canvas edge that paints everything inside it (glyphs,
+ * outline, shadows, blur) is a deliberate bleed, like a shape's: nothing a
+ * reader needs is cropped, so the finding drops to info. Where any of it
+ * reaches the edge, or the glyphs could not be measured (rotated, mirrored,
+ * lists, pictures, a run canvas and DOM shaped differently), the warning
+ * stands. Ink comes from measure.ts, the same render.
  */
 function settleOverhangs(doc: BentoDoc, overhangs: Array<{ slide: Slide; el: TextElement; finding: Finding }>) {
   if (!overhangs.length) return
@@ -500,8 +501,11 @@ function settleOverhangs(doc: BentoDoc, overhangs: Array<{ slide: Slide; el: Tex
   const W = doc.size.width
   const H = doc.size.height
   ink.forEach((b, i) => {
-    // half a pixel of slack: antialiasing at an exact edge crops nothing
-    if (!b || b.left < -0.5 || b.top < -0.5 || b.right > W + 0.5 || b.bottom > H + 0.5) return
+    // measured ink must clear the edge by 2px: against screenshots the
+    // measurement lands within about 1px of the faintest antialiased pixel,
+    // and that margin keeps the error on the side of warning
+    const IN = 2
+    if (!b || b.left < IN || b.top < IN || b.right > W - IN || b.bottom > H - IN) return
     const { el, finding } = overhangs[i]
     finding.severity = 'info'
     finding.message = `Extends outside the ${W}x${H} canvas (x ${el.x}-${el.x + el.w}, y ${el.y}-${el.y + el.h}), but every glyph stays inside it — fine as a deliberate bleed.`

@@ -15405,15 +15405,35 @@ replaced before this shipped.
   unmeasured checks, and `scripts/test-slides-starter-clean-browser.mjs` on
   any warning with measuring on and fonts loaded. Future findings (new codes,
   new checks) must leave the starter at zero, by fixing the deck or the check.
-- **Out-of-canvas on text is decided by ink, not the box.** A text box past
-  the canvas edge stays a warning unless the measured pass shows every glyph
-  painting inside the canvas; then it is info, worded like a shape's bleed.
-  Ink = per character, the DOM's advance and font ascent (a Range) plus a
-  canvas `measureText` of that character in the same computed font
-  (`measure.ts measureInk`), so it goes through the same render as
-  `measure()`. Anything it cannot attribute (rotated, mirrored, lists, inline
-  pictures or formulas) is not measured and keeps the warning: nothing is
-  cleared on a guess. Without a DOM, behaviour is unchanged.
+- **Out-of-canvas on text is decided by what it paints, not the box.** A text
+  box past the canvas edge stays a warning unless the measured pass shows
+  everything it paints at least 2px inside the canvas; then it is info,
+  worded like a shape's bleed. Without a DOM, behaviour is unchanged.
+- **Ink is measured per line run, never per character.** Grapheme clusters
+  (`Intl.Segmenter`) only find where each line of a text node starts and
+  ends; the whole run on a line is then shaped by a canvas `measureText` in
+  the same computed font (`measure.ts measureInk`). Per code point was
+  wrong in review: a flag is two code points and one glyph, Thai and
+  combining marks stack on the letter before, Arabic letters take their
+  joined forms, so cropped flags and stacked marks read as inside. Two
+  cross-checks must hold or the element is not measured: the canvas advance
+  equals the width the DOM laid the run at, and the Range's line box equals
+  the font's ascent plus descent. Anything it cannot attribute (rotated,
+  mirrored, lists, inline pictures or formulas, text transforms, font
+  features, no `Intl.Segmenter`) is not measured and keeps the warning. The
+  rule must never produce a false info; the 2px inset is there because the
+  measurement lands within about 1px of the faintest antialiased pixel
+  against screenshots (18 strings × 4 edges, minimum clearance 1.4px with
+  the inset).
+- **Shadows and blur count as paint, padded, not refused.** A drop shadow is
+  the box so far, offset and spread by three times its blur (CSS filters
+  chain, so stacked shadows accumulate); an element blur spreads by three
+  times its value; a text outline by its full width. Three times reads the
+  blur as a standard deviation, the larger of the two conventions, so the
+  pad errs wide. Chosen over "any shadow keeps the warning" because a soft
+  shadow is common on display type and would otherwise make every bleed a
+  warning; a shadow switched off with the eye (`shadowHidden`) is not drawn
+  and not counted.
 - **No `decorative` key.** Marking a deliberate bleed explicitly would be a
   format addition; the ink rule makes it unnecessary for the case that
   prompted it. Raise it separately (with screen-reader skipping as its own

@@ -215,12 +215,12 @@ runs:
         node "$RUNNER_TEMP/test-slides-schema.mjs"
 
     - name: Document validation rig
-      # validate() is only useful if it is trusted: the rig proves, without a
-      # DOM (so no measured checks), that the starter deck has no errors, a
-      # realistic chart draws no chart findings, and a deliberately broken
-      # deck trips every check. The starter's zero-warning gate is the Starter
-      # deck rig (unmeasured) and test-slides-starter-clean-browser.mjs
-      # (measured, fonts loaded).
+      # validate() is only useful if it is trusted: the rig proves, without
+      # a DOM (so no measured checks), that the starter deck has no errors,
+      # a realistic chart draws no chart findings, and a deliberately broken
+      # deck trips every check. The starter's zero-warning gate is the
+      # Starter deck rig (unmeasured) and
+      # test-slides-starter-clean-browser.mjs (measured, fonts loaded).
       shell: bento-step {0}
       run: |
         slides/node_modules/.bin/esbuild scripts/test-validate.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-validate.mjs"
