@@ -58,6 +58,21 @@ for (const f of files) {
   if (auto) ok(els.some((e) => e.type === 'text' && e.h === provisionalHeight(Number((e as { fontSize?: number }).fontSize) || 24, Number((e as { lineHeight?: number }).lineHeight) || 1.2)), `${auto} text element(s) carry a provisional one-line height`)
 }
 
+console.log('\nequal-cards.json: frames survive the loader as written\n')
+{
+  // the agent pattern for equal-height cards (AI-10): a hugging, wrapping,
+  // stretching row of hugging column cards that fill it. The browser half —
+  // texts fitted at their laid-out width, every card as tall as the tallest —
+  // is scripts/test-slides-load-fit-browser.mjs.
+  const parsed = parseDocInputReport(readFileSync(join(dir, 'equal-cards.json'), 'utf8'), false)
+  const els = parsed?.doc.slides[0].elements ?? []
+  const at = (id: string) => els.find((e) => e.id === id) as Record<string, any> | undefined
+  const L = at('row')?.layout ?? {}
+  ok(L.dir === 'row' && L.align === 'stretch' && L.hug === true && L.wrap === true && L.gap === 24 && String(L.pad) === '24,24,24,24', `the row keeps its layout (${JSON.stringify(L)})`)
+  ok([1, 2, 3].every((i) => at(`card-${i}`)?.parentId === 'row' && at(`card-${i}`)?.sizing?.w === 'fill' && at(`card-${i}`)?.layout?.hug === true), 'every card is in the row, fills it and hugs its texts')
+  ok([1, 2, 3].every((i) => at(`card-${i}-title`)?.parentId === `card-${i}` && at(`card-${i}-body`)?.sizing?.w === 'fill'), 'every text is in its card and fills it')
+}
+
 console.log('\nthe report on a deliberately wrong deck\n')
 {
   const bad = JSON.stringify({ compact: true, slides: [{ elements: [

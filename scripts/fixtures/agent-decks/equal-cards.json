@@ -1,0 +1,214 @@
+{
+  "compact": true,
+  "title": "Equal-height cards",
+  "theme": {
+    "background": "#0F1720",
+    "color": "#F5F7FA"
+  },
+  "slides": [
+    {
+      "id": "options",
+      "elements": [
+        {
+          "id": "heading",
+          "type": "text",
+          "x": 64,
+          "y": 72,
+          "w": 1152,
+          "h": "auto",
+          "html": "Three ways forward",
+          "fontSize": 48,
+          "fontWeight": 700
+        },
+        {
+          "id": "row",
+          "type": "shape",
+          "shape": "rect",
+          "x": 64,
+          "y": 200,
+          "w": 1152,
+          "h": 100,
+          "fill": "#0F1720",
+          "layout": {
+            "dir": "row",
+            "gap": 24,
+            "pad": [
+              24,
+              24,
+              24,
+              24
+            ],
+            "hug": true,
+            "wrap": true,
+            "align": "stretch"
+          }
+        },
+        {
+          "id": "card-1",
+          "type": "shape",
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 100,
+          "h": 100,
+          "fill": "#1B2735",
+          "radius": 16,
+          "parentId": "row",
+          "sizing": {
+            "w": "fill"
+          },
+          "layout": {
+            "dir": "col",
+            "gap": 12,
+            "pad": [
+              16,
+              16,
+              16,
+              16
+            ],
+            "hug": true
+          }
+        },
+        {
+          "id": "card-1-title",
+          "type": "text",
+          "x": 0,
+          "y": 0,
+          "w": 100,
+          "h": "auto",
+          "html": "Build it ourselves",
+          "fontSize": 30,
+          "fontWeight": 700,
+          "parentId": "card-1",
+          "sizing": {
+            "w": "fill"
+          }
+        },
+        {
+          "id": "card-1-body",
+          "type": "text",
+          "x": 0,
+          "y": 1,
+          "w": 100,
+          "h": "auto",
+          "html": "Full control over the roadmap and the data model, at the cost of two quarters of engineering before the first customer sees anything.",
+          "fontSize": 20,
+          "parentId": "card-1",
+          "sizing": {
+            "w": "fill"
+          }
+        },
+        {
+          "id": "card-2",
+          "type": "shape",
+          "shape": "rect",
+          "x": 1,
+          "y": 0,
+          "w": 100,
+          "h": 100,
+          "fill": "#1B2735",
+          "radius": 16,
+          "parentId": "row",
+          "sizing": {
+            "w": "fill"
+          },
+          "layout": {
+            "dir": "col",
+            "gap": 12,
+            "pad": [
+              16,
+              16,
+              16,
+              16
+            ],
+            "hug": true
+          }
+        },
+        {
+          "id": "card-2-title",
+          "type": "text",
+          "x": 0,
+          "y": 0,
+          "w": 100,
+          "h": "auto",
+          "html": "Buy",
+          "fontSize": 30,
+          "fontWeight": 700,
+          "parentId": "card-2",
+          "sizing": {
+            "w": "fill"
+          }
+        },
+        {
+          "id": "card-2-body",
+          "type": "text",
+          "x": 0,
+          "y": 1,
+          "w": 100,
+          "h": "auto",
+          "html": "Fastest to ship.",
+          "fontSize": 20,
+          "parentId": "card-2",
+          "sizing": {
+            "w": "fill"
+          }
+        },
+        {
+          "id": "card-3",
+          "type": "shape",
+          "shape": "rect",
+          "x": 2,
+          "y": 0,
+          "w": 100,
+          "h": 100,
+          "fill": "#1B2735",
+          "radius": 16,
+          "parentId": "row",
+          "sizing": {
+            "w": "fill"
+          },
+          "layout": {
+            "dir": "col",
+            "gap": 12,
+            "pad": [
+              16,
+              16,
+              16,
+              16
+            ],
+            "hug": true
+          }
+        },
+        {
+          "id": "card-3-title",
+          "type": "text",
+          "x": 0,
+          "y": 0,
+          "w": 100,
+          "h": "auto",
+          "html": "Partner",
+          "fontSize": 30,
+          "fontWeight": 700,
+          "parentId": "card-3",
+          "sizing": {
+            "w": "fill"
+          }
+        },
+        {
+          "id": "card-3-body",
+          "type": "text",
+          "x": 0,
+          "y": 1,
+          "w": 100,
+          "h": "auto",
+          "html": "Shared risk and a shared roadmap with a vendor who already serves our market, with an option to bring it in house later.",
+          "fontSize": 20,
+          "parentId": "card-3",
+          "sizing": {
+            "w": "fill"
+          }
+        }
+      ]
+    }
+  ]
+}

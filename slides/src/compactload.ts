@@ -23,6 +23,14 @@
 // way the panel's "Fit height to text" measures (measureElement, the deck's
 // real fonts) and given its true height BEFORE the document reaches the store,
 // so undo never sees the provisional frame.
+//
+// A text inside an auto-layout frame gets its real width from the layout
+// (derive.ts → layout.ts), not from the file: an agent writes a placeholder w
+// and lets the frame size it. So the fit runs again on the laid-out width:
+// fit, derive, re-fit what layout resized, derive again, until a round
+// changes nothing (capped at 4, like derive's own settle). layout.ts stays
+// pure geometry; text heights stay its inputs. The document reaches the store
+// already derived, so the editor's own pass on `replace` finds nothing to do.
 
 import { parseDoc, type BentoDoc, type Slide, type TextElement } from './model'
 import { sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
@@ -30,6 +38,7 @@ import { expandDocWithStats, isCompact, STACK_GAP, type ExpandStats } from './co
 import { measureElement } from './measure'
 import { validateDoc, type ValidateResult } from './validate'
 import { sanitizeDoc } from './restoregate'
+import { derive, deriveMemory } from './derive'
 
 export interface LoadReport {
   ok: true
@@ -101,8 +110,14 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
   let fitted = 0
   let refit: ExpandStats['autoHeight'] = []
   if (fit && stats.autoHeight.length) {
-    fitted = fitAutoHeights(doc, stats)
+    const h = () => stats.autoHeight.map(({ slide, id }) => doc.slides.find((s) => s.id === slide)?.elements.find((e) => e.id === id)?.h)
+    const provisional = h()
+    const mem = deriveMemory(doc) // the memory the editor seeds on `replace`
+    fitAutoHeights(doc, stats)
     restack(doc, stats)
+    derive(doc, mem)
+    for (let i = 0; i < 4 && fitAutoHeights(doc, stats); i++) { restack(doc, stats); derive(doc, mem) }
+    fitted = h().filter((v, i) => v !== provisional[i]).length
     if (document.fonts?.status === 'loading') refit = stats.autoHeight
   }
   // a role the layout had no slot for is reported beside the gate's drops:
