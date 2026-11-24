@@ -252,11 +252,12 @@ try {
   // the field's own number, under the pill, must paint nothing: right to left
   // it sits at the left, where the corners button now is, and printed under it
   // ("1⛶4"). Measured in pixels: the field drawn with its number and without
-  // it (the corners button hidden both times) must be the same picture.
+  // it (the corners button hidden both times, nothing focused) must be the same picture.
   {
     const field = p.locator('.ed-props .ed-mini[title="Corner radius"]')
     const shot = async (v) => {
-      await field.evaluate((f, v) => { f.querySelector('.ed-corners-btn').style.visibility = 'hidden'; f.querySelector('input').value = v }, v)
+      // at rest: a focused input paints its own text (the pill steps aside for typing)
+      await field.evaluate((f, v) => { document.activeElement?.blur(); f.querySelector('.ed-corners-btn').style.visibility = 'hidden'; f.querySelector('input').value = v }, v)
       return field.screenshot()
     }
     const withNum = await shot(String(tile.radius)), without = await shot('')
