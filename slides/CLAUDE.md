@@ -19,7 +19,12 @@ anim, charts, i18n, sync), shared by every app.
   into the row of chips. Verified by measurement, not belief: on that morph
   arrival all four tiles travel, 13 elements stagger in, and the count-up runs
   0→100%. Charts slide + hidden pie state demo the bar⇄pie data morph, speaker
-  notes double as the feature tour. It is also the reference for how a deck is BUILT:
+  notes double as the feature tour, and every linear slide carries ONE "try
+  this" comment thread (author `bento`, `tryThis()`, anchored to an `sd-*` id
+  on that slide — editor-only, so the tour shows where the editor does; the
+  notes pane starts OPEN on the untouched starter only: Editor's `starter`
+  flag from boot's `docIsFresh`, a stored `bento-notes-open` always wins;
+  guarded by scripts/test-slides-starter-tour-browser.mjs). It is also the reference for how a deck is BUILT:
   every layer named, background/bokeh/furniture/milestones grouped, auto-layout
   frames wherever things line up (logo, anatomy card, stats, panels, cards),
   three components (Key hint, Button — its copies override label or paint —

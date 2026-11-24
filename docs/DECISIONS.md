@@ -15396,3 +15396,34 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — slides: the untouched starter opens its speaker notes (narrows 2026-11-22)
+
+This narrows the 2026-11-22 entry ("the speaker-notes pane starts folded at
+every window size") for ONE case: the untouched starter deck. The Showcase
+keeps its tour in its notes, and folded, a newcomer in the editor saw nothing
+that said what to try. Pending the maintainer's word, as SC-03 asks; until
+then, do not "fix" it back to folded, and do not widen it.
+
+- **The signal is session-only.** It is boot's own "this is our starter"
+  (`docIsFresh` from `bootWith(parsed || starterDoc(), !parsed)` in
+  slides/src/main.ts), passed to the Editor and on to `mountNotesPane`. No
+  format key and no docId-keyed store, so the reasons 2026-11-22 gave for
+  rejecting a per-deck flag still hold: notes visibility stays a viewer
+  preference, never document state. The same deck saved and reopened is
+  somebody's document and starts folded.
+- **A stored choice always wins.** `bento-notes-open` '1' opens and '0' folds,
+  starter or not; nothing is written until the viewer toggles. A document
+  that takes the starter's place in the session (loadDoc, Open, a drop,
+  Replace from JSON — the store's `replace` event) folds the pane when no
+  choice is stored. Start from scratch keeps the same document and leaves
+  the pane as it was.
+- **The rest of the tour is on the canvas**: one "try this" comment thread per
+  linear slide (slides/src/starterdeck.ts `tryThis()`), editor-only like every
+  comment, so it never reaches the show, print or an exported image.
+- **Guard.** `scripts/test-slides-starter-tour-browser.mjs` asserts the
+  starter opens its pane, a stored '0' keeps it folded, a document loaded
+  over the starter folds it, and a saved copy starts folded.
+  `scripts/test-slides-notes-pane-browser.mjs` measures the folded default
+  as before, now on a saved copy of the starter (somebody's document), so
+  its "opens by default" mutant still turns rows red.
