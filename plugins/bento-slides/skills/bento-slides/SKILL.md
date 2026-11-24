@@ -118,6 +118,25 @@ looked at is not finished.
 6. **Write back** the edited `#bento-doc` block (escaping `<`), or return the
    replacement JSON. Never regenerate the whole HTML file.
 
+## The `bento` tool (scripts/bento.mjs)
+
+When this skill folder carries `scripts/bento.mjs`, use it instead of
+splicing JSON by hand. Node 20+, no install, no network; Chrome only for
+`render` and for applying a compact document.
+
+```bash
+node scripts/bento.mjs inspect deck.bento.html          # the deck's tokens, palette slots, components, layouts, fonts
+node scripts/bento.mjs extract deck.bento.html -o doc.json   # no assets, no collab (key names only)
+node scripts/bento.mjs lint doc.json --base orig.json   # static checks + the design-system diff of your edit
+node scripts/bento.mjs apply deck.bento.html doc.json   # restores collab, docId, assets; escapes <
+node scripts/bento.mjs render deck.bento.html --png out # validate() findings + page-NN.png + contact.png
+node scripts/bento.mjs new Topic.bento.html             # an empty deck from the bundled app file
+```
+
+Reuse what `inspect` lists; `lint --base` fails when an edit changes the
+deck's design system the user did not ask to change. Every verb takes
+`--help` and `--json`; every error ends with what to do next.
+
 ## Critical gotchas
 
 - **Charts:** bar/line series `data` must be **plain numbers** (`{value,…}`

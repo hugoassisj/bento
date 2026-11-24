@@ -223,6 +223,15 @@ report never came) with Chrome's exit code and the end of its output.
 `--timeout <seconds>` (default 90) for a long deck or a slow machine,
 `--keep-tmp` to keep the Chrome profile and the probe for a look.
 
+Outside a repo checkout, the skill carries the same tool:
+`node plugins/bento-slides/skills/bento-slides/scripts/bento.mjs` (Node 20+, no
+install, no network) with six verbs — `new`, `extract` (the document without
+its assets and sharing keys), `inspect` (the deck's tokens, palette slots,
+components, layouts and fonts), `lint` (static checks; `--base` gives the
+design-system diff of an edit), `render` (this check, which it implements) and
+`apply` (splices the document back, keeping `collab`, `docId` and the assets).
+`bento-check.mjs` is a thin wrapper over its `render`.
+
 ## The document schema
 
 The bento/slides format has a machine-readable schema, generated from the
