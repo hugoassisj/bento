@@ -231,7 +231,8 @@ export interface ExpandStats {
 export const STACK_GAP = 16
 
 /** A layout's role → slot map (first slot per role wins; `left`/`right` are
- *  the first and second `body` slot). Exported for AGENTS.md's table rig. */
+ *  the first and second `body` slot). Exported for the agent reference's
+ *  layout table (scripts/build-agent-docs.mjs) and its rig. */
 export function layoutRoles(layout: Slide): Record<string, string> {
   const roles: Record<string, string> = {}
   const bodies: string[] = []

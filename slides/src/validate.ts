@@ -87,8 +87,15 @@ export const FINDINGS = {
 
 export type FindingCode = keyof typeof FINDINGS
 
-/** A finding as a check emits it: a code from FINDINGS, at one of its severities. */
-type Emitted = { [C in FindingCode]: Omit<Finding, 'code' | 'severity'> & { code: C; severity: (typeof FINDINGS)[C]['severity'][number] } }[FindingCode]
+/**
+ * A finding as a check emits it: a code from FINDINGS, at one of its
+ * severities. Exported so a module of checks that validateDoc hands its
+ * `add` to types the callback as `AddFinding` and is held to the same table.
+ */
+export type Emitted = { [C in FindingCode]: Omit<Finding, 'code' | 'severity'> & { code: C; severity: (typeof FINDINGS)[C]['severity'][number] } }[FindingCode]
+
+/** The callback validateDoc's checks report through. */
+export type AddFinding = (f: Emitted) => void
 
 export interface ValidateResult {
   ok: boolean
@@ -177,7 +184,7 @@ function morphArrivals(doc: BentoDoc): Map<string, Slide | undefined> {
 
 export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateResult {
   const findings: Finding[] = []
-  const add = (f: Emitted) => findings.push(f)
+  const add: AddFinding = (f) => findings.push(f)
 
   const hasDom = typeof document !== 'undefined'
   const measure = (opts.measure ?? true) && hasDom
@@ -475,7 +482,7 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
 function validateChart(
   option: Record<string, any>,
   at: { slide: string; element: string },
-  add: (f: Emitted) => void,
+  add: AddFinding,
 ) {
   const note = (path: string, what: string) =>
     add({ ...at, code: 'chart-key-ignored', severity: 'warning', path,
@@ -523,7 +530,7 @@ function validateChart(
  * box fits its text — which they would within a release if each had its own
  * copy of the arithmetic.
  */
-function measureOverflow(doc: BentoDoc, add: (f: Emitted) => void) {
+function measureOverflow(doc: BentoDoc, add: AddFinding) {
   // a placeholder with no content measures as one empty line — not overflow
   const targets: Array<{ slide: string; el: TextElement }> = []
   for (const slide of doc.slides) {

@@ -162,9 +162,34 @@ ok(refRows.length > 0 && refRows.every((r) => guideRef.includes(r)), `the guide'
 
 // ---- every finding code ----------------------------------------------------------
 console.log('\nevery finding code validate() can emit is documented\n')
-const validateSrc = read('slides/src/validate.ts')
-const emitted = [...new Set([...validateSrc.slice(validateSrc.indexOf('export function validateDoc')).matchAll(/code: '([a-z][a-z-]+)'/g)].map((m) => m[1]))]
-ok(emitted.length >= 20, `validate.ts emits ${emitted.length} codes`)
+// The modules that emit findings: validate.ts; every module under slides/src
+// that types a callback with its Emitted / AddFinding (a module of checks
+// validateDoc hands its `add` to); and every module validate.ts imports,
+// transitively within slides/src, that writes a finding-shaped literal. The
+// codes are the `code: '…', severity` literals in them.
+const srcFiles = (dir: string): string[] => readdirSync(join(root, dir), { withFileTypes: true }).flatMap((d) =>
+  d.isDirectory() ? srcFiles(`${dir}/${d.name}`) : /\.ts$/.test(d.name) && !/\.d\.ts$/.test(d.name) ? [`${dir}/${d.name}`] : [])
+const FINDING = /code: '([a-z][a-z-]+)',\s*severity\b/g
+const emitters = new Set<string>(['slides/src/validate.ts'])
+for (const f of srcFiles('slides/src')) {
+  const t = read(f)
+  if (/from '\.{1,2}\/(?:[\w./]*\/)?validate(?:\.ts)?'/.test(t) && /\b(?:Emitted|AddFinding)\b/.test(t)) emitters.add(f)
+}
+const seen = new Set<string>()
+const walk = (f: string) => {
+  if (seen.has(f)) return
+  seen.add(f)
+  const t = tryRead(f)
+  if (f !== 'slides/src/validate.ts' && [...t.matchAll(FINDING)].length) emitters.add(f)
+  for (const m of t.matchAll(/from '(\.{1,2}\/[^']+)'/g)) {
+    const target = join(f, '..', m[1]).replace(/\\/g, '/')
+    const file = target.endsWith('.ts') ? target : `${target}.ts`
+    if (file.startsWith('slides/src/')) walk(file)
+  }
+}
+walk('slides/src/validate.ts')
+const emitted = [...new Set([...emitters].flatMap((f) => [...read(f).matchAll(FINDING)].map((m) => m[1])))]
+ok(emitted.length >= 20, `${emitted.length} codes emitted, from ${[...emitters].join(', ')} (${seen.size} modules reached from validate.ts scanned)`)
 const listed = Object.keys(FINDINGS)
 ok(emitted.every((c) => listed.includes(c)) && listed.every((c) => emitted.includes(c)), `FINDINGS lists exactly the emitted codes${emitted.filter((c) => !listed.includes(c)).length ? ` (missing: ${emitted.filter((c) => !listed.includes(c))})` : ''}${listed.filter((c) => !emitted.includes(c)).length ? ` (never emitted: ${listed.filter((c) => !emitted.includes(c))})` : ''}`)
 const verifyRows = rows(refVerify)
