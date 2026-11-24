@@ -12,10 +12,12 @@
 //      bare press('?') without Shift is what misled the audit), F1 and H open
 //      a sheet of the show's keys inside the overlay: role=dialog, named by its
 //      title, focused; any key closes it without doing anything else, Esc
-//      included (the show goes on), and focus goes back to the show;
+//      included (the show goes on), and focus goes back to the show; a
+//      Ctrl/Alt chord passes to the browser and leaves the sheet open;
 //   3. N and P walk exactly like → and ←: the same (slide, hidden steps)
 //      sequence through the steps and past the state slides, and on a black
 //      screen N, like →, only wakes it (MP-07) — the deck does not move;
+//      ↑ and ↓ walk and wake exactly like ← and → as well;
 //   4. Home and End land on the first and last slide of the linear flow,
 //      never on the trailing state slide;
 //   5. O still opens the overview and Esc closes it without ending the show;
@@ -122,7 +124,7 @@ try {
     ok(!!sheet && sheet.visible, `2. Shift+/ opens the sheet inside the show (${JSON.stringify(sheet && { rows: sheet.rows.length })})`)
     ok(sheet?.modal === 'true' && sheet.inBox && sheet.title === 'Keyboard shortcuts', `2. it is a modal dialog named by its title ("${sheet?.title}")`)
     ok(sheet?.focused, '2. focus moves into the sheet')
-    const want = ['→', 'PageDown', 'Space', '←', 'PageUp', 'Home', 'End', 'S', 'F', 'B', 'L', 'M', '?', 'F1', 'Esc']
+    const want = ['→', '↓', 'PageDown', 'Space', '←', '↑', 'PageUp', 'Home', 'End', 'S', 'F', 'B', 'L', 'M', '?', 'F1', 'Esc']
     const caps = (sheet?.rows ?? []).flat()
     ok(want.every((k) => caps.includes(k)), `2. it lists the show's keys (${(sheet?.rows ?? []).map((r) => r.join(' ')).join(' | ')})`)
     ok(!caps.includes('O') && !caps.includes('G') && !caps.includes('V'), '2. and nothing it does not do or does not advertise (no O, G, V)')
@@ -146,6 +148,16 @@ try {
     ok(s && !s.sheet && s.h === before.h && s.hidden === before.hidden, `2. a click closes it, and does not reach the slide (${JSON.stringify(s)})`)
     await shiftSlash(p); await shiftSlash(p)
     ok(!(await state(p))?.sheet, '2. a second ? closes it')
+    // a Ctrl/⌘/Alt chord is the browser's, even with the sheet open: it reaches
+    // the window unhandled and the sheet stays; a plain key then closes it
+    await shiftSlash(p)
+    await p.evaluate(() => { window.__chord = []; window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.altKey) && e.key.length === 1) window.__chord.push(`${e.key}:${e.defaultPrevented}`) }) })
+    await press(p, 'Control+j'); await press(p, 'Alt+z')
+    const chord = await p.evaluate(() => window.__chord)
+    s = await state(p)
+    ok(s?.sheet && chord.join() === 'j:false,z:false', `2. a Ctrl or Alt chord passes to the browser and leaves the sheet open (${JSON.stringify(chord)}, sheet ${s?.sheet})`)
+    await press(p, 'x')
+    ok(!(await state(p))?.sheet, '2. then a plain key closes it')
 
     // 3. N/P walk like →/←
     const walk = async (key, n) => { const out = []; for (let i = 0; i < n; i++) { await press(p, key, 180); const q = await state(p); out.push(q ? `${q.h}/${q.hidden}` : 'ended') } return out.join(' ') }
@@ -162,6 +174,12 @@ try {
     await press(p, 'End')
     const ps = await walk('p', 20)
     ok(ps === larrows, `3. P walks like ← (← ${larrows} | P ${ps})`)
+    await press(p, 'Home')
+    const downs = await walk('ArrowDown', 20)
+    ok(downs === arrows, `3. ↓ walks like → (↓ ${downs})`)
+    await press(p, 'End')
+    const ups = await walk('ArrowUp', 20)
+    ok(ups === larrows, `3. ↑ walks like ← (↑ ${ups})`)
     // under a black screen N wakes it and stays put, as → does; the next N moves on
     await press(p, 'Home'); for (let i = 0; i < 4; i++) await press(p, 'n') // slide 3, past slide 2's steps
     const lit = await state(p)
@@ -177,6 +195,15 @@ try {
     await press(p, 'b'); await press(p, 'p')
     s = await state(p)
     ok(!(await black()) && s?.h === lit.h + 1, `3. P on a black screen wakes it without moving too (${s?.h})`)
+    const blackOut = async () => { if (!(await black())) await press(p, 'b') }
+    await blackOut(); await press(p, 'ArrowDown')
+    s = await state(p)
+    ok(!(await black()) && s?.h === lit.h + 1, `3. ↓ on a black screen wakes it without moving (${s?.h})`)
+    await blackOut()
+    ok(await black(), 'CONTROL: black again')
+    await press(p, 'ArrowUp')
+    s = await state(p)
+    ok(!(await black()) && s?.h === lit.h + 1, `3. ↑ on a black screen wakes it without moving (${s?.h})`)
 
     // 4. Home / End
     await press(p, 'End')
