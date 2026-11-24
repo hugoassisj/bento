@@ -14,7 +14,8 @@
 //      title, focused; any key closes it without doing anything else, Esc
 //      included (the show goes on), and focus goes back to the show;
 //   3. N and P walk exactly like → and ←: the same (slide, hidden steps)
-//      sequence through the steps and past the state slides;
+//      sequence through the steps and past the state slides, and on a black
+//      screen N, like →, only wakes it (MP-07) — the deck does not move;
 //   4. Home and End land on the first and last slide of the linear flow,
 //      never on the trailing state slide;
 //   5. O still opens the overview and Esc closes it without ending the show;
@@ -161,6 +162,21 @@ try {
     await press(p, 'End')
     const ps = await walk('p', 20)
     ok(ps === larrows, `3. P walks like ← (← ${larrows} | P ${ps})`)
+    // under a black screen N wakes it and stays put, as → does; the next N moves on
+    await press(p, 'Home'); for (let i = 0; i < 4; i++) await press(p, 'n') // slide 3, past slide 2's steps
+    const lit = await state(p)
+    const black = () => p.evaluate(() => { const b = document.querySelector('.bento-blackout'); return !!b && !b.hidden })
+    await press(p, 'b')
+    ok(await black(), `CONTROL: B blacks the screen out (on ${lit?.h}/${lit?.hidden})`)
+    await press(p, 'n')
+    s = await state(p)
+    ok(!(await black()) && s?.h === lit?.h && s?.hidden === lit?.hidden, `3. N on a black screen wakes it without moving (${lit?.h}/${lit?.hidden} → ${s?.h}/${s?.hidden})`)
+    await press(p, 'n')
+    s = await state(p)
+    ok(s?.h === lit.h + 1, `3. the next N moves on (${s?.h})`)
+    await press(p, 'b'); await press(p, 'p')
+    s = await state(p)
+    ok(!(await black()) && s?.h === lit.h + 1, `3. P on a black screen wakes it without moving too (${s?.h})`)
 
     // 4. Home / End
     await press(p, 'End')
