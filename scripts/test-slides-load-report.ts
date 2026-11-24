@@ -208,10 +208,63 @@ console.log('\nwhat the derive pass changes is reported\n')
     const d = entry(r, '/slides/0/elements/0/parentId')
     const d2 = entry(r, '/slides/0/elements/1/parentId')
     ok(els(r)[0].parentId === undefined && els(r)[0].sizing === undefined, 'a dangling parentId is still removed with its sizing (behaviour unchanged)')
-    ok(!!d && /^parent removed/.test(d.reason) && d.reason.includes('"nope"') && /not a frame/.test(d.reason),
+    ok(!!d && /^parent removed/.test(d.reason) && d.reason.includes('"nope"') && d.reason.includes('"x"') && /names no element/.test(d.reason),
       `a parentId naming nothing is reported (${show(r)})`)
     ok(!!d2 && /^parent removed/.test(d2.reason) && d2.reason.includes('"z"') && /not a frame/.test(d2.reason),
       'a parentId naming an element that is not a frame is reported')
+  }
+  // paths name the element the AUTHOR wrote, though the gate, parseDoc or a
+  // compact nested array changed the indices; every reason names the ids too
+  {
+    const drift = rect({ id: 'card', fill: '#123456', themeRefs: { fill: '$color.card' } })
+    const at = (r: ReturnType<typeof load>) => r.report.dropped.find((d) => /^binding dropped/.test(d.reason))
+    const gated = load(full([rect({ id: 'bad', shape: 'bogus' }), drift]))
+    const g = at(gated)
+    ok(g?.path === '/slides/0/elements/1/themeRefs/fill' && g.reason.includes('"card"') && g.reason.includes('"s1"'),
+      `after an element the gate drops, the entry points at the author's element 1 and names it (${show(gated)})`)
+    const unfilled = load(full([{ ...rect({ id: 'nofill' }), fill: undefined }, drift]))
+    ok(at(unfilled)?.path === '/slides/0/elements/1/themeRefs/fill', `after an element parseDoc drops (a shape with no fill), the entry points at element 1 (${show(unfilled)})`)
+    const slides = load(JSON.stringify({ ...JSON.parse(full([drift])), slides: [5, ...JSON.parse(full([drift])).slides] }))
+    ok(at(slides)?.path === '/slides/1/elements/0/themeRefs/fill', `after a slide that is not an object, the entry points at slide 1 (${show(slides)})`)
+    const nested = load(JSON.stringify({ compact: true, theme, slides: [{ id: 's1', elements: [
+      [{ type: 'shape', shape: 'rect', id: 'n1', x: 0, y: 0, w: 10, h: 10 }, { type: 'shape', shape: 'rect', x: 0, y: 20, w: 10, h: 10, fill: '#123456', themeRefs: { fill: '$color.card' } }],
+      { type: 'shape', shape: 'rect', id: 'card', x: 0, y: 40, w: 10, h: 10, fill: '#654321', themeRefs: { fill: '$color.card' } },
+    ] }] }))
+    const ps = nested.report.dropped.map((d) => d.path).sort().join(' ')
+    ok(ps === '/slides/0/elements/0/1/themeRefs/fill /slides/0/elements/1/themeRefs/fill',
+      `compact nested arrays: the entries point into the author's nesting, minted id or not (${show(nested)})`)
+  }
+  // "omit the literal" only where omitting it works; a value the author left
+  // out that a default filled has its own reason
+  {
+    const reason = (r: ReturnType<typeof load>) => r.report.dropped.find((d) => /^binding dropped/.test(d.reason))?.reason ?? ''
+    const omitOk = load(full([rect({ id: 'card', stroke: '#123456', themeRefs: { stroke: '$color.card' } })]))
+    ok(/leave the literal out/.test(reason(omitOk)), `full, a key that may be left out: the fix offers leaving the literal out (${reason(omitOk)})`)
+    const required = load(full([rect({ id: 'card', fill: '#123456', themeRefs: { fill: '$color.card' } })]))
+    ok(!/leave the literal out/.test(reason(required)) && /write the token's value/i.test(reason(required)), `full, a required key (fill): the fix is only to write the token's value (${reason(required)})`)
+    const compactR = load(JSON.stringify({ compact: true, theme, slides: [{ id: 's1', elements: [{ type: 'shape', shape: 'rect', id: 'card', x: 0, y: 0, w: 10, h: 10, fill: '#123456', themeRefs: { fill: '$color.card' } }] }] }))
+    ok(/leave the literal out/.test(reason(compactR)), `compact: the fix offers leaving the literal out (${reason(compactR)})`)
+    const bg = JSON.parse(full([]))
+    bg.slides[0] = { id: 's1', transition: 'none', notes: '', elements: [], themeRefs: { background: '$color.card' } }
+    const bgR = load(JSON.stringify(bg))
+    ok(/no value/.test(reason(bgR)) && !/leave the literal out/.test(reason(bgR)) && /write the token's value/i.test(reason(bgR)),
+      `full, an omitted slide background the loader filled: its own reason, and no "leave the literal out" (${reason(bgR)})`)
+    const gapR = load(full([rect({ id: 'f', w: 600, layout: { dir: 'row', pad: [0, 0, 0, 0] }, themeRefs: { 'layout.gap': '$g' } })]).replace('"tokens":{"set":{', '"tokens":{"set":{"g":{"type":"number","values":{"default":16}},'))
+    ok(/no value/.test(reason(gapR)) && !/leave the literal out/.test(reason(gapR)), `full, an omitted layout.gap: its own reason, and no "leave the literal out" (${reason(gapR)})`)
+  }
+  // parent removed: a cycle and a layout are worded as such; an empty parentId is no link at all
+  {
+    const fr = (id: string, parentId: string) => rect({ id, parentId, w: 300, layout: { dir: 'row', gap: 0, pad: [0, 0, 0, 0] } })
+    const cyc = load(full([fr('F1', 'F2'), fr('F2', 'F1')]))
+    const c = cyc.report.dropped.find((d) => /^parent removed/.test(d.reason))
+    ok(!!c && /cycle/.test(c.reason) && !/not a frame/.test(c.reason), `a frame cycle is reported as a cycle (${show(cyc)})`)
+    const lay = JSON.parse(full([rect({ id: 'z' })]))
+    lay.layouts = [{ id: 'L1', name: 'L', background: '#fff', transition: 'none', notes: '', elements: [rect({ id: 'lx', parentId: 'nope' })] }]
+    const layR = load(JSON.stringify(lay))
+    const l = layR.report.dropped.find((d) => /^parent removed/.test(d.reason))
+    ok(l?.path === '/layouts/0/elements/0/parentId' && /layout "L1"/.test(l.reason) && !/slide/.test(l.reason), `an element in a layout is worded for its layout (${show(layR)})`)
+    const empty = load(full([rect({ id: 'e', parentId: '' })]))
+    ok(empty.report.dropped.length === 0, `parentId "" is not reported (${show(empty)})`)
   }
   // the decks people and agents already load stay silent
   {
