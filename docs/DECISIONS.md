@@ -15407,14 +15407,23 @@ replaced before this shipped.
   deliberate: a menu is where people go to learn what exists, a toolbar is
   where they act on what is there. Do not "fix" either to match the other.
 - **One level of submenu, inside `editor/ctxmenu.ts`.** `CtxItem.items`
-  opens a submenu beside its row on hover, click, or → (← and Escape close it
-  back onto the row; ↑↓ walk a list). It is part of the menu's singleton and
-  mounts on the body, never inside the list, because a list that scrolls clips
-  both axes. The topbar dropdowns do not share this code.
+  opens a submenu beside its row (never over it) on hover, a click or tap, or
+  → (← and Escape close it back onto the row; ↑↓ walk a list; every arrow is
+  swallowed while a menu is open, so none nudges the selection). A click only
+  opens, never shuts: a mouse hovers before it clicks, and a tap fires the
+  hover and the click together. Where neither side has room (a phone) the
+  submenu takes the menu's place, headed by a row back, and opens only on a
+  click, tap or key, never on hover. A submenu row runs only for a press that
+  began on the submenu, so the gesture that opened it can never run what
+  appeared under the pointer. It is part of the menu's singleton and mounts on
+  the body, never inside the list, because a list that scrolls clips both
+  axes. The topbar dropdowns do not share this code.
 - **Tidy up arranges in place and makes no frame.** It detects a row, a column
   or a grid from the selection (`editor/tidy.ts`, pure geometry), keeps sizes,
-  and uses the median gap already there; a group moves whole, a frame's child
-  never moves. Making a frame is ⇧A's job, offered from the toast afterwards.
+  and uses the median gap already there, measured between columns and rows so
+  a second run moves nothing; it stays on the slide (a row too long wraps into
+  a grid, an arrangement past an edge shifts back); a group moves whole, a
+  frame's child never moves. Making a frame is ⇧A's job, offered from the toast afterwards.
   Commands `match-width`, `match-height` and `tidy-up` have no keys of their
   own (⌘K and the menu); `distribute-x`/`-y` are labelled "Distribute
   horizontally / vertically" everywhere.

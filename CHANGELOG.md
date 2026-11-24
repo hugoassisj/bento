@@ -13,11 +13,13 @@ pre-1.0.
 
 - **Arrange, in words, on the right-click menu — and Tidy up.** Right-click
   a selection and open Arrange for every align, distribute and size action
-  spelled out, each with its icon and shortcut; it works with the mouse or the
-  arrow keys. Rows that need more elements than you selected are greyed out
-  and say how many they need. New **Tidy up** squares a loose selection into
-  an even row, column or grid where it stands, without making a frame, and
-  offers to keep it that way with auto layout. ⌘K now finds "Same width",
+  spelled out, each with its icon and shortcut. It opens on hover, a click, a
+  tap or the arrow keys; on a phone, where there is no room beside the menu,
+  it takes the menu's place with a row to go back. Rows that need more
+  elements than you selected are greyed out and say how many they need. New
+  **Tidy up** squares a loose selection into an even row, column or grid where
+  it stands, without making a frame and without pushing anything off the
+  slide, and offers to keep it that way with auto layout. ⌘K now finds "Same width",
   "Same height", "Distribute horizontally" and "Tidy up", and the Format tab's
   buttons use the same words.
 

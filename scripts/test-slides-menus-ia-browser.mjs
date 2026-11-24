@@ -19,7 +19,10 @@
 //   9. The element menu's Arrange ▸ submenu (DS-10): every align, distribute
 //      and size action and Tidy up in words, each with its icon and keys; it
 //      opens and closes by mouse and by keyboard (→ ← Esc) and its rows are
-//      menu items; rows that cannot apply are disabled and say why; Tidy up
+//      menu items; a click never shuts what a hover opened; on a 390px phone,
+//      by touch or mouse, it takes the menu's place and the tap that opened it
+//      runs nothing; ← → never nudge the selection behind a menu; rows that
+//      cannot apply are disabled and say why; Tidy up
 //      squares a row and a 2×3 scatter in one undo step with no frame, its
 //      toast's Use auto layout wraps exactly as ⇧A does, and a frame's children
 //      are never moved by it.
@@ -197,26 +200,49 @@ try {
   }
   console.log('\n9. Arrange ▸ in the element menu\n')
   await run(async () => {
-    const s = await open(1440)
-    const q = s.p
+    // its own contexts, sealed: no WebSocket reaches a host and the deck stays
+    // offline (a loaded deck may carry a live session), every http(s) aborted
+    const sealed = async (width, height, touch = false) => {
+      const ctx = await browser.newContext({ viewport: { width, height }, hasTouch: touch })
+      await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1'); localStorage.setItem('bento-offline', 'on') } catch {} })
+      if (ctx.routeWebSocket) await ctx.routeWebSocket(/.*/, (ws) => ws.close())
+      await ctx.route(/^https?:/, (r) => r.abort())
+      const p = await ctx.newPage()
+      const errors = []
+      p.on('pageerror', (e) => errors.push(e.message))
+      p.on('dialog', (d) => d.dismiss())
+      await p.goto('file://' + SHELL)
+      await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-topbar'))
+      await p.waitForTimeout(400)
+      return { p, ctx, errors }
+    }
+    let s = await sealed(1440, 900)
+    let q = s.p
+    let blank = { x: 250, y: 600 } // the grey surround; the toast docks at the canvas top
     const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
     const rect = (id, x, y, extra = {}) => ({ id, type: 'shape', shape: 'rect', x, y, w: 200, h: 120, fill: '#88aadd', ...extra })
     const load = async (elements) => {
       await q.evaluate((els) => window.bento.loadDoc(JSON.stringify({ compact: true, slides: [{ id: 's1', elements: els }] })), elements)
       await q.waitForTimeout(300)
-      await q.mouse.click(250, 600) // the grey surround: the toast docks at the canvas top; await q.keyboard.press('Escape'); await q.keyboard.press('Escape')
+      await q.mouse.click(blank.x, blank.y); await q.keyboard.press('Escape'); await q.keyboard.press('Escape')
     }
     const els = () => q.evaluate(() => window.bento.doc.slides[0].elements.map((e) => ({ id: e.id, x: e.x, y: e.y, w: e.w, h: e.h, parentId: e.parentId, layout: !!e.layout })))
     const centre = (id) => q.evaluate((id) => { const r = document.querySelector(`.ed-stage-scale [data-el-id="${id}"]`).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } }, id)
+    // shift-clicks, a frame apart (a selection change re-targets the control
+    // box a frame later); checked, and tried once more if a click went astray
     const pick = async (ids) => {
-      await q.mouse.click(250, 600) // the grey surround: the toast docks at the canvas top; await q.keyboard.press('Escape')
-      for (const [i, id] of ids.entries()) {
-        const c = await centre(id)
-        if (i) await q.keyboard.down('Shift')
-        await q.mouse.click(c.x, c.y)
-        if (i) await q.keyboard.up('Shift')
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await q.mouse.click(blank.x, blank.y); await q.keyboard.press('Escape'); await q.waitForTimeout(150)
+        for (const [i, id] of ids.entries()) {
+          const c = await centre(id)
+          if (i) await q.keyboard.down('Shift')
+          await q.mouse.click(c.x, c.y)
+          if (i) await q.keyboard.up('Shift')
+          await q.waitForTimeout(80)
+        }
+        await q.waitForTimeout(100)
+        if ((await q.evaluate(() => window.bento.selection)).sort().join() === [...ids].sort().join()) return
       }
-      await q.waitForTimeout(100)
     }
     const menuOn = async (id) => {
       const c = await centre(id)
@@ -239,6 +265,10 @@ try {
     ok(/Arrange/.test(parent.text) && parent.pop === 'menu' && parent.exp === 'false' && parent.role === 'menuitem', `the menu has an Arrange row that opens a submenu (${JSON.stringify(parent)})`)
     await hoverArrange()
     ok(await q.$eval('#ed-ctxmenu-sub', (m) => m.getAttribute('role')) === 'menu' && await q.$eval('.ed-ctxmenu-parent', (b) => b.getAttribute('aria-expanded')) === 'true', 'hover opens it, as a menu, and the row says it is expanded')
+    await q.click('.ed-ctxmenu-parent'); await q.waitForTimeout(100)
+    ok(!!(await q.$('#ed-ctxmenu-sub')), 'a click after the hover keeps it open (a click only opens)')
+    const side = await q.evaluate(() => { const r = document.querySelector('.ed-ctxmenu-parent').getBoundingClientRect(), m = document.querySelector('#ed-ctxmenu-sub').getBoundingClientRect(); return { rowRight: r.right, subLeft: m.left } })
+    ok(side.subLeft >= side.rowRight, `beside the row, never over it (${Math.round(side.rowRight)} → ${Math.round(side.subLeft)})`)
     const rows = await subRows()
     const want = ['align-left', 'align-center', 'align-right', 'align-top', 'align-middle', 'align-bottom', 'distribute-x', 'distribute-y', 'match-width', 'match-height', 'tidy-up']
     ok(want.every((c) => rows.some((r) => r.cmd === c)), `every align, distribute and size action and Tidy up (${rows.map((r) => r.cmd).join(', ')})`)
@@ -255,6 +285,10 @@ try {
     await q.keyboard.press('Escape'); await q.waitForTimeout(80)
     ok(!(await q.$('.ed-ctxmenu')), '…and a second Escape the menu')
     await menuOn('b')
+    // ← and → with nothing focused, then on a row that opens nothing: swallowed
+    await q.keyboard.press('ArrowRight'); await q.keyboard.press('ArrowLeft')
+    await q.keyboard.press('ArrowDown'); await q.keyboard.press('ArrowRight'); await q.keyboard.press('ArrowLeft'); await q.keyboard.press('ArrowUp')
+    ok(!!(await q.$('.ed-ctxmenu')) && JSON.stringify((await els()).map((e) => [e.x, e.y])) === JSON.stringify(three.map((e) => [e.x, e.y])), '← and → that open nothing do not nudge the selection either')
     let steps = 0
     while (steps++ < 30 && !(await q.evaluate(() => document.activeElement?.classList.contains('ed-ctxmenu-parent')))) await q.keyboard.press('ArrowDown')
     ok(steps < 30, `↓ walks the rows to Arrange (${steps} presses)`)
@@ -357,6 +391,48 @@ try {
 
     ok(s.errors.length === 0, `no page errors${s.errors.length ? ': ' + s.errors.join(' | ') : ''}`)
     await s.ctx.close()
+
+    // h. a phone: no room beside the menu, so the submenu takes its place —
+    // on a tap or click only, and the gesture that opened it runs nothing
+    for (const touch of [true, false]) {
+      const how = touch ? '390px, touch' : '390px, mouse'
+      s = await sealed(390, 844, touch)
+      q = s.p
+      blank = await q.evaluate(() => { const r = document.querySelector('.ed-scroll').getBoundingClientRect(); return { x: r.left + 10, y: r.bottom - 120 } })
+      const row3 = [rect('a', 100, 200), rect('b', 400, 210), rect('c', 700, 195)]
+      await load(row3)
+      await q.keyboard.press(`${mod}+a`); await q.waitForTimeout(100)
+      const tap = (x, y) => (touch ? q.touchscreen.tap(x, y) : q.mouse.click(x, y))
+      const arrangeRect = async () => (await q.$('.ed-ctxmenu-parent')).boundingBox()
+      for (const where of ['right', 'left']) {
+        await menuOn('b')
+        const r = await arrangeRect()
+        const x = where === 'right' ? r.x + r.width - 12 : r.x + 12
+        if (!touch) { await q.mouse.move(x, r.y + r.height / 2); await q.waitForTimeout(120) }
+        if (!touch) ok(!(await q.$('#ed-ctxmenu-sub')), `${how}: hovering Arrange opens nothing over the pointer`)
+        await tap(x, r.y + r.height / 2); await q.waitForTimeout(200)
+        const st = await q.evaluate(() => {
+          const m = document.querySelector('#ed-ctxmenu-sub'), root = document.querySelector('.ed-ctxmenu:not(#ed-ctxmenu-sub)')
+          const b = m?.getBoundingClientRect()
+          return { open: !!m, back: m?.querySelector('.ed-ctxmenu-back')?.textContent ?? '', rootHidden: root ? getComputedStyle(root).visibility === 'hidden' : null, onScreen: !!b && b.left >= 0 && b.right <= innerWidth && b.top >= 0 && b.bottom <= innerHeight }
+        })
+        ok(st.open && st.rootHidden && /Arrange/.test(st.back) && st.onScreen, `${how}, tap on the ${where} of Arrange: the submenu takes the menu's place, headed by a row back (${JSON.stringify(st)})`)
+        ok(JSON.stringify((await els()).map((e) => [e.x, e.y])) === JSON.stringify(row3.map((e) => [e.x, e.y])), `${how}: the tap that opened it ran nothing`)
+        const back = await (await q.$('.ed-ctxmenu-back')).boundingBox()
+        await tap(back.x + 20, back.y + back.height / 2); await q.waitForTimeout(150)
+        ok(!(await q.$('#ed-ctxmenu-sub')) && await q.evaluate(() => getComputedStyle(document.querySelector('.ed-ctxmenu')).visibility) !== 'hidden', `${how}: the row back brings the menu back`)
+        await closeAll()
+      }
+      await q.keyboard.press(`${mod}+a`); await q.waitForTimeout(100)
+      await menuOn('b')
+      const r = await arrangeRect()
+      await tap(r.x + r.width / 2, r.y + r.height / 2); await q.waitForTimeout(200)
+      const al = await (await q.$('#ed-ctxmenu-sub [data-cmd="align-top"]')).boundingBox()
+      await tap(al.x + al.width / 2, al.y + al.height / 2); await q.waitForTimeout(200)
+      ok(!(await q.$('.ed-ctxmenu')) && (await els()).every((e) => e.y === 195), `${how}: a tap on a row of it runs that row (Align top: y ${(await els()).map((e) => e.y).join(', ')})`)
+      ok(s.errors.length === 0, `${how}: no page errors${s.errors.length ? ': ' + s.errors.join(' | ') : ''}`)
+      await s.ctx.close()
+    }
   })
 } finally {
   await browser.close()
