@@ -16,6 +16,14 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Cards in a hugging row can all be as tall as the tallest.** Give the row
+  Hug contents and Stretch alignment, and give each card its own auto layout
+  with Hug contents: every card now grows to the tallest card's content and
+  shrinks with it. Before, each card kept whatever height it already had.
+  Without Stretch, each card still keeps its own height. Decks that load from
+  JSON (`window.bento.loadDoc`, Replace from JSON…) also size their text to
+  the width the frames give it. Before, a text left to the frame was measured
+  at its placeholder width and could come out hundreds of pixels too tall.
 
 ## [1.3.0] — 2026-11-22
 

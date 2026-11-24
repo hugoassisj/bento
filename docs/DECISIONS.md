@@ -15396,3 +15396,39 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — slides: a stretched card is measured by its content; loaded text is fitted after layout
+
+**Context.** An agent's row of cards (a hugging row, `align: "stretch"`,
+hugging column frames inside) loaded with every card at the 100px written in
+the file. A frame its parent sizes on an axis (fill, or stretched across)
+skipped its own hug there, so the parent's hug read the size the parent had
+given it, which is whatever the file carried. And `loadDoc` fitted `h: "auto"`
+texts at their placeholder width, before the layout gave them their real
+one.
+
+**Decision.**
+- **Natural size.** What such a frame's hug would give is kept as its natural
+  size for that layout pass. The parent's hug across its axis, and a wrapping
+  line's stretch, measure the child by it. So a hugging row of stretched (or
+  cross-filling) cards is as tall as the tallest card's content, every card is
+  stretched to it, and they shrink with it. Inner frames hug first, so one pass
+  is still a fixed point (the layout rig's fuzz). The main axis is unchanged:
+  a hugging row still adds up its children's widths, so a fill card in a
+  non-wrapping hugging row still gets no width from it. The editor disables
+  Fill under Hug contents for that reason. Hugging grids still size their
+  cells by the children that keep their own size.
+- **Fit after layout, in the loader.** `parseDocInputReport` fits, runs
+  `derive`, re-fits the texts the layout resized and derives again, until a
+  round changes nothing (cap 4). `layout.ts` still never measures text (the
+  2026-08-02 rule). The document reaches the store already derived, so the
+  editor's pass on `replace` finds nothing to do.
+
+**No format change.** No key added. A shell that predates this reads the
+laid-out boxes written into the file, and its own layout pass leaves them
+where they are (equal stretched cards are a fixed point there too). Only when
+content changes in that shell do its cards keep their old size, as they
+always did.
+
+**Guard.** `scripts/test-slides-layout.ts` (stretch and hug cases),
+`scripts/test-slides-load-fit-browser.mjs`.
