@@ -11,7 +11,8 @@
 // validates without errors; every bound token exists and its literal agrees;
 // every component copy has a main and kept its intended overrides; every
 // frame child sits inside its frame; and each invisible hit rect covers the
-// button it serves.
+// button it serves; every linear slide carries one "try this" comment on an
+// element of its own, and no note names a chart engine the shell lacks.
 
 // validate.ts reaches render.ts and its extensionless imports: resolve them as the build does
 import { register } from 'node:module'
@@ -88,5 +89,22 @@ const named = doc.slides.flatMap((s) => s.elements).filter((e) => e.name || e.gr
 const all = doc.slides.flatMap((s) => s.elements).length
 ok(named / all > 0.8, `layers are named (${named}/${all})`)
 
+// The tour where the editor shows it: every linear slide carries exactly one
+// "try this" comment, anchored to an element that exists on that slide (a
+// dangling anchor falls back to the slide's corner and points at nothing);
+// states carry none. The notes name no engine the shell does not have.
+let tips = 0, tipChars = 0
+for (const s of doc.slides) {
+  const cs = s.comments ?? []
+  if (s.stateOf) { ok(!cs.length, `state ${s.name ?? s.id} carries no "try this" (${cs.length})`); continue }
+  ok(cs.length === 1, `slide ${doc.slides.indexOf(s) + 1} carries exactly one "try this" (${cs.length})`)
+  for (const c of cs) {
+    ok(!!c.elementId && s.elements.some((e) => e.id === c.elementId), `"${c.text}" is anchored to an element on its slide (${c.elementId})`)
+    ok(!!c.author && !!c.text && c.text.length <= 80 && !c.resolved, `"${c.text}" is short, authored and open (${c.text.length} chars)`)
+    tips++; tipChars += c.text.length
+  }
+}
+for (const s of doc.slides) ok(!/ECharts/i.test(s.notes), `slide ${doc.slides.indexOf(s) + 1}'s notes name no chart engine the shell does not have`)
+
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1) }
-console.log(`starter deck OK — ${frames} frames, ${comps.length} components, ${bound} token bindings, ${named}/${all} named`)
+console.log(`starter deck OK — ${frames} frames, ${comps.length} components, ${bound} token bindings, ${named}/${all} named, ${tips} "try this" comments (${tipChars} chars)`)
