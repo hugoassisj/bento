@@ -751,3 +751,12 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Agent docs state what the code does
+      # docs/agents.md (bento.page/agents.md), docs/format.md, the skill,
+      # AGENTS.md and llms.txt against the code: every kept text tag, every
+      # line ending, the built-in faces, every present key and the show's
+      # chrome defaults, every element type, the required-fields rule as
+      # parseDoc applies it (no theme, no size, no theme.fontFamily), and the
+      # File-menu path for the JSON commands.
+      shell: bento-step {0}
+      run: node scripts/test-agent-docs-facts.ts
