@@ -47,6 +47,49 @@ export interface Finding {
   path?: string
 }
 
+/**
+ * Every finding code validate() can emit: the severities it is reported at,
+ * and what it means in one line. `add()` below only takes a code from this
+ * table at one of its severities, so a new check cannot ship without its row.
+ * scripts/build-agent-docs.mjs publishes the table as the agent reference
+ * (verify.md, and the guide's finding list). Nothing reads it at run time, so
+ * the shell bundle leaves it out.
+ */
+export const FINDINGS = {
+  'unknown-key': { severity: ['warning'], meaning: 'A key the format does not define (often a typo). It is ignored, so what it was meant to do does not happen.' },
+  'missing-asset': { severity: ['error'], meaning: 'An asset: reference, or a doc.fonts entry, names an asset that is not in doc.assets (or a builtin: face the app does not carry). Nothing renders.' },
+  'collab-secrets-present': { severity: ['info'], meaning: 'The deck carries live-session keys; anything that receives the file holds the same access. Read it with window.bento.read() before handing it on.' },
+  'font-not-embedded': { severity: ['info'], meaning: 'A font stack starts with a face the document does not carry, so viewers without it installed get the next family. Use a builtin: face or embed the woff2.' },
+  'token-unknown': { severity: ['warning'], meaning: 'A themeRefs entry names a $token that theme.tokens does not define, so the value never follows it.' },
+  'theme-ref-malformed': { severity: ['warning'], meaning: 'A themeRefs entry is neither a palette slot (optionally with a shift like "accent1 -20%") nor a $token.' },
+  'theme-ref-unknown-slot': { severity: ['warning'], meaning: 'A themeRefs entry names a palette slot the theme leaves empty, so the colour never follows the palette.' },
+  'theme-ref-dangling': { severity: ['warning'], meaning: 'A themeRefs entry points at a property the element or slide does not have; it controls nothing.' },
+  'theme-ref-stale': { severity: ['info'], meaning: 'A palette-bound colour differs from what its slot resolves to, so the next palette edit will replace it.' },
+  'unreachable-hidden-slide': { severity: ['info'], meaning: 'A hidden slide that no element links to: it cannot be reached while presenting.' },
+  'broken-state-parent': { severity: ['error'], meaning: 'stateOf names a slide that does not exist, so the state is unreachable.' },
+  'duplicate-id': { severity: ['error'], meaning: 'Two elements on one slide share an id; selection, morph and comment anchors all key off it.' },
+  'morph-key-collision': { severity: ['error'], meaning: 'Two elements on one slide share a morph key (morphId, else id), so one of them will not tween.' },
+  'out-of-canvas': { severity: ['warning', 'info'], meaning: 'The element extends past the canvas. A warning for text and tables (words are cropped), info for anything else (a bleed may be deliberate).' },
+  'past-margin': { severity: ['info'], meaning: 'Text or a table reaches past the 96 px side margin (scaled to the deck width) where the rest of the content stops short.' },
+  'overridden-enter-fx': { severity: ['warning'], meaning: 'The element morphs in from the previous slide, so its fx.enter is skipped. Give it a morph key new to the slide to make it enter.' },
+  'entrance-on-motion-path': { severity: ['warning'], meaning: 'fx.enter and a motion-path loop fight over the same transform; use one or the other.' },
+  'inert-countup': { severity: ['info'], meaning: 'The element morphs in already showing its number, so fx.countUp is skipped by design.' },
+  'dash-march-no-dash': { severity: ['warning'], meaning: 'A dash-march loop needs a visible stroke and strokeStyle "dashed" or "dotted"; as set, nothing moves.' },
+  'broken-link': { severity: ['error'], meaning: 'link names a slide that does not exist and is not an http(s) URL; clicking it does nothing.' },
+  'dangling-connector': { severity: ['warning'], meaning: 'A connector end (from/to) names an element that is not on the slide; that end stops following.' },
+  'embed-missing-view': { severity: ['error'], meaning: 'An embed has no view, so it is an empty box offline, in thumbnails and in print.' },
+  'embed-remote-view': { severity: ['warning'], meaning: 'An embed view is a URL: it needs the network and paints nothing offline. Capture it into doc.assets.' },
+  'embed-live-no-url': { severity: ['warning'], meaning: 'An embed has live on but no http(s) url, so no frame is created and only the view shows.' },
+  'chart-key-ignored': { severity: ['warning'], meaning: 'A chart option key charts-lite does not implement (label on a bar or line series is the common one); it is ignored silently.' },
+  'text-overflow': { severity: ['warning'], meaning: 'Measured with the real renderer, the text needs more height than its box; the finding says by how many px. Needs a browser.' },
+  'table-overflow': { severity: ['warning'], meaning: 'Measured with the real renderer, the rows need more height than the table box; the finding says by how many px. Needs a browser.' },
+} as const satisfies Record<string, { severity: readonly Severity[]; meaning: string }>
+
+export type FindingCode = keyof typeof FINDINGS
+
+/** A finding as a check emits it: a code from FINDINGS, at one of its severities. */
+type Emitted = { [C in FindingCode]: Omit<Finding, 'code' | 'severity'> & { code: C; severity: (typeof FINDINGS)[C]['severity'][number] } }[FindingCode]
+
 export interface ValidateResult {
   ok: boolean
   /** false when there was no DOM, so overflow was not checked */
@@ -134,7 +177,7 @@ function morphArrivals(doc: BentoDoc): Map<string, Slide | undefined> {
 
 export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateResult {
   const findings: Finding[] = []
-  const add = (f: Finding) => findings.push(f)
+  const add = (f: Emitted) => findings.push(f)
 
   const hasDom = typeof document !== 'undefined'
   const measure = (opts.measure ?? true) && hasDom
@@ -432,7 +475,7 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
 function validateChart(
   option: Record<string, any>,
   at: { slide: string; element: string },
-  add: (f: Finding) => void,
+  add: (f: Emitted) => void,
 ) {
   const note = (path: string, what: string) =>
     add({ ...at, code: 'chart-key-ignored', severity: 'warning', path,
@@ -480,7 +523,7 @@ function validateChart(
  * box fits its text — which they would within a release if each had its own
  * copy of the arithmetic.
  */
-function measureOverflow(doc: BentoDoc, add: (f: Finding) => void) {
+function measureOverflow(doc: BentoDoc, add: (f: Emitted) => void) {
   // a placeholder with no content measures as one empty line — not overflow
   const targets: Array<{ slide: string; el: TextElement }> = []
   for (const slide of doc.slides) {
