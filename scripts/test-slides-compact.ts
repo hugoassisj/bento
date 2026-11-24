@@ -111,7 +111,9 @@ const t1 = el(0, 't1') as unknown as TextElement
 // AI-08: an omitted fontFamily stays absent (the theme font), so the insert is defaultText minus its stack
 const want = defaultText({ id: 't1', x: 96, y: 80, w: 1000, h: 80, html: 'Hello', fontSize: 48, color: readableInk(ex.slides[0].background) }) as Partial<TextElement>
 delete want.fontFamily
-ok(canon(t1) === canon(want), 'a light-slide text box equals defaultText(...) with readableInk of the slide background, minus the font stack (it follows the theme)')
+want.color = ex.theme.color
+;(want as Obj).themeRefs = { color: 'tx1' }
+ok(canon(t1) === canon(want), 'a text box on a theme-background slide equals defaultText(...) minus the font stack (it follows the theme), its colour bound to tx1 — the slot drawn on bg1')
 ok(!('fontFamily' in t1) && t1.fontWeight === 400 && t1.align === 'center' && t1.valign === 'middle' && t1.lineHeight === 1.25 && t1.rotation === 0 && t1.opacity === 1, 'rotation, opacity, weight, align, valign, line height filled; no fontFamily literal')
 const s1 = el(0, 's1') as unknown as ShapeElement
 ok(canon(s1) === canon({ ...defaultShape('ellipse', { id: 's1', x: 100, y: 200, w: 200, h: 200 }), fill: ex.theme.accent, themeRefs: { fill: 'accent1' } }), 'an ellipse equals defaultShape(\'ellipse\', …) — radius 0, not the rect\'s 12 — with its fill bound to accent1 instead of the editor\'s orange')
@@ -272,7 +274,7 @@ console.log('\nround four: the deck\'s design system (AI-08)\n')
   ok(at('stale').fill === '#123456' && at('stale').themeRefs?.fill === '$color.card' && /differs from token `\$color\.card`, so this binding is dropped on load; write `"fill": "\$color\.card"`/.test(note('/slides/0/elements/5/themeRefs/fill')?.reason ?? ''), 'a $token ref beside a literal it disagrees with is REPORTED (the open-time rule drops it), with the fix')
   ok(at('badtok').fill === '#E8B923' && at('badtok').themeRefs?.fill === 'accent1' && /unknown token `\$color\.crad`; tokens in this deck: `\$color\.card`, `\$radius\.md`/.test(note('/slides/0/elements/6/fill')?.reason ?? ''), 'an unknown token is reported with the deck\'s token names, and the property takes its default')
   ok(at('badslot').fill === '#E8B923' && /unknown palette slot `accent9`; slots: `bg1`, `tx1`/.test(note('/slides/0/elements/7/fill')?.reason ?? ''), 'an unknown slot is reported with the slot names, and the property takes its default')
-  ok(at('wrongtype').fontSize === 32 && !at('wrongtype').themeRefs && /token `\$color\.card` \(color\) cannot set `fontSize`/.test(note('/slides/0/elements/8/fontSize')?.reason ?? ''), 'a token of the wrong type for the property is reported; the property keeps its default')
+  ok(at('wrongtype').fontSize === 32 && !at('wrongtype').themeRefs?.fontSize && /token `\$color\.card` \(color\) cannot set `fontSize`/.test(note('/slides/0/elements/8/fontSize')?.reason ?? ''), 'a token of the wrong type for the property is reported; the property keeps its default')
   ok(at('css').fill === 'tomato' && !at('css').themeRefs && !stats.notes.some((n) => n.path.startsWith('/slides/0/elements/9')), 'a CSS colour word is a literal, not a name: kept, unbound, unreported')
   ok(stats.notes.length === 4, `exactly the four problems are reported (${stats.notes.length})`)
   const sl = (i: number) => d4.slides[i] as unknown as R
@@ -281,6 +283,20 @@ console.log('\nround four: the deck\'s design system (AI-08)\n')
   ok(sl(2).background === '#16273E' && sl(2).themeRefs?.background === '$color.card', '"background": "$color.card" on a slide binds the token')
   ok(sl(3).background === '#ABCDEF' && !sl(3).themeRefs, 'a literal slide background stays an unbound literal')
   ok(!('fontFamily' in (d4.slides[0].elements.find((e) => e.id === 'wrongtype') as unknown as Obj)), 'a text element with no fontFamily has none after expansion (it follows the theme font)')
+  // text and its background move together (review: an unbound ink on a bg1 slide went 1.23:1 after a theme switch)
+  const ink = expandDoc({ compact: true, theme: { background: '#FFFFFF', color: '#1E2A3A' }, slides: [
+    { id: 'p', elements: [{ id: 'h', type: 'text', x: 0, y: 0, w: 100, h: 40, html: 'Heading' }, { id: 'k', type: 'code', x: 0, y: 50, w: 100, h: 40, content: 'x' }, { id: 'own', type: 'text', x: 0, y: 100, w: 100, h: 40, html: 'Mine', color: '#AA0000' }] },
+    { id: 'q', background: 'bg2', elements: [{ id: 'h2', type: 'text', x: 0, y: 0, w: 100, h: 40, html: 'On bg2' }] },
+    { id: 'r', background: '#102030', elements: [{ id: 'h3', type: 'text', x: 0, y: 0, w: 100, h: 40, html: 'Literal bg' }] },
+  ] })
+  const ie = (si: number, id: string) => ink.slides[si].elements.find((e) => e.id === id) as unknown as R
+  ok(ie(0, 'h').color === '#1E2A3A' && ie(0, 'h').themeRefs?.color === 'tx1' && ie(0, 'k').themeRefs?.color === 'tx1', 'on a bg1 slide an omitted text or code colour is the theme text colour, bound to tx1')
+  ok(ie(0, 'own').color === '#AA0000' && !ie(0, 'own').themeRefs, 'a colour the author wrote stays theirs, unbound')
+  ok(ie(1, 'h2').color === '#FFFFFF' && ie(1, 'h2').themeRefs?.color === 'tx2', 'on a bg2 slide it is tx2, the slot paired with bg2')
+  ok(ie(2, 'h3').color === readableInk('#102030') && !ie(2, 'h3').themeRefs, 'on a slide with a literal background it stays the readable ink of that background, unbound')
+  ink.theme.background = '#101820'; ink.theme.color = '#F5F7FA'
+  resolveThemeRefs(ink)
+  ok(ink.slides[0].background === '#101820' && ie(0, 'h').color === '#F5F7FA' && ie(0, 'k').color === '#F5F7FA', 'switching Background and Text moves the slide and its text together (no dark-on-dark)')
   // the bindings hold on open and follow the design system afterwards
   const live = JSON.parse(JSON.stringify(d4)) as BentoDoc
   syncTokenRefs(live, false) // what opening does: a disagreeing literal loses its binding
@@ -355,13 +371,21 @@ console.log('\nround four: the deck\'s design system (AI-08)\n')
   ok(!('fill' in rcEl[0]) && JSON.stringify(rcEl[0].themeRefs) === '{"stroke":"tx1"}' && rcEl[1].fill === '#E8B923' && !rcEl[1].themeRefs && rcEl[2].fill === '#F7A600', 'compactDoc strips fill only with its accent1 ref; a fill that merely equals the accent, or the old orange, is kept')
   ok(rcEl[3].fontFamily === FONT_STACK && !('fontFamily' in rcEl[4]), 'compactDoc keeps a written font stack and leaves an absent fontFamily absent')
   ok((rc.slides as R[])[0].background === '#FFFFFF' && !('background' in (rc.slides as R[])[1]) && !(rc.slides as R[])[1].themeRefs, 'a slide background strips only with its bg1 ref')
+  const rt2 = newDoc()
+  rt2.slides = [{ id: 'b1', background: '#FFFFFF', themeRefs: { background: 'bg1' }, transition: 'fade', notes: '', elements: [
+    defaultText({ id: 'paired', color: '#1E2A3A', themeRefs: { color: 'tx1' } } as Partial<TextElement>),
+    defaultText({ id: 'unpaired', color: '#1E2A3A' }),
+  ] } as unknown as BentoDoc['slides'][0]]
+  const rc2 = ((compactDoc(rt2).slides as R[])[0].elements as R[])
+  ok(!('color' in rc2[0]) && !rc2[0].themeRefs && rc2[1].color === '#1E2A3A', 'on a bg1 slide compactDoc strips a text colour only with its tx1 ref; an equal but unbound ink is kept')
+  ok(canon(expandDoc(compactDoc(rt2))) === canon(rt2), 'and that round-trips deep-equal')
   ok(canon(expandDoc(rc)) === canon(rt), 'expandDoc(compactDoc(d)) deep-equals d around every bound default')
 }
 
 console.log('\nthe numbers\n')
 // one deck, both ways: two starterDoc() calls differ in their random ids, and that noise alone moved the ratio ±0.7%
 const sd = starterDoc(), sj = JSON.stringify(sd), sc = compactJson(sd)
-ok(sc.length / sj.length < 0.92, `the starter deck compacts to ${(sc.length / sj.length * 100).toFixed(1)}% of full (a designed deck overrides most defaults; measured 89.2% since a background or fill bound to the theme strips as a pair, 90.0% before that, 86.1% before it named its layers and bound its tokens)`)
+ok(sc.length / sj.length < 0.92, `the starter deck compacts to ${(sc.length / sj.length * 100).toFixed(1)}% of full (a designed deck overrides most defaults; measured 89.0% since a background, fill or text colour bound to the theme strips as a pair, 90.0% before that, 86.1% before it named its layers and bound its tokens)`)
 const agentCompact = JSON.stringify(compact), agentFull = JSON.stringify(ex)
 ok(agentFull.length / agentCompact.length > 2.5, `an agent deck written compact is ${(agentFull.length / agentCompact.length).toFixed(1)}× smaller than its expansion`)
 

@@ -22,7 +22,8 @@ pre-1.0.
   (`"fill": "accent1"`, `"radius": "$radius.md"`), and the element stays
   linked to it, so changing the theme later recolours it too. A shape the
   agent left uncoloured takes your accent instead of orange, text it left
-  without a font uses your theme font, `use` places a copy of one of your
+  without a font or colour uses your theme's font and text colour (and keeps
+  following them, so it stays readable when you change the theme), `use` places a copy of one of your
   components, and `like` starts a slide from an earlier one. A name that does
   not exist is listed in the load report with the ones that do. Saved files
   are unchanged.
