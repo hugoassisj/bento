@@ -1,0 +1,80 @@
+{
+  "primitives": {
+    "blue": {
+      "500": {
+        "$type": "color",
+        "$value": "#2f6fed"
+      },
+      "700": {
+        "$type": "color",
+        "$value": "#1d4fb8"
+      }
+    },
+    "gray": {
+      "900": {
+        "$type": "color",
+        "$value": "#101828"
+      },
+      "50": {
+        "$type": "color",
+        "$value": "#f9fafb"
+      }
+    }
+  },
+  "color": {
+    "background": {
+      "$type": "color",
+      "$value": "{primitives.gray.50}"
+    },
+    "text": {
+      "$type": "color",
+      "$value": "{primitives.gray.900}"
+    },
+    "accent": {
+      "$type": "color",
+      "$value": "{primitives.blue.500}"
+    },
+    "overlay": {
+      "$type": "color",
+      "$value": "rgba(16, 24, 40, 0.4800)"
+    },
+    "brand 2": {
+      "$type": "color",
+      "$value": "#ff9e8a"
+    }
+  },
+  "space": {
+    "xs": {
+      "$type": "number",
+      "$value": 4
+    },
+    "sm": {
+      "$type": "number",
+      "$value": 8
+    },
+    "md": {
+      "$type": "number",
+      "$value": 16
+    },
+    "lg": {
+      "$type": "number",
+      "$value": 24
+    }
+  },
+  "radius": {
+    "md": {
+      "$type": "number",
+      "$value": 12
+    },
+    "card": {
+      "$type": "number",
+      "$value": "{radius.md}"
+    }
+  },
+  "opacity": {
+    "muted": {
+      "$type": "number",
+      "$value": 0.6
+    }
+  }
+}

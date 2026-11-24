@@ -751,3 +751,14 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Design-token import and export rig
+      # slides/src/tokenio.ts + tokenimport.ts, DOM-free: the mapping table both
+      # ways; export then import into an empty deck reproduces theme.tokens; a
+      # Penpot-shaped and a Figma-shaped fixture import with every unsupported
+      # token skipped and named; aliases resolve and are counted; a hostile file
+      # (url() colours, __proto__, 10,000 tokens, Infinity, 40 modes, 1 MB)
+      # writes nothing harmful; nothing unticked changes; no content exported.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-token-io.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-token-io.mjs"
+        node "$RUNNER_TEMP/test-slides-token-io.mjs"

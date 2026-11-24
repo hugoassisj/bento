@@ -71,8 +71,9 @@ function plainObject(v: unknown, path: string, dropped: Dropped[], depth = 0): R
  * Names must be token names (tokens.ts), values per mode a finite number or a
  * colour the element gate would take for a fill — a bound value is written
  * straight into elements, so a token is a colour at the same trust level.
+ * Also the rule an imported token file meets (tokenimport.ts, as gateTokens).
  */
-function tokens(v: unknown, dropped: Dropped[]): BentoDoc['theme']['tokens'] {
+export function tokens(v: unknown, dropped: Dropped[]): BentoDoc['theme']['tokens'] {
   if (!isObj(v) || !isObj(v.set)) { dropped.push({ path: '/theme/tokens', reason: 'not a token set — dropped' }); return undefined }
   const str = (x: unknown) => typeof x === 'string' && x.length <= 64
   const out: NonNullable<BentoDoc['theme']['tokens']> = { set: {} }
