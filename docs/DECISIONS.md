@@ -15419,10 +15419,24 @@ one.
   Fill under Hug contents for that reason. Hugging grids still size their
   cells by the children that keep their own size.
 - **Fit after layout, in the loader.** `parseDocInputReport` fits, runs
-  `derive`, re-fits the texts the layout resized and derives again, until a
-  round changes nothing (cap 4). `layout.ts` still never measures text (the
+  `derive`, re-fits only the texts whose width the layout changed and derives
+  again, until no width moves (cap 4). A deck without frames pays one derive
+  and no second measurement. `layout.ts` still never measures text (the
   2026-08-02 rule). The document reaches the store already derived, so the
   editor's pass on `replace` finds nothing to do.
+- **Not covered: fill children in a hugging row that does not wrap.** Such a
+  row adds up its children's widths: Hug overrides `w`, so a fill child gets
+  no size from it and keeps the placeholder width in the file. The issue's
+  own reproduction deck has this shape. Its texts are fitted to the narrow
+  width they end up with, and the slide gets `out-of-canvas` warnings that do
+  not point at the cause. `wrap: true` keeps the row's width. A validator
+  finding for "a fill child on the main axis of a hugging frame that does not
+  wrap gets no size" is a follow-up, not part of this change.
+
+**Files saved earlier re-lay out when opened.** A deck saved with stretched
+hugging cards (each kept the height it had before) opens with those cards
+re-laid out to the tallest card's content. This is a derived pass, not an edit
+and not an undo step, and it applies to every replica that runs this shell.
 
 **No format change.** No key added. A shell that predates this reads the
 laid-out boxes written into the file, and its own layout pass leaves them
