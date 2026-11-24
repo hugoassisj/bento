@@ -25,7 +25,7 @@ pre-1.0.
   Every text tag, line ending, element type and slideshow setting is listed,
   including how to turn off the slide counter when a deck numbers its own
   slides. A test now fails when these drift from the code.
-- **The Claude skill for bento/slides is rebuilt around your deck's own
+- **The agent skill for bento/slides is rebuilt around your deck's own
   design.** Before it writes anything, an agent now reads the deck's theme,
   palette, tokens, components, layouts and fonts, and reuses them: new
   elements are bound to your tokens and colour slots, your components and
@@ -36,7 +36,7 @@ pre-1.0.
   hand-placed coordinates, checks its work with the app's validator and by
   looking at every slide, and says so when it could not. The skill is now a
   short main file plus references on design systems, defaults, motion, data
-  and editing a file safely, and the downloadable skill zip carries all of it.
+  and editing a file safely; installed as a plugin it carries all of them.
 
 ## [1.3.0] — 2026-11-22
 

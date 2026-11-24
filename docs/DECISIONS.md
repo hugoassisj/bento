@@ -15399,7 +15399,7 @@ replaced before this shipped.
 
 ## 2026-11-24 — The bento-slides skill: the deck's design system wins, and the skill steers to layouts and frames
 
-The Claude skill (`plugins/bento-slides/skills/bento-slides/`) was one file
+The agent skill (`plugins/bento-slides/skills/bento-slides/`) was one file
 that sent agents to bento.page for their real instructions and gave design
 rules unconditionally, so an agent restyled decks that already had a system
 (an audit trial: 0 token-bound values out of 444 written, literal colours in a
@@ -15423,13 +15423,20 @@ and three things are settled for anyone who edits it:
   browser, because the derive pass lays them out at boot.
 - **Every statement is pinned to the code.** The rig reads the sets the skill
   lists from source, runs each gotcha through `derive()` as boot and loadDoc
-  do, runs the two scripts in `references/editing.md`, loads every JSON
-  example through the real loader, and replays the release zip step. Two
-  findings it pinned that are easy to get wrong: a token value or `mode`
-  changed in the JSON alone unbinds every use (palette slots, by contrast,
-  recolour their uses on open), and opening a saved deck in a driven browser
-  joins its live room unless `bento-offline` is on.
+  do, runs the two scripts in `references/editing.md`, and loads every JSON
+  example through the real loader. Two findings it pinned that are easy to
+  get wrong: a token value or `mode` changed in the JSON alone unbinds every
+  use (palette slots, by contrast, recolour their uses on open), and opening
+  a saved deck in a driven browser joins its live room unless `bento-offline`
+  is on.
 
-The `plugin.json` version is not bumped here (a version file is the
-maintainer's at release time); without a bump Claude Code does not offer the
-update to installed copies.
+Two maintainer follow-ups are left open on purpose, because version and
+release files are the maintainer's (`docs/PARALLEL-WORK.md` §3):
+
+- `plugin.json` is not bumped, so an installed skill is not offered the
+  update until it is.
+- `scripts/release.mjs` still publishes `SKILL.md` alone and the skill zip
+  holds `bento-slides/SKILL.md` only, so a copy installed from the zip or the
+  raw-file one-liner lacks `references/`. The fix is to copy the whole folder
+  to `skills/bento-slides` (and the `bento-deck` compat path) and zip it with
+  `-r`. `SKILL.md` says what an install without its references still has.

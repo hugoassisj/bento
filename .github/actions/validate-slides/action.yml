@@ -761,14 +761,14 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-agent-docs-facts.ts
     - name: The bento-slides skill package holds together
-      # plugins/bento-slides/skills/bento-slides against Claude's skill limits
-      # and the code: front matter, body length and what the first 5,000
-      # tokens hold; no fetch instruction; every reference indexed with a
-      # "read when" line and none pointing at another; the five gotchas in
-      # SKILL.md, each run through the derive pass the app runs on open; every
-      # set it lists equal to the code's; the scripts in editing.md run on a
-      # deck with fixture keys; every JSON example loads clean; and the
-      # claude.ai zip release.mjs builds holds every file of the folder.
+      # plugins/bento-slides/skills/bento-slides against the skill's
+      # front-matter limits and the code: front matter, body length and what
+      # the first 5,000 tokens hold; no fetch instruction; every reference
+      # indexed with a "read when" line and none pointing at another; the five
+      # gotchas in SKILL.md, each run through the derive pass the app runs on
+      # open; every set it lists equal to the code's; the scripts in
+      # editing.md run on a deck with fixture keys; and every JSON example
+      # loads clean.
       shell: bento-step {0}
       run: |
         slides/node_modules/.bin/esbuild scripts/test-skill-package.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-skill-package.mjs"

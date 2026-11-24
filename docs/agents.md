@@ -26,11 +26,10 @@ so a deck can be authored from an empty folder:*
 /plugin install bento-slides@bento
 ```
 
-*…or as a plain personal skill (the zip holds `SKILL.md` and the
-`references/` it points to):*
+*…or as a plain personal skill:*
 
 ```bash
-mkdir -p ~/.claude/skills && curl -fsSL https://bento.page/skills/bento-slides.zip -o bento-slides.zip && unzip -o bento-slides.zip -d ~/.claude/skills && rm bento-slides.zip
+mkdir -p ~/.claude/skills/bento-slides && curl -fsSL https://bento.page/skills/bento-slides/SKILL.md -o ~/.claude/skills/bento-slides/SKILL.md
 ```
 
 *(claude.ai / Claude Desktop: upload
