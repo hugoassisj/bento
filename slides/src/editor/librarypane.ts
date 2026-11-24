@@ -55,6 +55,8 @@ export class LibraryPane {
   /** a panel folded open again (or resized) catches up on what it skipped while hidden */
   private sized: ResizeObserver | null = null
   private dragged = false
+  /** the tile whose name was just entered with the keyboard */
+  private refocus: string | null = null
 
   constructor(private store: Store, private ui: LibraryPaneHost) {}
 
@@ -123,10 +125,12 @@ export class LibraryPane {
     this.filter()
   }
 
-  /** The key a tile's picture is drawn from: the main and the slide it sits on. */
+  /** The key a tile's picture is drawn from: the main, the slide it sits on
+   *  and the deck's fonts (a text that names none is drawn in them). */
   private keyOf(c: ComponentInfo): string {
     const s = this.store.doc.slides.find((x) => x.id === c.slideId)
-    return `${mainSig(c.main)}|${JSON.stringify(s?.background ?? '')}|${JSON.stringify(c.main.map((m) => m.component))}`
+    const th = this.store.doc.theme
+    return `${mainSig(c.main)}|${JSON.stringify([s?.background ?? '', th.fontFamily, th.codeFontFamily, th.headingFamily])}|${JSON.stringify(c.main.map((m) => m.component))}`
   }
 
   /** Draw (or re-draw) a tile's picture, unless the one it has is current. */
@@ -173,14 +177,22 @@ export class LibraryPane {
     box.className = 'ed-lib-pic'
     box.setAttribute('aria-hidden', 'true')
     tile.appendChild(box)
-    const label = editing(name, t('Component name'), () => null, (to) => this.store.commit(() => {
-      for (const m of components(this.store.doc).find((x) => x.id === c.id)?.main ?? []) {
-        if (to) m.groupName = to
-        else delete m.groupName
-      }
-    }), undefined, 'ed-lib-name', false, !c.name)
+    const label = editing(name, t('Component name'), () => null, (to) => {
+      this.store.commit(() => {
+        for (const m of components(this.store.doc).find((x) => x.id === c.id)?.main ?? []) {
+          if (to) m.groupName = to
+          else delete m.groupName
+        }
+      })
+      // the rename rebuilt the tile: a name typed from the keyboard hands focus to the new one
+      if (this.refocus === c.id) this.focusTile(c.id)
+      this.refocus = null
+    }, undefined, 'ed-lib-name', false, !c.name)
     label.tabIndex = -1 // the tile is the stop; F2 or the menu renames
     tile.appendChild(label)
+    // a read-only deck shows names, it never opens them for typing
+    tile.addEventListener('click', (e) => { if (this.store.readOnly && label.contains(e.target as Node)) e.stopPropagation() }, true)
+    tile.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.target as HTMLElement).matches('input')) this.refocus = c.id }, true)
     tile.addEventListener('focus', () => this.setActive(c.id))
     tile.addEventListener('click', (e) => {
       if (this.dragged) { this.dragged = false; return }
@@ -209,6 +221,7 @@ export class LibraryPane {
    *  pointer, the frame under it is outlined, and the drop places the copy. */
   private startDrag(down: MouseEvent, id: string, label: HTMLElement) {
     if (down.button !== 0 || this.store.readOnly || label.contains(down.target as Node) || (down.target as HTMLElement).closest('input')) return
+    this.settle()
     down.preventDefault() // no text selection, no native drag of the picture
     this.dragged = false
     let ghost: HTMLElement | null = null
@@ -238,10 +251,19 @@ export class LibraryPane {
     window.addEventListener('mouseup', up, true)
   }
 
+  /** End an edit in progress outside the Library (a canvas text box commits
+   *  on blur): the press below keeps focus where it is, and the edit's own
+   *  undo step must land before the insert's, not after it. */
+  private settle() {
+    const a = document.activeElement as HTMLElement | null
+    if (a && a !== document.body && !this.host?.contains(a)) a.blur()
+  }
+
   /** A copy centred on a slide point; inside `frame` when the point is in one. One commit. */
   private placeAt(id: string, at: { x: number; y: number; frame?: string; slot: number }) {
     const c = components(this.store.doc).find((x) => x.id === id)
     if (!c) return
+    this.settle()
     const box = bounds(c.main as unknown as Box[])
     const els = instanceOf(c, () => uid('c'), Math.round(at.x - box.w / 2) - box.x, Math.round(at.y - box.h / 2) - box.y)
     this.store.commit(() => {
@@ -262,6 +284,7 @@ export class LibraryPane {
     if (this.store.readOnly) return
     const c = components(this.store.doc).find((x) => x.id === id)
     if (!c) return
+    this.settle()
     const box = bounds(c.main as unknown as Box[])
     const { width, height } = this.store.doc.size
     const others = this.store.slide.elements as unknown as Box[]

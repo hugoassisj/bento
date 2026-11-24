@@ -21,7 +21,10 @@
 //   8. ⌘K finds Insert component… (search focused) and Show library;
 //   9. a deck with no components says how to make one; a deck with fifty
 //      opens the view without a stall, drawing only the tiles in view;
-//  10. no page error.
+//  10. a click on a tile while a canvas text box is being edited commits the
+//      typing first (its own undo step) and closes the edit; F2 renames and
+//      hands focus back to the tile; a change of deck font re-draws tiles;
+//  11. no page error.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -228,6 +231,12 @@ try {
     n0 = (await els()).length
     await p.keyboard.press('Enter'); await p.waitForTimeout(300)
     ok((await els()).length === n0 + 2, 'Enter on a focused tile inserts a copy')
+    // F2 renames from the keyboard; Enter hands focus back to the (rebuilt) tile
+    await tile(compC).focus()
+    await p.keyboard.press('F2'); await p.waitForTimeout(80)
+    await p.keyboard.press(`${MOD}+a`); await p.keyboard.type('Badge'); await p.keyboard.press('Enter'); await p.waitForTimeout(250)
+    focused = await p.evaluate(() => document.activeElement?.closest('.ed-lib-tile')?.dataset.component)
+    ok((await el('c')).groupName === 'Badge' && focused === compC, `F2 renames; Enter returns focus to the tile (${focused})`)
   })
 
   console.log('\n7. the tile menu\n')
@@ -286,6 +295,38 @@ try {
     ok(drawn > 0 && drawn < 50, `only the tiles in view are drawn (${drawn} of 50)`)
     await p.locator('.ed-side-library .ed-lib-tile').last().scrollIntoViewIfNeeded(); await p.waitForTimeout(300)
     ok(await p.locator('.ed-side-library .ed-lib-tile').last().locator('.ed-lib-pic .bento-el').count() === 2, 'a tile scrolled into view is drawn')
+  })
+
+  console.log('\n10. a canvas text edit, and the deck font\n')
+  await run(async () => {
+    const txt = (id, x, y, extra = {}) => ({ id, type: 'text', x, y, w: 300, h: 60, rotation: 0, opacity: 1, html: 'Hello', fontSize: 24, fontFamily: '', ...extra })
+    const deck = () => [slide('s1', [txt('tx', 100, 100), txt('lbl', 100, 400, { html: 'Card', groupId: 'g', groupName: 'Label', component: { id: 'compL', key: 'k0', main: true } })])]
+    await load(deck())
+    await sideView('library')
+    await p.waitForFunction(() => document.querySelector('.ed-lib-tile[data-component="compL"] .ed-lib-win'), null, { timeout: 2000 })
+    // a text box being edited, then a click on a tile
+    const at = await p.locator('.ed-stage-scale [data-el-id="tx"]').first().boundingBox()
+    await p.mouse.dblclick(at.x + at.width / 2, at.y + at.height / 2); await p.waitForTimeout(250)
+    await p.keyboard.press('End'); await p.keyboard.type(' world'); await p.waitForTimeout(100)
+    ok(await p.locator('.ed-stage-scale [contenteditable="true"]').count() === 1, 'the text box is being edited')
+    const n0 = (await els()).length
+    await tile('compL').locator('.ed-lib-pic').click(); await p.waitForTimeout(300)
+    const list = await els()
+    ok(/Hello world/.test(list.find((e) => e.id === 'tx').html) && list.length === n0 + 1, 'a tile click commits the typed text, then inserts the copy')
+    ok(await p.locator('.ed-stage-scale [contenteditable="true"]').count() === 0, '…and the edit is closed')
+    await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
+    let after = await els()
+    ok(after.length === n0 && /Hello world/.test(after.find((e) => e.id === 'tx').html), 'one undo takes the copy back and keeps the text')
+    await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
+    after = await els()
+    ok(!/world/.test(after.find((e) => e.id === 'tx').html), 'the next undo takes the typing back: it was its own step, before the insert')
+    // the deck font: a document that changes only the theme font re-draws the tile
+    await p.evaluate(() => { document.querySelector('.ed-lib-tile[data-component="compL"] .ed-lib-pic').__mark = 1 })
+    await p.evaluate(() => { const d = JSON.parse(JSON.stringify(window.bento.doc)); window.bento.loadDoc(JSON.stringify(d)) }); await p.waitForTimeout(300)
+    ok(await p.evaluate(() => document.querySelector('.ed-lib-tile[data-component="compL"] .ed-lib-pic').__mark) === 1, 'reloading the same document keeps the drawn picture')
+    await p.evaluate(() => { const d = JSON.parse(JSON.stringify(window.bento.doc)); d.theme.fontFamily = 'Georgia, serif'; window.bento.loadDoc(JSON.stringify(d)) }); await p.waitForTimeout(300)
+    const f = await p.evaluate(() => { const pic = document.querySelector('.ed-lib-tile[data-component="compL"] .ed-lib-pic'); return { mark: pic.__mark, font: pic.querySelector('.bento-text-inner')?.style.fontFamily ?? '' } })
+    ok(f.mark === undefined && /Georgia/.test(f.font), `a new deck font re-draws the tile in it (${f.font})`)
   })
 
   ok(errors.length === 0, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)
