@@ -16,6 +16,19 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Bring a brand's design tokens in from Penpot, Figma or Tokens Studio, and
+  take a deck's tokens out.** In the Tokens view, ⋯ ▸ Import tokens… takes a
+  design-tokens JSON file, or JSON you paste, and shows what it would do
+  before anything changes: which tokens are new, which would change (old →
+  new), which are the same, and which are skipped and why — typography, a
+  shadow with several layers, a unit like rem. Tick the ones you want; tokens
+  you already have only change when you ask, and the theme colours only when
+  you tick them. Aliases come in as their values. One ⌘Z undoes the import,
+  and things that follow a token keep following it. ⋯ ▸ Export tokens… copies
+  or downloads the deck's tokens and theme colours as `<deck>.tokens.json`,
+  one group per mode, with nothing else from the deck in it. Nothing is
+  fetched from the internet, and a file's values meet the same safety rules
+  as a file you open.
 
 ## [1.3.0] — 2026-11-22
 
