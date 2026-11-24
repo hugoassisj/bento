@@ -172,6 +172,10 @@ export class Store {
     if (event !== 'doc') this.emit(event)
   }
 
+  /** The newest undo step, as an opaque token: the same token later means
+   *  nothing was committed, undone or redone in between. */
+  historyMark(): object | undefined { return this.undoStack[this.undoStack.length - 1] }
+
   undo() { this.restore(this.undoStack, this.redoStack) }
   redo() { this.restore(this.redoStack, this.undoStack) }
 

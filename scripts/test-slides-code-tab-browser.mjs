@@ -14,10 +14,12 @@
 //   2. code pasted onto the canvas — as plain text, or with the html flavour
 //      an editor such as VS Code writes — becomes one Code element holding the
 //      text verbatim, its language guessed (py); "Paste as text" in the toast
-//      gives the text box a paste made before; a sentence and a bulleted list
-//      still paste as text; a fence still works, with or without a tag;
+//      gives the text box a paste made before; a sentence, a bulleted list,
+//      a Google Sheets table and prose in a monospace font still paste as
+//      text; a fence still works, with or without a tag;
 //   3. with a Code element selected, a paste replaces its code and the
-//      toast's Undo puts it back;
+//      toast's Undo puts it back — the same single step as ⌘Z, and never
+//      after a later edit, which it would otherwise take back instead;
 //   4. Tab in a bullet of a text box still indents the item.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
@@ -151,6 +153,21 @@ try {
   got0 = await els()
   ok(got0.length === 1 && got0[0].type === 'text', `prose in pre-wrap html (a text box copied off a slide) stays text (${got0.map((e) => e.type).join(',')})`)
 
+  await fresh()
+  await p.waitForTimeout(250)
+  await paste('Region\tRevenue (USD)\tQ2\n\tNorth\t10\n\tSouth\t12',
+    '<google-sheets-html-origin><style type="text/css"><!--td {border: 1px solid #cccccc;}--></style><table cellspacing="0" cellpadding="0" dir="ltr" border="1" style="table-layout:fixed;font-size:10pt;font-family:Arial"><tbody><tr><td>Region</td><td>Revenue (USD)</td><td>Q2</td></tr><tr><td></td><td>North</td><td>10</td></tr><tr><td></td><td>South</td><td>12</td></tr></tbody></table>')
+  await p.waitForTimeout(250)
+  got0 = await els()
+  ok(got0.length === 1 && got0[0].type === 'text', `a Google Sheets table with blank first cells stays text (${got0.map((e) => e.type).join(',')})`)
+  await fresh()
+  await p.waitForTimeout(250)
+  await paste('The quarter closed above plan in every region.\nCosts held flat for the third quarter running.',
+    '<div style="font-family: \'IBM Plex Mono\', monospace">The quarter closed above plan in every region.<br>Costs held flat for the third quarter running.</div>')
+  await p.waitForTimeout(250)
+  got0 = await els()
+  ok(got0.length === 1 && got0[0].type === 'text', `prose set in a monospace font stays text (${got0.map((e) => e.type).join(',')})`)
+
   for (const [what, text] of [['a sentence', 'Revenue grew in every region this quarter.'], ['a bulleted list', '- Goals:\n  - ship (on time)\n  - hire']]) {
     await fresh()
     await p.waitForTimeout(250)
@@ -183,6 +200,25 @@ try {
   await clickAction()
   got = await els()
   ok(got.length === 1 && got[0].content === 'old()' && got[0].grammarName === undefined, `Undo puts the old code back (${JSON.stringify(got[0]?.content)})`)
+  const x = () => p.evaluate(() => window.bento.doc.slides[0].elements[0].x)
+  await p.mouse.click(c1.x + 20, c1.y + 20)
+  await p.waitForTimeout(150)
+  await paste(PY, null)
+  await p.waitForTimeout(250)
+  await p.keyboard.press('ArrowRight')
+  await p.waitForTimeout(150)
+  const nudged = await x()
+  await clickAction()
+  got = await els()
+  ok(got[0].content === PY && await x() === nudged && nudged === 201, `after a later edit (a nudge to x=${nudged}) the toast's Undo takes nothing back (${JSON.stringify(got[0].content.slice(0, 12))}, x=${await x()})`)
+  await p.keyboard.press(`${MOD}+z`)
+  await p.waitForTimeout(150)
+  got = await els()
+  ok(await x() === 200 && got[0].content === PY, `⌘Z takes back the nudge alone (x=${await x()})`)
+  await p.keyboard.press(`${MOD}+z`)
+  await p.waitForTimeout(150)
+  got = await els()
+  ok(got[0].content === 'old()' && got[0].grammarName === undefined, `and the next ⌘Z the replace, in one step (${JSON.stringify(got[0].content)})`)
 
   console.log('\n4 · Tab in a bullet of a text box\n')
   await fresh([{ id: 'list', type: 'text', x: 120, y: 300, w: 520, h: 150, rotation: 0, opacity: 1, html: '<ul><li>One</li><li>Two</li></ul>', fontSize: 28, color: '#1E2A3A', align: 'left' }])

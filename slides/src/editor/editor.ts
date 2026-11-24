@@ -41,7 +41,7 @@ import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, onRecoveryOff, pruneOld, putRecovery, recoveryLooksOlder, type Snapshot } from '../autosave'
 import { freshGroups, insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { estimatedFrames, fencedElements, splitFences, type FencePart } from './codefence'
-import { guessLanguage, htmlLooksLikeCode, textLooksLikeCode } from './codepaste'
+import { guessLanguage, htmlLooksLikeCode, looksLikeProse, textLooksLikeCode } from './codepaste'
 import { keepSpaces } from './markdown'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
@@ -2913,7 +2913,6 @@ export class Editor {
       const picked = this.store.selectedElements
       if (picked.length === 1 && picked[0].type === 'code') {
         const el = picked[0]
-        const was = { content: el.content, grammarName: el.grammarName, h: el.h }
         const lang = el.grammarName ? undefined : guessLanguage(code)
         const needH = Math.ceil(code.split('\n').length * el.fontSize * (el.lineHeight || 1.25) + el.fontSize)
         this.store.commit(() => {
@@ -2921,19 +2920,13 @@ export class Editor {
           if (lang) el.grammarName = lang
           if (needH > el.h) el.h = needH
         })
-        this.toast(t('Code replaced'), { label: t('Undo'), run: () => {
-          const now = this.store.doc.slides.flatMap((sl) => sl.elements).find((e) => e.id === el.id)
-          if (now?.type !== 'code') return
-          this.store.commit(() => {
-            now.content = was.content
-            now.h = was.h
-            if (was.grammarName === undefined) delete now.grammarName
-            else now.grammarName = was.grammarName
-          })
-        } })
+        // the toast's Undo is ⌘Z, and only while the replace is still the
+        // newest step: it never takes back an edit made after it
+        const mark = this.store.historyMark()
+        this.toast(t('Code replaced'), { label: t('Undo'), run: () => { if (this.store.historyMark() === mark) this.store.undo() } })
         return true
       }
-      if (htmlLooksLikeCode(html) || textLooksLikeCode(code)) {
+      if ((htmlLooksLikeCode(html) && !looksLikeProse(code)) || textLooksLikeCode(code)) {
         const lang = guessLanguage(code)
         const part: FencePart = { kind: 'code', lines: code.split('\n'), ...(lang ? { lang } : {}) }
         const src = defaultText({ html: '', color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 400), y: 120, w: 800 })

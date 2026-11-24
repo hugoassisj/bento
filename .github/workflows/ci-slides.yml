@@ -745,6 +745,8 @@ jobs:
         # indentation, Shift+Tab outdents, a selection indents as a block, Esc
         # commits exactly what was typed. Code pasted onto the canvas, plain or
         # with an editor's html, becomes one Code element with its language
-        # guessed; Paste as text, sentences, lists and fences behave as before;
-        # a paste onto a selected Code element replaces its code, with Undo.
+        # guessed; Paste as text, sentences, lists, a Sheets table, prose in a
+        # monospace font and fences behave as before; a paste onto a selected
+        # Code element replaces its code, and its Undo is ⌘Z's single step,
+        # never taking back a later edit.
         run: node scripts/test-slides-code-tab-browser.mjs
