@@ -26,6 +26,14 @@ pre-1.0.
   components, and `like` starts a slide from an earlier one. A name that does
   not exist is listed in the load report with the ones that do. Saved files
   are unchanged.
+- **Four new layouts, and layouts never lose text.** *Statistics*, *Big
+  number*, *Timeline* and *Chart + figures* join the layout picker. They use
+  your theme's colours and font, and when a deck written by an assistant leaves
+  out a third number or a fourth step, the others close up instead of leaving a
+  gap. A chart dropped on *Chart + figures* takes the chart's place. Placing
+  text by role no longer swaps two columns or drops a column's text when a role
+  the layout does not have comes first: everything written arrives once, in its
+  place, and the load report says where anything unusual went.
 
 ## [1.3.0] — 2026-11-22
 
