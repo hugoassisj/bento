@@ -404,8 +404,8 @@ export function tidyUnits(p: PropsPanel, els: SlideElement[]): SlideElement[][] 
 }
 
 /** Tidy up (tidy.ts): the selection into an even row, column or grid where
- *  it stands, by the turned boxes as align is. No frame. One undo step.
- *  Reports whether anything was arranged. */
+ *  it stands, by the turned boxes as align is, kept on the slide. No frame.
+ *  One undo step. Reports whether anything was arranged. */
 export function tidyUp(p: PropsPanel, els: SlideElement[]): boolean {
   const units = tidyUnits(p, els)
   if (units.length < 2) return false
@@ -414,7 +414,9 @@ export function tidyUp(p: PropsPanel, els: SlideElement[]): boolean {
     const x = Math.min(...bs.map((b) => b.x0)), y = Math.min(...bs.map((b) => b.y0))
     return { x, y, w: Math.max(...bs.map((b) => b.x1)) - x, h: Math.max(...bs.map((b) => b.y1)) - y }
   })
-  const out = tidy(boxes).boxes
+  // within the slide: a row too long for it wraps, nothing is pushed off an edge
+  const { width, height } = p.store.doc.size
+  const out = tidy(boxes, { w: width, h: height }).boxes
   p.edit(() => units.forEach((u, i) => {
     const dx = out[i].x - boxes[i].x, dy = out[i].y - boxes[i].y
     for (const e of u) {
