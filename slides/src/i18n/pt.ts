@@ -30,7 +30,7 @@ export const pt: Catalog = {
   "Takes the link off this element; it led nowhere": "Tira o link deste elemento; ele não levava a lugar nenhum",
   "Show the font": "Mostrar a fonte",
   "Selects the element and shows its font in the Format panel": "Seleciona o elemento e mostra a fonte no painel Formato",
-  "Loaded: {dropped} fields dropped — see console": "Carregado: {dropped} campos descartados — veja o console",
+  "Loaded: {dropped} fields dropped — ⌘Z undoes": "Carregado: {dropped} campos descartados — ⌘Z desfaz",
   "Links to a slide that does not exist": "Leva a um slide que não existe",
   "Variant of a slide that does not exist": "Variante de um slide que não existe",
   "Chart setting has no effect": "Uma configuração do gráfico não tem efeito",

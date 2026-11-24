@@ -27,7 +27,7 @@ export const it: Catalog = {
   "Takes the link off this element; it led nowhere": "Toglie il link da questo elemento; non portava da nessuna parte",
   "Show the font": "Mostra il carattere",
   "Selects the element and shows its font in the Format panel": "Seleziona l’elemento e ne mostra il carattere nel pannello Formato",
-  "Loaded: {dropped} fields dropped — see console": "Caricato: {dropped} campi scartati — vedi la console",
+  "Loaded: {dropped} fields dropped — ⌘Z undoes": "Caricato: {dropped} campi scartati — ⌘Z annulla",
   "Links to a slide that does not exist": "Rimanda a una diapositiva che non esiste",
   "Variant of a slide that does not exist": "Variante di una diapositiva che non esiste",
   "Chart setting has no effect": "Un’impostazione del grafico non ha effetto",

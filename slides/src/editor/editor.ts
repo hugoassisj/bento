@@ -1519,7 +1519,7 @@ export class Editor {
         const added = this.checkDeck.findings().filter((f) => f.severity !== 'info' && !before.has(findingKey(f)))
         if (added.length) this.checkDeck.open({ only: new Set(added.map(findingKey)) })
         this.toast(r.dropped.length
-          ? t('Loaded: {dropped} fields dropped — see console', { dropped: String(r.dropped.length) })
+          ? t('Loaded: {dropped} fields dropped — ⌘Z undoes', { dropped: String(r.dropped.length) })
           : t('Document replaced — ⌘Z undoes'))
       } else {
         ta.style.borderColor = '#C0392B'

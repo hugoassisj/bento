@@ -27,7 +27,7 @@ export const zhHans: Catalog = {
   "Takes the link off this element; it led nowhere": "移除此元素上的链接；它指向的地方不存在",
   "Show the font": "显示字体",
   "Selects the element and shows its font in the Format panel": "选中该元素，并在“格式”面板中显示其字体",
-  "Loaded: {dropped} fields dropped — see console": "已载入：丢弃了 {dropped} 个字段——请查看控制台",
+  "Loaded: {dropped} fields dropped — ⌘Z undoes": "已载入：丢弃了 {dropped} 个字段 — ⌘Z 可撤销",
   "Links to a slide that does not exist": "链接到不存在的幻灯片",
   "Variant of a slide that does not exist": "所属的幻灯片不存在的变体",
   "Chart setting has no effect": "图表设置不起作用",

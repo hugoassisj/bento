@@ -27,7 +27,7 @@ export const fr: Catalog = {
   "Takes the link off this element; it led nowhere": "Retire le lien de cet élément ; il ne menait nulle part",
   "Show the font": "Afficher la police",
   "Selects the element and shows its font in the Format panel": "Sélectionne l’élément et affiche sa police dans le panneau Format",
-  "Loaded: {dropped} fields dropped — see console": "Chargé : {dropped} champs ignorés — voir la console",
+  "Loaded: {dropped} fields dropped — ⌘Z undoes": "Chargé : {dropped} champs ignorés — ⌘Z annule",
   "Links to a slide that does not exist": "Renvoie à une diapositive qui n’existe pas",
   "Variant of a slide that does not exist": "Variante d’une diapositive qui n’existe pas",
   "Chart setting has no effect": "Un réglage du graphique n’a aucun effet",

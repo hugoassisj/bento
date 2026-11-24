@@ -27,7 +27,7 @@ export const ja: Catalog = {
   "Takes the link off this element; it led nowhere": "この要素からリンクを外します。リンク先はありませんでした",
   "Show the font": "フォントを表示",
   "Selects the element and shows its font in the Format panel": "要素を選択し、書式パネルでそのフォントを表示します",
-  "Loaded: {dropped} fields dropped — see console": "読み込み完了: {dropped} 個のフィールドを破棄 — コンソールを確認",
+  "Loaded: {dropped} fields dropped — ⌘Z undoes": "読み込み完了: {dropped} 個のフィールドを破棄 — ⌘Z で元に戻せます",
   "Links to a slide that does not exist": "存在しないスライドへのリンク",
   "Variant of a slide that does not exist": "存在しないスライドのバリエーション",
   "Chart setting has no effect": "グラフの設定が反映されません",
