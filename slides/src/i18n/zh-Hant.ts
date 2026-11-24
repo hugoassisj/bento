@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Double-click to add text · T for a text box · pick a layout in the panel": "按兩下以新增文字 · 按 T 新增文字方塊 · 在面板中選擇版面配置",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",

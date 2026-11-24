@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Double-click to add text · T for a text box · pick a layout in the panel": "Doppio clic per aggiungere testo · T per una casella di testo · scegli un layout nel pannello",
   "View": "Vista",
   "Current slide": "Diapositiva attuale",
   "Slide thumbnails": "Miniature delle diapositive",

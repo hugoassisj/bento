@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Double-click to add text · T for a text box · pick a layout in the panel": "Doppelklick fügt Text hinzu · T für ein Textfeld · im Bereich ein Layout wählen",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",

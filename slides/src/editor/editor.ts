@@ -1295,9 +1295,14 @@ export class Editor {
   }
 
   /**
-   * Clear the deck back to a single blank slide (issue #31). Starting a fresh
+   * Clear the deck back to a single empty slide (issue #31). Starting a fresh
    * presentation meant deleting every slide by hand, then stripping the one
    * the deck refuses to delete.
+   *
+   * The slide is the built-in Title layout with its title placeholder
+   * selected, as a new deck opens in PowerPoint and Keynote: the first keys a
+   * newcomer types become the title (typeIntoText), where on a bare slide
+   * they armed tools (L the Line, O the Ellipse). Blank stays a layout.
    *
    * CONTENT ONLY: docId, theme, size, layouts and the live session all stay.
    * "Duplicate as new deck…" (above) is the action that changes IDENTITY, and
@@ -1308,12 +1313,15 @@ export class Editor {
   private startFromScratch() {
     const n = this.store.doc.slides.length
     if (!window.confirm(t('Replace all {n} slides with one blank slide? ⌘Z undoes this.', { n: String(n) }))) return
-    const blank = builtinLayouts().find((l) => l.id === 'layout-blank')
-    if (!blank) return
+    const title = builtinLayouts(this.store.doc.size).find((l) => l.id === 'layout-title')
+    if (!title) return
     this.canvas.commitTextEdit() // a live text edit would commit ONTO the new slide
+    const slide = instantiateLayout(title)
     this.store.commit(() => {
-      this.store.doc.slides = [instantiateLayout(blank)]
+      this.store.doc.slides = [slide]
     }, 'slides')
+    const ph = slide.elements.find((e) => e.role === 'title')
+    if (ph) this.store.select([ph.id])
   }
 
   /** A sealed hand-out: present-only player file, no editor, no live session. */

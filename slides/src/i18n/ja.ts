@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Double-click to add text · T for a text box · pick a layout in the panel": "ダブルクリックでテキストを追加 · T でテキストボックス · パネルでレイアウトを選択",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

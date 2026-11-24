@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Double-click to add text · T for a text box · pick a layout in the panel": "双击添加文本 · 按 T 添加文本框 · 在面板中选择版式",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",

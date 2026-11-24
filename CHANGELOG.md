@@ -23,6 +23,13 @@ pre-1.0.
   is at full strength from the first letter), comes back when the box is left
   empty, and is never saved or shown in the show or in print. Slides already
   saved with the prompt as text keep it; delete it once and it stays gone.
+- **Start from scratch opens on a title slide you can type into.** The fresh
+  deck is one Title slide with its title selected, so the first thing you type
+  becomes the title; before, it was one bare white slide, and typing "Hello"
+  picked the Line and Ellipse tools instead of writing anything. ⌘Z still
+  brings the whole old deck back in one step. A slide with nothing on it now
+  says how to start, in the editor only: double-click it to put a text box
+  there, press T for a text box, or pick a layout in the panel.
 
 ## [1.3.0] — 2026-11-22
 

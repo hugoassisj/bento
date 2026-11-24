@@ -8,7 +8,7 @@ import Moveable from 'moveable'
 import Selecto from 'selecto'
 import type { Store } from '../store'
 import { t } from '../i18n'
-import { defaultShape, internAsset, ratioLocked, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
+import { defaultShape, defaultText, internAsset, ratioLocked, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
 import { cssColor, renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, autolinkAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
@@ -437,7 +437,15 @@ export class SlideCanvas {
       if (td) { this.editCellFromTd(td); return }
       // a picture: double-click opens crop mode (pan + zoom inside the frame)
       const pic = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-image')
-      if (pic?.dataset.elId) this.startCropEdit(pic.dataset.elId)
+      if (pic?.dataset.elId) { this.startCropEdit(pic.dataset.elId); return }
+      // an empty slide: a text box where the pointer is, open for typing — the
+      // Text tool's click, which is what the empty-slide hint promises
+      if (this.store.slide.elements.length || this.store.readOnly || this.drawOverlay || this.isCommenting) return
+      const r = this.scaleHost.getBoundingClientRect()
+      const el = defaultText({ color: readableInk(this.store.slide.background) })
+      el.x = Math.round((ev.clientX - r.left) / this.scale - el.w / 2)
+      el.y = Math.round((ev.clientY - r.top) / this.scale - el.h / 2)
+      this.insert(el, true)
     })
 
     // Touch has no double-click. Selecto and Moveable preventDefault the touch
@@ -1396,6 +1404,29 @@ export class SlideCanvas {
     this.relayout()
     this.syncTargets()
     this.drawRemote()
+    this.syncEmptyHint()
+  }
+
+  private emptyHint: HTMLElement | null = null
+
+  /** One quiet line on a slide with no elements, saying how to start. It is
+   *  editor chrome beside the render, never in it, so thumbnails, the show,
+   *  print and exports cannot carry it; it goes the moment the slide has an
+   *  element, or while a tool is armed. */
+  private syncEmptyHint() {
+    const slide = this.store.slide
+    if (!slide || slide.elements.length || this.drawOverlay || this.store.readOnly) {
+      this.emptyHint?.remove()
+      this.emptyHint = null
+      return
+    }
+    if (!this.emptyHint) {
+      this.emptyHint = document.createElement('div')
+      this.emptyHint.className = 'ed-empty-hint'
+      this.stage.appendChild(this.emptyHint)
+    }
+    this.emptyHint.textContent = t('Double-click to add text · T for a text box · pick a layout in the panel')
+    this.emptyHint.style.color = readableInk(slide.background)
   }
 
   // --- collaborator presence (colored outlines + name tags) -----------------
@@ -2667,6 +2698,7 @@ export class SlideCanvas {
     ov.appendChild(svg)
     this.scaleHost.appendChild(ov)
     this.drawOverlay = ov
+    this.syncEmptyHint()
     const k = () => 1 / this.scale
     const toSlide = (ev: MouseEvent) => {
       const r = this.scaleHost.getBoundingClientRect()
@@ -2892,7 +2924,7 @@ export class SlideCanvas {
     this.drawOverlay = null
     if (this.drawKeys) window.removeEventListener('keydown', this.drawKeys, true)
     this.drawKeys = null
-    if (was) this.onToolEnd?.()
+    if (was) { this.syncEmptyHint(); this.onToolEnd?.() }
   }
 
   /** Arm a box tool (R, O, F, T): a drag draws the element at the dragged
@@ -2912,6 +2944,7 @@ export class SlideCanvas {
     ov.appendChild(box)
     this.scaleHost.appendChild(ov)
     this.drawOverlay = ov
+    this.syncEmptyHint()
     const toSlide = (ev: MouseEvent) => {
       const r = this.scaleHost.getBoundingClientRect()
       return { x: (ev.clientX - r.left) / this.scale, y: (ev.clientY - r.top) / this.scale }
