@@ -46,7 +46,9 @@
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
 
-export const LAYOUTS = ['title', 'title-content', 'two-col', 'section', 'three-cards', 'quote', 'image-left', 'image-right', 'blank']
+export const LAYOUTS = ['title', 'title-content', 'two-col', 'section', 'three-cards', 'quote', 'image-left', 'image-right', 'stats', 'big-number', 'timeline', 'chart-figures', 'blank']
+/** The text roles the new-slide op can fill, beyond the first nine layouts' (stats, big-number, timeline, chart-figures). */
+const MORE_ROLES = ['stat1', 'label1', 'stat2', 'label2', 'stat3', 'label3', 'figure', 'caption', 'step1', 'stepbody1', 'step2', 'stepbody2', 'step3', 'stepbody3', 'step4', 'stepbody4']
 const SIZE = ['bigger', 'smaller']
 const WEIGHT = ['bold', 'normal']
 const ALIGN = ['left', 'center', 'right']
@@ -62,7 +64,7 @@ export const OPS_SCHEMA = {
     cells: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, row: { type: 'integer' }, col: { type: 'integer' }, text: { type: 'string' } }, required: ['id', 'row', 'col', 'text'] } },
     chart: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, series: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, data: { type: 'array', items: { type: 'number' } } }, required: ['name', 'data'] } }, categories: { type: 'array', items: { type: 'string' } } }, required: ['id'] } },
     style: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, size: { type: 'string', enum: [...SIZE] }, weight: { type: 'string', enum: [...WEIGHT] }, align: { type: 'string', enum: [...ALIGN] } }, required: ['id'] } },
-    add: { type: 'array', items: { type: 'object', properties: { after: { type: 'integer' }, layout: { type: 'string', enum: [...LAYOUTS] }, title: { type: 'string' }, subtitle: { type: 'string' }, kicker: { type: 'string' }, body: { type: 'string' }, left: { type: 'string' }, right: { type: 'string' }, quote: { type: 'string' }, attribution: { type: 'string' }, card1: { type: 'string' }, card2: { type: 'string' }, card3: { type: 'string' }, notes: { type: 'string' } }, required: ['after', 'layout'] } },
+    add: { type: 'array', items: { type: 'object', properties: { after: { type: 'integer' }, layout: { type: 'string', enum: [...LAYOUTS] }, title: { type: 'string' }, subtitle: { type: 'string' }, kicker: { type: 'string' }, body: { type: 'string' }, left: { type: 'string' }, right: { type: 'string' }, quote: { type: 'string' }, attribution: { type: 'string' }, card1: { type: 'string' }, card2: { type: 'string' }, card3: { type: 'string' }, ...Object.fromEntries(MORE_ROLES.map((r) => [r, { type: 'string' }])), notes: { type: 'string' } }, required: ['after', 'layout'] } },
     remove: { type: 'array', items: { type: 'integer' } },
     move: { type: 'array', items: { type: 'object', properties: { slide: { type: 'integer' }, to: { type: 'integer' } }, required: ['slide', 'to'] } },
   },
@@ -79,7 +81,7 @@ export const OPS_PROMPT = `You are the editing assistant inside Bento Slides, a 
 - "cells": [{"id","row","col","text"}] — one table cell.
 - "chart": [{"id","series":[{"name","data":[numbers]}],"categories":[...]}] — a chart's numbers.
 - "style": [{"id","size":"bigger"|"smaller","weight":"bold"|"normal","align":"left"|"center"|"right"}] — a text's look.
-- "add": [{"after": slide number (0 = at the start), "layout": "title"|"title-content"|"two-col"|"section"|"three-cards"|"quote"|"blank", "title","subtitle","kicker","body","left","right","quote","attribution","card1","card2","card3","notes", "elements": [full elements, only for a slide you design yourself]}] — a new slide.
+- "add": [{"after": slide number (0 = at the start), "layout": "title"|"title-content"|"two-col"|"section"|"three-cards"|"quote"|"stats"|"big-number"|"timeline"|"chart-figures"|"blank", "title","subtitle","kicker","body","left","right","quote","attribution","card1".."card3","stat1".."stat3","label1".."label3","figure","caption","step1".."step4","stepbody1".."stepbody4","notes", "elements": [full elements, only for a slide you design yourself]}] — a new slide.
 - "remove": [slide numbers]. "move": [{"slide","to"}] — put a slide where another is.
 - "set": [{"id", ...fields}] — change an element precisely: only the fields you change, values in the compact form shown in the focus; never id or type.
 - "insert": [{"slide", "type": "text"|"shape"|"image"|"table"|"chart", ...fields with x y w h}] — a new element (the slide is 1280×720 unless the size says otherwise; keep 96px side margins).
