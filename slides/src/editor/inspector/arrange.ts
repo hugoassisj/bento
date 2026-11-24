@@ -14,6 +14,7 @@ import { isMacOS } from '../../screens'
 import { ICONS } from '../../icons'
 import { childResizing } from './layout'
 import { openCtxMenu } from '../ctxmenu'
+import { tidy } from '../tidy'
 
 export function buildLayoutRole(p: PropsPanel, el: SlideElement) {
   // What the box IS to the slide's layout — its own section, said in
@@ -114,11 +115,12 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
       ),
       ...(els.length >= 2 ? [kind(
         ...(els.length >= 3 ? [
-          iconBtn(ICONS.distX, tip('distribute-x', t('Space evenly across (3 or more)')), () => distribute(p, els, 'x')),
-          iconBtn(ICONS.distY, tip('distribute-y', t('Space evenly down (3 or more)')), () => distribute(p, els, 'y')),
+          iconBtn(ICONS.distX, tip('distribute-x', t('Distribute horizontally')), () => distribute(p, els, 'x')),
+          iconBtn(ICONS.distY, tip('distribute-y', t('Distribute vertically')), () => distribute(p, els, 'y')),
         ] : []),
-        iconBtn(ICONS.matchW, t('Same width as the first selected (2 or more)'), () => matchSize(p, els, 'w')),
-        iconBtn(ICONS.matchH, t('Same height as the first selected (2 or more)'), () => matchSize(p, els, 'h')),
+        // the same words as the Arrange menu and ⌘K (the first selected sets the size)
+        iconBtn(ICONS.matchW, tip('match-width', t('Same width')), () => matchSize(p, els, 'w')),
+        iconBtn(ICONS.matchH, tip('match-height', t('Same height')), () => matchSize(p, els, 'h')),
       )] : []),
     )
   }
@@ -385,6 +387,42 @@ export function distribute(p: PropsPanel, els: SlideElement[], axis: 'x' | 'y') 
       cursor += b[hi] - b[lo] + gap
     }
   }, true)
+}
+
+/**
+ * What Tidy up moves, each a unit that keeps its shape: a frame's child is
+ * never one (its frame places it); a group moves whole, unless the whole
+ * selection is inside one group (entered), when its members are the units.
+ */
+export function tidyUnits(p: PropsPanel, els: SlideElement[]): SlideElement[][] {
+  const loose = els.filter((e) => !(e.parentId && p.store.element(e.parentId)))
+  const key = (e: SlideElement) => e.groupId ?? `#${e.id}`
+  if (new Set(loose.map(key)).size <= 1) return loose.map((e) => [e])
+  const units = new Map<string, SlideElement[]>()
+  for (const e of loose) units.set(key(e), [...(units.get(key(e)) ?? []), e])
+  return [...units.values()]
+}
+
+/** Tidy up (tidy.ts): the selection into an even row, column or grid where
+ *  it stands, by the turned boxes as align is. No frame. One undo step.
+ *  Reports whether anything was arranged. */
+export function tidyUp(p: PropsPanel, els: SlideElement[]): boolean {
+  const units = tidyUnits(p, els)
+  if (units.length < 2) return false
+  const boxes = units.map((u) => {
+    const bs = u.map(turnedBox)
+    const x = Math.min(...bs.map((b) => b.x0)), y = Math.min(...bs.map((b) => b.y0))
+    return { x, y, w: Math.max(...bs.map((b) => b.x1)) - x, h: Math.max(...bs.map((b) => b.y1)) - y }
+  })
+  const out = tidy(boxes).boxes
+  p.edit(() => units.forEach((u, i) => {
+    const dx = out[i].x - boxes[i].x, dy = out[i].y - boxes[i].y
+    for (const e of u) {
+      const el = p.store.element(e.id)
+      if (el) { el.x += dx; el.y += dy }
+    }
+  }), true)
+  return true
 }
 
 /** Move the selection one step up/down the paint order (adjacent swap). */

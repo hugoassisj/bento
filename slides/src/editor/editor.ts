@@ -68,7 +68,7 @@ import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
 import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
-import { align, distribute, flip } from './inspector/arrange'
+import { align, distribute, flip, matchSize, tidyUnits, tidyUp } from './inspector/arrange'
 import type { NodeKind } from './beziereditor'
 import { withDescendants, flagged, frameChildren, isFrame, moveInFrame, colsOf } from '../layout'
 import { decoratePeer, vouchAgent as vouchPeopleAgent } from './vouch'
@@ -3798,8 +3798,12 @@ export class Editor {
       ...([['align-left', 'Align left', 'A', 'left'], ['align-center', 'Align centers', 'H', 'centerX'], ['align-right', 'Align right', 'D', 'right'],
         ['align-top', 'Align top', 'W', 'top'], ['align-middle', 'Align middles', 'V', 'middleY'], ['align-bottom', 'Align bottom', 'S', 'bottom']] as const)
         .map(([id, label, k, edge]): Command => ({ id, label, keys: `⌥${k}`, scope: 'canvas', when: () => toolFree() && free(), match: (ev, mod) => !mod && ev.altKey && !ev.shiftKey && letter(ev, `Key${k}`), run: () => align(this.panel, sel(), edge) })),
-      { id: 'distribute-x', label: 'Space evenly across', keys: '⌃⌥H', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyH'), run: () => distribute(this.panel, sel(), 'x') },
-      { id: 'distribute-y', label: 'Space evenly down', keys: '⌃⌥V', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyV'), run: () => distribute(this.panel, sel(), 'y') },
+      { id: 'distribute-x', label: 'Distribute horizontally', keys: '⌃⌥H', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyH'), run: () => distribute(this.panel, sel(), 'x') },
+      { id: 'distribute-y', label: 'Distribute vertically', keys: '⌃⌥V', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyV'), run: () => distribute(this.panel, sel(), 'y') },
+      // the rest of the Arrange row, for ⌘K and the Arrange menu (no keys of their own)
+      { id: 'match-width', label: 'Same width', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 2, run: () => matchSize(this.panel, sel(), 'w') },
+      { id: 'match-height', label: 'Same height', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 2, run: () => matchSize(this.panel, sel(), 'h') },
+      { id: 'tidy-up', label: 'Tidy up', scope: 'canvas', when: () => toolFree() && free() && tidyUnits(this.panel, sel()).length >= 2, run: () => this.tidyUp() },
       { id: 'flip-h', label: 'Flip horizontal', keys: '⇧H', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'h', run: () => flip(this.panel, sel(), 'flipX') },
       { id: 'flip-v', label: 'Flip vertical', keys: '⇧V', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'v', run: () => flip(this.panel, sel(), 'flipY') },
       { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
@@ -4401,6 +4405,61 @@ export class Editor {
     return this.commands.find((c) => c.id === id)?.keys
   }
 
+  /**
+   * Arrange ▸ — every align, distribute and size action in words, with its icon
+   * and keys, then Tidy up. A row the selection cannot use is disabled, not
+   * hidden, and its title says why: a menu is where people look for what
+   * exists (the panel's icon row leaves such tools out instead). A frame's
+   * children are the frame's to place, so the menu says that first and offers
+   * the frame.
+   */
+  private arrangeMenu(els: SlideElement[]): CtxItem {
+    const frames = [...new Set(els.filter((e) => e.parentId && this.store.element(e.parentId)).map((e) => e.parentId!))]
+    const placed = t('Placed by its frame’s auto layout — align and space it on the frame.')
+    const units = tidyUnits(this.panel, els).length
+    const row = (id: string, icon: string, why?: string): CtxItem => {
+      const c = this.commands.find((x) => x.id === id)!
+      const off = frames.length ? placed : why
+      return { label: t(c.label), icon, hint: c.keys, cmd: id, disabled: !els.length || !!off, title: off, run: () => c.run() }
+    }
+    const need = (n: number, have: number) => (have < n ? t('Needs {n} or more selected', { n: String(n) }) : undefined)
+    return {
+      label: t('Arrange'),
+      disabled: !els.length,
+      items: [
+        ...(frames.length ? [
+          { label: placed, disabled: true },
+          { label: t('Select the frame'), run: () => this.store.select(frames) },
+          'sep' as const,
+        ] : []),
+        row('align-left', ICONS.arrLeft),
+        row('align-center', ICONS.arrCenterX),
+        row('align-right', ICONS.arrRight),
+        row('align-top', ICONS.arrTop),
+        row('align-middle', ICONS.arrMiddleY),
+        row('align-bottom', ICONS.arrBottom),
+        'sep',
+        row('distribute-x', ICONS.distX, need(3, els.length)),
+        row('distribute-y', ICONS.distY, need(3, els.length)),
+        row('match-width', ICONS.matchW, need(2, els.length)),
+        row('match-height', ICONS.matchH, need(2, els.length)),
+        'sep',
+        row('tidy-up', ICONS.tidy, need(2, units)),
+      ],
+    }
+  }
+
+  /** Tidy up, then offer to keep it so: Use auto layout wraps the same
+   *  elements in a frame exactly as ⇧A would. */
+  private tidyUp() {
+    const ids = this.store.selection.slice()
+    if (!tidyUp(this.panel, this.store.selectedElements)) return
+    this.toast(t('Tidied. Keep it tidy?'), {
+      label: t('Use auto layout'),
+      run: () => this.panel.addAutoLayout(ids.map((id) => this.store.element(id)).filter((e): e is SlideElement => !!e)),
+    }, 'tidy')
+  }
+
   private elementMenuItems(): CtxItem[] {
     const els = this.store.selectedElements
     const one = els.length === 1 ? els[0] : null
@@ -4426,6 +4485,7 @@ export class Editor {
       { label: els.every((x) => x.locked) ? t('Unlock') : t('Lock'), hint: '⌘L', run: () => this.panel.lock(els) },
       { label: t('Bring to front'), run: () => this.panel.reorder(els, 'front') },
       { label: t('Send to back'), run: () => this.panel.reorder(els, 'back') },
+      this.arrangeMenu(els),
       'sep',
       grouped
         ? { label: t('Ungroup'), hint: this.keysOf('ungroup'), cmd: 'ungroup', run: () => this.panel.ungroup(els) }

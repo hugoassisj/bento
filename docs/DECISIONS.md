@@ -15396,3 +15396,25 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — slides: Arrange ▸ on the element menu disables what it cannot do; Tidy up makes no frame
+
+- **The menu greys, the icon row hides.** The Format tab's arrange row leaves
+  out tools the selection cannot use (two elements get no Distribute). The
+  element menu's Arrange ▸ lists every align, distribute and size action and
+  disables the ones that do not apply, with a title saying why ("Needs 3 or
+  more selected", or the frame's explanation for a frame's children). Both are
+  deliberate: a menu is where people go to learn what exists, a toolbar is
+  where they act on what is there. Do not "fix" either to match the other.
+- **One level of submenu, inside `editor/ctxmenu.ts`.** `CtxItem.items`
+  opens a submenu beside its row on hover, click, or → (← and Escape close it
+  back onto the row; ↑↓ walk a list). It is part of the menu's singleton and
+  mounts on the body, never inside the list, because a list that scrolls clips
+  both axes. The topbar dropdowns do not share this code.
+- **Tidy up arranges in place and makes no frame.** It detects a row, a column
+  or a grid from the selection (`editor/tidy.ts`, pure geometry), keeps sizes,
+  and uses the median gap already there; a group moves whole, a frame's child
+  never moves. Making a frame is ⇧A's job, offered from the toast afterwards.
+  Commands `match-width`, `match-height` and `tidy-up` have no keys of their
+  own (⌘K and the menu); `distribute-x`/`-y` are labelled "Distribute
+  horizontally / vertically" everywhere.

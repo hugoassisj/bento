@@ -12,6 +12,8 @@
 //      duplicates, ⌘Z / ⇧⌘Z undo and redo, ⌘G groups, [ hides the slide list,
 //      PageDown walks a slide — and none of them fires while typing in a field.
 //   4. The topbar's Undo tooltip reads its keys from the list.
+//   5. Same width, Same height, Distribute horizontally and Tidy up are
+//      commands, found by those words.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -88,7 +90,16 @@ try {
   await p.keyboard.type('distribute')
   const dist = await p.$$eval('.ed-cmdk-list li', (l) => l.map((x) => x.dataset.cmd))
   ok(dist[0]?.startsWith('distribute-'), `the other tools' word finds the command — "distribute" → ${dist.slice(0, 2).join(', ')}`)
-  await p.keyboard.press('Escape'); await p.keyboard.press('Escape')
+  await p.keyboard.press('Escape')
+  // the whole Arrange row is in the list, in the Arrange menu's words (DS-10)
+  for (const [q, id] of [['Same width', 'match-width'], ['Same height', 'match-height'], ['Distribute horizontally', 'distribute-x'], ['Tidy up', 'tidy-up']]) {
+    await p.keyboard.press(`${mod}+k`)
+    await p.keyboard.type(q)
+    const hit = await p.$eval('.ed-cmdk-list li', (li) => ({ cmd: li.dataset.cmd, text: li.textContent }))
+    ok(hit.cmd === id && hit.text.startsWith(q), `⌘K "${q}" finds it first (${hit.cmd})`)
+    await p.keyboard.press('Escape')
+  }
+  await p.keyboard.press('Escape')
   const sideOpen = () => p.evaluate(() => !document.querySelector('.ed-root')?.classList.contains('left-collapsed') && (document.querySelector('.ed-sidebar')?.getBoundingClientRect().width ?? 0) > 40)
   const wasOpen = await sideOpen()
   await p.keyboard.press('[')

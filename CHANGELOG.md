@@ -11,6 +11,16 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Arrange, in words, on the right-click menu — and Tidy up.** Right-click
+  a selection and open Arrange for every align, distribute and size action
+  spelled out, each with its icon and shortcut; it works with the mouse or the
+  arrow keys. Rows that need more elements than you selected are greyed out
+  and say how many they need. New **Tidy up** squares a loose selection into
+  an even row, column or grid where it stands, without making a frame, and
+  offers to keep it that way with auto layout. ⌘K now finds "Same width",
+  "Same height", "Distribute horizontally" and "Tidy up", and the Format tab's
+  buttons use the same words.
+
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the

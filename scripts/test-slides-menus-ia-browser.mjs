@@ -16,6 +16,13 @@
 //   5. About holds no settings and no document properties.
 //   6. ⌘K finds every moved command; ⌘, opens Preferences.
 //   7. At 1280, 768 and 390 no bar control overlaps another.
+//   9. The element menu's Arrange ▸ submenu (DS-10): every align, distribute
+//      and size action and Tidy up in words, each with its icon and keys; it
+//      opens and closes by mouse and by keyboard (→ ← Esc) and its rows are
+//      menu items; rows that cannot apply are disabled and say why; Tidy up
+//      squares a row and a 2×3 scatter in one undo step with no frame, its
+//      toast's Use auto layout wraps exactly as ⇧A does, and a frame's children
+//      are never moved by it.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -188,6 +195,169 @@ try {
       await s.ctx.close()
     })
   }
+  console.log('\n9. Arrange ▸ in the element menu\n')
+  await run(async () => {
+    const s = await open(1440)
+    const q = s.p
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    const rect = (id, x, y, extra = {}) => ({ id, type: 'shape', shape: 'rect', x, y, w: 200, h: 120, fill: '#88aadd', ...extra })
+    const load = async (elements) => {
+      await q.evaluate((els) => window.bento.loadDoc(JSON.stringify({ compact: true, slides: [{ id: 's1', elements: els }] })), elements)
+      await q.waitForTimeout(300)
+      await q.mouse.click(250, 600) // the grey surround: the toast docks at the canvas top; await q.keyboard.press('Escape'); await q.keyboard.press('Escape')
+    }
+    const els = () => q.evaluate(() => window.bento.doc.slides[0].elements.map((e) => ({ id: e.id, x: e.x, y: e.y, w: e.w, h: e.h, parentId: e.parentId, layout: !!e.layout })))
+    const centre = (id) => q.evaluate((id) => { const r = document.querySelector(`.ed-stage-scale [data-el-id="${id}"]`).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } }, id)
+    const pick = async (ids) => {
+      await q.mouse.click(250, 600) // the grey surround: the toast docks at the canvas top; await q.keyboard.press('Escape')
+      for (const [i, id] of ids.entries()) {
+        const c = await centre(id)
+        if (i) await q.keyboard.down('Shift')
+        await q.mouse.click(c.x, c.y)
+        if (i) await q.keyboard.up('Shift')
+      }
+      await q.waitForTimeout(100)
+    }
+    const menuOn = async (id) => {
+      const c = await centre(id)
+      await q.mouse.click(c.x, c.y, { button: 'right' }); await q.waitForTimeout(150)
+    }
+    const subRows = () => q.$$eval('#ed-ctxmenu-sub .ed-ctxmenu-item', (bs) => bs.map((b) => ({ cmd: b.dataset.cmd ?? '', role: b.getAttribute('role'), text: b.querySelector('.ed-ctxmenu-label')?.textContent ?? '', icon: !!b.querySelector('.ed-ctxmenu-icon svg'), keys: b.querySelector('kbd')?.textContent ?? '', off: b.disabled, title: b.title })))
+    const hoverArrange = async () => {
+      const b = await q.$('.ed-ctxmenu-parent')
+      const r = await b.boundingBox()
+      await q.mouse.move(r.x + 12, r.y + r.height / 2); await q.waitForTimeout(150)
+    }
+    const closeAll = async () => { await q.mouse.move(5, 895); await q.keyboard.press('Escape'); await q.keyboard.press('Escape') }
+
+    // a. three rough boxes: every action, in words, with icon and keys
+    const three = [rect('a', 100, 200), rect('b', 340, 210), rect('c', 610, 195)]
+    await load(three)
+    await q.keyboard.press(`${mod}+a`); await q.waitForTimeout(100)
+    await menuOn('b')
+    const parent = await q.$eval('.ed-ctxmenu-parent', (b) => ({ text: b.textContent, pop: b.getAttribute('aria-haspopup'), exp: b.getAttribute('aria-expanded'), role: b.getAttribute('role') }))
+    ok(/Arrange/.test(parent.text) && parent.pop === 'menu' && parent.exp === 'false' && parent.role === 'menuitem', `the menu has an Arrange row that opens a submenu (${JSON.stringify(parent)})`)
+    await hoverArrange()
+    ok(await q.$eval('#ed-ctxmenu-sub', (m) => m.getAttribute('role')) === 'menu' && await q.$eval('.ed-ctxmenu-parent', (b) => b.getAttribute('aria-expanded')) === 'true', 'hover opens it, as a menu, and the row says it is expanded')
+    const rows = await subRows()
+    const want = ['align-left', 'align-center', 'align-right', 'align-top', 'align-middle', 'align-bottom', 'distribute-x', 'distribute-y', 'match-width', 'match-height', 'tidy-up']
+    ok(want.every((c) => rows.some((r) => r.cmd === c)), `every align, distribute and size action and Tidy up (${rows.map((r) => r.cmd).join(', ')})`)
+    ok(rows.every((r) => r.role === 'menuitem' && r.icon && r.text.length > 3), 'each row is a menu item with an icon and words')
+    ok(['Distribute horizontally', 'Distribute vertically', 'Same width', 'Same height', 'Tidy up'].every((w) => rows.some((r) => r.text === w)), 'in the words of the issue')
+    ok(rows.find((r) => r.cmd === 'align-left').keys === '⌥A' && rows.find((r) => r.cmd === 'distribute-x').keys === '⌃⌥H', 'rows show their shortcut from the command list')
+    ok(rows.every((r) => !r.off), 'three free boxes: every row enabled')
+    const tips = await q.$$eval('.ed-layer-block .ed-toolbar button', (bs) => bs.map((b) => b.title || b.dataset.hint || ''))
+    ok(['Distribute horizontally', 'Distribute vertically', 'Same width', 'Same height', 'Align left'].every((w) => tips.some((x) => x.startsWith(w))), 'the Format tab’s icons carry the same words')
+
+    // b. the keyboard: Esc closes the submenu first; ↓ walks, → opens, ← closes
+    await q.keyboard.press('Escape'); await q.waitForTimeout(80)
+    ok(!(await q.$('#ed-ctxmenu-sub')) && !!(await q.$('.ed-ctxmenu')), 'Escape closes the submenu, not the menu')
+    await q.keyboard.press('Escape'); await q.waitForTimeout(80)
+    ok(!(await q.$('.ed-ctxmenu')), '…and a second Escape the menu')
+    await menuOn('b')
+    let steps = 0
+    while (steps++ < 30 && !(await q.evaluate(() => document.activeElement?.classList.contains('ed-ctxmenu-parent')))) await q.keyboard.press('ArrowDown')
+    ok(steps < 30, `↓ walks the rows to Arrange (${steps} presses)`)
+    const before = await els()
+    ok(JSON.stringify(before.map((e) => [e.x, e.y])) === JSON.stringify(three.map((e) => [e.x, e.y])), 'the arrows did not nudge the selection behind the menu')
+    await q.keyboard.press('ArrowRight'); await q.waitForTimeout(80)
+    ok(await q.evaluate(() => document.activeElement?.dataset.cmd) === 'align-left', '→ opens the submenu on its first row')
+    await q.keyboard.press('ArrowLeft'); await q.waitForTimeout(80)
+    ok(!(await q.$('#ed-ctxmenu-sub')) && await q.evaluate(() => document.activeElement?.classList.contains('ed-ctxmenu-parent')), '← closes it, back on Arrange')
+    await q.keyboard.press('ArrowRight')
+    steps = 0
+    while (steps++ < 20 && await q.evaluate(() => document.activeElement?.dataset.cmd) !== 'tidy-up') await q.keyboard.press('ArrowDown')
+    const n0 = (await els()).length
+    await q.keyboard.press('Enter'); await q.waitForTimeout(250)
+
+    // c. Tidy up on a rough row
+    const after = await els()
+    const ys = after.map((e) => e.y)
+    const sorted = [...after].sort((m, n) => m.x - n.x)
+    const gaps = sorted.slice(1).map((e, i) => e.x - (sorted[i].x + sorted[i].w))
+    ok(!(await q.$('.ed-ctxmenu')), 'Enter on Tidy up ran it and closed the menu')
+    ok(ys.every((y) => y === ys[0]), `a common top edge (${ys.join(', ')})`)
+    ok(gaps.every((g) => Math.abs(g - gaps[0]) <= 1), `equal gaps within 1px (${gaps.join(', ')})`)
+    ok(after.length === n0 && !after.some((e) => e.layout || e.parentId), 'no frame was created')
+    const toast = await q.$eval('.ed-toast', (t) => t.textContent).catch(() => '')
+    ok(/Tidied\. Keep it tidy\?/.test(toast) && /Use auto layout/.test(toast), `the toast offers auto layout (${toast})`)
+    await q.keyboard.press(`${mod}+z`); await q.waitForTimeout(150)
+    ok(JSON.stringify((await els()).map((e) => [e.x, e.y])) === JSON.stringify(three.map((e) => [e.x, e.y])), 'one ⌘Z puts all three back')
+    await q.keyboard.press(`${mod}+Shift+z`); await q.waitForTimeout(150)
+
+    // d. the toast's Use auto layout is ⇧A on the same elements
+    const norm = (list) => JSON.stringify(list.map((e) => ({ ...e, id: e.layout ? 'F' : e.id, parentId: e.parentId ? 'F' : undefined })))
+    await pick(['a', 'b', 'c'])
+    const sel3 = (await q.evaluate(() => window.bento.selection)).sort().join()
+    await q.keyboard.press(`${mod}+k`); await q.keyboard.type('Tidy up'); await q.keyboard.press('Enter')
+    await q.waitForSelector('.ed-toast.show .ed-toast-act', { timeout: 3000 }); await q.waitForTimeout(300) // let it settle in
+    await q.click('.ed-toast-act', { timeout: 5000 }); await q.waitForTimeout(250)
+    const viaToast = await els()
+    ok(viaToast.some((e) => e.layout) && viaToast.filter((e) => e.parentId).length === 3, `Use auto layout wrapped the three in a frame (selected ${sel3})`)
+    await q.keyboard.press(`${mod}+z`); await q.waitForTimeout(150)
+    await pick(['a', 'b', 'c'])
+    await q.keyboard.press('Shift+A'); await q.waitForTimeout(250)
+    ok(norm(await els()) === norm(viaToast), 'exactly as ⇧A wraps the same selection')
+
+    // e. rows that cannot apply say why
+    await load(three)
+    await pick(['a', 'b'])
+    await menuOn('a'); await hoverArrange()
+    let two = await subRows()
+    const dx = two.find((r) => r.cmd === 'distribute-x')
+    ok(dx.off && /3 or more/.test(dx.title), `two selected: Distribute is disabled and says why (${dx.title})`)
+    ok(!two.find((r) => r.cmd === 'match-width').off && !two.find((r) => r.cmd === 'tidy-up').off, '…Same width and Tidy up are not')
+    await closeAll()
+    await pick(['a'])
+    await menuOn('a'); await hoverArrange()
+    two = await subRows()
+    const mw = two.find((r) => r.cmd === 'match-width')
+    ok(mw.off && /2 or more/.test(mw.title) && !two.find((r) => r.cmd === 'align-left').off, `one selected: Same width disabled (${mw.title}), align to the slide still on`)
+    await closeAll()
+
+    // f. a 2×3 scatter becomes a 2×3 grid, by mouse
+    await load([rect('g1', 100, 100), rect('g2', 345, 112), rect('g3', 610, 95), rect('g4', 108, 285), rect('g5', 330, 300), rect('g6', 598, 290)])
+    await q.keyboard.press(`${mod}+a`); await q.waitForTimeout(100)
+    await menuOn('g2'); await hoverArrange()
+    await q.click('#ed-ctxmenu-sub [data-cmd="tidy-up"]'); await q.waitForTimeout(250)
+    const g = Object.fromEntries((await els()).map((e) => [e.id, e]))
+    const rowsY = new Set(Object.values(g).map((e) => e.y)), colsX = new Set(Object.values(g).map((e) => e.x))
+    ok(rowsY.size === 2 && colsX.size === 3, `a 2×3 grid (${rowsY.size} rows × ${colsX.size} columns)`)
+    const colGaps = [g.g2.x - (g.g1.x + g.g1.w), g.g3.x - (g.g2.x + g.g2.w), g.g5.x - (g.g4.x + g.g4.w), g.g6.x - (g.g5.x + g.g5.w)]
+    const rowGaps = [g.g4.y - (g.g1.y + g.g1.h), g.g5.y - (g.g2.y + g.g2.h), g.g6.y - (g.g3.y + g.g3.h)]
+    ok(colGaps.every((v) => Math.abs(v - colGaps[0]) <= 1) && rowGaps.every((v) => Math.abs(v - rowGaps[0]) <= 1), `equal column gaps (${colGaps.join(', ')}) and row gaps (${rowGaps.join(', ')})`)
+
+    // g. a frame's children are the frame's: never moved by Tidy up
+    await load([
+      { id: 'f', type: 'shape', shape: 'rect', x: 100, y: 150, w: 700, h: 160, fill: '#eeeeee', layout: { dir: 'row', gap: 24, pad: [16, 16, 16, 16], hug: true } },
+      rect('k1', 116, 166, { parentId: 'f' }), rect('k2', 340, 166, { parentId: 'f' }), rect('k3', 564, 166, { parentId: 'f' }),
+      rect('loose', 300, 450),
+    ])
+    const kids0 = JSON.stringify((await els()).filter((e) => e.parentId))
+    for (const [i, id] of ['k1', 'k2'].entries()) {
+      const c = await centre(id)
+      await q.keyboard.down(mod); if (i) await q.keyboard.down('Shift')
+      await q.mouse.click(c.x, c.y)
+      if (i) await q.keyboard.up('Shift'); await q.keyboard.up(mod)
+    }
+    await q.waitForTimeout(100)
+    const picked = await q.evaluate(() => window.bento.selection)
+    ok(picked.length >= 1 && picked.every((id) => /^k/.test(id)), `frame children selected (${picked.join(', ')})`)
+    await menuOn(picked[0]); await hoverArrange()
+    const fr = await subRows()
+    ok(fr[0].off && /Placed by its frame/.test(fr[0].text) && fr[1].text === 'Select the frame' && !fr[1].off, 'the submenu opens with the frame’s explanation and Select the frame')
+    ok(fr.filter((r) => r.cmd).every((r) => r.off && /frame/.test(r.title)), 'every action row is disabled, saying the frame places it')
+    const box = await q.$eval('#ed-ctxmenu-sub', (m) => { const r = m.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, h: innerHeight } })
+    ok(box.top >= 0 && box.bottom <= box.h, `the long submenu stays on the screen (${Math.round(box.top)}–${Math.round(box.bottom)} of ${box.h})`)
+    await closeAll()
+    await q.keyboard.press(`${mod}+k`); await q.keyboard.type('Tidy up'); await q.waitForTimeout(100)
+    ok(!(await q.$$eval('.ed-cmdk-list li', (l) => l.map((x) => x.dataset.cmd))).includes('tidy-up'), '⌘K does not offer Tidy up for them')
+    await q.keyboard.press('Escape')
+    ok(JSON.stringify((await els()).filter((e) => e.parentId)) === kids0, 'the frame’s children did not move')
+
+    ok(s.errors.length === 0, `no page errors${s.errors.length ? ': ' + s.errors.join(' | ') : ''}`)
+    await s.ctx.close()
+  })
 } finally {
   await browser.close()
 }
