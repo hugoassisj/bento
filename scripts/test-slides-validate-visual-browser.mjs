@@ -22,8 +22,7 @@
 //      its margin), and a chart with room reports nothing; without a DOM the
 //      chart check is skipped while low-contrast still runs on whole boxes;
 //   5. the starter deck and the four agent fixtures gain no low-contrast or
-//      text-overlap warning; the starter's only visual findings are the chart
-//      labels it really cuts off ("Engagement", "Growth");
+//      text-overlap warning, and the starter cuts off no chart label;
 //   6. validate() leaves the document unchanged, and its run time on the
 //      starter is printed.
 import { readFileSync, readdirSync } from 'node:fs'
@@ -159,11 +158,10 @@ try {
   ok(!real.starter.some((f) => f.code === 'low-contrast' || f.code === 'text-overlap'),
     `the starter deck gains no low-contrast or text-overlap (${real.starter.filter((f) => f.code === 'low-contrast' || f.code === 'text-overlap').map((f) => f.code + '@' + f.el).join(', ') || 'none'})`)
   ok(!real.starter.some((f) => f.code === 'outside-frame' && f.severity === 'warning'), 'nor a frame child cut off by its frame')
-  // the two the starter really cuts off (seen on screen: "agement" at the
-  // scatter chart's top left, "Growth" losing its h at the panel's edge); any
-  // other is a false finding — and a fixed starter simply drops one
+  // it used to cut off two axis names ("agement" on the scatter state,
+  // "Growth" at the linked chart's top) until their grids gave them room
   const clipped = real.starter.filter((f) => f.code === 'chart-label-clipped').map((f) => f.msg.match(/Chart text "([^"]+)"/)?.[1])
-  ok(clipped.every((t) => t === 'Engagement' || t === 'Growth'), `its chart findings are the labels it really cuts off (${clipped.join(', ') || 'none'})`)
+  ok(!clipped.length, `nor a chart label cut off at its chart's edge (${clipped.join(', ') || 'none'})`)
   for (const [n, f] of Object.entries(real.fixtures)) ok(!f.length, `agent fixture ${n}: no new visual warnings (${f.join(', ') || 'none'})`)
   ok(real.same, 'validate() leaves the starter document unchanged')
   console.log(`  ..    validate() on the starter: ${real.ms.toFixed(1)} ms (median of 9, measured)`)
