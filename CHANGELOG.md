@@ -21,7 +21,9 @@ pre-1.0.
   name is shortened in the middle so its last part stays readable. A colour
   that follows the theme says so ("Theme: Text") and shows its hex, so a dark
   slide's Background no longer seems to say the background is text; the dot in
-  front of it is the colour itself. In the Tokens view, each usage count reads
+  front of it is the colour itself. Where a row is too narrow for all of it,
+  "Theme:" becomes a small palette mark and the chip takes a line of its own,
+  so the name and the hex still show. In the Tokens view, each usage count reads
   "39×", and screen readers hear what it counts and that clicking it selects
   the next use.
 

@@ -3231,9 +3231,13 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-has-token > .ed-token-pill { inset: 1px; transform: none; max-width: none; font-size: 11.5px; color: var(--ink); container-type: inline-size; }
 .ed-mini:has(> .ed-token-pill) > .ed-corners-btn { inset-inline-end: 2px; }
 .ed-mini:has(> .ed-corners-btn) > .ed-token-pill { inset-inline-end: 29px; }
+/* the input under the pill draws nothing: an RTL field puts its LTR number at
+   the left, where the corners button now sits, and it printed under it */
+.ed-mini:has(> .ed-token-pill) > input { color: transparent; caret-color: var(--ink); }
 /* the detach floats over the pill's end, so at rest the name has the whole width */
 .ed-color-token { position: relative; }
-.ed-token-pill > .ed-color-detach, .ed-color-token > .ed-color-detach { position: absolute; inset-inline-end: 2px; top: 50%; translate: 0 -50%; margin: 0; background: var(--chrome-2); }
+.ed-token-pill > .ed-color-detach, .ed-color-token > .ed-color-detach { position: absolute; inset-inline-end: 2px; top: 50%; translate: 0 -50%; margin: 0; background: var(--chrome-2); box-shadow: 0 0 5px 4px var(--chrome-2); }
+/* (the soft edge fades the name's end under it instead of cutting a letter in half) */
 /* the pill's name reopens the picker; its detach shows on hover or focus */
 .ed-token-pill-name, .ed-color-token-name {
   flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 4px; padding: 0; font: inherit; color: inherit; text-align: start; background: none; border: 0; cursor: pointer;
@@ -3244,24 +3248,38 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-token-pill:has(> .ed-token-pill-name > .ed-token-pill-value) { padding-inline-start: 6px; }
 .ed-token-pill:has(> .ed-token-pill-name > .ed-token-pill-value)::before { display: none; }
 .ed-token-pill-name { gap: 3px; }
-.ed-token-pill-value { flex: none; font-variant-numeric: tabular-nums; }
+.ed-token-pill-value { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .ed-token-pill-sep { flex: none; color: var(--muted); }
 .ed-token-label { display: flex; min-width: 0; overflow: hidden; }
 .ed-token-label-head { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ed-token-label-tail { flex: none; }
 /* too narrow for both (the panel dragged to its narrowest): the name alone, the value in the title */
 @container (max-width: 72px) { .ed-token-pill-value, .ed-token-pill-value + .ed-token-pill-sep { display: none; } }
-/* a colour: the name, then the hex muted only where it fits WHOLE — a hex that
-   no longer fits wraps onto a second line the button clips */
-.ed-color-token-name { flex-wrap: wrap; align-content: flex-start; height: 24px; column-gap: 6px; }
-.ed-color-token-name > * { line-height: 24px; }
-.ed-color-token-role { display: flex; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ed-color-token-pre { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+/* a colour: [glyph] Theme: name · hex. What gives way when it does not all fit
+   is chosen by measuring (color.ts boundPill): "Theme:" for the palette glyph
+   (ed-ct-short), then the chip's place in the row (ed-color-wrapchip), then
+   the hex's place beside the name (ed-ct-two), then the end of the name */
+.ed-color-token-name { height: 24px; gap: 4px; }
+.ed-color-token-role { display: flex; align-items: center; min-width: 0; overflow: hidden; }
+.ed-color-token-glyph { display: none; flex: none; margin-inline-end: 2px; color: var(--muted); }
+.ed-color-token-glyph svg { display: block; width: 11px; height: 11px; }
+.ed-ct-short .ed-color-token-glyph { display: block; }
+.ed-color-token.ed-ct-short { padding-inline-start: 6px; gap: 3px; }
+.ed-color-token-pre { flex: none; white-space: pre; }
+.ed-ct-short .ed-color-token-pre { display: none; }
 .ed-color-token-slot { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* a paint row's chip has room for the slot's name only: "Accent 1", not "T…Accen…" */
-.ed-color-token { container-type: inline-size; }
-@container (max-width: 140px) { .ed-color-token-pre { display: none; } }
-.ed-color-token-hex { display: flex; gap: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ed-color-token-hex { display: flex; flex: none; gap: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* a chip the row cannot hold whole gets a line of its own under the swatch and the % */
+.ed-color.ed-color-wrapchip { flex-wrap: wrap; row-gap: 4px; }
+.ed-color-wrapchip > .ed-color-token { order: 1; flex: 1 0 100%; }
+.ed-color-wrapchip > input[type='color'] { margin-inline-end: auto; }
+.ed-paintrow:has(.ed-color-wrapchip) { align-items: start; }
+/* …and the hex under the name when even that line is short */
+.ed-color-token.ed-ct-two { height: auto; min-height: 26px; padding-block: 2px; }
+.ed-ct-two .ed-color-token-name { height: auto; flex-wrap: wrap; row-gap: 0; }
+.ed-ct-two .ed-color-token-name > * { line-height: 17px; }
+.ed-ct-two .ed-color-token-hex { flex-basis: 100%; font-size: 11px; }
+.ed-ct-two .ed-color-token-hex > .ed-token-pill-sep { display: none; }
 .ed-token-pill .ed-color-detach, .ed-color-token .ed-color-detach { opacity: 0; }
 .ed-token-pill:hover .ed-color-detach, .ed-token-pill:focus-within .ed-color-detach,
 .ed-color-token:hover .ed-color-detach, .ed-color-token:focus-within .ed-color-detach { opacity: 1; }

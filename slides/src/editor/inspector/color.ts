@@ -445,10 +445,16 @@ export function sharedLink(p: PropsPanel, ids: string[], path: string, field: HT
 }
 
 /** What a bound colour field shows instead of its hex: the name, then the
- *  hex muted while there is room (Theme: Text · 0d1b2e), after a dot in the
- *  colour itself. A theme colour says so, so that a Background field reading
- *  "Text" is not taken for "the background is text". A click reopens the
- *  picker, the detach icon (on hover or focus) lets go and keeps the value. */
+ *  hex muted (Theme: Text · 0d1b2e), after a dot in the colour itself. A
+ *  theme colour always says so, so that a Background field reading "Text" is
+ *  not taken for "the background is text". A click reopens the picker, the
+ *  detach icon (on hover or focus) lets go and keeps the value.
+ *
+ *  Where the chip is short of room (a paint row, a narrow panel, a longer
+ *  language) it gives up the word "Theme:" for the palette glyph (the role
+ *  stays), then takes a line of its own in the field, then puts the hex under
+ *  the name; only then is the end of the name cut. Measured, not guessed from
+ *  a width: what fits depends on the language and the name. */
 function boundPill(label: string, isToken: boolean, color: string, reopen: () => void, detach: () => void): HTMLElement {
   const token = document.createElement('span')
   token.className = 'ed-color-token'
@@ -459,19 +465,20 @@ function boundPill(label: string, isToken: boolean, color: string, reopen: () =>
   let shown: string
   if (isToken) { shown = label; name.append(tokenLabel(label)) } else {
     shown = t('Theme: {name}', { name: label })
-    // in a narrow row the prefix gives way first: "Th… Accent 1", never "Theme: Ac…"
     const role = document.createElement('span')
     role.className = 'ed-color-token-role'
+    const glyph = document.createElement('span')
+    glyph.className = 'ed-color-token-glyph'
+    glyph.innerHTML = ICONS.palette
+    glyph.setAttribute('aria-hidden', 'true')
     const parts = t('Theme: {name}', { name: '\u0001' }).split('\u0001')
-    if (parts.length === 2) {
-      const pre = document.createElement('span')
-      pre.className = 'ed-color-token-pre'
-      pre.textContent = parts[0]
-      const slot = document.createElement('span')
-      slot.className = 'ed-color-token-slot'
-      slot.textContent = label + parts[1]
-      role.append(pre, slot)
-    } else role.textContent = shown
+    const pre = document.createElement('span')
+    pre.className = 'ed-color-token-pre'
+    pre.textContent = parts.length === 2 ? parts[0] : ''
+    const slot = document.createElement('span')
+    slot.className = 'ed-color-token-slot'
+    slot.textContent = parts.length === 2 ? label + parts[1] : shown
+    role.append(glyph, pre, slot)
     name.append(role)
   }
   const value = color ? shownValue('color', color) : ''
@@ -485,6 +492,8 @@ function boundPill(label: string, isToken: boolean, color: string, reopen: () =>
     hex.append(sep, value)
     name.append(hex)
   }
+  // the whole of it, whatever the chip has room to show
+  name.setAttribute('aria-label', value ? `${shown} · ${value}` : shown)
   const why = isToken
     ? t('Follows the token “{name}”. Click to change.', { name: label })
     : t('Follows the theme color “{name}”. Click to change.', { name: label })
@@ -498,6 +507,27 @@ function boundPill(label: string, isToken: boolean, color: string, reopen: () =>
   off.setAttribute('aria-label', off.title)
   off.addEventListener('click', detach)
   token.append(name, off)
+  // the richest form that shows the name uncut. The chip's own width never
+  // depends on what it shows (flex: 1 1 0), so this cannot loop. Where the
+  // row cannot hold it on one line (a paint row: swatch · chip · %), the chip
+  // takes a line of its own under the swatch and the %, and if that is still
+  // short (the narrowest panel), the hex goes under the name.
+  const oneLine = isToken ? [''] : ['', 'ed-ct-short']
+  const twoLine = isToken ? ['ed-ct-two'] : ['ed-ct-short ed-ct-two']
+  const cut = (e: Element) => e.scrollWidth > e.clientWidth + 0.5
+  const ladder = (steps: string[]): boolean => steps.some((step) => {
+    token.className = step ? `ed-color-token ${step}` : 'ed-color-token'
+    return ![name, ...name.querySelectorAll('.ed-color-token-pre, .ed-color-token-slot, .ed-token-label-head')].some(cut)
+  })
+  const fit = () => {
+    const row = token.parentElement
+    if (!token.isConnected || !row) return
+    row.classList.remove('ed-color-wrapchip')
+    if (ladder(oneLine) || !value) return
+    row.classList.add('ed-color-wrapchip')
+    if (!ladder(oneLine)) ladder(twoLine)
+  }
+  if (value || !isToken) new ResizeObserver(fit).observe(token)
   return token
 }
 
