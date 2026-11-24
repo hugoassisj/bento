@@ -12,7 +12,12 @@
 // the editor only (not in the render, a thumbnail, read(), the saved
 // document, print or the show), hides it while a tool is armed, and drops it
 // once the slide has an element; a double-click on it puts a text box at the
-// pointer, open for typing; letter tools still work on a non-empty slide.
+// pointer, open for typing, but not when the double-click placed a comment;
+// a read-only viewer sees no hint; letter tools still work on a non-empty
+// slide. Nothing here reaches the network.
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -28,8 +33,9 @@ const HINT = 'Double-click to add text'
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
-  await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1') } catch {} })
+  await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1'); localStorage.setItem('bento-offline', 'on') } catch {} })
   await ctx.route(/^https?:/, (r) => r.abort())
+  await ctx.routeWebSocket(/.*/, (ws) => ws.close())
   const p = await ctx.newPage()
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
@@ -152,6 +158,28 @@ try {
   d = await doc()
   ok(d.slides[0].elements.length === 0 && !!(await hint()), `undo empties the slide and the hint returns (${d.slides[0].elements.length} elements)`)
 
+  console.log('\na double-click that places a comment\n')
+  await p.keyboard.press('Escape')
+  await p.keyboard.press('c')
+  await p.waitForTimeout(150)
+  ok(await p.evaluate(() => document.querySelector('.ed-topbar [data-cmd="comment"]')?.classList.contains('ed-btn-armed')), 'C arms the comment tool')
+  await p.mouse.dblclick(at.x, at.y)
+  await p.waitForTimeout(300)
+  d = await doc()
+  ok(d.slides[0].elements.length === 0, `it makes no text box (${d.slides[0].elements.map((e) => e.type).join(', ') || 'none'})`)
+  ok(!(await p.evaluate(() => !!document.querySelector('.ed-stage-scale .bento-editing'))), 'and opens no text edit')
+  await p.keyboard.press('Escape')
+  await p.keyboard.press('Escape')
+  await p.waitForTimeout(150)
+  const had = (await doc()).slides[0].elements.length
+  await p.mouse.dblclick(at.x, at.y)
+  await p.waitForTimeout(300)
+  d = await doc()
+  ok(had === 0 && d.slides[0].elements.length === 1, `with the comment tool put away, a fresh double-click makes one (${had} → ${d.slides[0].elements.length})`)
+  await p.keyboard.press('Escape')
+  await p.keyboard.press('Escape')
+  for (let i = 0; i < 4 && (await doc()).slides[0].elements.length; i++) { await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(200) }
+
   console.log('\nwhat leaves the editor\n')
   await p.evaluate(() => { window.print = () => {} })
   await p.keyboard.press('ControlOrMeta+p')
@@ -163,6 +191,29 @@ try {
   await p.waitForFunction(() => document.querySelector('.bento-present-overlay .reveal .slides > section'), null, { timeout: 10000 })
   await p.waitForTimeout(600)
   ok(await p.evaluate((t) => { const o = document.querySelector('.bento-present-overlay'); return !o.innerText.includes(t) && !o.querySelector('.ed-empty-hint') }, HINT), 'the show carries no hint')
+
+  console.log('\na read-only viewer\n')
+  // the starter deck as it booted (its fonts, theme and assets), cut to one
+  // empty slide; its own docId, so the edits above are no recovery for it
+  const ro = { ...before, docId: crypto.randomUUID(), slides: [{ id: 'r1', background: '#ffffff', transition: 'none', notes: '', elements: [] }], collab: { role: 'reader', on: false } }
+  const shell = readFileSync(SHELL, 'utf8')
+  const open = '<script type="application/bento+json" id="bento-doc">'
+  const cut = shell.indexOf(open) + open.length
+  const file = join(mkdtempSync(join(tmpdir(), 'bento-empty-state-')), 'reader.bento.html')
+  writeFileSync(file, shell.slice(0, cut) + JSON.stringify(ro).replace(/</g, '\\u003c') + shell.slice(shell.indexOf('</' + 'script>', cut)))
+  const r = await ctx.newPage()
+  r.on('pageerror', (e) => errors.push(e.message))
+  await r.goto('file://' + file)
+  await r.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale') && !document.getElementById('bento-splash'))
+  await r.waitForTimeout(400)
+  const view = await r.evaluate(() => ({ count: document.querySelectorAll('.ed-empty-hint').length, reader: document.body.classList.contains('ed-reader'), empty: window.bento.doc.slides[0].elements.length === 0, hint: [...document.querySelectorAll('.ed-empty-hint')].some((n) => n.getBoundingClientRect().width > 0 && getComputedStyle(n).display !== 'none') }))
+  ok(view.reader && view.empty, `the reader copy opens read-only on an empty slide (${JSON.stringify(view)})`)
+  ok(!view.hint, 'and shows no hint: it cannot add anything')
+  const rs = await r.evaluate(() => { const b = document.querySelector('.ed-stage').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } })
+  await r.mouse.dblclick(rs.x, rs.y)
+  await r.waitForTimeout(300)
+  ok(await r.evaluate(() => window.bento.doc.slides[0].elements.length === 0), 'a double-click there makes nothing')
+  await r.close()
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
