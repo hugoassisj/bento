@@ -22,6 +22,7 @@ import { openColorPopover } from './inspector/colorpopover'
 import { colorGroups } from './inspector/color'
 import { preview, shownValue } from './inspector/tokenpicker'
 import { openCtxMenu } from './ctxmenu'
+import { openExportTokens, openImportTokens } from './tokeniodialog'
 import { cssColor } from '../render'
 import { t } from '../i18n'
 import { ICONS } from '../icons'
@@ -246,7 +247,17 @@ export class TokensPane {
     const head = div('ed-tokens-head')
     const h = document.createElement('h3')
     h.textContent = t('Tokens')
-    head.append(h, this.modeChips())
+    // ⋯: the deck's tokens in and out as a design-tokens file
+    const file = button('ed-btn ed-tool ed-tokens-file', '⋯', t('Token file actions'))
+    file.setAttribute('aria-haspopup', 'menu')
+    file.addEventListener('click', () => {
+      const r = file.getBoundingClientRect()
+      openCtxMenu(r.left, r.bottom + 4, [
+        { label: t('Import tokens…'), run: () => openImportTokens(this.store, (m) => this.ui.toast(m)) },
+        { label: t('Export tokens…'), run: () => openExportTokens(this.store, (m) => this.ui.toast(m)) },
+      ])
+    })
+    head.append(h, this.modeChips(), file)
     sec.appendChild(head)
 
     const uses = tokenUses(doc)

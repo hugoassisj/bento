@@ -301,6 +301,28 @@ ok(!/writeText\(JSON\.stringify\(this\.store\.doc\)/.test(body('copyDocJson')),
   ok(carriesHidden(JSON.parse(out)).length === 0, 'carriesHidden() agrees: nothing hidden travels')
 }
 
+// The design-tokens export (Tokens ▸ ⋯ ▸ Export tokens…) is not a document
+// copy at all: it builds a token file from theme.tokens and the palette and
+// hands THAT to the clipboard or a download. Run on a deck carrying every
+// secret, and pinned at its one call site: the dialog's sinks see only the
+// exportTokens() result.
+{
+  const { exportTokens } = await import('../slides/src/tokenio.ts')
+  const deck = {
+    format: 'bento/slides', version: 1, docId: 'DOCID-MUST-NOT-TRAVEL', title: 't', size: { width: 1, height: 1 },
+    theme: { background: '#fff', color: '#000', accent: '#f00', fontFamily: 'x', tokens: { set: { 'c.a': { type: 'color', values: { default: '#123456' } } } } },
+    slides: [{ id: 's', background: '#fff', transition: 'fade', elements: [], notes: 'NOTES-MUST-NOT-TRAVEL' }],
+    assets: { a: 'data:image/png;base64,ASSET-MUST-NOT-TRAVEL' },
+    collab: { room: 'ROOM-MUST-NOT-TRAVEL', key: 'KEY-MUST-NOT-TRAVEL', on: true, ownerPriv: 'PRIV-MUST-NOT-TRAVEL', writerPriv: 'PRIV-MUST-NOT-TRAVEL' },
+  }
+  const out = JSON.stringify(exportTokens(deck as never, '0'))
+  ok(!/MUST-NOT-TRAVEL/.test(out) && out.includes('#123456'), 'the token export carries the tokens and no collab, docId, notes or asset data')
+  const dlg = mask(read('slides/src/editor/tokeniodialog.ts'))
+  const sinks = [...dlg.matchAll(/writeText\(|downloadBlob\(/g)].length
+  ok(sinks === 2 && /const json = JSON\.stringify\(exportTokens\(store\.doc, APP_VERSION\)/.test(read('slides/src/editor/tokeniodialog.ts')) && /writeText\(json\)/.test(dlg) && /downloadBlob\(new Blob\(\[json\]/.test(dlg),
+    'Export tokens… sends only the exportTokens() result to its two sinks (clipboard, download)')
+}
+
 // The catch-all: any method that clones the document and then hands it to an
 // outbound sink is an export, named in the list above or not. saveAsNewDeck is
 // the one clone that legitimately keeps a session — it mints a brand new one.

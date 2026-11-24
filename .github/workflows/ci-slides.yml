@@ -721,3 +721,11 @@ jobs:
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
 
+      - name: Design-token import and export in Chromium
+        if: ${{ !cancelled() }}
+        # Tokens ▸ ⋯: paste a file, the review counts and explains each row, a
+        # changed row starts unticked, Apply writes only the ticked rows (a
+        # bound element follows and keeps its binding), ⌘Z restores the token
+        # set byte for byte; Export's JSON and download carry no collab or
+        # content; a hostile paste lists each refusal; no request leaves.
+        run: node scripts/test-slides-token-io-browser.mjs

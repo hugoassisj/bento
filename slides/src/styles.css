@@ -4062,3 +4062,20 @@ body.ed-row-resizing .ed-notespane-text, body.ed-row-resizing .ed-notespane { tr
   .ed-keys-cat { flex: none; }
   .ed-keys-list { padding: 4px 16px 16px; }
 }
+/* Tokens ▸ ⋯ ▸ Import / Export tokens (tokeniodialog.ts) */
+.ed-tokens-file { flex: none; width: 24px; height: 24px; padding: 0; }
+.ed-tokio { width: min(516px, calc(100vw - 76px)); display: flex; flex-direction: column; gap: 8px; }
+.ed-tokio > .ed-btn { align-self: flex-start; }
+.ed-tokio > p { margin: 0; }
+.ed-tokio-why { margin: 0; min-height: 1em; font-size: 12px; color: var(--danger); }
+.ed-tokio-sum { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.ed-tokio-opts { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; }
+.ed-tokio-opt { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.ed-tokio-list { max-height: min(48vh, 420px); overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+.ed-tokio-cap { margin: 8px 0 2px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.ed-tokio-row { display: grid; grid-template-columns: 18px 18px minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; min-height: 26px; font-size: 12px; color: var(--ink); }
+.ed-tokio-row > input { margin: 0; }
+.ed-tokio-box { width: 18px; }
+.ed-tokio-name, .ed-tokio-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-tokio-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ed-tokio-skipped .ed-tokio-name { color: var(--muted); }
