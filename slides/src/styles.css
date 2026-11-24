@@ -3630,6 +3630,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-frame-band:hover { background: rgba(236, 72, 153, 0.32); }
 .ed-frame-band[data-axis='x'] { cursor: ew-resize; }
 .ed-frame-band[data-axis='y'] { cursor: ns-resize; }
+/* an empty frame's "Draw or drop here" (frameoverlay.ts drawFrameHints): editor chrome, a constant size on screen */
+.ed-frame-hints { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 1; }
+.ed-frame-hint { position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 0 calc(8px * var(--k, 1)); overflow: hidden; white-space: nowrap; font-size: calc(13px * var(--k, 1)); font-weight: 500; opacity: 0.45; pointer-events: none; }
 /* ————— COMMAND PALETTE (editor/commands.ts) — ⌘K ————————————————————————— */
 .ed-cmdk-overlay {
   position: fixed; inset: 0; z-index: 1500; background: rgb(15 23 36 / 0.25);

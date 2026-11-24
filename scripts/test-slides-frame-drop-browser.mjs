@@ -190,6 +190,10 @@ try {
   const overlap = (m, n) => m.l < n.r - 0.5 && n.l < m.r - 0.5 && m.t < n.b - 0.5 && n.t < m.b - 0.5
   const hints = () => p.evaluate(() => [...document.querySelectorAll('.ed-frame-hint')].map((n) => ({ frame: n.dataset.frame, text: n.textContent, inStage: !!n.closest('.ed-stage-scale'), shown: n.getBoundingClientRect().width > 0 })))
   await run(async () => {
+    const tips = await p.evaluate(() => ['tool-frame', 'tool-rect', 'tool-ellipse', 'insert-text'].map((c) => document.querySelector(`.ed-topbar [data-cmd="${c}"]`)?.title ?? ''))
+    ok(tips.every((x) => x.includes('\nAlt: draw on top of a frame instead of inside it')), `F, R, O and T say in their tooltips how to draw over a frame without nesting (${tips.map((x) => x.split('\n')[1]).join(' | ')})`)
+  })
+  await run(async () => {
     await load([])
     let before = await ids()
     await draw('f', 200, 150, 800, 450)

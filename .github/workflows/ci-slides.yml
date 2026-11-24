@@ -584,7 +584,8 @@ jobs:
         run: node scripts/test-slides-drag-copy-browser.mjs
       - name: Drag into a frame in Chromium
         if: ${{ !cancelled() }}
-        # Layers and canvas drops put elements inside auto-layout frames, at a slot.
+        # Layers and canvas drops put elements inside auto-layout frames, at a slot;
+        # what a box tool draws inside a frame joins the innermost one (Alt: on top).
         run: node scripts/test-slides-frame-drop-browser.mjs
       - name: The top bar's map in Chromium
         if: ${{ !cancelled() }}

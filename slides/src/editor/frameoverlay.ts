@@ -5,11 +5,69 @@
 // pink bands (Figma's), and dragging a band changes that padding or gap, one
 // undo step per drag. Lives in the scaled stage host, so its coordinates are
 // slide px; only the bands take the pointer.
+//
+// Also here: which frame adopts what is drawn on the slide (adoptingFrame),
+// and the "Draw or drop here" hint an empty frame shows on the editor canvas
+// (drawFrameHints) — editor chrome, never an element, never in the document.
 
 import type { Store } from '../store'
-import type { Slide } from '../model'
-import { frameChildren, isFrame } from '../layout'
+import { isLightBg, type ShapeElement, type Slide, type SlideElement } from '../model'
+import { flagged, frameChildren, isFrame } from '../layout'
 import { t } from '../i18n'
+
+type Frame = ShapeElement & { layout: NonNullable<ShapeElement['layout']> }
+
+/** The frame that takes an element drawn (or dropped) with its start point at
+ *  slide point `pt`: the innermost auto-layout frame whose box holds it,
+ *  visible and unlocked in effect (a hidden or locked frame it sits in counts,
+ *  layout.ts flagged). Among frames as deep as each other, `prefer` (the
+ *  frame the selection is in) wins, then the one painted on top. */
+export function adoptingFrame(slide: Slide, pt: { x: number; y: number }, prefer?: string): Frame | undefined {
+  const hidden = flagged(slide, 'hidden'), locked = flagged(slide, 'locked')
+  const byId = new Map(slide.elements.map((e) => [e.id, e]))
+  const depth = (e: SlideElement) => {
+    let d = 0
+    for (let up = e.parentId, seen = new Set<string>(); up && !seen.has(up); up = byId.get(up)?.parentId) { seen.add(up); d++ }
+    return d
+  }
+  let best: Frame | undefined, bestDepth = -1
+  // topmost first, so a tie keeps the one painted on top
+  for (const f of [...slide.elements].reverse()) {
+    if (!isFrame(f) || hidden.has(f.id) || locked.has(f.id)) continue
+    if (pt.x < f.x || pt.x > f.x + f.w || pt.y < f.y || pt.y > f.y + f.h) continue
+    const d = depth(f)
+    if (d > bestDepth || (d === bestDepth && f.id === prefer)) { best = f; bestDepth = d }
+  }
+  return best
+}
+
+/** "Draw or drop here", dimmed and centred in every visible, unlocked frame
+ *  that has no children yet. `view` as for drawFrameOverlay. */
+export function drawFrameHints(host: HTMLElement, store: Store, scale: () => number, view?: Slide) {
+  host.querySelector(':scope > .ed-frame-hints')?.remove()
+  const slide = view ?? store.slide
+  const hidden = flagged(slide, 'hidden'), locked = flagged(slide, 'locked')
+  const empty = slide.elements.filter((f) => isFrame(f) && !hidden.has(f.id) && !locked.has(f.id) && !frameChildren(slide, f).length)
+  if (!empty.length) return
+  const layer = document.createElement('div')
+  layer.className = 'ed-frame-hints'
+  layer.style.setProperty('--k', String(1 / (scale() || 1)))
+  for (const f of empty) {
+    if (!isFrame(f)) continue
+    const hint = document.createElement('div')
+    hint.className = 'ed-frame-hint'
+    hint.dataset.frame = f.id
+    hint.textContent = t('Draw or drop here')
+    // dark words on a light frame, light on a dark one (a fill that is not a
+    // plain colour reads by the slide behind it)
+    const bg = /^#[0-9a-f]{6}/i.test(f.fill) ? f.fill : String(slide.background ?? '')
+    hint.style.color = isLightBg(bg) ? '#1E2A3A' : '#F5F7FA'
+    Object.assign(hint.style, { left: `${f.x}px`, top: `${f.y}px`, width: `${f.w}px`, height: `${f.h}px` })
+    if (f.rotation) hint.style.transform = `rotate(${Number(f.rotation) || 0}deg)`
+    layer.appendChild(hint)
+  }
+  host.appendChild(layer)
+}
 
 /** `view` draws from a laid-out copy of the slide instead of the model: the
  *  canvas passes its live copy while a frame is dragged, so the bands follow. */

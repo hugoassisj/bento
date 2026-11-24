@@ -102,6 +102,8 @@ const LONG_PRESS_SLOP = 10
 
 /** Shape-menu rows that are also one-letter tools (commands.ts), by label. */
 const SHAPE_TOOL: Record<string, string> = { Rectangle: 'tool-rect', Ellipse: 'tool-ellipse', Line: 'tool-line', Pen: 'tool-pen' }
+/** The tools that put a box down where you click or drag (canvas.armPlace). */
+const PLACE_TOOLS = ['tool-frame', 'tool-rect', 'tool-ellipse', 'insert-text']
 /** The topbar's tools: one of them is pressed at any time (refreshTools). */
 const TOOL_CMDS = ['tool-select', 'tool-marquee', 'tool-frame', 'tool-rect', 'tool-ellipse', 'tool-line', 'tool-pen', 'insert-text', 'comment']
 
@@ -4079,12 +4081,14 @@ export class Editor {
   }
 
   /** R, O, F, T: the tool arms, and a click or a drag on the slide puts it
-   *  down. With an auto-layout frame selected, a gesture that starts inside
-   *  that frame puts the new element in it (canvas.armPlace). */
+   *  down. A gesture that starts inside an auto-layout frame puts the new
+   *  element in it (canvas.armPlace); between frames as deep as each other,
+   *  the selected frame — or the frame the selected element is in — wins. */
   private placeTool(make: () => SlideElement, edit = false) {
     const sel = this.store.selectedElements
-    const f = sel.length === 1 && sel[0].type === 'shape' && sel[0].layout ? sel[0] : null
-    this.canvas.armPlace(make, edit, f?.id)
+    const one = sel.length === 1 ? sel[0] : undefined
+    const f = isFrame(one) ? one : one?.parentId ? this.store.element(one.parentId) : undefined
+    this.canvas.armPlace(make, edit, isFrame(f) ? f.id : undefined)
   }
 
   private duplicateSelection() {
@@ -4301,7 +4305,9 @@ export class Editor {
    *  are the command's (commands.ts), and data-cmd names it. */
   private cmdButton(id: string, icon: string, label: string, tip?: string): HTMLElement {
     const c = this.commands.find((x) => x.id === id)!
-    const b = btn(icon, label, () => c.run(), titleFor(this.commands, id, tip))
+    // the box tools say how to draw over a frame without going into it
+    const alt = PLACE_TOOLS.includes(id) ? `\n${t('Alt: draw on top of a frame instead of inside it')}` : ''
+    const b = btn(icon, label, () => c.run(), titleFor(this.commands, id, tip) + alt)
     b.dataset.cmd = id
     if (c.keys && /^[A-Z]$/.test(c.keys)) {
       const k = document.createElement('kbd')

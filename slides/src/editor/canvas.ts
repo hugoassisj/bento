@@ -33,7 +33,7 @@ import { StepBadges } from './stepbadges'
 import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
-import { drawFrameOverlay } from './frameoverlay'
+import { adoptingFrame, drawFrameHints, drawFrameOverlay } from './frameoverlay'
 import { canAccept, flagged, frameChildren, isFrame, layoutSlide, moveInFrame, moveIntoFrame, roomIn, withDescendants } from '../layout'
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
@@ -383,6 +383,8 @@ export class SlideCanvas {
       const r = this.scaleHost.getBoundingClientRect()
       if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return
       if (ev.target instanceof Element && ev.target.closest('.ed-sidebar, .ed-props, .ed-topbar')) return
+      // an armed box tool owns the press: Alt there draws on top of a frame (armPlace)
+      if (ev.target instanceof Element && ev.target.closest('.ed-place')) return
       // Alt-DRAG on a resize/rotate handle means center-scale, not deep-select.
       // But below ~100% zoom a small element's edge handles cover its middle,
       // so aiming at a selected label lands on a handle: an Alt-press there
@@ -1522,6 +1524,7 @@ export class SlideCanvas {
     }
     // the padding and gap bands follow too
     drawFrameOverlay(this.scaleHost, this.store, () => this.scale, false, clone)
+    drawFrameHints(this.scaleHost, this.store, () => this.scale, clone)
   }
 
   private unfollow() {
@@ -1563,6 +1566,7 @@ export class SlideCanvas {
     // an editor may decline (a compound path): then Moveable's box takes it
     const handled = this.bezierEditor.active || this.lineEditor.active
     drawFrameOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active)
+    drawFrameHints(this.scaleHost, this.store, () => this.scale)
     drawGradientOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active || handled)
     const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes().filter((n) => !n.dataset.locked)
     // snap against slide bounds/center and every non-selected element
@@ -2881,11 +2885,14 @@ export class SlideCanvas {
 
   /** Arm a box tool (R, O, F, T): a drag draws the element at the dragged
    *  size, a click drops the default one centred on the click. Esc or V
-   *  stands it down. A gesture that starts inside frame `into` puts the
-   *  element in that frame (the frame places it, at the slot its default
-   *  position reads as): a drag gives it the dragged size, a click the
-   *  default held to the room the frame has left (layout.ts roomIn). */
-  armPlace(make: () => SlideElement, edit = false, into?: string) {
+   *  stands it down. A gesture that starts inside an auto-layout frame puts
+   *  the element in the innermost one there (frameoverlay.ts adoptingFrame;
+   *  `prefer`, the frame the selection is in, breaks a tie), outlined while
+   *  the gesture lasts; Alt held at the press draws on top instead. The frame
+   *  places it, at the slot its default position reads as: a drag gives it
+   *  the dragged size, a click the default held to the room the frame has
+   *  left (layout.ts roomIn). */
+  armPlace(make: () => SlideElement, edit = false, prefer?: string) {
     this.cancelDraw()
     const { width, height } = this.store.doc.size
     const ov = document.createElement('div')
@@ -2906,6 +2913,18 @@ export class SlideCanvas {
       down.stopPropagation()
       const a = toSlide(down)
       let b = a
+      const into = down.altKey ? undefined : adoptingFrame(this.store.slide, a, prefer)?.id
+      const target = into ? this.store.element(into) : undefined
+      if (target) {
+        // the drop-target outline a drag over a frame shows (trackSlot); it
+        // goes with the overlay — on release, on Esc, on V
+        const hl = document.createElement('div')
+        hl.className = 'ed-drop-frame'
+        hl.dataset.frame = target.id
+        Object.assign(hl.style, { left: `${target.x}px`, top: `${target.y}px`, width: `${target.w}px`, height: `${target.h}px` })
+        hl.style.setProperty('--k', String(1 / (this.scale || 1)))
+        ov.insertBefore(hl, box)
+      }
       const move = (ev: MouseEvent) => {
         b = toSlide(ev)
         Object.assign(box.style, { display: 'block', left: `${Math.min(a.x, b.x)}px`, top: `${Math.min(a.y, b.y)}px`, width: `${Math.abs(b.x - a.x)}px`, height: `${Math.abs(b.y - a.y)}px` })
@@ -2913,6 +2932,7 @@ export class SlideCanvas {
       const up = () => {
         window.removeEventListener('mousemove', move, true)
         window.removeEventListener('mouseup', up, true)
+        if (this.drawOverlay !== ov) return // stood down mid-gesture (Esc, V): nothing is drawn
         const el = make()
         const f = into ? this.store.element(into) : undefined
         const inF = isFrame(f) && a.x >= f.x && a.x <= f.x + f.w && a.y >= f.y && a.y <= f.y + f.h

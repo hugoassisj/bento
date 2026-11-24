@@ -15396,3 +15396,27 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — Frames adopt what is drawn in them; the innermost frame wins, Alt opts out
+
+A box tool (F R O T) whose gesture STARTS inside an auto-layout frame puts the
+new element in that frame, whatever is selected (it used to need the frame
+itself selected, so the second rectangle drawn — with the first child now the
+selection — floated on top, outside the layout).
+- **Which frame:** the innermost one under the start point that is visible
+  and unlocked in effect (a hidden or locked frame it sits in counts). The
+  selection only breaks a tie between frames as deep as each other, then
+  paint order; a selected OUTER frame does not beat the inner one the press
+  landed in. `frameoverlay.ts adoptingFrame` is the one rule — a future
+  drop path (picture files, paste at the pointer) should call it rather than
+  grow its own.
+- **The slot** is still the one the element's default position reads as
+  (layout.ts orders by coordinate); the start point only picks the frame.
+- **Alt at the press draws on top** (Figma uses Space; Space is pan here).
+  The Alt-click dig ignores presses on the place overlay for this.
+- **Feedback:** the frame wears the drag path's drop-target outline from the
+  press until release (it lives in the place overlay, so Esc and V clear it;
+  a gesture stood down mid-drag now draws nothing). An empty frame shows
+  "Draw or drop here" as editor chrome in the scaled stage host — never an
+  element, so it is absent from the document, thumbnails, the show and print.
+- **Guard:** `scripts/test-slides-frame-drop-browser.mjs`, "drawing into a frame".

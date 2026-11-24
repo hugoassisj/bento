@@ -55,7 +55,7 @@ try {
   const byCmd = Object.fromEntries(tools.map((x) => [x.cmd, x]))
   for (const [cmd, key] of [['tool-select', 'V'], ['tool-frame', 'F'], ['insert-text', 'T'], ['comment', 'C']]) {
     ok(byCmd[cmd]?.key === key, `${cmd} carries the badge ${key} (${byCmd[cmd]?.key})`)
-    ok(byCmd[cmd]?.title.endsWith(`(${key})`), `${cmd}'s tooltip names ${key}`)
+    ok(byCmd[cmd]?.title.split('\n')[0].endsWith(`(${key})`), `${cmd}'s tooltip names ${key}`) // a box tool's second line is the Alt note
   }
   for (const cmd of ['insert-image', 'insert-table', 'insert-chart', 'insert-code']) ok(!!byCmd[cmd], `${cmd} is a command button`)
   const shapeKeys = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.ed-topbar .ed-menu [data-cmd^="tool-"]')].map((b) => [b.dataset.cmd, b.querySelector('.ed-tool-key')?.textContent])))

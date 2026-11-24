@@ -16,6 +16,14 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **What you draw inside a frame goes into it.** A rectangle, ellipse, text
+  box or frame drawn starting inside an auto-layout frame joins that frame
+  and lines up with what is already there, whatever is selected; in nested
+  frames the innermost one takes it, and a locked or hidden frame never does.
+  The frame is outlined while you draw so you can see where it will land.
+  Hold Alt (Option on a Mac) as you press to draw on top of the frame
+  instead. An empty frame says "Draw or drop here" in the editor; the words
+  never appear in the slide, the show or print.
 
 ## [1.3.0] — 2026-11-22
 

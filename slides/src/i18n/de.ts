@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Draw or drop here": "Hier zeichnen oder ablegen",
+  "Alt: draw on top of a frame instead of inside it": "Alt: über einem Rahmen zeichnen statt darin",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",
