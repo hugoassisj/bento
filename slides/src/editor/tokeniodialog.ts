@@ -31,6 +31,11 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''):
 }
 const btn = (text: string, primary = false) => { const b = el('button', primary ? 'ed-btn ed-primary' : 'ed-btn', text); b.type = 'button'; return b }
 
+/** A dialog's title: its menu item without the trailing ellipsis (one string for both). */
+const titleOf = (item: string) => item.replace(/\s*…$/, '')
+/** After the dialog: back to the Tokens view's ⋯ (rebuilt by then), not <body>. */
+const backToMenu = () => setTimeout(() => document.querySelector<HTMLElement>('.ed-tokens-file')?.focus())
+
 /** Export tokens…: the file, with Copy and Download. */
 export function openExportTokens(store: Store, toast: (m: string) => void) {
   const json = JSON.stringify(exportTokens(store.doc, APP_VERSION), null, 2)
@@ -39,12 +44,13 @@ export function openExportTokens(store: Store, toast: (m: string) => void) {
   ta.readOnly = true
   ta.rows = 12
   ta.value = json
-  ta.setAttribute('aria-label', t('Export tokens'))
+  const title = titleOf(t('Export tokens…'))
+  ta.setAttribute('aria-label', title)
   body.append(ta)
   const close = btn(t('Cancel'))
   const copy = btn(t('Copy'))
   const save = btn(t('Download'), true)
-  const dlg = createDialog({ title: t('Export tokens'), content: body, actions: [close, copy, save] })
+  const dlg = createDialog({ title, content: body, actions: [close, copy, save], onClose: backToMenu })
   close.addEventListener('click', () => dlg.close())
   copy.addEventListener('click', () => { void navigator.clipboard?.writeText(json).then(() => toast(t('Tokens copied')), () => ta.select()) })
   save.addEventListener('click', () => { downloadBlob(new Blob([json], { type: 'application/json' }), `${exportBase(store.doc)}.tokens.json`); dlg.close() })
@@ -60,20 +66,22 @@ function reasonText(r: ImportRow): string {
     unit: () => t('The unit {unit} is not supported', { unit: d }),
     expression: () => t('Expressions are not supported'),
     colorSpace: () => t('The color space {space} is not supported', { space: d }),
-    layers: () => t('Only a single shadow layer is supported'),
-    inset: () => t('Inner shadows are not supported'),
-    spread: () => t('Shadow spread is not supported'),
+    layers: () => t('This shadow is not supported'),
+    inset: () => t('This shadow is not supported'),
+    spread: () => t('This shadow is not supported'),
     name: () => t('Not a usable name'),
-    proto: () => t('A name the deck refuses'),
+    proto: () => t('Not a usable name'),
     kind: () => t('Already a {type} token in this deck', { type: d }),
     alias: () => t('The alias {ref} is not in the file', { ref: d }),
     loop: () => t('The alias {ref} refers back to itself', { ref: d }),
+    aliases: () => t('Too many aliases'),
     modes: () => t('A deck has 16 modes at most'),
     depth: () => t('Nested too deeply'),
     notToken: () => t('Not a token'),
     unsafe: () => t('Refused by the deck’s safety rules'),
   }
-  return words[r.reason ?? 'value']()
+  // a reason is always one of ours; anything else reads as "not a value"
+  return (r.reason && Object.hasOwn(words, r.reason) ? words[r.reason] : words.value)()
 }
 
 /** Per mode, or the one value when there is one mode. */
@@ -87,14 +95,15 @@ export function openImportTokens(store: Store, toast: (m: string) => void) {
   const body = el('div', 'ed-tokio')
   const back = btn(t('Cancel'))
   const go = btn(t('Review'), true)
-  const dlg = createDialog({ title: t('Import tokens'), content: body, actions: [back, go] })
+  const title = titleOf(t('Import tokens…'))
+  const dlg = createDialog({ title, content: body, actions: [back, go], onClose: backToMenu })
   back.addEventListener('click', () => dlg.close())
 
   // --- step 1: the file
   const ta = el('textarea', 'ed-about-json')
   ta.rows = 10
   ta.placeholder = '{ "color": { "brand": { "$type": "color", "$value": "#ff9e8a" } } }'
-  ta.setAttribute('aria-label', t('Import tokens'))
+  ta.setAttribute('aria-label', title)
   const file = el('input')
   file.type = 'file'
   file.accept = '.json,application/json'
@@ -130,7 +139,10 @@ export function openImportTokens(store: Store, toast: (m: string) => void) {
   }
   const syncGo = () => { go.disabled = !ticked.size && !(withTheme && plan?.theme.length) }
   const review = (eachSetIsMode?: boolean) => {
-    const p = planImport(store.doc, ta.value, { eachSetIsMode })
+    // the file is hostile until shown otherwise: nothing it does may leave
+    // the dialog on the paste step without a word
+    let p: ImportPlan
+    try { p = planImport(store.doc, ta.value, { eachSetIsMode }) } catch { why.textContent = errors.json(); return }
     if (p.error) { why.textContent = errors[p.error](); return }
     plan = p
     ticked.clear()

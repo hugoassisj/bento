@@ -19,7 +19,9 @@
 //      mode", ticked for it), or merged into the active mode when unticked;
 //      applied, the deck gains the modes, and ⌘Z takes them away.
 //   6. A hostile paste (url() colour, __proto__) lists each refusal and writes
-//      nothing; Escape closes the dialog.
+//      nothing; Escape closes the dialog. A file built to exhaust or crash the
+//      review (alias fan-out, a 200,000-deep value, values shaped like refusals)
+//      still gets its review, quickly; on a phone the reasons read in full.
 //   7. Not one request leaves the page: http(s) is aborted, sockets closed,
 //      Offline mode on — and the count of attempts stays zero.
 import { fileURLToPath } from 'node:url'
@@ -117,6 +119,8 @@ try {
   const a = await elA()
   ok(a?.radius === 24 && a?.themeRefs?.radius === '$radius.md', `the bound element follows its token and keeps its binding (radius ${a?.radius}, ${a?.themeRefs?.radius})`)
   ok(!(await p.$('.bkd-overlay')), 'Apply closes the dialog')
+  await p.waitForTimeout(100)
+  ok(await p.evaluate(() => document.activeElement?.classList.contains('ed-tokens-file')), `focus goes back to the ⋯, not the page (${await p.evaluate(() => document.activeElement?.className || document.activeElement?.tagName)})`)
 
   console.log('\n3. one undo step\n')
   await p.evaluate(() => document.activeElement?.blur())
@@ -173,6 +177,35 @@ try {
   await p.keyboard.press('Escape'); await p.waitForTimeout(150)
   ok(!(await p.$('.bkd-overlay')), 'Escape closes the dialog')
   ok(await p.evaluate(() => JSON.stringify(window.bento.doc.theme)) === pre && !('x' in {}), 'nothing was written, Object.prototype untouched')
+
+  // a file built to exhaust or crash the review (review round 1): aliases that
+  // fan out ten wide and eight deep, a value nested 200,000 levels, and values
+  // shaped like the importer's own refusals
+  const fan = {}
+  for (let i = 0; i < 8; i++) fan[`l${i}`] = { $type: 'shadow', $value: Array.from({ length: 10 }, () => `{l${i + 1}}`) }
+  fan.l8 = { $type: 'color', $value: '#000000' }
+  fan.forged = { $type: 'color', $value: { error: 'foo' } }
+  fan.forged2 = { $type: 'color', $value: { error: 'constructor' } }
+  const nested = `"deep":{"$type":"color","$value":${'['.repeat(200000)}"#000"${']'.repeat(200000)}}`
+  const hostileText = JSON.stringify(fan).replace(/\}$/, `,${nested}}`)
+  await menu('Import tokens…')
+  await p.waitForSelector('.bkd-card textarea', { timeout: 2000 }).catch(() => {})
+  await p.evaluate((v) => { const ta = document.querySelector('.bkd-card textarea'); if (ta) ta.value = v }, hostileText)
+  const t0 = Date.now()
+  await tap('.bkd-card button:has-text("Review")')
+  await p.waitForSelector('.ed-tokio-sum', { timeout: 3000 }).catch(() => {})
+  const took = Date.now() - t0
+  const rows = await p.$$eval('.ed-tokio-skipped', (r) => r.map((x) => x.textContent))
+  ok(took < 1500 && rows.some((r) => /^l0Too many aliases/.test(r)) && rows.some((r) => /^deepNested too deeply/.test(r)),
+    `alias fan-out and a 200,000-deep value end in refusals, and the review shows in ${took} ms`)
+  ok(rows.filter((r) => /^forged/.test(r)).length === 2 && rows.filter((r) => /^forged/.test(r)).every((r) => /Not a value of this type/.test(r)),
+    `values shaped like refusals read as "not a value" (${rows.filter((r) => /^forged/.test(r)).join(' | ')})`)
+  // on a phone, a skipped row's reason is shown in full, not cut to a tooltip
+  await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(200)
+  const cut = await p.$$eval('.ed-tokio-skipped .ed-tokio-val', (v) => v.filter((x) => x.scrollWidth > x.clientWidth + 1).length)
+  ok(cut === 0, `on a 390px screen no skipped reason is cut off (${cut} cut)`)
+  await p.setViewportSize({ width: 1440, height: 1000 })
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150)
 
   console.log('\n7. offline\n')
   ok(requests === 0, `no request or socket was attempted (${requests})`)

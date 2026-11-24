@@ -4,11 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
-  "Token file actions": "Actions sur le fichier de jetons",
+  "This shadow is not supported": "Cette ombre n’est pas prise en charge",
+  "Too many aliases": "Trop d’alias",
   "Import tokens…": "Importer des jetons…",
   "Export tokens…": "Exporter les jetons…",
-  "Import tokens": "Importer des jetons",
-  "Export tokens": "Exporter les jetons",
   "Download": "Télécharger",
   "Tokens copied": "Jetons copiés",
   "Paste design-tokens JSON or choose a file. Nothing is fetched.": "Collez du JSON de design tokens ou choisissez un fichier. Rien n’est téléchargé depuis le réseau.",
@@ -31,11 +30,7 @@ export const fr: Catalog = {
   "The unit {unit} is not supported": "L’unité {unit} n’est pas prise en charge",
   "Expressions are not supported": "Les expressions ne sont pas prises en charge",
   "The color space {space} is not supported": "L’espace colorimétrique {space} n’est pas pris en charge",
-  "Only a single shadow layer is supported": "Une seule couche d’ombre est prise en charge",
-  "Inner shadows are not supported": "Les ombres intérieures ne sont pas prises en charge",
-  "Shadow spread is not supported": "L’étendue d’ombre n’est pas prise en charge",
   "Not a usable name": "Pas un nom utilisable",
-  "A name the deck refuses": "Un nom que la présentation refuse",
   "Already a {type} token in this deck": "Déjà un jeton de type {type} dans cette présentation",
   "The alias {ref} is not in the file": "L’alias {ref} n’est pas dans le fichier",
   "The alias {ref} refers back to itself": "L’alias {ref} renvoie à lui-même",

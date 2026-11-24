@@ -4,11 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
-  "Token file actions": "權杖檔案操作",
+  "This shadow is not supported": "不支援此陰影",
+  "Too many aliases": "別名過多",
   "Import tokens…": "匯入權杖…",
   "Export tokens…": "匯出權杖…",
-  "Import tokens": "匯入權杖",
-  "Export tokens": "匯出權杖",
   "Download": "下載",
   "Tokens copied": "已複製權杖",
   "Paste design-tokens JSON or choose a file. Nothing is fetched.": "貼上 design tokens JSON，或選擇一個檔案。不會從網路取得任何內容。",
@@ -31,11 +30,7 @@ export const zhHant: Catalog = {
   "The unit {unit} is not supported": "不支援單位 {unit}",
   "Expressions are not supported": "不支援運算式",
   "The color space {space} is not supported": "不支援色彩空間 {space}",
-  "Only a single shadow layer is supported": "僅支援單層陰影",
-  "Inner shadows are not supported": "不支援內陰影",
-  "Shadow spread is not supported": "不支援陰影擴散",
   "Not a usable name": "不是可用的名稱",
-  "A name the deck refuses": "簡報拒絕的名稱",
   "Already a {type} token in this deck": "在此簡報中已是 {type} 權杖",
   "The alias {ref} is not in the file": "別名 {ref} 不在檔案中",
   "The alias {ref} refers back to itself": "別名 {ref} 參照了自身",

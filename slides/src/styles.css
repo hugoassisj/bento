@@ -4079,3 +4079,7 @@ body.ed-row-resizing .ed-notespane-text, body.ed-row-resizing .ed-notespane { tr
 .ed-tokio-name, .ed-tokio-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-tokio-val { color: var(--muted); font-variant-numeric: tabular-nums; }
 .ed-tokio-skipped .ed-tokio-name { color: var(--muted); }
+/* a phone: a skipped row's reason in full, under its name, not cut to a tooltip */
+@media (max-width: 700px) {
+  .ed-tokio-skipped .ed-tokio-val { grid-column: 3 / -1; white-space: normal; }
+}

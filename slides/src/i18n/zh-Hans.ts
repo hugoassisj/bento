@@ -4,11 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
-  "Token file actions": "令牌文件操作",
+  "This shadow is not supported": "不支持此阴影",
+  "Too many aliases": "别名过多",
   "Import tokens…": "导入令牌…",
   "Export tokens…": "导出令牌…",
-  "Import tokens": "导入令牌",
-  "Export tokens": "导出令牌",
   "Download": "下载",
   "Tokens copied": "已复制令牌",
   "Paste design-tokens JSON or choose a file. Nothing is fetched.": "粘贴 design tokens JSON，或选择一个文件。不会从网络获取任何内容。",
@@ -31,11 +30,7 @@ export const zhHans: Catalog = {
   "The unit {unit} is not supported": "不支持单位 {unit}",
   "Expressions are not supported": "不支持表达式",
   "The color space {space} is not supported": "不支持色彩空间 {space}",
-  "Only a single shadow layer is supported": "仅支持单层阴影",
-  "Inner shadows are not supported": "不支持内阴影",
-  "Shadow spread is not supported": "不支持阴影扩展",
   "Not a usable name": "不是可用的名称",
-  "A name the deck refuses": "演示文稿拒绝的名称",
   "Already a {type} token in this deck": "在本演示文稿中已是 {type} 令牌",
   "The alias {ref} is not in the file": "别名 {ref} 不在文件中",
   "The alias {ref} refers back to itself": "别名 {ref} 引用了自身",

@@ -4,11 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
-  "Token file actions": "トークンファイルの操作",
+  "This shadow is not supported": "この影には対応していません",
+  "Too many aliases": "エイリアスが多すぎます",
   "Import tokens…": "トークンを読み込む…",
   "Export tokens…": "トークンを書き出す…",
-  "Import tokens": "トークンを読み込む",
-  "Export tokens": "トークンを書き出す",
   "Download": "ダウンロード",
   "Tokens copied": "トークンをコピーしました",
   "Paste design-tokens JSON or choose a file. Nothing is fetched.": "design tokens JSON を貼り付けるか、ファイルを選んでください。ネットからは何も取得しません。",
@@ -31,11 +30,7 @@ export const ja: Catalog = {
   "The unit {unit} is not supported": "単位 {unit} には対応していません",
   "Expressions are not supported": "式には対応していません",
   "The color space {space} is not supported": "色空間 {space} には対応していません",
-  "Only a single shadow layer is supported": "影は 1 層のみ対応しています",
-  "Inner shadows are not supported": "内側の影には対応していません",
-  "Shadow spread is not supported": "影の広がりには対応していません",
   "Not a usable name": "使える名前ではありません",
-  "A name the deck refuses": "デッキが受け付けない名前です",
   "Already a {type} token in this deck": "このデッキではすでに {type} トークンです",
   "The alias {ref} is not in the file": "エイリアス {ref} がファイル内にありません",
   "The alias {ref} refers back to itself": "エイリアス {ref} が自分自身を参照しています",

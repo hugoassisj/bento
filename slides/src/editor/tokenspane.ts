@@ -248,7 +248,7 @@ export class TokensPane {
     const h = document.createElement('h3')
     h.textContent = t('Tokens')
     // ⋯: the deck's tokens in and out as a design-tokens file
-    const file = button('ed-btn ed-tool ed-tokens-file', '⋯', t('Token file actions'))
+    const file = button('ed-btn ed-tool ed-tokens-file', '⋯', t('More actions'))
     file.setAttribute('aria-haspopup', 'menu')
     file.addEventListener('click', () => {
       const r = file.getBoundingClientRect()

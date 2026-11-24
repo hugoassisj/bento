@@ -4,11 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
-  "Token file actions": "Azioni sul file dei token",
+  "This shadow is not supported": "Questa ombra non è supportata",
+  "Too many aliases": "Troppi alias",
   "Import tokens…": "Importa token…",
   "Export tokens…": "Esporta token…",
-  "Import tokens": "Importa token",
-  "Export tokens": "Esporta token",
   "Download": "Scarica",
   "Tokens copied": "Token copiati",
   "Paste design-tokens JSON or choose a file. Nothing is fetched.": "Incolla JSON di design token o scegli un file. Non viene scaricato nulla dalla rete.",
@@ -31,11 +30,7 @@ export const it: Catalog = {
   "The unit {unit} is not supported": "L’unità {unit} non è supportata",
   "Expressions are not supported": "Le espressioni non sono supportate",
   "The color space {space} is not supported": "Lo spazio colore {space} non è supportato",
-  "Only a single shadow layer is supported": "È supportato un solo livello di ombra",
-  "Inner shadows are not supported": "Le ombre interne non sono supportate",
-  "Shadow spread is not supported": "L’estensione dell’ombra non è supportata",
   "Not a usable name": "Non è un nome utilizzabile",
-  "A name the deck refuses": "Un nome che la presentazione rifiuta",
   "Already a {type} token in this deck": "Già un token di tipo {type} in questa presentazione",
   "The alias {ref} is not in the file": "L’alias {ref} non è nel file",
   "The alias {ref} refers back to itself": "L’alias {ref} rimanda a sé stesso",
