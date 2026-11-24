@@ -15454,20 +15454,27 @@ What is settled, so the next change does not undo it:
   same change.
 - **The chip leads the bottom-end cluster**: [chip] [notes] [Slideshow]
   [zoom]. Status about the deck sits with the output controls, and it adds no
-  corner of its own (the notes entry's reason against one). It exists only
-  while there are errors or warnings. In a row too narrow for it, Slideshow
-  drops its word by the measured rule that entry set, so with findings that
-  happens at 390px; the notes rig asserts the word's presence only without
-  the chip, and the fit of the row either way.
+  corner of its own (the notes entry's reason against one). It is in the
+  row only while there are errors or warnings (removed, not `[hidden]`:
+  `.ed-btn`'s display beats the attribute), and the row refits (`fitCorner`)
+  each time it comes, goes or changes width. In a row too narrow for it,
+  Slideshow drops its word by the measured rule that entry set, so with
+  findings that happens at 390px. The notes rig keeps that entry's own
+  assertions on a deck with nothing to report, and checks the row with the
+  chip as a separate case.
 - **The panel is not modal.** A labelled region floating in the canvas's
   top-end corner: a row jumps to its element and the panel stays, so a person
   can look, fix and go on. The kernel dialog primitive is for modal sheets
   and was not used. The panel keeps its own keys (an arrow is not a nudge,
   Delete does not delete the element a row selected); ⌘/Ctrl chords pass, so
-  ⌘Z undoes a fix. Whether it is open is viewer state, never saved.
-- **When it runs.** Once on open (after the fonts load); with the panel open,
-  300ms after a change; closed, 2s after the last change, on a slide change
-  and on save if the deck changed since. A canvas text edit changes nothing
+  ⌘Z undoes a fix — but only while focus is in it: a press anywhere else
+  blurs it, so the canvas has its keys back. Whether it is open is viewer
+  state, never saved. Replace from JSON's toast counts the dropped fields
+  and points nowhere else (no "see console"); the findings are the panel's.
+- **When it runs.** Once on open (after the fonts load); at once when the
+  document is replaced (loadDoc, Replace from JSON, a restored version);
+  with the panel open, 300ms after a change; closed, 2s after the last
+  change, on a slide change and on save if the deck changed since. A canvas text edit changes nothing
   until it commits, so typing runs nothing. Measured cost on the starter
   (19 slides, 336 elements): about 55–100ms headless, 12ms without the
   measured checks — hence "once things settle" while closed.

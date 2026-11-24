@@ -52,10 +52,12 @@ pre-1.0.
   choices such as contrast, overlap or a deliberate bleed are pointed out,
   never changed, and tips stay folded and uncounted. File ▸ Replace from JSON
   now opens the list on the problems the pasted JSON brought in, instead of
-  "see console". The list works from the keyboard (arrows, Enter, Escape),
-  is in all eight languages, and a read-only copy shows it without the fix
-  buttons. The check runs when the deck opens and again once your edits
-  settle, never while you type.
+  a toast telling you to look in the browser console. The list works from
+  the keyboard (arrows, Home, End, Enter, Escape) and hands the keys back to
+  the slide as soon as you click it; it is in all eight languages, and a
+  read-only copy shows it without the fix buttons. The check runs when the
+  deck opens or is replaced, and again a moment after your edits settle; it
+  does not run while you type in a text box.
 
 ## [1.3.0] — 2026-11-22
 
