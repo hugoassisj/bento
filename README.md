@@ -60,8 +60,9 @@ no plugin, no API. Two ways in:
   with filesystem access. Claude Code users get a packaged `bento-slides`
   skill (installable from this repo's plugin marketplace: `/plugin marketplace
   add nyblnet/bento`) that even downloads the latest Bento app by itself.
-- **Chat round-trip** for any chatbot: copy the document JSON out (*Save →
-  Copy document JSON*), let the assistant rewrite it, paste it back.
+- **Chat round-trip** for any chatbot: copy the document JSON out (File menu
+  on the bento/slides wordmark → *Copy document JSON*), let the assistant
+  rewrite it, paste it back (*Replace from JSON…*, same menu).
 
 **It works fully offline with local open-weight models** — point
 [Ollama](https://ollama.com), llama.cpp, or LM Studio at the deck and nothing

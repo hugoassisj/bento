@@ -1,9 +1,9 @@
 # The `bento/slides` document format
 
-*Normative reference for the JSON document model, current as of bento/slides
-**v1.0.6** (format version `1`). The authoritative source is
-[`slides/src/model.ts`](../slides/src/model.ts) — this document tracks it. If
-the two disagree, the code wins; please file that as a docs bug.*
+*Normative reference for the JSON document model (format version `1`). It
+tracks [`slides/src/model.ts`](../slides/src/model.ts), which is the
+authoritative source: if the two disagree, the code wins; please file that as
+a docs bug.*
 
 A `.bento.html` file carries one JSON document inside a single plaintext block:
 
@@ -61,9 +61,9 @@ the string `</script>` can never appear and terminate the block.
 | `theme` | `Theme` | yes | Deck-wide defaults (see below). |
 | `slides` | `Slide[]` | yes | Linear order; state slides sit right after their parent. Must be non-empty. |
 | `modified` | `string` (ISO) | yes | Last-modified timestamp. |
-| `present?` | `{ slideNumber?, controls?, progress? }` | no | Present-mode Reveal chrome toggles. |
+| `present?` | `{ slideNumber?, progress?, controls?, numberHidden?, morphSeconds?, typeWriterSeconds? }` | no | Present-mode settings. The show's chrome: `slideNumber` (the "3 / 12" counter, default `true`), `progress` (the bar, default `true`), `controls` (corner arrows, default `false`). `numberHidden`: hidden slides keep their page number (default `false`). `morphSeconds`: morph duration in seconds (absent = 0.65, clamped to 0.1–6). `typeWriterSeconds`: typewriter pace in seconds per character (absent = 0.08, clamped to 0.08–1). |
 | `assets?` | `Record<string,string>` | no | Shared blobs (raw SVG markup or `data:` URIs), referenced by key as `"asset:<key>"`. |
-| `fonts?` | `Array<{ family, asset, weight?, style? }>` | no | Embedded `@font-face`s injected at boot; `asset` is a key into `assets` (a woff2 data URI). |
+| `fonts?` | `Array<{ family, asset, weight?, style? }>` | no | Embedded `@font-face`s injected at boot; `asset` is a key into `assets` (a woff2 data URI), or one of the faces the shell carries: `builtin:fraunces-900` (Fraunces, weight 900) and `builtin:instrument-sans` (Instrument Sans, weights 400–700), whose bytes are not written into the file. A shell older than the `builtin:` keys skips such a face and draws the fallback stack. |
 | `layouts?` | `Slide[]` | no | Slide-shaped templates (see [Layouts](#layouts)). Absent = the built-in starter layouts are offered. |
 | `collab?` | `Collab` | no | Live-collaboration credentials + CRDT state (see [Collaboration fields](#collaboration-fields)). |
 | `template?` | `boolean` | no | Template file: every open mints a fresh `docId` and drops `collab` (see [File modes](#file-modes)). |
@@ -144,13 +144,15 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `component?` | `{ id, key, main?, over?, off?, sig? }` | Component membership (Penpot's main/copy model, no element type of its own). Elements sharing `id` form one component; the set with `main: true` is the main, every other set (one per `groupId`) is a copy. `key` pairs a copy element with its counterpart in the main. A copy re-derives every property from the main except identity (`id`, `groupId`, `name`, `groupName`, `morphId`), its position offset, and the keys listed in `over` — the properties edited on that copy by hand. `off` (`[dx, dy]`) is a copy's offset from its main, kept so a reopened file places it as the session that saved it did. `sig` is a short hash of the main a copy last followed: a main that no longer matches it has moved since (the copy follows), and a copy that differs from an unmoved main was edited by hand (an override) — read from the file, so every replica and every later session agree. A copy's `parentId` and `sizing` are its own (a copy's children sit in the copy's frame). A copy pasted into a deck without its main is detached (`component` dropped); a main pasted or duplicated into a deck that already has its main becomes a copy. An older shell sees ordinary grouped elements. |
 
 The element `type` discriminant is one of: `text`, `shape`, `image`, `svg`,
-`chart`, `table`, `media`.
+`chart`, `table`, `media`, `code`, `embed`.
 
 ### `text`
 
-`type: "text"` — `html` (sanitized subset: inline `b/i/u/s/code/br/span` plus
-blocks `p/div/h1/h2/ul/ol/li`; every tag is attribute-free, and a shell that
-predates a tag unwraps it and keeps the words),
+`type: "text"` — `html` (sanitized subset: inline
+`b/strong/i/em/u/s/code/br/span/a` plus blocks `p/div/h1/h2/ul/ol/li`; any
+other tag is unwrapped and its words kept; every attribute is stripped except
+an `a`'s `href` when it is an `http(s)` URL; a shell that predates a tag
+unwraps it and keeps the words),
 `fontSize`, `fontFamily`, `fontWeight`, `color`, `align` (`left|center|right`),
 `valign` (`top|middle|bottom`), `lineHeight`. Optional `letterSpacing` (px) and
 `placeholder` (a dimmed prompt shown while `html` is empty; hidden in
@@ -205,7 +207,8 @@ plus `fill`, `stroke`, `strokeWidth`, `radius` (rect corner). Options:
   `strokes.1.gradient.stops.0.color`).
 - **line** shapes take their color from `fill`, draw horizontally across the
   box (rotate for vertical), and accept tips `lineStart?`/`lineEnd?` =
-  `none | arrow | dot | bar`.
+  `none | arrow | arrow-open | triangle | triangle-open | diamond |
+  diamond-open | square | circle-open | dot | bar`.
 - **path** shapes carry `d?` (SVG path data) authored in the `pathBox?`
   viewBox `[x, y, w, h]`.
 - `bool?`: `{ op: union | subtract | intersect | exclude, shapes: ShapeElement[] }`
@@ -284,6 +287,28 @@ takes `poster?` (`data:`/`asset:`/URL), `fit?` (`contain|cover|fill`),
   (8 MB) and offers a URL instead — a big data URI makes the file slow to open
   and save.
 
+### `code`
+
+`type: "code"` — a syntax-highlighted code block. `content` (the raw source
+text), `grammarName?` (the language that colours it: `js`, `ts`, `py`, `sql`,
+`diff`, `md`, …; `js` when absent), `fontSize`, `fontFamily` (absent =
+`theme.codeFontFamily`, then `theme.fontFamily`), `color`, `align`, `valign`,
+`lineHeight`. Token colours come from `theme.codePalette`. `grammarAssetId?`,
+`themeAssetId?` and `themeName?` name a grammar or colour theme by asset or
+name. Across a `morph` transition, code elements that pair animate token by
+token.
+
+### `embed`
+
+`type: "embed"` — a document from another app, or a web page, placed on the
+slide. `app` (`'bento/dash'`, `'bento/type'`, …, or `'web'` for a page),
+`view` (the static render: raw `<svg>` markup, or `"asset:<key>"` holding it),
+`doc?` (the source, pure JSON or `"asset:<key>"`), `url?` (`app: 'web'` only:
+the page a live frame loads, `http(s)` only), `live?` (`app: 'web'` only: opt
+in to a sandboxed live iframe of `url` over the view while presenting and
+online). The static `view` is what draws everywhere else: on the canvas,
+offline, in print and in thumbnails.
+
 ---
 
 ## `fx` (presentation effects)
@@ -292,7 +317,7 @@ All `fx` behaviour runs in **present mode only**.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `enter?` | `'fade-up' \| 'fade' \| 'fade-down' \| 'slide-left' \| 'slide-right' \| 'slide-up' \| 'slide-down'` | Entrance animation. `fade-*` nudge ~16px; `slide-*` sweep ~120px from an edge. Only runs on non-morph arrivals. |
+| `enter?` | `'fade-up' \| 'fade' \| 'fade-down' \| 'slide-left' \| 'slide-right' \| 'slide-up' \| 'slide-down'` | Entrance animation. `fade-*` nudge ~16px; `slide-*` sweep ~120px from an edge. On a morph arrival the rule is per element: one with a morph partner on the previous slide morphs, and its `enter` (and `countUp`) is skipped; one without a partner is new to the slide and runs its entrance (with no `enter`, a default fade-and-rise). |
 | `order?` | `number` | Stagger step in the entrance sequence; **equal values enter together**. |
 | `countUp?` | `boolean` | Animate numeric parts of the text from 0 to their final value. |
 | `ambient?` | `'kenburns'` | Continuous ambient motion for full-bleed photos. |

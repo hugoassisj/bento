@@ -23,8 +23,9 @@ JSON in a single block:
 You edit **that block only**, in place. Escape every `<` in the JSON as
 `\u003c` so it can never contain a literal `</script>`. Leave the rest of the
 file (the compressed runtime) untouched. In a chat context instead, the user
-copies the JSON out (*Save ▾ → Copy document JSON*) and pastes your
-replacement back (*Save ▾ → Replace from JSON…*); `window.bento.loadDoc(json)`
+copies the JSON out and pastes your replacement back with *Copy document JSON*
+and *Replace from JSON…*, in the File menu (the bento/slides wordmark, top
+left) under "Advanced", or ⌘K (Ctrl+K) and the name; `window.bento.loadDoc(json)`
 does it from the console, and `window.bento.read()` reads the document with its
 sharing keys left out (`window.bento.doc` is the raw object and carries them).
 
@@ -48,11 +49,18 @@ and nothing to copy from, so do not go looking for it.
 Rules for a fresh document:
 
 - **Fetch https://bento.page/agents.md BEFORE authoring** and start from its
-  "Minimal valid document" skeleton. `size` and `theme` (including
-  `theme.fontFamily`) are **required** — the app will not boot without them.
-- **Fully specify element fields** as the skeleton shows (shapes need
-  `stroke`/`strokeWidth`; text needs `fontFamily`/`align`/`valign`) — missing
-  fields render wrong or not at all.
+  "Minimal valid document" skeleton. Only `"format": "bento/slides"` and a
+  non-empty `slides` array are required; a missing `size` or `theme` (or
+  theme key) opens with the editor's defaults (1280×720, a white slide, the
+  system font stack), so write them because you are choosing them.
+- **Write element fields as the skeleton shows** (shapes need
+  `stroke`/`strokeWidth`; text needs `fontSize`/`color`/`align`/`valign`) —
+  missing fields render wrong or not at all. The exception is `fontFamily`:
+  a text box without `fontFamily` renders in `theme.fontFamily`, so omit it
+  unless that box is choosing a different face; a stack written on every
+  element stops text following the theme. (The guide's compact form,
+  `"compact": true`, fills every omitted field with the editor's default on
+  load instead; there an omitted `fontFamily` becomes the system stack.)
 - **Omit `docId` and `collab` entirely**: the app mints a fresh identity and
   dormant collaboration credentials on first open.
 
@@ -126,8 +134,11 @@ looked at is not finished.
   (`{b}`/`{c}`/`{d}`), never functions.
 - **Morph needs deterministic, stable ids** shared across the slides that
   should animate together. Different ids = no morph (elements just cut).
-- **Images/fonts must be embedded** as data URIs in `doc.assets` and
-  referenced by `"asset:<key>"` — the file stays self-contained.
+- **Images must be embedded** as data URIs in `doc.assets` and referenced by
+  `"asset:<key>"` — the file stays self-contained. Fonts too, except the two
+  the app carries: a `doc.fonts` entry may name `builtin:fraunces-900`
+  (Fraunces 900) or `builtin:instrument-sans` (Instrument Sans 400–700) as its
+  `asset`, and no bytes are written into the file.
 - **Media:** a `media` element (`kind: video|audio`) embeds short clips as a
   data URI in `src` (self-contained) or references a URL for big files (keeps
   the deck small). `autoplay` runs only in present mode and needs `muted:true`

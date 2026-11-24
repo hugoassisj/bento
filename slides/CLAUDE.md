@@ -737,8 +737,8 @@ anim, charts, i18n, sync), shared by every app.
   same id, file survives DOMParser→splice→outerHTML, no stray script-close —
   release.mjs runs a conformance GATE before signing every release.
 - **AI round-trip**: the DOCUMENT is the interchange unit (chat AIs can't emit
-  1MB+ files). Save → "Copy document JSON" / "Replace from JSON…"
-  (File ▸ Advanced; store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
+  1MB+ files). File menu (the wordmark) ▸ Advanced ▸ "Copy document JSON" /
+  "Replace from JSON…" (store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
   shell carries a Tooling-note comment pointing AIs at #bento-doc + the API.
   Agent harnesses edit files in place; chat AIs round-trip the JSON. A plain
   save writes the document on ONE line and, when it has pictures, `"assets":`

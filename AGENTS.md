@@ -158,10 +158,12 @@ The built-in layouts and their roles (this list is generated from the code by
 A deck's own `layouts` (full Slide objects, the shape *Save slide as layout*
 writes) may be named the same way.
 
-Load it with `window.bento.loadDoc(json)` or *Save ▾ Replace from JSON…*;
-`window.bento.compact()` (or *Save ▾ Copy compact JSON*) gives a deck back in
-this shape. A compact document passes the untrusted shape gate on the way in,
-and `loadDoc` RETURNS what happened:
+Load it with `window.bento.loadDoc(json)` or *Replace from JSON…*;
+`window.bento.compact()` (or *Copy compact JSON (for agents)*) gives a deck
+back in this shape. Both commands are in the File menu (the bento/slides
+wordmark, top left) under "Advanced", and in the ⌘K palette. A compact
+document passes the untrusted shape gate on the way in, and `loadDoc`
+RETURNS what happened:
 
 ```js
 const r = window.bento.loadDoc(json)

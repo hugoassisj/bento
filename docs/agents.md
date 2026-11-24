@@ -77,7 +77,8 @@ lives in ONE plaintext block near the top:
 >   key, so it still opens the live room for whoever holds it.
 > - **In the browser, read with `window.bento.read()`** (or
 >   `window.bento.compact()`): the document with the sharing keys left out. In
->   the app, *Save ▾ → Copy document JSON* gives the same copy.
+>   the app, *Copy document JSON* in the File menu (the bento/slides wordmark,
+>   top left) gives the same copy.
 >   `window.bento.doc` and `serialize()` are the raw file and carry the keys.
 >   `window.bento.validate()` reports any key as `collab-secrets-present`.
 > - **Editing a file on disk:** check which `collab` fields exist by NAME without
@@ -97,9 +98,12 @@ Two ways to work with it:
    so the block can never contain a literal `</script>`. Leave everything else in the
    file untouched, and handle `collab` as the box above says: read without it,
    write it back exactly as it was.
-2. **Chat round-trip** (any chatbot): the user copies the JSON out via
-   *Save → Copy document JSON*, you return a full replacement document,
-   they paste it back via *Save → Replace from JSON…* (undoable).
+2. **Chat round-trip** (any chatbot): the user copies the JSON out with
+   *Copy document JSON* (or *Copy compact JSON (for agents)*), you return a
+   full replacement document, and they paste it back with *Replace from
+   JSON…* (undoable). All three are in the File menu, opened from the
+   bento/slides wordmark at the top left, under the "Advanced" caption; or
+   press ⌘K (Ctrl+K) and type the name.
    In the browser console: `window.bento.read()` (read, sharing keys left
    out) / `window.bento.loadDoc(json)` (write, undoable; the open deck keeps
    its own session).
@@ -282,9 +286,7 @@ rest — whether a slide is any good — still needs eyes.
 
 ## Minimal valid document
 
-Start from this skeleton when creating a deck from scratch. `size` and
-`theme` (including `fontFamily`) are **required** — the app will not boot
-without them — and elements should carry the full field set shown.
+Start from this skeleton when creating a deck from scratch.
 
 ```json
 {
@@ -299,19 +301,59 @@ without them — and elements should carry the full field set shown.
         { "id": "t1", "type": "text", "x": 96, "y": 260, "w": 1088, "h": 160,
           "rotation": 0, "opacity": 1,
           "html": "Hello from an agent.",
-          "fontSize": 88, "fontFamily": "system-ui, sans-serif",
-          "fontWeight": 800, "color": "#F2F0EA",
+          "fontSize": 88, "fontWeight": 800, "color": "#F2F0EA",
           "align": "left", "valign": "top", "lineHeight": 1.1 }
       ] }
   ]
 }
 ```
 
+**What is required.** Only `"format": "bento/slides"` and a non-empty `slides`
+array are required; without them the document is refused. Everything else
+above the element level is filled from the editor's defaults when it is
+missing or of the wrong type, and the deck opens: `size` becomes 1280×720; a
+missing `theme`, or any of its `background`, `color`, `accent` and
+`fontFamily`, takes the editor's (a white slide, dark ink, an amber accent,
+the system font stack); a slide without `id`, `transition` (`fade`), `notes`
+or `background` gets one, and that background is white, not
+`theme.background`. So write `size` and `theme` because you are choosing them,
+not because the app needs them. Elements are stricter: one missing a key its
+type cannot render without (text `html`, shape `shape` and `fill`, image
+`src`, chart `option`, table `columns` and `rows`, media `kind` and `src`) is
+dropped, and other missing fields render wrong (a text box without `fontSize`
+comes out at 16 px). Write the field set shown above, with one exception:
+leave `fontFamily` off a text box and it renders in `theme.fontFamily`, which
+is what lets the deck's font be changed in one place. Writing the same stack
+on every element is what stops text following the theme.
+
+To leave the defaults out safely, write the **compact form** instead:
+`"compact": true` at the top level, and every field you omit is filled on load
+with what the editor would insert (`format` and the rest of the document
+level too; ids are minted from the slide id). In this form an omitted
+`fontFamily` becomes the editor's system stack, not the theme's, so write the
+deck's stack on text that should carry it. The saved file is always the full
+document.
+
+```json
+{ "compact": true, "title": "My deck",
+  "theme": { "background": "#101418", "color": "#F2F0EA",
+             "accent": "#FF9E8A", "fontFamily": "system-ui, sans-serif" },
+  "slides": [
+    { "id": "s1", "notes": "speaker notes here", "elements": [
+      { "type": "text", "x": 96, "y": 260, "w": 1088, "h": 160,
+        "html": "Hello from an agent.", "fontSize": 88, "fontWeight": 800,
+        "align": "left", "valign": "top" } ] } ] }
+```
+
 ## Element types (all share `id,x,y,w,h,rotation,opacity`)
 
-- **text**: `html` (inline `<b> <i> <br>` ok), `fontSize`, `fontFamily`,
-  `fontWeight`, `color`, `align` (`left|center|right`), `valign`,
-  `lineHeight`, optional `letterSpacing`.
+- **text**: `html`, `fontSize`, `fontFamily` (omit it to follow
+  `theme.fontFamily`), `fontWeight`, `color`, `align` (`left|center|right`),
+  `valign`, `lineHeight`, optional `letterSpacing`. The `html` keeps these tags
+  and unwraps any other (its words stay): inline `<b> <strong> <i> <em> <u>
+  <s> <code> <br> <span> <a>` and blocks `<p> <div> <h1> <h2> <ul> <ol> <li>`.
+  Every attribute is stripped, except an `<a>`'s `href` when it is an `http(s)`
+  URL, so a `style` or `class` in the markup does nothing.
 - **shape**: `shape` = `rect|ellipse|triangle|arrow|line|path`, `fill`, `stroke`,
   `strokeWidth`, `radius` (rect corner). Optional `fillGradient`
   `{angle, stops:[{at:0..1, color}]}` (CSS-convention angle).
@@ -321,7 +363,8 @@ without them — and elements should carry the full field set shown.
   with `layout`, and its children carry `parentId` (see format.md). Lines take
   their color from `fill` and draw horizontally across the box (rotate for
   vertical); `strokeStyle: solid|dashed|dotted`; tips `lineStart`/`lineEnd`
-  = `arrow|dot|bar`. A `path` is a free vector: `d` (SVG path data) +
+  = `none|arrow|arrow-open|triangle|triangle-open|diamond|diamond-open|square|circle-open|dot|bar`.
+  A `path` is a free vector: `d` (SVG path data) +
   `pathBox` `[x,y,w,h]` authoring viewBox, stretched into the element box;
   for a **curved line** set `fill:"transparent"` + a `stroke` + `strokeWidth`.
   A **connector** is a `line` (or `path`) with `from`/`to: {el, side}` — its ends
@@ -450,27 +493,43 @@ without them — and elements should carry the full field set shown.
   over content starting at `y:208` leaves 416 px of content height above a
   96 px bottom margin.
 - One accent color; 2 typefaces max. `theme` sets deck defaults.
-- Fonts: `doc.fonts` (`{family, asset, weight}`) + woff2 data URIs in
-  `doc.assets` if you need embedded faces; otherwise stick to system stacks.
+- Fonts: `doc.fonts` (`{family, asset, weight}`) declares the faces a deck
+  carries. Two come with the app: name them by a `builtin:` key instead of an
+  asset and no font bytes are written into the file. These are the starter
+  deck's own entries:
+
+  ```json
+  "fonts": [
+    { "family": "Fraunces", "asset": "builtin:fraunces-900", "weight": "900" },
+    { "family": "Instrument Sans", "asset": "builtin:instrument-sans", "weight": "400 700" }
+  ]
+  ```
+
+  `builtin:fraunces-900` is Fraunces at weight 900 only (a display serif for
+  headings); `builtin:instrument-sans` is Instrument Sans across weights 400 to
+  700. Then write `"'Fraunces', Georgia, serif"` or
+  `"'Instrument Sans', system-ui, sans-serif"` in `theme.fontFamily` or on an
+  element. Any other face is embedded: a woff2 data URI in `doc.assets`, its
+  key in a `doc.fonts` entry. (A shell older than the `builtin:` keys opens
+  such a deck with the fallback stack.)
   **A `fontFamily` naming a face the document does not carry falls back
   silently** to the next entry in the stack — there is no warning, and worse,
   it will usually look right to *you*, because you are the one with the
   typeface installed. Everyone else gets the fallback. `validate()` reports
-  this (`font-not-embedded`) precisely because you cannot see it locally.
-  Fonts belong to the DOCUMENT, not the app:
-  Instrument Sans and Fraunces appear in the starter deck and in several
-  templates because those files embed them in their own `doc.assets`, not
-  because the app provides them. So either embed the woff2 yourself, start from
-  a template that already carries the face, or name a system stack and mean it.
+  this (`font-not-embedded`) precisely because you cannot see it locally. So
+  use a built-in face, embed the woff2 yourself, start from a template that
+  already carries the face, or name a system stack and mean it.
   Always write a full stack (`"'Fraunces', Georgia, serif"`), never a bare
   family name.
 
 ## Layouts and `role`
 
 `doc.layouts` is a supported top-level key: an array of Slide-shaped templates
-the editor offers under *Apply layout*. Every deck also gets five built-ins
+the editor offers under *Apply layout*. Every deck also gets the built-ins
 (`layout-title`, `layout-title-content`, `layout-two-col`, `layout-section`,
-`layout-blank`), which are scaled to the deck's `doc.size` when applied.
+`layout-three-cards`, `layout-quote`, `layout-image-left`,
+`layout-image-right`, `layout-blank`), which are scaled to the deck's
+`doc.size` when applied.
 
 The part that matters when you are generating a deck is **`role`**. Any text
 element can carry `"role": "title" | "subtitle" | "body" | "kicker"`. Applying a
@@ -493,6 +552,27 @@ model keeps the raw token, so numbering/props update automatically):
 properties `{{author}}`, `{{company}}`, `{{subject}}`, `{{event}}`. Set the
 props in an optional top-level `"meta": {author, company, subject, event,
 keywords}` object — great for title slides and footers that fill from one place.
+
+### Show chrome
+
+While presenting, the show draws its own furniture over the slides. The
+top-level `present` object sets it for the whole deck:
+
+- `present.slideNumber` (default `true`): a "3 / 12" counter in the bottom
+  corner, numbered the way `{{page}}`/`{{pages}}` are.
+- `present.progress` (default `true`): a thin progress bar along the bottom.
+- `present.controls` (default `false`): arrow buttons in the corner.
+- `present.numberHidden` (default `false`): hidden slides keep their page
+  number (see *Hidden slides* above).
+- `present.morphSeconds` (absent = 0.65): how long a morph transition takes,
+  0.1 to 6; a slower beat suits decks built on code-token morphs.
+- `present.typeWriterSeconds` (absent = 0.08): typewriter pace in seconds per
+  character, 0.08 to 1; a whole run never takes longer than 6 seconds.
+
+If your slides number themselves (a `{{page}}` footer, a hand-made "3 / 12"),
+set `"present": { "slideNumber": false }`, or the show stacks its counter on
+top of yours; add `"progress": false` when the design has its own progress
+mark.
 
 ## Gotchas
 

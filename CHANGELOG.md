@@ -16,6 +16,15 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **The guide for AI agents now says what the app actually does.** The JSON
+  commands (*Copy document JSON*, *Copy compact JSON*, *Replace from JSON…*)
+  are in the File menu on the wordmark, not under Save. The two fonts the app
+  carries, Fraunces and Instrument Sans, are named, with the entries a deck
+  writes to use them. A deck without `size` or `theme` opens with the
+  editor's defaults, and a text box without a font follows the deck's font.
+  Every text tag, line ending, element type and slideshow setting is listed,
+  including how to turn off the slide counter when a deck numbers its own
+  slides. A test now fails when these drift from the code.
 
 ## [1.3.0] — 2026-11-22
 
