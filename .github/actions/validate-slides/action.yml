@@ -751,3 +751,11 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Replace from JSON takes a chatbot's reply
+      # A fenced reply, prose around it and trailing commas are repaired by
+      # removing characters only (never adding), and each repair is named; a
+      # reply cut off at any point is refused as cut off, a syntax error names
+      # its line and column in the pasted text, a non-document and a deck with
+      # no slides say so; the summary counts slides added, removed, changed.
+      shell: bento-step {0}
+      run: node scripts/test-slides-pastejson.ts

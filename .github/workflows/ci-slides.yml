@@ -721,3 +721,10 @@ jobs:
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
 
+      - name: Replace from JSON reviews before it applies in Chromium
+        if: ${{ !cancelled() }}
+        # The audit's six chatbot replies each loaded with the repair named or
+        # refused with a reason, the deck untouched; nothing applies before the
+        # summary; removing slides needs the tick; the report is listed and
+        # copied; one undo step; docId and collab stay the deck's own.
+        run: node scripts/test-slides-replace-dialog-browser.mjs
