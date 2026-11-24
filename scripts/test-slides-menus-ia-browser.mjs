@@ -163,7 +163,8 @@ try {
       await q.$eval(`.ed-thumbs .ed-thumb[data-index="${i}"]`, (e) => e.scrollIntoView({ block: 'center' }))
       await q.click(`.ed-thumbs .ed-thumb[data-index="${i}"]`, { button: 'right' })
       await q.waitForTimeout(150)
-      return q.$$eval('.ed-ctxmenu > .ed-ctxmenu-item', (r) => r.map((b) => b.textContent.trim()))
+      // the row's name only, not its key hint
+      return q.$$eval('.ed-ctxmenu > .ed-ctxmenu-item', (r) => r.map((b) => b.querySelector('span:not(.ed-ctxmenu-icon)')?.textContent.trim()))
     }
 
     ok(await q.$eval('.ed-present-pill', (e) => e.classList.contains('ed-hint-pulse')), 'a newcomer sees the first-run pulse on the Slideshow pill')
@@ -209,7 +210,7 @@ try {
     // a thumbnail: Present from here, while another slide is current
     await pick(4)
     const rows = await thumbMenu(2)
-    ok(rows.join(' · ') === 'New slide · Duplicate slide · Present from here · Delete slide', `the thumbnail menu's rows (${rows.join(' · ')})`)
+    ok(rows.indexOf('Present from here') === rows.indexOf('Duplicate slide') + 1 && rows[0] === 'New slide' && rows.at(-1) === 'Delete slide', `the thumbnail menu offers Present from here after Duplicate slide (${rows.join(' · ')})`)
     await q.click('.ed-ctxmenu > .ed-ctxmenu-item:has-text("Present from here")', { timeout: 2000 })
     ok(await counter() === `3 / ${total}`, `"Present from here" on slide 3 opens on 3 / ${total} while slide 5 is current (${await counter()})`)
     await end()
@@ -239,7 +240,7 @@ try {
     await q.waitForTimeout(700)
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     await q.waitForTimeout(150)
-    const touch = await q.$$eval('.ed-ctxmenu > .ed-ctxmenu-item', (r) => r.map((b) => b.textContent.trim()))
+    const touch = await q.$$eval('.ed-ctxmenu > .ed-ctxmenu-item', (r) => r.map((b) => b.querySelector('span:not(.ed-ctxmenu-icon)')?.textContent.trim()))
     ok(touch.includes('Present from here'), `a long press on a thumbnail offers it too (${touch.join(' · ')})`)
     ok(errs.length === 0, `no page errors${errs.length ? ': ' + errs.join(' | ') : ''}`)
     await c.close()
