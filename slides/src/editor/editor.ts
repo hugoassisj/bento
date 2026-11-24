@@ -10,7 +10,7 @@ import {
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
-  type ChartElement, type ShapeKind, type ShapeElement, type Slide, type SlideElement, type TableElement } from '../model'
+  type ChartElement, type ShapeKind, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
@@ -21,6 +21,7 @@ import { adoptComponents, components, detach, mainsLost, makeComponent, promoteC
 import { goToMain, selectedComponent } from './inspector/component'
 import { activeMode, bindToken, modesOf } from '../tokens'
 import { derive, deriveMemory, type DeriveMemory } from '../derive'
+import { paletteOf, readableSlot, setColor } from '../palette'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
@@ -1308,7 +1309,7 @@ export class Editor {
   private startFromScratch() {
     const n = this.store.doc.slides.length
     if (!window.confirm(t('Replace all {n} slides with one blank slide? ⌘Z undoes this.', { n: String(n) }))) return
-    const blank = builtinLayouts().find((l) => l.id === 'layout-blank')
+    const blank = builtinLayouts(undefined, paletteOf(this.store.doc)).find((l) => l.id === 'layout-blank')
     if (!blank) return
     this.canvas.commitTextEdit() // a live text edit would commit ONTO the new slide
     this.store.commit(() => {
@@ -2088,7 +2089,7 @@ export class Editor {
         // line / curve / connector arm a draw tool — drag on the canvas to draw
         // (or click to drop a default); other shapes insert straight away.
         if (item.draw) { this.canvas.armDraw(item.draw); return }
-        this.canvas.insert(defaultShape(item.kind, item.heads ? { heads: item.heads } : {}))
+        this.canvas.insert(this.newShape(item.kind, item.heads ? { heads: item.heads } : {}))
       }, t(item.tip))
       menu.appendChild(b)
     }
@@ -2231,7 +2232,7 @@ export class Editor {
       t.textContent = i18nT('Apply layout to this slide')
       pick.appendChild(t)
     }
-    const sections: Array<[string, Slide[], boolean]> = [[t('Built-in'), builtinLayouts(doc.size), false]]
+    const sections: Array<[string, Slide[], boolean]> = [[t('Built-in'), builtinLayouts(doc.size, paletteOf(doc)), false]]
     if (doc.layouts?.length) sections.push([t('This document'), doc.layouts, true])
     for (const [label, layouts, custom] of sections) {
       const h = div('ed-layoutpick-h')
@@ -2301,7 +2302,9 @@ export class Editor {
     this.store.commit(() => {
       const s = this.store.slide
       s.elements = applyLayout(s, layout, known)
-      s.background = layout.background
+      // the layout's background reference comes with it (or a literal one
+      // clears the slide's, which would otherwise repaint it from the theme)
+      setColor(s as unknown as Record<string, unknown>, 'background', layout.background, layout.themeRefs?.background ?? null)
     })
     this.store.select([])
   }
@@ -2896,7 +2899,7 @@ export class Editor {
       const { width } = this.store.doc.size
       const parts = splitFences(text.slice(0, 20000))
       if (parts.some((p) => p.kind === 'code')) {
-        const src = defaultText({ html: '', color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 400), y: 120, w: 800 })
+        const src = defaultText({ html: '', ...this.newTextInk(), x: Math.round(width / 2 - 400), y: 120, w: 800 })
         const made = fencedElements(src, parts, estimatedFrames(src, parts))
         this.store.commit(() => this.store.slide.elements.push(...made))
         this.store.select(made.map((e) => e.id))
@@ -2904,7 +2907,7 @@ export class Editor {
         return true
       }
       const esc = text.replace(/^\s*\n/, '').trimEnd().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').split('\n').map(keepSpaces).join('<br>')
-      const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
+      const el = defaultText({ html: esc, ...this.newTextInk(), x: Math.round(width / 2 - 300), y: 260, w: 600 })
       this.store.commit(() => this.store.slide.elements.push(el))
       this.store.select([el.id])
       this.toast(t('Text pasted'))
@@ -3780,11 +3783,11 @@ export class Editor {
       // different scope.
       { id: 'tool-marquee', label: 'Select only', keys: 'S', scope: 'canvas', when: canvasFree, match: tool('s'), run: () => this.useTool(true) },
       { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: toolFree, match: tool('f'), run: () => this.arm('tool-frame', () => this.placeTool(() => this.newFrame())) },
-      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.arm('tool-rect', () => this.placeTool(() => defaultShape('rect'))) },
-      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.arm('tool-ellipse', () => this.placeTool(() => defaultShape('ellipse'))) },
+      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.arm('tool-rect', () => this.placeTool(() => this.newShape('rect'))) },
+      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.arm('tool-ellipse', () => this.placeTool(() => this.newShape('ellipse'))) },
       { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: toolFree, match: tool('l'), run: () => this.arm('tool-line', () => this.canvas.armDraw('line')) },
       { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: toolFree, match: tool('p'), run: () => this.arm('tool-pen', () => this.canvas.armDraw('pen')) },
-      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.arm('insert-text', () => this.placeTool(() => defaultText({ color: readableInk(this.store.slide.background) }), true)) },
+      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.arm('insert-text', () => this.placeTool(() => defaultText(this.newTextInk()), true)) },
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => writable() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
       // ⌘L / Ctrl+L locks the selection, or unlocks it when all of it is locked (#838);
@@ -4067,6 +4070,23 @@ export class Editor {
       shape.classList.toggle('ed-btn-armed', on)
       shape.setAttribute('aria-pressed', String(on))
     }
+  }
+
+  /** A new text box's colour and font, bound to the theme: the Text colour
+   *  (or, on a slide painted in it, the Background colour) and the theme font.
+   *  Only where no theme colour reads on the slide does it fall back to an
+   *  unbound literal picked by lightness. */
+  private newTextInk(): Partial<TextElement> {
+    const bg = this.store.slide.background
+    const palette = paletteOf(this.store.doc)
+    const slot = readableSlot(bg, palette)
+    const ink = slot ? { color: palette[slot], themeRefs: { color: slot } } : { color: readableInk(bg) }
+    return { ...ink, fontFamily: '' }
+  }
+
+  /** A new shape, filled with the theme's Accent 1 and bound to it. */
+  private newShape(kind: ShapeKind, partial: Partial<ShapeElement> = {}): ShapeElement {
+    return defaultShape(kind, { fill: this.store.doc.theme.accent, themeRefs: { fill: 'accent1' }, ...partial })
   }
 
   /** F: an empty auto-layout frame (a rect carrying `layout`, layout.ts) —

@@ -76,6 +76,7 @@
  */
 
 import { markdownToHtml } from './editor/markdown.ts'
+import { paletteOf } from './palette.ts'
 import {
   FORMAT, FORMAT_VERSION, FONT_STACK,
   defaultText, defaultShape, defaultImage, defaultChart, defaultCode, defaultTable, defaultMedia,
@@ -245,11 +246,13 @@ export function layoutRoles(layout: Slide): Record<string, string> {
 }
 
 /** The compact `layout` name resolved to a layout for this deck: a built-in
- *  (by id, with or without the `layout-` prefix) or one of the document's. */
+ *  (by id, with or without the `layout-` prefix, its colours resolved for the
+ *  deck's theme) or one of the document's. */
 export function findLayout(name: string, doc: Obj): Slide | undefined {
   const size = doc.size as { width: number; height: number } | undefined
   const own = Array.isArray(doc.layouts) ? (doc.layouts as Slide[]) : []
-  const all = [...builtinLayouts(size), ...own]
+  const palette = isObj(doc.theme) ? paletteOf(doc as unknown as BentoDoc) : undefined
+  const all = [...builtinLayouts(size, palette), ...own]
   const key = LAYOUT_ALIASES[name] ?? name
   return all.find((l) => l.id === key) ?? all.find((l) => l.id === `layout-${key}`) ?? all.find((l) => l.name?.toLowerCase() === name.toLowerCase())
 }
@@ -364,10 +367,13 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
   doc.slides = slidesIn.map((raw, si) => {
     const s0 = isObj(raw) ? raw : {}
     const sd = slideDefaults(doc)
-    // a layout supplies the slide's background/transition unless the author set them
+    // a layout supplies the slide's background/transition unless the author
+    // set them, and with the background its palette reference
     const layout = typeof s0.layout === 'string' ? findLayout(s0.layout, doc) : undefined
     if (typeof s0.layout === 'string' && !layout) stats.notes.push({ path: `/slides/${si}/layout`, reason: `unknown layout \`${s0.layout}\`; elements placed as given` })
-    const slide: Obj = { ...sd, ...(layout ? { background: layout.background, transition: layout.transition } : {}), ...s0 }
+    const bgRef = layout?.themeRefs?.background
+    const fromLayout = layout ? { background: layout.background, transition: layout.transition, ...(bgRef && !('background' in s0) && !('themeRefs' in s0) ? { themeRefs: { background: bgRef } } : {}) } : {}
+    const slide: Obj = { ...sd, ...fromLayout, ...s0 }
     delete slide.layout
     stats.expanded += Object.keys(sd).filter((k) => !(k in s0)).length
     if (typeof slide.id !== 'string' || !slide.id) slide.id = `s${si + 1}`

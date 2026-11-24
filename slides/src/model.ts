@@ -3,6 +3,8 @@
 // The bento/slides document model. This JSON is what lives inside the
 // <script type="application/bento+json"> block of a .bento.html file.
 
+import { applyRefs, contrastRatio, paletteOf, type Palette } from './palette.ts'
+
 export const FORMAT = 'bento/slides'
 export const FORMAT_VERSION = 1
 
@@ -1279,6 +1281,14 @@ export function emptySlide(partial: Partial<Slide> = {}): Slide {
 // set below). Element ids are deterministic per layout and are KEPT when a
 // layout is instantiated: slides born from the same layout share ids, so
 // their common chrome morphs across transitions.
+//
+// The built-ins are bound to the deck's THEME: every colour carries a palette
+// reference (`themeRefs`, palette.ts) and text uses the theme font (the empty
+// family, which every shell has always rendered as `theme.fontFamily`). The
+// literals written here are only the default deck's; `builtinLayouts` rewrites
+// them from the palette it is given, so what lands in a document is the
+// resolved colour, and a shell that predates palette references shows exactly
+// that.
 
 const ph = (
   id: string,
@@ -1293,9 +1303,10 @@ const ph = (
   html: '',
   placeholder,
   fontSize: 32,
-  fontFamily: FONT_STACK,
+  fontFamily: '',
   fontWeight: 400,
   color: '#1E2A3A',
+  themeRefs: { color: 'tx1' },
   align: 'left',
   valign: 'top',
   lineHeight: 1.25,
@@ -1305,14 +1316,32 @@ const ph = (
 const bar = (id: string, frame: { x: number; y: number; w: number; h: number }): ShapeElement => ({
   id, type: 'shape', shape: 'rect', ...frame,
   rotation: 0, opacity: 1, fill: '#F7A600', stroke: 'transparent', strokeWidth: 0, radius: 2,
+  themeRefs: { fill: 'accent1' },
 })
 
-/** A card backdrop: a soft panel grouped with the text that sits on it. */
+/**
+ * A card backdrop: a soft panel grouped with the text that sits on it. A shade
+ * of the BACKGROUND, not `bg2`: `paletteOf` fills an unset `bg2` from the Text
+ * colour, so on a fresh deck a `bg2` card is navy under navy text. Darkening
+ * the background keeps Text legible on the card in a light and a dark theme.
+ */
 const card = (id: string, frame: { x: number; y: number; w: number; h: number }, role: string): ShapeElement => ({
   id, type: 'shape', shape: 'rect', ...frame,
-  rotation: 0, opacity: 1, fill: '#F3F0EA', stroke: 'transparent', strokeWidth: 0, radius: 16,
+  rotation: 0, opacity: 1, fill: '#f2f2f2', stroke: 'transparent', strokeWidth: 0, radius: 16,
+  themeRefs: { fill: 'bg1 -5%' },
   groupId: `l3c-g${role.slice(-1)}`,
 })
+
+/** Muted text tones, as lightness shifts of the Text colour. */
+const SUBTLE = { color: '#3b5272', themeRefs: { color: 'tx1 +20%' } }
+const MUTED = { color: '#49668d', themeRefs: { color: 'tx1 +30%' } }
+const PROMPT = { color: '#50709b', themeRefs: { color: 'tx1 +35%' } }
+/** A slide painted in the theme Background. */
+const PAPER = { background: '#FFFFFF', themeRefs: { background: 'bg1' } }
+
+/** The palette of a deck that never touched its theme (newDoc's). */
+const defaultPalette = (): Palette =>
+  paletteOf({ theme: { background: '#FFFFFF', color: '#1E2A3A', accent: '#F7A600', fontFamily: FONT_STACK } } as BentoDoc)
 
 /**
  * The canvas the built-in layout geometry below is authored against.
@@ -1352,30 +1381,37 @@ function scaleLayout(ly: Slide, sx: number, sy: number): Slide {
 /**
  * The layouts every document offers out of the box (not persisted until edited).
  * Pass the deck's page size to get geometry that fits it; omit it only when the
- * caller just wants the element ids.
+ * caller just wants the element ids. Pass the deck's palette (`paletteOf(doc)`)
+ * to get colours resolved for it — the literals then equal what the references
+ * resolve to in that deck; omitted, they are the default theme's.
  */
-export function builtinLayouts(size?: { width: number; height: number }): Slide[] {
+export function builtinLayouts(size?: { width: number; height: number }, palette: Palette = defaultPalette()): Slide[] {
+  // The Section divider inverts (Text-coloured slide, Background-coloured
+  // title). Its kicker is Accent 1 when the accent reads on the Text colour,
+  // else the Background colour: an orange kicker on a dark theme's light
+  // section slide would fail 4.5:1.
+  const kicker = (contrastRatio(palette.accent1, palette.tx1) ?? 0) >= 4.5 ? 'accent1' : 'bg1'
   const base: Slide[] = [
     {
-      id: 'layout-title', name: 'Title', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+      id: 'layout-title', name: 'Title', ...PAPER, transition: 'fade', notes: '', elements: [
         bar('lt-bar', { x: 160, y: 380, w: 72, h: 8 }),
         ph('lt-title', 'Click to add title', { x: 160, y: 404, w: 1280, h: 140 },
           { fontSize: 76, fontWeight: 700, valign: 'middle', role: 'title' }),
         ph('lt-sub', 'Click to add subtitle', { x: 160, y: 556, w: 1100, h: 60 },
-          { fontSize: 28, color: '#45566B', valign: 'middle', role: 'subtitle' }),
+          { fontSize: 28, ...SUBTLE, valign: 'middle', role: 'subtitle' }),
       ],
     },
     {
-      id: 'layout-title-content', name: 'Title + content', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+      id: 'layout-title-content', name: 'Title + content', ...PAPER, transition: 'fade', notes: '', elements: [
         ph('ltc-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
           { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         bar('ltc-rule', { x: 120, y: 168, w: 1360, h: 3 }),
         ph('ltc-body', 'Click to add content', { x: 120, y: 208, w: 1360, h: 600 },
-          { fontSize: 26, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+          { fontSize: 26, ...MUTED, valign: 'top', lineHeight: 1.5, role: 'body' }),
       ],
     },
     {
-      id: 'layout-two-col', name: 'Two columns', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+      id: 'layout-two-col', name: 'Two columns', ...PAPER, transition: 'fade', notes: '', elements: [
         ph('l2c-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
           { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         bar('l2c-rule', { x: 120, y: 168, w: 1360, h: 3 }),
@@ -1386,19 +1422,19 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
       ],
     },
     {
-      id: 'layout-section', name: 'Section divider', background: '#1E2A3A', transition: 'fade', notes: '', elements: [
+      id: 'layout-section', name: 'Section divider', background: '#1E2A3A', themeRefs: { background: 'tx1' }, transition: 'fade', notes: '', elements: [
         bar('lsec-bar', { x: 160, y: 396, w: 72, h: 8 }),
         ph('lsec-title', 'Section title', { x: 160, y: 420, w: 1280, h: 120 },
-          { fontSize: 64, fontWeight: 700, color: '#FFFFFF', valign: 'middle', role: 'title' }),
+          { fontSize: 64, fontWeight: 700, color: '#FFFFFF', themeRefs: { color: 'bg1' }, valign: 'middle', role: 'title' }),
         ph('lsec-kicker', 'PART 1', { x: 160, y: 350, w: 800, h: 40 },
-          { fontSize: 18, fontWeight: 600, color: '#F7A600', letterSpacing: 3, valign: 'middle', role: 'kicker' }),
+          { fontSize: 18, fontWeight: 600, color: '#F7A600', themeRefs: { color: kicker }, letterSpacing: 3, valign: 'middle', role: 'kicker' }),
       ],
     },
     // Four layouts an agent reaches for (compact input: `layout` + `role`,
     // compact.ts). Roles are the slot names; the card backdrops share a
     // groupId per card so a card moves as one in the editor.
     {
-      id: 'layout-three-cards', name: 'Three cards', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+      id: 'layout-three-cards', name: 'Three cards', ...PAPER, transition: 'fade', notes: '', elements: [
         ph('l3c-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
           { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         card('l3c-bg1', { x: 120, y: 220, w: 426, h: 560 }, 'card1'),
@@ -1413,36 +1449,43 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
       ],
     },
     {
-      id: 'layout-quote', name: 'Quote', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+      id: 'layout-quote', name: 'Quote', ...PAPER, transition: 'fade', notes: '', elements: [
         bar('lq-bar', { x: 160, y: 300, w: 8, h: 300 }),
         ph('lq-quote', 'Click to add a quote', { x: 208, y: 300, w: 1232, h: 300 },
           { fontSize: 48, fontWeight: 500, valign: 'middle', lineHeight: 1.3, role: 'quote' }),
         ph('lq-attr', 'Who said it', { x: 208, y: 620, w: 1232, h: 44 },
-          { fontSize: 24, color: '#586A80', valign: 'middle', role: 'attribution' }),
+          { fontSize: 24, ...MUTED, valign: 'middle', role: 'attribution' }),
       ],
     },
     {
-      id: 'layout-image-left', name: 'Image left', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+      id: 'layout-image-left', name: 'Image left', ...PAPER, transition: 'fade', notes: '', elements: [
         ph('lil-image', 'Add an image', { x: 120, y: 120, w: 640, h: 660 },
-          { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'image' }),
+          { fontSize: 24, ...PROMPT, align: 'center', valign: 'middle', role: 'image' }),
         ph('lil-title', 'Click to add title', { x: 820, y: 120, w: 660, h: 120 },
           { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         ph('lil-body', 'Click to add content', { x: 820, y: 264, w: 660, h: 516 },
-          { fontSize: 24, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+          { fontSize: 24, ...MUTED, valign: 'top', lineHeight: 1.5, role: 'body' }),
       ],
     },
     {
-      id: 'layout-image-right', name: 'Image right', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+      id: 'layout-image-right', name: 'Image right', ...PAPER, transition: 'fade', notes: '', elements: [
         ph('lir-title', 'Click to add title', { x: 120, y: 120, w: 660, h: 120 },
           { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         ph('lir-body', 'Click to add content', { x: 120, y: 264, w: 660, h: 516 },
-          { fontSize: 24, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+          { fontSize: 24, ...MUTED, valign: 'top', lineHeight: 1.5, role: 'body' }),
         ph('lir-image', 'Add an image', { x: 840, y: 120, w: 640, h: 660 },
-          { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'image' }),
+          { fontSize: 24, ...PROMPT, align: 'center', valign: 'middle', role: 'image' }),
       ],
     },
-    { id: 'layout-blank', name: 'Blank', background: '#FFFFFF', transition: 'fade', notes: '', elements: [] },
+    { id: 'layout-blank', name: 'Blank', ...PAPER, transition: 'fade', notes: '', elements: [] },
   ]
+  for (const ly of base) {
+    // each holder its own refs object (the helpers share theirs), resolved
+    for (const h of [ly, ...ly.elements] as Array<{ themeRefs?: Record<string, string> }>) {
+      if (h.themeRefs) h.themeRefs = { ...h.themeRefs }
+      applyRefs(h, palette)
+    }
+  }
   if (!size || (size.width === LAYOUT_BASE.width && size.height === LAYOUT_BASE.height)) return base
   const sx = size.width / LAYOUT_BASE.width
   const sy = size.height / LAYOUT_BASE.height

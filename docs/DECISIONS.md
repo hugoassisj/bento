@@ -15396,3 +15396,37 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — slides: built-in layouts and new elements are bound to the theme
+
+Built-in layouts, new text boxes and new shapes wrote hard-coded colours and
+the font stack, so a theme change moved none of them. They now use the
+binding the format already has: a palette reference in `themeRefs` beside
+every literal, and the empty `fontFamily` that every shell since the first
+renders as `theme.fontFamily`. No new key, no schema change.
+
+- **The literal is resolved for the deck it lands in.** `builtinLayouts(size,
+  palette)` writes each literal as its reference resolves against the deck's
+  palette, so a shell that predates references shows the right colour, and
+  1.2.x shells (same `paletteOf` and `shiftLightness`) re-derive the same one.
+  The layout picker passes `paletteOf(doc)`, so its previews are in the
+  deck's colours; so does the compact loader's `layout` + `role` path.
+- **Nothing existing is rebound.** Only newly instantiated layouts and newly
+  created elements carry references. A slide from the old layouts keeps its
+  literals; guessing a binding for a colour someone already has would
+  silently restyle their deck (rejected in F-01).
+- **Cards are `bg1 -5%`, not `bg2`.** `paletteOf` fills an unset `bg2` from
+  the Text colour, so a `bg2` card is navy under navy text on a fresh deck. A
+  darkened Background keeps Text legible on the card in light and dark themes.
+- **Muted text is a lightness shift of Text** (`tx1 +20%` subtitle, `+30%`
+  body, `+35%` the image prompt), each at least 4.5:1 on white with the
+  default Text colour; in a dark theme they lighten and stay legible.
+- **The Section divider inverts:** a Text-coloured slide, Background-coloured
+  title, Accent 1 bar. Its kicker is Accent 1 only when the accent reads on
+  the Text colour at 4.5:1, else Background, decided when the layout is built
+  for the deck (an orange kicker on a dark theme's light divider is 1.9:1).
+- **A new text box binds to Text, or to Background on a slide painted in
+  Text, whichever reads at 4.5:1** (`readableSlot`). Only where neither does
+  (a mid-tone literal background) is it an unbound `readableInk` literal.
+  New shapes bind their fill to Accent 1.
+- **Guard.** `scripts/test-slides-layout-theme.ts`.

@@ -211,6 +211,44 @@ export function resolveRef(token: string, palette: Palette): string | null {
   return shiftLightness(base, ref.shift)
 }
 
+/**
+ * WCAG contrast ratio of two hex colours (1..21), or null when either is not
+ * a hex colour. Alpha is ignored: this answers "does the ink read on the
+ * paint", which is the question for a new element's default colour.
+ */
+export function contrastRatio(a: string, b: string): number | null {
+  const lum = (hex: string) => {
+    const c = parseHex(hex)
+    if (!c) return null
+    const ch = [c.r, c.g, c.b].map((v) => {
+      const x = v / 255
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+  }
+  const la = lum(a), lb = lum(b)
+  if (la === null || lb === null) return null
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+/**
+ * The palette slot a new text box on this background should be bound to: the
+ * theme Text colour when it reads there (4.5:1), else the theme Background
+ * colour when THAT reads (a slide painted in the Text colour, like the
+ * Section divider), else null — the caller then writes an unbound literal
+ * (`readableInk`), because no theme colour is legible on this slide. A
+ * background that is not a plain hex colour (a gradient, a CSS name) samples
+ * its first hex, as `isLightBg` does.
+ */
+export function readableSlot(background: string, palette: Palette): 'tx1' | 'bg1' | null {
+  const bg = /#[0-9a-f]{6}\b/i.exec(background || '')?.[0]
+  if (!bg) return null
+  for (const slot of ['tx1', 'bg1'] as const) {
+    if ((contrastRatio(palette[slot], bg) ?? 0) >= 4.5) return slot
+  }
+  return null
+}
+
 /** Read a dotted path (`fillGradient.stops.0.color`) off an object. */
 function readPath(obj: unknown, path: string): unknown {
   let cur: any = obj
@@ -259,7 +297,13 @@ export function keepAlpha(current: unknown, literal: string): string {
   return `rgba(${c.r}, ${c.g}, ${c.b}, ${Math.round(a * 1000) / 1000})`
 }
 
-function applyRefs(holder: RefHolder, palette: Palette): boolean {
+/**
+ * Rewrite one holder's referenced literals (a slide's own `background`, or one
+ * element's colours) from the palette. `resolveThemeRefs` is this over the
+ * whole document; on its own it serves something being BUILT, such as a
+ * built-in layout, so its literals are right before it ever enters a deck.
+ */
+export function applyRefs(holder: RefHolder, palette: Palette): boolean {
   const refs = holder.themeRefs
   if (!refs) return false
   let changed = false
