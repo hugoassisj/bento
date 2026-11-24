@@ -24,9 +24,12 @@ pre-1.0.
   columns — not numeric: Notes"), and a column's currency shows on its axis.
   The new chart goes below, beside or above the table, wherever it fits inside
   the slide on any page size, instead of hanging off the bottom. Editing a
-  cell updates a linked chart with the same rules, and a linked chart follows
-  its columns by name, so an existing chart keeps showing the column it
-  showed.
+  cell updates a linked chart with the same rules. A linked chart never takes
+  another column's data: a series named after one column follows that column,
+  and if that column no longer reads as numbers (`12 apples` used to chart as
+  12) the series keeps the values it had. A decimal comma now reads as the
+  count-up already reads it, so `1,5` is 1.5 where it used to be 15; a linked
+  chart over such cells shows the corrected numbers once its slide is edited.
 
 ## [1.3.0] — 2026-11-22
 

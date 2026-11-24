@@ -19,7 +19,11 @@
 //      out (`skipped`), and carries a column's currency (`unit`).
 //   3. syncLinkedChart, the live link, uses the same reader: editing `$1,204`
 //      to `$2,000` reaches the chart, and a series follows its column by NAME
-//      when a column that used to be skipped now charts.
+//      when a column that used to be skipped now charts. Charts made by the
+//      previous release get, after an edit, exactly what that release gave:
+//      a column the reader now skips (`12 apples`) keeps its series' data,
+//      duplicate headers and a series renamed to another column's header map
+//      by position.
 //   4. chartBoxFor places the new chart inside the page: on a 16:9 deck with
 //      the table at its default position and at the bottom, on 4:3 and 9:16.
 //   5. there is one cell-to-number reader in slides/src: the inspector keeps
@@ -72,6 +76,9 @@ else {
     ['1.2k', { value: 1200 }],
     ['3bn', { value: 3000000000 }],
     ['−15', { value: -15 }],
+    ['–15', { value: -15 }],
+    ['.5', { value: 0.5 }],
+    ['1,5', { value: 1.5 }],
     ['12 %', { value: 12, pct: true }],
     ['USD 3,000', { value: 3000, unit: 'USD' }],
     ['3,000 EUR', { value: 3000, unit: 'EUR' }],
@@ -126,6 +133,8 @@ H('2. tableChartColumns on the finance table')
 
   const noHeader = tableChartColumns(tableOf([['a', '1', 'x'], ['b', '2', 'y']], false))
   ok(same(noHeader.skipped, ['C']), 'a headerless table names a skipped column by its letter', JSON.stringify(noHeader.skipped))
+  const wide = tableChartColumns(tableOf([Array.from({ length: 30 }, (_, i) => (i ? 'x' : 'a')), Array.from({ length: 30 }, (_, i) => (i ? 'y' : 'b'))], false))
+  ok(wide.skipped[24] === 'Z' && wide.skipped[25] === 'AA' && wide.skipped[28] === 'AD', 'past column Z the letters go on AA, AB…', JSON.stringify(wide.skipped.slice(23)))
 
   const mixed = tableChartColumns(tableOf([['K', 'V'], ['a', '$1'], ['b', '€2']]))
   ok(mixed.cols[0]?.unit === undefined, 'two currencies in one column give no unit', String(mixed.cols[0]?.unit))
@@ -160,6 +169,43 @@ H('3. the live link uses the same reader')
   ok(same(unnamed.option.series.map((s: any) => s.data), [[1204, 1530, 2310], [-300, -410, -520]]), 'series whose name matches no column still map by position',
     JSON.stringify(unnamed.option.series.map((s: any) => s.data)))
 
+  // Charts made by the previous release, synced after one cell edit. The
+  // expected arrays are what that release's syncLinkedChart gives on the same
+  // edit (checked by running these rows against origin/main): a deck that
+  // opens in this shell must never show another column's data.
+  const made = (series: Array<[string, number[]]>) => defaultChart({
+    xAxis: { type: 'category', data: [] }, yAxis: { type: 'value' },
+    series: series.map(([name, data]) => ({ type: 'bar', name, data })),
+  }, { source: { tableId: 'tbl' } })
+  const dataOf = (c: any) => c.option.series.map((s: any) => [s.name, s.data])
+  {
+    // the previous reader charted "12 apples" (parseFloat read the 12); this
+    // one does not. Stock must keep its own data, not take Price's.
+    const t = tableOf([['Fruit', 'Stock', 'Price'], ['Apple', '12 apples', '6'], ['Banana', '30 apples', '4'], ['Cherry', '7 apples', '5']])
+    const c = made([['Stock', [12, 30, 7]], ['Price', [6, 4, 5]]])
+    t.rows[1].cells[2].html = '8'
+    syncLinkedChart(c, t)
+    ok(same(dataOf(c), [['Stock', [12, 30, 7]], ['Price', [8, 4, 5]]]), 'a column the reader now skips leaves its series alone; no neighbour\'s data moves in',
+      JSON.stringify(dataOf(c)))
+  }
+  {
+    const t = tableOf([['Q', 'Sales', 'Sales'], ['Q1', '10', '20'], ['Q2', '11', '21']])
+    const c = made([['Sales', [10, 11]], ['Sales', [20, 21]]])
+    t.rows[1].cells[2].html = '25'
+    syncLinkedChart(c, t)
+    ok(same(dataOf(c), [['Sales', [10, 11]], ['Sales', [25, 21]]]), 'two columns with the same header map by position, each to its own',
+      JSON.stringify(dataOf(c)))
+  }
+  {
+    // the Revenue series renamed in the inspector to "Costs"
+    const t = tableOf([['Q', 'Revenue', 'Costs'], ['Q1', '100', '40'], ['Q2', '120', '50']])
+    const c = made([['Costs', [100, 120]], ['Costs', [40, 50]]])
+    t.rows[1].cells[1].html = '130'
+    syncLinkedChart(c, t)
+    ok(same(dataOf(c), [['Costs', [130, 120]], ['Costs', [40, 50]]]), 'a series renamed to another column\'s header keeps its column (the name is not unique among series)',
+      JSON.stringify(dataOf(c)))
+  }
+
   // the starter deck's linked chart renders the same data it ships with
   const doc = starterDoc()
   const all = doc.slides.flatMap((s: any) => s.elements)
@@ -188,6 +234,8 @@ else {
     ['4:3, table at the bottom', { x: 80, y: 460, w: 800, h: 240 }, { width: 960, height: 720 }],
     ['9:16, table at its default position', { x: tbl.x, y: tbl.y, w: tbl.w, h: tbl.h }, { width: 1080, height: 1920 }],
     ['9:16, table at the bottom', { x: 140, y: 1600, w: 800, h: 300 }, { width: 1080, height: 1920 }],
+    ['16:9, table dragged off the right edge', { x: 1500, y: 200, w: 400, h: 200 }, { width: 1280, height: 720 }],
+    ['16:9, table dragged above the page', { x: 200, y: -600, w: 600, h: 200 }, { width: 1280, height: 720 }],
   ]
   for (const [name, t, size] of rows) {
     const b = chartBoxFor(t, size)
