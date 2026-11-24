@@ -28,7 +28,7 @@ These rules protect the user's file. They are absolute.
   `<script type="application/bento+json" id="bento-doc"> … </script>`.
   Change the JSON inside it and nothing else in the file. Never regenerate the
   HTML around it (it is the compressed app, and it updates itself).
-- **Escape every `<` in the JSON as `<`** when you write the block, so it
+- **Escape every `<` in the JSON as `\u003c`** when you write the block, so it
   can never contain `</script>`. `JSON.parse` reads the escape back.
 - **Check `format` first.** `"bento/slides"` is this skill. `"bento/enc"` is a
   password-protected deck: it cannot be read or edited as JSON; tell the user.
@@ -50,8 +50,8 @@ These rules protect the user's file. They are absolute.
   created, so a deck can carry them before it is ever shared. List the field
   names without printing their values, read the document without it, and write
   it back exactly as it was; a file written without it drops out of its room.
-  If it has keys, tell the user the deck carries live-session keys. The remedy for keys that already leaked is
-  *Share → Reset access…* in the app.
+  If it has keys, tell the user the deck carries live-session keys. The remedy
+  for keys that already leaked is *Share → Reset access…* in the app.
 - **Pictures are the last line.** A deck saved by a current shell writes its
   `assets` map (embedded pictures, fonts, files as data URIs) last, starting on
   its own line. Stop reading at the line that starts `"assets":`, or drop the
@@ -157,9 +157,10 @@ palette refs and shifts, components, frames and fonts.
    edits reach everyone in it.
 6. **Look** at every slide. With nothing selected, the arrow keys walk the
    slides in the editor; the File menu's *Export slides as images…* writes one
-   picture per slide. Overflowing text, crowded elements, a heading that
-   wrapped to three lines and a chart that ignored a key are invisible in the
-   JSON and obvious on screen.
+   picture per slide in the show, leaving out hidden and state slides, so
+   step to those in the editor. Overflowing text, crowded elements, a heading
+   that wrapped to three lines and a chart that ignored a key are invisible in
+   the JSON and obvious on screen.
 7. **Apply.** From the browser, `window.bento.serialize()` returns the whole
    file with your document in it; write that to the deck's path. Without a
    browser, splice the full JSON into the block (`references/editing.md`).
@@ -273,7 +274,9 @@ app, `window.bento.schema()` returns the whole format as JSON Schema.
 
 ## 7. References
 
-Read a reference when its trigger applies; each stands alone.
+Read a reference when its trigger applies; each stands alone. They sit in the
+`references/` folder beside this file; a copy of `SKILL.md` installed on its
+own lacks them, and sections 1 to 6 still hold without them.
 
 - `references/design-system.md`: read when the deck has tokens, palette slots,
   `themeRefs`, components, its own layouts or fonts, or when you build a row,

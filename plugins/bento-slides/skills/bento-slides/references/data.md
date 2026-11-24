@@ -18,7 +18,7 @@ key it does not implement, without a warning.
     "xAxis": { "type": "category", "data": ["2022", "2023", "2024", "2025"] },
     "yAxis": { "type": "value" },
     "series": [{ "type": "bar", "name": "Revenue", "data": [420, 780, 1300, 2450] }],
-    "tooltip": { "trigger": "item", "formatter": "{b}: {c}" } } }
+    "tooltip": { "trigger": "item" } } }
 ```
 
 - **Data.** Bar and line `data` are JSON numbers; an object or a numeric
@@ -26,16 +26,19 @@ key it does not implement, without a warning.
   by series, not per bar.
 - **Colours.** Without `option.color` (or a series' `itemStyle.color`) a chart
   draws in the engine's default palette, not the deck's. Take the series
-  colours from `theme.chartPalette` when the deck has one, else from its palette
-  slots, and write them into `option.color`.
-- **Formatters** are templates only: `{b}` (category), `{c}` (value), `{d}`
-  (pie percent), not functions.
+  colours from `theme.chartPalette` when the deck has one, else from its
+  palette slots, and write them into `option.color`.
+- **Formatters** are template strings, not functions, and only two are read.
+  A pie series' `label.formatter` substitutes `{b}` (the name), `{c}` (the
+  value) and `{d}` (the percent). A value axis's `axisLabel.formatter`
+  substitutes `{value}` (`"{value}%"`). A tooltip's `formatter` is not read:
+  the tooltip shows the name and value itself.
 - **Two scales** (a volume and a percentage): make `yAxis` an array of two
   `{ "type": "value" }` axes and point the second series at the second axis
   with `"yAxisIndex": 1`, drawn as a `line` over the bars.
 - **What it honours**:
   - top level: `color`, `series`, `xAxis`, `yAxis`, `legend`, `grid`,
-    `tooltip`, `textStyle`, `dataZoom`
+    `tooltip` (`trigger` only), `textStyle` (`fontFamily`), `dataZoom`
   - any series: `type`, `name`, `data`, `yAxisIndex`, `itemStyle.color`
   - bar: `itemStyle.borderRadius`
   - line: `smooth`, `symbol`, `symbolSize`, `lineStyle.color`,

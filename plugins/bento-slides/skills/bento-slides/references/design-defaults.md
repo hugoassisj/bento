@@ -40,9 +40,9 @@ something, do that.
 
 ## Type
 
-- **Faces.** If the deck carries no faces, the two the app ships are a good
-  pair, because they cost no bytes: Fraunces 900 for display
-  (`builtin:fraunces-900`) and Instrument Sans 400 to 700 for text
+- **Faces.** If you are creating the deck and it carries no faces, the two
+  the app ships are a good pair, because they cost no bytes: Fraunces 900 for
+  display (`builtin:fraunces-900`) and Instrument Sans 400 to 700 for text
   (`builtin:instrument-sans`). Declare them in `doc.fonts` and write
   `"'Instrument Sans', system-ui, sans-serif"` as `theme.fontFamily`.
 - **How many.** Two typefaces at most is a good default for a fresh deck,

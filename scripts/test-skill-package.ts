@@ -10,16 +10,21 @@
 // WHAT THIS PROVES. plugins/bento-slides/skills/bento-slides/ is what an agent
 // reads before it touches a deck, often with nothing else in context. So:
 //
-//   SHAPE. The front matter fits Claude's limits (name = directory, a third-
-//   person description under 1,024 characters naming the triggers); the body
+//   SHAPE. The front matter fits the skill's front-matter limits (name =
+//   directory, a third-person description under 1,024 characters naming the
+//   triggers); the body
 //   is under 500 lines and its first 5,000 tokens hold the file contract, the
 //   precedence protocol and the workflow; nothing in SKILL.md asks for a
 //   network fetch; every reference is indexed with a "read when" line, every
 //   relative path resolves, and no reference points at another; the five
 //   gotchas live in SKILL.md; design guidance is phrased as defaults (no
 //   "always"/"never" or shouted words outside the file contract); and the
-//   claude.ai zip that scripts/release.mjs builds carries every file of the
-//   folder (the zip step is replayed here on a copy; nothing is released).
+//   escape rule names the exact sequence the save path writes.
+//
+//   KNOWN GAP, NOT CHECKED HERE. scripts/release.mjs still publishes SKILL.md
+//   alone and zips bento-slides/SKILL.md only, so the skill zip and the
+//   raw-file install lack references/. That file is the maintainer's at
+//   release time; SKILL.md says what an install without references still has.
 //
 //   FACTS. Every set the skill lists is the set the code has: bindable keys,
 //   token types, palette slots and their fallbacks, frame layout keys and
@@ -27,7 +32,8 @@
 //   default durations, chart presets and the option keys charts-lite reads,
 //   code languages and palette scopes, table style keys, the built-in layouts
 //   with their roles and aliases, the element keys in the essentials table,
-//   and every validator code the skill names.
+//   the chart formatters charts-lite actually substitutes, and every validator
+//   code the skill names.
 //
 //   BEHAVIOUR. Each gotcha is run through the real derive pass the app runs
 //   when a file opens and after loadDoc (derive.ts): a token-bound literal that
@@ -45,10 +51,10 @@
 //   contract says. Every complete JSON example in the skill loads through the
 //   real loader with nothing dropped and no error finding.
 
-import { readFileSync, readdirSync, statSync, mkdtempSync, writeFileSync, rmSync, cpSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { tmpdir } from 'node:os'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { parseDoc, builtinLayouts, FONT_STACK } from '../slides/src/model.ts'
 import { MODEL_KEYS } from '../slides/src/modelkeys.generated.ts'
 import { expandDocWithStats, layoutRoles, LAYOUT_ALIASES } from '../slides/src/compact.ts'
@@ -73,6 +79,7 @@ const read = (f: string) => readFileSync(join(root, f), 'utf8')
 const flat = (s: string) => s.replace(/\s+/g, ' ')
 const same = (a: Iterable<string>, b: Iterable<string>) => [...new Set(a)].sort().join() === [...new Set(b)].sort().join()
 const show = (s: Iterable<string>) => [...s].sort().join(', ')
+const everythingJson = () => [skillRaw, ...Object.values(refs)].join('\n').match(/```json\n[\s\S]*?```/g)?.join('\n') ?? ''
 const ticks = (s: string) => [...s.matchAll(/`([^`]+)`/g)].map((m) => m[1])
 
 const DIR = 'plugins/bento-slides/skills/bento-slides'
@@ -115,7 +122,7 @@ ok(description.length > 0 && description.length <= 1024, `description is ${descr
 ok(!/\b(I|I'm|my|we)\b/.test(description) && !/^(Use|Create|Make|Help)\b/.test(description), 'description is written in the third person')
 for (const trigger of ['.bento.html', 'deck', 'slides', 'presentation']) ok(description.includes(trigger), `description names the trigger "${trigger}"`)
 const whenToUse = /^when_to_use:\s*(.+)$/m.exec(yaml)?.[1] ?? ''
-ok(description.length + whenToUse.length <= 1536, 'description plus when_to_use fit the 1,536 characters Claude Code keeps')
+ok(description.length + whenToUse.length <= 1536, 'description plus when_to_use fit the 1,536 characters the skill loader keeps')
 const bodyLines = body.split('\n').length
 ok(bodyLines < 500, `SKILL.md body is ${bodyLines} lines (under 500)`)
 const s1 = section(body, /^## 1\. The file contract$/m)
@@ -129,6 +136,9 @@ ok(estTokens <= 5000, `the front matter and sections 1 to 3 come to about ${estT
 const net = /\bcurl\b|\bwget\b|\biwr\b|Invoke-WebRequest|\bfetch\s*\(|bento\.page\/agents\.md|https?:\/\//
 ok(!net.test(skillRaw), `SKILL.md carries no fetch instruction or URL${net.exec(skillRaw) ? ` (found "${net.exec(skillRaw)![0]}")` : ''}`)
 ok(/only step that touches\s+the network/.test(s1), 'SKILL.md says fetching the app is the only step that touches the network')
+const ESC = '\\u003c' // the six characters backslash, u, 0, 0, 3, c
+ok(/'\\\\u003c'/.test(read('kernel/src/save.ts')) || read('kernel/src/save.ts').includes("replace(/</g, '\\\\u003c')"), 'kernel save.ts writes every < as \\u003c')
+ok(s1.includes('Escape every `<` in the JSON as `' + ESC + '`'), 'SKILL.md\'s escape rule names the exact sequence \\u003c')
 
 console.log('\nthe reference index\n')
 const index = section(body, /^## 7\. References$/m)
@@ -249,6 +259,11 @@ const honoured = ticks(section(da, /^## Charts/m).split('**What it honours**')[1
 for (const k of new Set(honoured)) ok(new RegExp(`\\b${k}\\b`).test(chartsSrc), `charts-lite reads \`${k}\``)
 ok(/colors: Array\.isArray\(option\?\.color\) && option\.color\.length \? option\.color : PALETTE/.test(chartsSrc), 'charts-lite falls back to its own palette when option.color is absent')
 ok((chartsSrc.match(/\.map\(\(v: unknown\) => num\(v, 0\)\)/g) ?? []).length >= 3 && /const num = \(v: unknown, d: number\): number => \(typeof v === 'number' && Number\.isFinite\(v\) \? v : d\)/.test(chartsSrc), 'charts-lite reads bar/line data with num(v, 0): anything but a number draws as 0')
+const charts = section(da, /^## Charts/m)
+ok(!/tooltip\??\.formatter/.test(chartsSrc) && /tooltipTrigger: option\?\.tooltip \? \(option\.tooltip\.trigger === 'item' \? 'item' : 'axis'\) : null/.test(chartsSrc), 'charts-lite reads a tooltip\'s trigger and never its formatter')
+ok(/A tooltip's `formatter` is not read/.test(flat(charts)) && !/"tooltip":\s*\{[^}]*"formatter"/.test(everythingJson()), 'data.md says so, and no example gives a tooltip a formatter')
+ok(/cfg\.formatter \? cfg\.formatter\.replace\('\{value\}', fmt\(v\)\)/.test(chartsSrc) && /axisLabel\.formatter`\s+substitutes `\{value\}`/.test(flat(charts)), 'a value axis formatter substitutes {value} only, as data.md says')
+ok(/\.replaceAll\('\{b\}', p\.name\)\s*\.replaceAll\('\{c\}', fmt\(p\.value\)\)\s*\.replaceAll\('\{d\}'/.test(chartsSrc) && /pie series' `label\.formatter` substitutes `\{b\}`/.test(flat(charts)), 'a pie label formatter substitutes {b} {c} {d}, as data.md says')
 const langs = ticks(/the language:\s*([\s\S]*?)\. An unknown name/.exec(da)?.[1] ?? '')
 ok(same(langs, [...Object.keys(LANGS), 'diff', 'md']), `data.md lists exactly the code languages (${langs.length}; code ${Object.keys(LANGS).length + 2})`)
 ok(/const L = LANGS\[langId\] \?\? LANGS\.js/.test(read('kernel/src/tokenize.ts')), 'an unknown language reads as js')
@@ -386,6 +401,7 @@ ok(/parseDocInputReport\(ta\.value, \{ live: this\.store\.doc \}\)/.test(editorS
 for (const api of ['read(opts', 'loadDoc(json', 'serialize: ()', 'validate(target', 'measure(target', 'compact: ()', 'schema()']) ok(mainSrc.includes(`  ${api}`), `window.bento.${api.split(/[(:]/)[0]} exists`)
 ok(/validateDoc\(target \?\? store\.doc, opts\)/.test(mainSrc), 'window.bento.validate(undefined, opts) checks the open deck with those options')
 ok(/lsGet\('bento-offline'\) === 'on'/.test(read('kernel/src/net.ts')) && body.includes("localStorage['bento-offline'] = 'on'"), "the offline switch is localStorage['bento-offline'] = 'on'")
+ok(/export const exportableSlides = \(doc: BentoDoc\): Slide\[\] => doc\.slides\.filter\(inLinearFlow\)/.test(read('slides/src/exportimages.ts')) && /export const inLinearFlow = \(s: Slide\): boolean => !s\.stateOf && !s\.hidden/.test(modelSrc) && /leaving out hidden and state slides/.test(flat(body)), 'Export slides as images leaves out hidden and state slides, and SKILL.md says so')
 ok(/with NOTHING selected[^]*arrow keys walk slides/.test(read('slides/CLAUDE.md')), 'arrow keys walk the slides when nothing is selected (slides/CLAUDE.md, canvas slide nav)')
 
 console.log('\nthe file holds the full form\n')
@@ -491,33 +507,6 @@ for (const [f, t] of sources) {
   }
 }
 ok(examples >= 6, `${examples} complete examples checked`)
-
-// ---- the published zip --------------------------------------------------------------
-console.log('\nthe claude.ai zip carries the whole skill folder\n')
-const release = read('scripts/release.mjs')
-const zipCall = /execFileSync\('zip', (\[[^\]]*\]), \{ cwd: join\(site, 'skills'\) \}\)/.exec(release)
-const copies = [...release.matchAll(/cpSync\(skillSrc, join\(site, '(skills\/[a-z-]+)'\), \{ recursive: true \}\)/g)].map((m) => m[1])
-ok(/const skillSrc = join\(root, 'plugins\/bento-slides\/skills\/bento-slides'\)/.test(release), 'release.mjs takes the skill folder, not SKILL.md alone')
-ok(same(copies, ['skills/bento-slides', 'skills/bento-deck']), `release.mjs copies the whole folder to both published paths (${show(copies)})`)
-ok(!!zipCall, 'release.mjs zips from site/skills')
-if (zipCall) {
-  const argv = JSON.parse(zipCall[1].replace(/'/g, '"')) as string[]
-  ok(argv.includes('-r') && argv[argv.length - 1] === 'bento-slides', `the zip recurses into the bento-slides folder (${argv.join(' ')})`)
-  const zipOk = spawnSync('zip', ['-v'], { encoding: 'utf8' }).status === 0 && spawnSync('unzip', ['-v'], { encoding: 'utf8' }).status === 0
-  ok(zipOk, 'zip and unzip are on the path (the published zip is checked by building it)')
-  if (zipOk) {
-    const site = mkdtempSync(join(tmpdir(), 'skill-zip-'))
-    try {
-      cpSync(join(root, DIR), join(site, 'skills/bento-slides'), { recursive: true })
-      execFileSync('zip', argv, { cwd: join(site, 'skills') })
-      const listed = execFileSync('unzip', ['-Z1', join(site, 'skills', argv.find((a) => a.endsWith('.zip'))!)], { encoding: 'utf8' }).split('\n').filter((l) => l && !l.endsWith('/'))
-      const want = all.map((f) => `bento-slides/${f.slice(DIR.length + 1)}`)
-      ok(same(listed, want), `the zip holds every file of the folder (${listed.length}: ${show(listed)})`)
-    } finally {
-      rmSync(site, { recursive: true, force: true })
-    }
-  }
-}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

@@ -179,8 +179,10 @@ editor's *Save slide as layout* writes. Their text elements carry a
   attribution), `layout-image-left` and `layout-image-right` (image, title,
   body), and `layout-blank`. The `layout-` prefix may be left out. They carry
   the editor's own look, not the deck's (see the gotchas in `SKILL.md`).
-- A role the layout lacks falls back to its body slot, and the load report's
-  `dropped` says so. More body elements than body slots stack in the slot.
+- A role the layout lacks falls back to the layout's body slot when it has
+  one (with none, the element lands at the editor's default frame), and the
+  load report's `dropped` says so either way. More body elements than body
+  slots stack in the slot.
 - Writing the file directly, reproduce a layout by copying its elements onto
   the new slide with their ids (ids need only be unique within a slide), and
   put your text in `html` in place of the `placeholder`.
