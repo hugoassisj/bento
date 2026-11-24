@@ -4,6 +4,12 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Start the slideshow fullscreen on this slide — {key} starts from the beginning; F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "從這張投影片全螢幕開始放映 — {key} 從頭開始，F 切換全螢幕，S 開啟演講者檢視，Esc 結束；⇧ 點按可播放進入這張投影片的轉場",
+  "From the beginning": "從頭開始",
+  "Starts the slideshow fullscreen on the first slide, whichever slide you are on": "無論目前在哪張投影片，都從第一張投影片全螢幕開始放映",
+  "Present from the beginning": "從頭開始播放",
+  "Present from this slide": "從目前投影片開始播放",
+  "Present from here": "從這裡開始播放",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",
@@ -1131,7 +1137,6 @@ export const zhHant: Catalog = {
   "Play transition": "播放轉場",
   "Things moved — morph them from the slide before?": "有內容移動了 — 從上一張投影片變形？",
   "New slide at the end, from a layout": "在結尾新增投影片（使用版面配置）",
-  "Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "全螢幕開始放映 — F 切換全螢幕，S 開啟演講者檢視，Esc 結束；⇧ 點按可播放進入這張投影片的轉場",
   "{n} properties changed · {m} hard-coded colors on these slides didn’t follow": "{n} 個屬性已變更 · 這些投影片上的 {m} 個固定顏色沒有跟隨",
   "{n} properties changed": "{n} 個屬性已變更",
   "{n} properties follow {name} — click to select the next": "{n} 個屬性跟隨 {name} — 按一下選取下一個",

@@ -4,6 +4,12 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Start the slideshow fullscreen on this slide — {key} starts from the beginning; F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "Avvia la presentazione a schermo intero da questa diapositiva — {key} parte dall’inizio; F alterna lo schermo intero, S apre la vista relatore, Esc termina; ⇧-clic riproduce la transizione verso questa diapositiva",
+  "From the beginning": "Dall’inizio",
+  "Starts the slideshow fullscreen on the first slide, whichever slide you are on": "Avvia la presentazione a schermo intero dalla prima diapositiva, qualunque sia quella su cui ti trovi",
+  "Present from the beginning": "Presenta dall’inizio",
+  "Present from this slide": "Presenta da questa diapositiva",
+  "Present from here": "Presenta da qui",
   "View": "Vista",
   "Current slide": "Diapositiva attuale",
   "Slide thumbnails": "Miniature delle diapositive",
@@ -1131,7 +1137,6 @@ export const it: Catalog = {
   "Play transition": "Riproduci transizione",
   "Things moved — morph them from the slide before?": "Qualcosa si è spostato: trasformare dalla diapositiva precedente?",
   "New slide at the end, from a layout": "Nuova diapositiva in fondo, da un layout",
-  "Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "Avvia la presentazione a schermo intero — F alterna lo schermo intero, S apre la vista relatore, Esc termina; ⇧-clic riproduce la transizione verso questa diapositiva",
   "{n} properties changed · {m} hard-coded colors on these slides didn’t follow": "{n} proprietà cambiate · {m} colori fissi su queste slide non hanno seguito",
   "{n} properties changed": "{n} proprietà cambiate",
   "{n} properties follow {name} — click to select the next": "{n} proprietà seguono {name} — fai clic per selezionare la successiva",

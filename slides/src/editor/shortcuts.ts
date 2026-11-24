@@ -18,6 +18,7 @@ const GROUPS: Array<[Group, string]> = [
 
 /** A command's category, by its id. */
 function groupOf(id: string): Group {
+  if (id === 'slideshow') return 'present' // ⇧F5, beside 'present' (F5)
   if (id.startsWith('tool-') || id === 'insert-text' || id === 'comment') return 'tools'
   if (id.startsWith('select-')) return 'selection'
   if (/^(align|distribute|flip|bool)-/.test(id) || id === 'group' || id === 'ungroup') return 'arrange'

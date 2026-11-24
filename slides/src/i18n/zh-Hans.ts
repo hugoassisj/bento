@@ -4,6 +4,12 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Start the slideshow fullscreen on this slide — {key} starts from the beginning; F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "从本幻灯片全屏开始放映 — {key} 从头开始，F 切换全屏，S 打开演讲者视图，Esc 结束；⇧ 点按可播放进入本幻灯片的切换",
+  "From the beginning": "从头开始",
+  "Starts the slideshow fullscreen on the first slide, whichever slide you are on": "无论当前在哪张幻灯片，都从第一张幻灯片全屏开始放映",
+  "Present from the beginning": "从头开始演示",
+  "Present from this slide": "从当前幻灯片开始演示",
+  "Present from here": "从此处开始演示",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",
@@ -1131,7 +1137,6 @@ export const zhHans: Catalog = {
   "Play transition": "播放切换",
   "Things moved — morph them from the slide before?": "有内容移动了 — 从上一张幻灯片变形？",
   "New slide at the end, from a layout": "在末尾新建幻灯片（使用版式）",
-  "Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "全屏开始放映 — F 切换全屏，S 打开演讲者视图，Esc 结束；⇧ 点按可播放进入本幻灯片的切换",
   "{n} properties changed · {m} hard-coded colors on these slides didn’t follow": "{n} 个属性已更改 · 这些幻灯片上的 {m} 个固定颜色没有跟随",
   "{n} properties changed": "{n} 个属性已更改",
   "{n} properties follow {name} — click to select the next": "{n} 个属性跟随 {name} — 点击选择下一个",

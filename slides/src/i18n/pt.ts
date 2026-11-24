@@ -7,6 +7,12 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Start the slideshow fullscreen on this slide — {key} starts from the beginning; F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "Iniciar a apresentação em tela cheia neste slide — {key} começa do início; F alterna tela cheia, S abre o modo apresentador, Esc encerra; ⇧-clique reproduz a transição para este slide",
+  "From the beginning": "Do início",
+  "Starts the slideshow fullscreen on the first slide, whichever slide you are on": "Inicia a apresentação em tela cheia no primeiro slide, em qualquer slide que você esteja",
+  "Present from the beginning": "Apresentar do início",
+  "Present from this slide": "Apresentar a partir deste slide",
+  "Present from here": "Apresentar a partir daqui",
   "View": "Exibir",
   "Current slide": "Slide atual",
   "Slide thumbnails": "Miniaturas dos slides",
@@ -1129,7 +1135,6 @@ export const pt: Catalog = {
   "Play transition": "Reproduzir transição",
   "Things moved — morph them from the slide before?": "Algo se moveu — transformar a partir do slide anterior?",
   "New slide at the end, from a layout": "Novo slide no final, a partir de um layout",
-  "Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "Iniciar a apresentação em tela cheia — F alterna tela cheia, S abre o modo apresentador, Esc encerra; ⇧-clique reproduz a transição para este slide",
   "{n} properties changed · {m} hard-coded colors on these slides didn’t follow": "{n} propriedades mudaram · {m} cores fixas nestes slides não acompanharam",
   "{n} properties changed": "{n} propriedades mudaram",
   "{n} properties follow {name} — click to select the next": "{n} propriedades seguem {name} — clique para selecionar a próxima",

@@ -4,6 +4,12 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Start the slideshow fullscreen on this slide — {key} starts from the beginning; F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "このスライドからスライドショーをフルスクリーンで開始 — {key} で最初から開始、F でフルスクリーン切替、S でスピーカービュー、Esc で終了。⇧クリックでこのスライドへのトランジションを再生",
+  "From the beginning": "最初から",
+  "Starts the slideshow fullscreen on the first slide, whichever slide you are on": "どのスライドを開いていても、最初のスライドからスライドショーをフルスクリーンで開始します",
+  "Present from the beginning": "最初からプレゼン",
+  "Present from this slide": "このスライドからプレゼン",
+  "Present from here": "ここからプレゼン",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",
@@ -1131,7 +1137,6 @@ export const ja: Catalog = {
   "Play transition": "トランジションを再生",
   "Things moved — morph them from the slide before?": "移動しました — 前のスライドからモーフしますか？",
   "New slide at the end, from a layout": "末尾に新しいスライド（レイアウトから）",
-  "Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide": "スライドショーをフルスクリーンで開始 — F でフルスクリーン切替、S でスピーカービュー、Esc で終了。⇧クリックでこのスライドへのトランジションを再生",
   "{n} properties changed · {m} hard-coded colors on these slides didn’t follow": "{n} 個のプロパティが変わりました · これらのスライドの固定色 {m} 個は追従しませんでした",
   "{n} properties changed": "{n} 個のプロパティが変わりました",
   "{n} properties follow {name} — click to select the next": "{n} 個のプロパティが {name} に追従しています — クリックで次を選択",

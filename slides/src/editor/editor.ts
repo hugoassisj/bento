@@ -605,8 +605,9 @@ export class Editor {
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
     const pill = div('ed-dropdown ed-present-pill')
+    // both starts' keys come from the command list: ⇧F5 is this half's, F5 the menu's first row
     const showB = btn(ICONS.slideshow, t('Slideshow'), (ev) => ev.shiftKey ? this.playTransition() : this.present(false, true),
-      t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide'))
+      titleFor(this.commands, 'slideshow', t('Start the slideshow fullscreen on this slide — {key} starts from the beginning; F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide', { key: this.keysOf('present') ?? '' })))
     showB.classList.add('ed-pill-main')
     // Nudge: newcomers don't always spot how to start a show — run the neon
     // runner around the Slideshow pill on EVERY editor load until they've
@@ -623,10 +624,15 @@ export class Editor {
       t('More ways to present'))
     caret.classList.add('ed-pill-caret')
     const pmenu = div('ed-menu')
-    const pItem = (icon: string, label: string, title: string, onClick: () => void) => {
+    const pItem = (icon: string, label: string, title: string, onClick: () => void, cmd?: string) => {
       const b = btn(icon, label, () => { pill.classList.remove('open'); onClick() }, title)
+      // a row that is also a command shows its keys, as the File menu's rows do
+      const keys = cmd && this.keysOf(cmd)
+      if (cmd) b.dataset.cmd = cmd
+      if (keys) b.appendChild(Object.assign(document.createElement('kbd'), { className: 'ed-menu-keys', textContent: keys }))
       pmenu.appendChild(b)
     }
+    pItem(ICONS.slideshow, t('From the beginning'), t('Starts the slideshow fullscreen on the first slide, whichever slide you are on'), () => this.present(true, true), 'present')
     pItem(ICONS.window, t('Present in this tab'), t('Fills this tab instead of going fullscreen — handy for testing or sharing a window'), () => this.present(false, false))
     pItem(ICONS.presenter, t('Open speaker view'), t('Notes, controls and slide thumbnails in a separate window — drag it to a second screen. On macOS, open it before going fullscreen.'), () => this.openSpeakerView())
     pill.append(showB, caret, pmenu)
@@ -2753,7 +2759,7 @@ export class Editor {
     if (!w) this.toast(t('Couldn’t open the speaker view — allow pop-ups for this site.'))
   }
 
-  present(fromStart = false, fullscreen = true, at = fromStart ? 0 : this.store.currentIndex) {
+  present(fromStart = false, fullscreen = true, at = fromStart ? Math.max(0, this.store.doc.slides.findIndex(inLinearFlow)) : this.store.currentIndex) {
     if (this.presenting) return null
     // They've started a slideshow — retire the first-run nudge for good.
     lsSet('bento-slideshow-started', '1')
@@ -3770,7 +3776,8 @@ export class Editor {
       { id: 'zoom-in', label: 'Zoom in', keys: `${MOD}+`, scope: 'canvas', inField: true, match: (ev, mod) => mod && (ev.key === '=' || ev.key === '+'), run: () => this.canvas.zoomIn() },
       { id: 'zoom-out', label: 'Zoom out', keys: `${MOD}−`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '-', run: () => this.canvas.zoomOut() },
       { id: 'zoom-fit', label: 'Fit the slide', keys: `${MOD}0`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '0', run: () => this.canvas.zoomReset() },
-      { id: 'present', label: 'Present', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5', run: (ev) => this.present(!ev?.shiftKey) },
+      // F5 from the first slide; ⇧F5 is 'slideshow' below, from this one (PowerPoint's pair)
+      { id: 'present', label: 'Present from the beginning', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5' && !ev.shiftKey, run: () => this.present(true) },
       { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && !ev.altKey && key(ev) === 'k', run: () => openPalette(this.commands) },
       { id: 'help', label: 'Keyboard shortcuts', keys: `? or ${MOD}/`, scope: 'always', when: canvasFree, match: (ev, mod) => (!mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey))) || (mod && !ev.shiftKey && ev.key === '/'), run: () => this.openHelp() },
       // The tools, one letter each as in Figma and Penpot (C stays Comment)
@@ -3839,7 +3846,7 @@ export class Editor {
       { id: 'insert-code', when: toolFree, label: 'Add a code snippet', scope: 'canvas', run: () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true) },
       { id: 'copy', label: 'Copy', keys: `${MOD}C`, scope: 'canvas', when: () => sel().length > 0, run: () => this.copySelection() },
       { id: 'delete', label: 'Delete', keys: '⌫', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.deleteSelection() },
-      { id: 'slideshow', label: 'Slideshow', scope: 'always', run: () => this.present(false, true) },
+      { id: 'slideshow', label: 'Present from this slide', keys: '⇧F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5' && ev.shiftKey, run: () => this.present(false, true) },
       { id: 'use-morph', label: 'Use Morph', scope: 'always', when: () => writable() && this.store.slide.transition !== 'morph' && !!walkSource(this.store.doc, this.store.slide), run: () => { const sl = this.store.slide; this.store.commit(() => { sl.transition = 'morph' }) } },
       // ⌘A: every top-level element on the slide (a frame's children come with
       // it) — or, with focus in the slide list, every slide
@@ -4470,9 +4477,21 @@ export class Editor {
     return [
       { label: t('New slide'), run: () => this.openLayoutPicker(thumb, { kind: 'insert', at: i + 1 }) },
       { label: t('Duplicate slide'), run: () => this.duplicateSlide(i) },
+      ...this.presentFromHere(i),
       'sep',
       { label: t('Delete slide'), danger: true, run: () => this.deleteSlide(i) },
     ]
+  }
+
+  /** The thumbnail menu's Present from here: the show opens on that slide. A
+   *  state opens on its parent, the slide the show reaches it from; a hidden
+   *  slide is out of the show, so it is not offered. */
+  private presentFromHere(i: number): CtxItem[] {
+    const slides = this.store.doc.slides
+    const sl = slides[i]
+    const at = sl?.stateOf ? slides.findIndex((s) => s.id === sl.stateOf) : i
+    if (!sl || at < 0 || sl.hidden || slides[at].hidden) return []
+    return [{ label: t('Present from here'), run: () => this.present(false, true, at) }]
   }
 
   /** Menu Paste. A click carries no clipboardData, so the text has to be

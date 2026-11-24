@@ -82,7 +82,7 @@ try {
   console.log('\n4. complete, once each\n')
   const all = await names(p)
   const keyed = ['Save', 'Undo', 'Redo', 'Duplicate', 'Group', 'Ungroup', 'Move', 'Select only', 'Frame', 'Add auto layout', 'Zoom in', 'Fit the slide',
-    'Present', 'Command palette', 'Keyboard shortcuts', 'Select all', 'Align left', 'Space evenly across', 'Flip horizontal', 'Create component', 'Print or save as PDF…', 'Preferences']
+    'Present from the beginning', 'Present from this slide', 'Command palette', 'Keyboard shortcuts', 'Select all', 'Align left', 'Space evenly across', 'Flip horizontal', 'Create component', 'Print or save as PDF…', 'Preferences']
   const counts = keyed.map((k) => [k, all.filter((n) => n === k).length])
   ok(counts.every(([, n]) => n === 1), `each keyed command is listed exactly once${counts.filter(([, n]) => n !== 1).map(([k, n]) => ` — ${k}: ${n}`).join('')}`)
   const groups = await p.$$eval('.ed-keys-group', (h) => h.map((x) => x.textContent))

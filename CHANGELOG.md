@@ -17,6 +17,16 @@ pre-1.0.
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
 
+- **Present from the beginning, or from any slide.** The Slideshow button's
+  ▴ menu now starts with "From the beginning" (F5), which opens the show on
+  the first slide whichever slide you are editing; the Slideshow button
+  itself still starts on the current slide (⇧F5). Right-click or long-press a
+  slide in the slide list for "Present from here": the show opens on that
+  slide, or on its parent slide for an interactive state; hidden slides do not
+  offer it. The command palette lists "Present from the beginning" and
+  "Present from this slide", each with its key. "From the beginning" skips a
+  hidden first slide and opens on the first one in the show.
+
 ## [1.3.0] — 2026-11-22
 
 - **A new editor for people who design in Figma, Keynote or PowerPoint.**
