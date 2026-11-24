@@ -57,6 +57,8 @@ export interface CheckDeckHost {
   signal: AbortSignal
   /** bring the Format panel's font control into view, the element selected */
   revealFont: () => void
+  /** the chip came, went or changed width: the cluster refits its row */
+  onChipChange: () => void
 }
 
 /** The counts in words: "1 error, 6 warnings". */
@@ -82,9 +84,11 @@ export class CheckDeck {
   /** findings to show, by key — Replace from JSON shows what the load brought in */
   private only: Set<string> | null = null
   private tipsOpen = false
+  /** a replaced document re-checks at once: the old deck's count must not linger */
+  private replaced = false
 
   constructor(private host: CheckDeckHost) {
-    const { store, cluster, into, signal } = host
+    const { store, into, signal } = host
     const chip = this.chip = document.createElement('button')
     chip.type = 'button'
     chip.className = 'ed-btn ed-check-chip'
@@ -92,7 +96,8 @@ export class CheckDeck {
     chip.setAttribute('aria-controls', 'ed-check')
     chip.setAttribute('aria-expanded', 'false')
     chip.addEventListener('click', () => this.isOpen ? this.close() : this.open({ opener: chip }))
-    cluster.prepend(chip)
+    // In the row only while there is something to count (paint): a clean
+    // deck's cluster is exactly what it was before the chip existed.
 
     const panel = this.panel = document.createElement('section')
     panel.className = 'ed-check'
@@ -121,23 +126,32 @@ export class CheckDeck {
     this.list = document.createElement('div')
     this.list.className = 'ed-check-list'
     panel.append(head, this.filterNote, this.list)
-    // The panel's keys are its own: an arrow here is not a nudge, a letter is
-    // not a tool, Delete does not delete the element a row just selected.
-    // ⌘/Ctrl chords pass, so ⌘Z still undoes a fix.
+    // The panel's keys are its own while focus is in it: an arrow here is not
+    // a nudge, a letter is not a tool, Delete or ⌘⌫ does not delete the
+    // element a row just selected. Other ⌘/Ctrl chords pass, so ⌘Z still
+    // undoes a fix.
     panel.addEventListener('keydown', (ev) => {
       if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); this.close(); return }
-      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      const step = { ArrowDown: 1, ArrowUp: -1, Home: -Infinity, End: Infinity }[ev.key]
+      if (step !== undefined && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
         const rows = [...panel.querySelectorAll<HTMLElement>('.ed-check-jump')].filter((b) => b.offsetParent)
         const at = rows.indexOf(document.activeElement as HTMLElement)
-        const next = rows[at < 0 ? 0 : Math.max(0, Math.min(rows.length - 1, at + (ev.key === 'ArrowDown' ? 1 : -1)))]
+        const next = rows[at < 0 && Math.abs(step) === 1 ? 0 : Math.max(0, Math.min(rows.length - 1, (at < 0 ? 0 : at) + step))]
         if (next) { ev.preventDefault(); next.focus() }
       }
-      if (!ev.metaKey && !ev.ctrlKey) ev.stopPropagation()
+      if ((!ev.metaKey && !ev.ctrlKey) || ev.key === 'Backspace' || ev.key === 'Delete') ev.stopPropagation()
     })
+    // A press anywhere else hands the keys back: after a row jumps and the
+    // person clicks the canvas, the arrows nudge and typing types again.
+    document.addEventListener('pointerdown', (ev) => {
+      const active = document.activeElement as HTMLElement | null
+      if (active && panel.contains(active) && !panel.contains(ev.target as Node)) active.blur()
+    }, { capture: true, signal })
     into.appendChild(panel)
 
     const offs = [
-      store.on('doc', () => this.schedule(this.isOpen ? 300 : 2000)),
+      store.on('replace', () => { this.replaced = true }),
+      store.on('doc', () => this.schedule(this.replaced ? 0 : this.isOpen ? 300 : 2000)),
       store.on('current', () => { if (!this.isOpen && this.stale) this.schedule(0) }),
       store.on('dirty', () => { if (!store.dirty && this.stale) this.schedule(0) }),
     ]
@@ -157,6 +171,7 @@ export class CheckDeck {
   /** Validate now, and show it. */
   run(): ValidateResult {
     clearTimeout(this.timer)
+    this.replaced = false
     this.ranAt = this.host.store.revision
     this.result = validateDoc(this.host.store.doc)
     this.panel.dataset.runs = String(++this.runs)
@@ -186,7 +201,7 @@ export class CheckDeck {
     this.only = null
     this.chip.setAttribute('aria-expanded', 'false')
     if (hadFocus) {
-      const back = this.opener?.isConnected && this.opener.offsetParent ? this.opener : !this.chip.hidden ? this.chip : null
+      const back = this.opener?.isConnected && this.opener.offsetParent ? this.opener : this.chip.isConnected ? this.chip : null
       back?.focus({ preventScroll: true })
     }
     this.opener = null
@@ -196,16 +211,30 @@ export class CheckDeck {
     const r = this.result!
     const counted = { error: r.counts.error, warning: r.counts.warning, info: 0 }
     const words = countWords(counted)
-    this.chip.hidden = !words
+    const count = words ? String(counted.error + counted.warning) : ''
+    if (count !== this.chip.textContent || !!words !== this.chip.isConnected) {
+      this.chip.hidden = !words
+      if (words) {
+        const label = t('{counts}, check deck', { counts: words })
+        this.chip.innerHTML = ICONS.alert
+        const n = document.createElement('span')
+        n.textContent = count
+        this.chip.appendChild(n)
+        this.chip.setAttribute('aria-label', label)
+        this.chip.title = label
+        if (!this.chip.isConnected) this.host.cluster.prepend(this.chip)
+      } else {
+        this.chip.replaceChildren()
+        this.chip.remove()
+      }
+      this.host.onChipChange()
+    }
     if (words) {
+      // the words can change with the count unchanged (an error for a warning)
       const label = t('{counts}, check deck', { counts: words })
-      this.chip.innerHTML = ICONS.alert
-      const n = document.createElement('span')
-      n.textContent = String(counted.error + counted.warning)
-      this.chip.appendChild(n)
-      this.chip.dataset.sev = counted.error ? 'error' : 'warning'
       this.chip.setAttribute('aria-label', label)
       this.chip.title = label
+      this.chip.dataset.sev = counted.error ? 'error' : 'warning'
     }
     if (!this.isOpen) return
     const keepFocus = (document.activeElement as HTMLElement | null)?.dataset?.key

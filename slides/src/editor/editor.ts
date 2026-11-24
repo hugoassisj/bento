@@ -668,7 +668,7 @@ export class Editor {
     centre.appendChild(canvasWrap)
     mountNotesPane(this.store, centre, corner, this.buildScope.signal)
     // after the notes toggle, so its chip leads the row: [chip] [notes] [Slideshow] [zoom]
-    this.checkDeck = new CheckDeck({ store: this.store, cluster: corner, into: canvasWrap, signal: this.buildScope.signal, revealFont: () => this.revealFont() })
+    this.checkDeck = new CheckDeck({ store: this.store, cluster: corner, into: canvasWrap, signal: this.buildScope.signal, revealFont: () => this.revealFont(), onChipChange: fitCorner })
     main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)

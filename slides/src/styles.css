@@ -907,6 +907,7 @@ body.ed-scrubbing, body.ed-scrubbing * { cursor: ew-resize; }
   box-shadow: 0 4px 14px rgb(20 30 45 / 0.10); color: var(--accent-ink);
 }
 .ed-check-chip[data-sev='error'] { color: var(--danger); }
+.ed-check-chip[hidden] { display: none; } /* .ed-btn's inline-flex would beat [hidden] */
 .ed-check-chip:hover, .ed-check-chip[aria-expanded='true'] { background: var(--chrome); }
 .ed-check {
   position: absolute; top: 12px; inset-inline-end: 12px; z-index: 12;

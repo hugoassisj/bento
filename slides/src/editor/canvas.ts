@@ -382,7 +382,7 @@ export class SlideCanvas {
       if (!ev.altKey || ev.button !== 0 || this.pathEditor.active || this.bezierEditor.active) return
       const r = this.scaleHost.getBoundingClientRect()
       if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return
-      if (ev.target instanceof Element && ev.target.closest('.ed-sidebar, .ed-props, .ed-topbar')) return
+      if (ev.target instanceof Element && ev.target.closest('.ed-sidebar, .ed-props, .ed-topbar, .ed-check')) return
       // Alt-DRAG on a resize/rotate handle means center-scale, not deep-select.
       // But below ~100% zoom a small element's edge handles cover its middle,
       // so aiming at a selected label lands on a handle: an Alt-press there
