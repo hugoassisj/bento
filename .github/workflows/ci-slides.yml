@@ -721,3 +721,12 @@ jobs:
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
 
+      - name: Token chips show value and name in Chromium
+        if: ${{ !cancelled() }}
+        # A bound radius reads "14 · radius.md" (value and whole name, clear of
+        # the corners button); slide 1's Background reads "Theme: Text · 0d1b2e"
+        # with a dot in the colour itself; no chip shows under six characters of
+        # its name; the narrowest panel keeps the name and moves the value to
+        # the title; re-pick and detach work from both chips; RTL puts the value
+        # first; the Tokens tab's counts read "39×" and name what they do.
+        run: node scripts/test-slides-token-chips-browser.mjs
