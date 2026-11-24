@@ -183,14 +183,19 @@ export function docRejection(json: string): Rejection {
 interface HasId { id: string }
 interface DocLike { slides: (HasId & { elements?: HasId[] })[] }
 
-/** Deep equality that ignores key order (the gate rebuilds objects). */
-export function same(a: unknown, b: unknown): boolean {
+/**
+ * Deep equality that ignores key order (the gate rebuilds objects). A
+ * component copy's `component.sig` is skipped: it is a hash the derive pass
+ * keeps of its main's JSON in key order (components.ts mainSig), so the
+ * gate's rebuild changes it while nothing the person wrote has changed.
+ */
+export function same(a: unknown, b: unknown, comp = false): boolean {
   if (a === b) return true
   if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((x, i) => same(x, b[i]))
   if (!isObj(a) || !isObj(b)) return false
-  const ka = Object.keys(a).filter((k) => a[k] !== undefined)
-  const kb = Object.keys(b).filter((k) => b[k] !== undefined)
-  return ka.length === kb.length && ka.every((k) => same(a[k], b[k]))
+  const keys = (o: Record<string, unknown>) => Object.keys(o).filter((k) => o[k] !== undefined && !(comp && k === 'sig'))
+  const ka = keys(a)
+  return ka.length === keys(b).length && ka.every((k) => k in b && same(a[k], b[k], k === 'component'))
 }
 
 export interface ReplaceSummary {

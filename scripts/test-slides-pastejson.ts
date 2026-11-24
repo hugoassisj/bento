@@ -137,6 +137,11 @@ console.log('\n5. The summary\n')
   ok(s.before === 3 && s.after === 3, 'slide counts before and after')
   ok(JSON.stringify(s.added) === '["d"]' && JSON.stringify(s.removed) === '["c"]' && JSON.stringify(s.changed) === '["a"]', `added d, removed c, changed a only — key order ignored (${JSON.stringify(s)})`)
   ok(s.elements === 3, `three element changes on slide a: edited, removed, added (${s.elements})`)
+  const resig = { slides: [{ id: 'a', elements: [{ id: 'x', component: { id: 'c', key: 'k0', sig: 'abc' } }] }] }
+  const resigned = { slides: [{ id: 'a', elements: [{ id: 'x', component: { key: 'k0', id: 'c', sig: 'xyz' } }] }] }
+  ok(!summarizeReplace(resig, resigned).changed.length, 'a component copy whose derived sig was recomputed is not a change')
+  ok(summarizeReplace(resig, { slides: [{ id: 'a', elements: [{ id: 'x', component: { id: 'c', key: 'k1', sig: 'abc' } }] }] }).changed.length === 1, '…but any other change to it is')
+  ok(!same({ a: 1, sig: 2 }, { a: 1, sig: 3 }), 'sig is only skipped inside a component')
   const self = summarizeReplace(deck, JSON.parse(full))
   ok(!self.added.length && !self.removed.length && !self.changed.length && self.elements === 0, 'the deck against its own JSON: no changes')
   const half = JSON.parse(full)
