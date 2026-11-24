@@ -19,12 +19,18 @@
 // line-count estimate — would drift from the renderer the moment anything about
 // text layout changed, and drift in a measuring tool is worse than no tool: it
 // reads as authoritative and is quietly wrong.
+//
+// FIELDS. A field token ({{page:2}}, {{title}}, …) is measured as the value it
+// renders, never as its own characters: pass the FieldContext of the slide the
+// text lives on and the renderer resolves it exactly as it does on screen.
+// Date and time fields are measured with the context the renderer would use
+// now — this viewer's locale, this moment — not a worst case.
 
 import type { Area } from './contrast.ts'
 import type { SlideElement } from './model.ts'
 import type { BentoDoc, TableElement, TextElement } from './model.ts'
 import { defaultText } from './model.ts'
-import { renderElement } from './render.ts'
+import { renderElement, type FieldContext } from './render.ts'
 
 /** What to measure. Anything omitted falls back to the deck's text defaults. */
 export interface TextMeasureSpec {
@@ -80,12 +86,13 @@ function withHost<T>(fn: (host: HTMLElement) => T): T {
  * the deck the text will live in is the whole point — the same string in
  * Fraunces and in a system stack are different heights.
  */
-export function measureText(spec: TextMeasureSpec, doc: BentoDoc): TextMeasurement {
-  return withHost((host) => measureInto(host, spec, doc))
+export function measureText(spec: TextMeasureSpec, doc: BentoDoc, fields?: FieldContext): TextMeasurement {
+  return withHost((host) => measureInto(host, spec, doc, fields))
 }
 
-/** One measurement inside an already-open host. */
-function measureInto(host: HTMLElement, spec: TextMeasureSpec, doc: BentoDoc): TextMeasurement {
+/** One measurement inside an already-open host. `fields` resolves any field
+ *  tokens to their values; without it a token measures as its own text. */
+function measureInto(host: HTMLElement, spec: TextMeasureSpec, doc: BentoDoc, fields?: FieldContext): TextMeasurement {
   const el = defaultText({
     ...spec,
     id: 'bento-measure',
@@ -94,7 +101,7 @@ function measureInto(host: HTMLElement, spec: TextMeasureSpec, doc: BentoDoc): T
     w: spec.w,
     h: spec.h ?? 10,
   })
-  const node = renderElement(el, doc)
+  const node = renderElement(el, doc, { fields })
   // The box height is what we are trying to find, so it must not constrain the
   // measurement — let the inner text take whatever height it needs.
   node.style.height = 'auto'
@@ -116,11 +123,12 @@ function measureInto(host: HTMLElement, spec: TextMeasureSpec, doc: BentoDoc): T
 /**
  * Measure many elements through ONE host — what `validate()` uses to check a
  * whole deck. Opening a host per element would be the same answer and a lot
- * more DOM churn on a long deck.
+ * more DOM churn on a long deck. Each element comes with the field context of
+ * the slide it lives on, so its fields measure as that slide shows them.
  */
-export function measureElements(els: TextElement[], doc: BentoDoc): TextMeasurement[] {
+export function measureElements(els: Array<{ el: TextElement; fields?: FieldContext }>, doc: BentoDoc): TextMeasurement[] {
   if (!els.length) return []
-  return withHost((host) => els.map((el) => measureInto(host, specOf(el), doc)))
+  return withHost((host) => els.map(({ el, fields }) => measureInto(host, specOf(el), doc, fields)))
 }
 
 /** How tall a table's rows actually render, and how far past its box. */
@@ -236,8 +244,9 @@ const specOf = (el: TextElement): TextMeasureSpec => ({
 
 /**
  * The height an existing element's content needs — the number to write into
- * `h` so the box fits its text exactly.
+ * `h` so the box fits its text exactly. Pass its slide's field context so a
+ * field measures as its value.
  */
-export function measureElement(el: TextElement, doc: BentoDoc): TextMeasurement {
-  return measureText(specOf(el), doc)
+export function measureElement(el: TextElement, doc: BentoDoc, fields?: FieldContext): TextMeasurement {
+  return measureText(specOf(el), doc, fields)
 }

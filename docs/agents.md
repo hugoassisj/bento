@@ -250,6 +250,12 @@ measure one already in the deck, and include `h` in a spec to get `fits` and
 `overflow` back too. It renders through the real renderer, so the answer is
 what the slide will actually do, not an estimate.
 
+A field (`{{page:2}}`, `{{pages}}`, `{{title}}`, `{{author}}`, `{{date}}`, …)
+measures as the value it renders, not as the token's characters: an element by
+id as its own slide shows it, a spec as the current slide would. Date and time
+measure as they read for this viewer at this moment. `validate()` measures
+fields the same way, slide by slide.
+
 Use it for the arithmetic that used to be guesswork: stacking cards in a
 column, deciding whether a heading needs two lines or three, sizing a caption
 under a photo. In the editor, the same thing is a **Fit height to text** button

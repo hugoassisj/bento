@@ -33,6 +33,13 @@ pre-1.0.
   and chart labels cut off at the chart's edge. These are advice, never
   changes: a faint ghost numeral or a muted page number is left alone, and so
   is text over a picture, whose background cannot be worked out.
+- **Page numbers and other fields are checked at the size they show.** The
+  deck check (`window.bento.validate()`) and `window.bento.measure()` used to
+  lay out a field such as `{{page:2}}` as its ten characters of code, so a big
+  page number that shows as one line was reported as needing four (1500px
+  instead of 375px). They now measure the value the slide shows (`02`, the
+  deck's title, the author, today's date), so a box sized to fit its field
+  checks clean.
 
 ## [1.3.0] — 2026-11-22
 

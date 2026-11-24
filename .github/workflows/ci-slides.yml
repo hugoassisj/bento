@@ -738,3 +738,12 @@ jobs:
         # outside-frame after the real layout pass, chart labels cut off at the
         # chart's edge; the starter and the agent fixtures gain no false finding.
         run: node scripts/test-slides-validate-visual-browser.mjs
+
+      - name: Field tokens measure as their value in Chromium
+        if: ${{ !cancelled() }}
+        # measure() and the validator's text-overflow check lay out {{page}},
+        # {{pages}}, {{title}}, {{date}} and {{author}} as the value the
+        # thumbnails render, not as the token's own characters; the starter's
+        # findings match it with every field typed in, and validate() and
+        # measure() agree on every text element.
+        run: node scripts/test-slides-measure-fields-browser.mjs
