@@ -13,11 +13,14 @@
 // frame clips only what overflows; a dangling parentId is dropped; a slide
 // with no frames is left byte-identical and reports no change; a second run
 // changes nothing (the solver is a fixed point, so the editor's doc hook
-// cannot loop); and the layer list shows children under their frame.
+// cannot loop); and the layer list shows children under their frame. The
+// auto layout presets (layoutpresets.ts) make equal columns, equal rows and an
+// even grid that stay equal when a child is deleted or duplicated.
 
 import { layoutSlide, frameClip, frameChildren, moveInFrame, reflowByArray, moveIntoFrame, moveOutBeside, canAccept, flagged } from '../slides/src/layout.ts'
 import { syncComponents } from '../slides/src/components.ts'
 import { layerRows } from '../slides/src/editor/layerrows.ts'
+import { applyPreset, gridShape, readingOrder } from '../slides/src/layoutpresets.ts'
 
 let failures = 0
 let checks = 0
@@ -322,6 +325,75 @@ console.log('\nlock and visibility are a layer\'s own, not a component\'s\n')
   syncComponents(doc)
   const copy = doc.slides[1].elements[0]
   ok(!copy.locked && !copy.hidden, `locking and hiding the main leaves its copies alone (copy L${+!!copy.locked}H${+!!copy.hidden})`)
+}
+
+console.log('\nauto layout presets: equal columns, equal rows, grid\n')
+{
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1
+  const kidsOf = (s: any) => s.elements.filter((e: any) => e.parentId === 'f')
+  const sorted = (s: any, k: 'x' | 'y') => [...kidsOf(s)].sort((m: any, n: any) => m[k] - n[k])
+  const equal = (xs: number[]) => xs.every((v) => near(v, xs[0]))
+  const gapsOf = (ks: any[], P: 'x' | 'y', M: 'w' | 'h') => ks.slice(1).map((k, i) => k[P] - (ks[i][P] + ks[i][M]))
+  // three loose rectangles of different widths, wrapped as ⇧A does: the
+  // selection's box plus 16 of padding, hugging, the gap they had (92)
+  const three = () => slide(
+    box('f', 84, 184, 16 + 160 + 92 + 240 + 92 + 120 + 16, 16 + 120 + 16, { layout: { dir: 'row', gap: 92, pad: [16, 16, 16, 16], hug: true } }),
+    box('a', 100, 200, 160, 120, { parentId: 'f' }), box('b', 352, 210, 240, 100, { parentId: 'f' }), box('c', 684, 200, 120, 110, { parentId: 'f' }))
+  let s = three()
+  layoutSlide(s)
+  const before = { ...at(s, 'f') }
+  applyPreset(at(s, 'f'), sorted(s, 'x'), 'columns')
+  layoutSlide(s)
+  let ks = sorted(s, 'x')
+  ok(at(s, 'f').layout.dir === 'row' && !at(s, 'f').layout.hug && at(s, 'f').layout.align === 'stretch', 'equal columns: a row that no longer hugs, stretched across')
+  ok(at(s, 'f').x === before.x && at(s, 'f').y === before.y && at(s, 'f').w === before.w, `the frame keeps its place and width (${at(s, 'f').w})`)
+  ok(ks.every((k: any) => k.sizing?.w === 'fill'), 'every child fills its share of the width')
+  ok(equal(ks.map((k: any) => k.w)) && near(ks[0].w, (before.w - 32 - 2 * 92) / 3), `three equal widths (${ks.map((k: any) => k.w).join(', ')})`)
+  ok(equal(gapsOf(ks, 'x', 'w')) && near(gapsOf(ks, 'x', 'w')[0], 92), `equal gaps, the spacing they had (${gapsOf(ks, 'x', 'w').join(', ')})`)
+  ok(equal(ks.map((k: any) => k.h)) && ks.map((k: any) => k.id).join() === 'a,b,c', 'stretched to one height, left-to-right order kept')
+  ok(!layoutSlide(s), 'a second pass changes nothing (fixed point)')
+  s.elements = s.elements.filter((e: any) => e.id !== 'b')
+  layoutSlide(s)
+  ks = sorted(s, 'x')
+  ok(ks.length === 2 && equal(ks.map((k: any) => k.w)) && near(ks[0].w, (before.w - 32 - 92) / 2), `deleting one: the other two share the width (${ks.map((k: any) => k.w).join(', ')})`)
+  s = three(); layoutSlide(s); applyPreset(at(s, 'f'), sorted(s, 'x'), 'columns'); layoutSlide(s)
+  s.elements.push({ ...JSON.parse(JSON.stringify(at(s, 'c'))), id: 'd', x: at(s, 'c').x + 24, y: at(s, 'c').y + 24 }) // ⌘D
+  layoutSlide(s)
+  ks = sorted(s, 'x')
+  ok(ks.length === 4 && equal(ks.map((k: any) => k.w)), `duplicating one: four equal widths (${ks.map((k: any) => k.w).join(', ')})`)
+  ok(!layoutSlide(s), '…and a fixed point again')
+
+  s = three(); layoutSlide(s)
+  applyPreset(at(s, 'f'), sorted(s, 'x'), 'rows')
+  layoutSlide(s)
+  ks = sorted(s, 'y')
+  ok(at(s, 'f').layout.dir === 'col' && ks.every((k: any) => k.sizing?.h === 'fill' && !k.sizing?.w), 'equal rows: a column, every child fills its share of the height')
+  ok(ks.map((k: any) => k.id).join() === 'a,b,c', `the row's order reads top to bottom (${ks.map((k: any) => k.id).join()})`)
+  ok(equal(ks.map((k: any) => k.h)) && ks[0].h >= 100 && equal(gapsOf(ks, 'y', 'h')) && equal(ks.map((k: any) => k.w)), `three equal heights, equal gaps, one width (${ks.map((k: any) => k.h).join(', ')})`)
+  ok(at(s, 'f').h === 32 + (120 + 100 + 110) + 2 * 92 && at(s, 'f').y === before.y, `a frame too short for three rows grows down to fit them at their sizes (${at(s, 'f').h})`)
+  ok(!layoutSlide(s), 'a second pass changes nothing')
+  s.elements = s.elements.filter((e: any) => e.id !== 'a')
+  layoutSlide(s)
+  ok(equal(sorted(s, 'y').map((k: any) => k.h)), 'deleting one: the other two share the height')
+
+  // a rough 2×2 arrangement: the columns it forms, read in reading order
+  const rough = [box('p', 100, 100, 150, 90), box('q', 420, 110, 200, 80), box('r', 110, 330, 120, 100), box('t', 400, 340, 180, 90)]
+  ok(readingOrder(rough).map((e: any) => e.id).join() === 'p,q,r,t', 'reading order: row by row, left to right')
+  const shape = gridShape(rough)
+  ok(shape.cols === 2 && shape.gap === 400 - 250, `a rough 2×2 is two columns, with the spacing between them (${shape.cols}, ${shape.gap})`)
+  ok(gridShape(rough.slice(0, 2).concat(box('u', 700, 100, 50, 50))).cols === 2, 'a single row of three is no grid yet: ceil(√3) = 2 columns')
+  ok(gridShape([box('v', 0, 0, 50, 50), box('w', 0, 100, 50, 50), box('x', 0, 200, 50, 50), box('y', 0, 300, 50, 50)]).cols === 2, 'nor is one column of four: 2')
+  s = slide(box('f', 84, 84, 552, 362, { layout: { dir: 'row', gap: 150, pad: [16, 16, 16, 16], hug: true } }), ...rough.map((e: any) => ({ ...e, parentId: 'f' })))
+  applyPreset(at(s, 'f'), readingOrder(kidsOf(s)), 'grid', shape.cols)
+  layoutSlide(s)
+  const cells = ['p', 'q', 'r', 't'].map((id) => at(s, id))
+  ok(at(s, 'f').layout.dir === 'grid' && at(s, 'f').layout.cols === 2 && !at(s, 'f').layout.hug, 'grid: two columns, not hugging')
+  ok(equal(cells.map((k: any) => k.w)) && equal(cells.map((k: any) => k.h)), `every cell the same size (${cells.map((k: any) => `${k.w}×${k.h}`).join(', ')})`)
+  ok(cells[0].y === cells[1].y && cells[2].y === cells[3].y && cells[0].x === cells[2].x && near(cells[1].x - (cells[0].x + cells[0].w), 150), 'in reading order, one gap apart')
+  ok(!layoutSlide(s), 'a second pass changes nothing')
+  s.elements = s.elements.filter((e: any) => e.id !== 'q')
+  layoutSlide(s)
+  ok(equal(['p', 'r', 't'].map((id) => at(s, id).w)) && at(s, 'r').y === at(s, 'p').y, 'deleting one: the rest close up into equal cells')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

@@ -15,7 +15,15 @@
 // past ⇧A restores the slide exactly. Cards built of loose shapes (a rect
 // with texts lying on it) stay whole: marquee + ⇧A makes each rect its card's
 // column frame and lays the cards out in a row with the spacing they had, one
-// undo step; ⇧A on one such card makes its rect the frame.
+// undo step; ⇧A on one such card makes its rect the frame. The auto layout
+// presets: three rectangles drawn with the mouse become equal columns in one
+// undo step (measured on screen), and stay equal when one is deleted or
+// duplicated; Equal rows and Grid do the same on their axes; all three are in
+// the element menu and the palette, and absent when nothing suits them. Two
+// children of one frame selected show the sizing control and it writes to
+// both; the control reads in words, glyphs only when the panel is too narrow;
+// under a hugging frame the reason Fill is off shows without hovering, and
+// Turn off Hug enables Fill without moving the frame.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -29,7 +37,8 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH,
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
   await ctx.route(/^https?:/, (r) => r.abort())
-  await ctx.addInitScript(() => localStorage.setItem('bento-side-view', 'layers'))
+  if (ctx.routeWebSocket) await ctx.routeWebSocket(/.*/, (ws) => ws.close()) // never a live session
+  await ctx.addInitScript(() => { localStorage.setItem('bento-side-view', 'layers'); localStorage.setItem('bento-offline', 'on') })
   const p = await ctx.newPage()
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
@@ -168,6 +177,185 @@ try {
     list = await els()
     ok(list.filter((e) => e.layout).map((e) => e.id).join() === 'c1' && at(list, 't1').parentId === 'c1' && at(list, 'b1').parentId === 'c1', `⇧A on one loose card makes its rect the card frame (${list.filter((e) => e.layout).map((e) => e.id).join()})`)
     ok(await p.evaluate(() => window.bento.selection.join()) === 'c1', 'and selects it')
+  }
+
+  console.log('\nauto layout presets\n')
+  {
+    const load = async (els) => {
+      await p.evaluate((els) => {
+        const d = JSON.parse(JSON.stringify(window.bento.doc))
+        d.slides = [{ id: 's1', background: '#ffffff', transition: 'none', notes: '', elements: els }]
+        window.bento.loadDoc(JSON.stringify(d))
+      }, els)
+      await p.waitForTimeout(400)
+    }
+    const toClient = (x, y) => p.evaluate(([x, y]) => { const r = document.querySelector('.ed-stage-scale').getBoundingClientRect(); const k = r.width / window.bento.doc.size.width; return [r.left + x * k, r.top + y * k] }, [x, y])
+    const drag = async (x0, y0, x1, y1) => {
+      const [a, b] = await toClient(x0, y0), [c, d] = await toClient(x1, y1)
+      await p.mouse.move(a, b); await p.mouse.down()
+      for (let i = 1; i <= 8; i++) await p.mouse.move(a + (c - a) * i / 8, b + (d - b) * i / 8)
+      await p.mouse.up(); await p.waitForTimeout(200)
+    }
+    const palette = async (q) => {
+      await p.keyboard.press('Control+k'); await p.waitForTimeout(150)
+      await p.keyboard.type(q); await p.waitForTimeout(100)
+      const shown = await p.$$eval('.ed-cmdk-list li', (ls) => ls.map((l) => l.dataset.cmd))
+      await p.keyboard.press(shown[0]?.startsWith('layout-') ? 'Enter' : 'Escape'); await p.waitForTimeout(300)
+      return shown
+    }
+    const frameNow = () => p.evaluate(() => { const els = window.bento.doc.slides[0].elements; const f = els.find((e) => e.layout); return f && JSON.parse(JSON.stringify(f)) })
+    // children of the frame as they stand ON SCREEN
+    const onScreen = () => p.evaluate(() => {
+      const els = window.bento.doc.slides[0].elements
+      const f = els.find((e) => e.layout)
+      return els.filter((e) => e.parentId === f?.id).map((e) => {
+        const r = document.querySelector(`.ed-stage-scale [data-el-id="${e.id}"]`).getBoundingClientRect()
+        return { id: e.id, x: r.left, y: r.top, w: r.width, h: r.height, sizing: e.sizing }
+      })
+    })
+    const same = (xs) => xs.every((v) => Math.abs(v - xs[0]) <= 1)
+    const gaps = (ks, P, M) => ks.slice(1).map((k, i) => k[P] - (ks[i][P] + ks[i][M]))
+    const fmt = (xs) => xs.map((v) => v.toFixed(1)).join(', ')
+
+    // three rectangles of different widths, drawn with the mouse in a rough row
+    // drawn low on the slide: the last section's control box outlives the
+    // loadDoc where its card stood (y 200–440) and would take a drag there
+    await p.evaluate(() => document.activeElement?.blur()) // a layer row had focus: Esc and R must reach the canvas
+    for (let i = 0; i < 3; i++) { await p.keyboard.press('Escape'); await p.waitForTimeout(80) }
+    await load([])
+    for (const [x, w, y] of [[100, 160, 480], [380, 240, 490], [740, 120, 476]]) {
+      await p.keyboard.press('Escape'); await p.keyboard.press('r'); await p.waitForTimeout(100)
+      await drag(x, y, x + w, y + 110)
+    }
+    await p.keyboard.press('Escape'); await p.waitForTimeout(100)
+    await drag(40, 450, 1000, 640) // marquee
+    const drawn = JSON.stringify(await els())
+    ok((await p.evaluate(() => window.bento.selection.length)) === 3, `three drawn rectangles, marquee-selected (${(await els()).map((e) => `${e.x},${e.w}`).join(' ')})`)
+    const one = await p.evaluate(() => window.bento.selection[0])
+    const shown = await palette('Equal columns')
+    ok(shown[0] === 'layout-equal-columns', `⌘K finds Equal columns (${shown.slice(0, 3).join(', ')})`)
+    let f = await frameNow()
+    let ks = (await onScreen()).sort((a, b) => a.x - b.x)
+    ok(!!f && f.layout.dir === 'row' && !f.layout.hug && ks.length === 3, 'one new frame, a row that does not hug, holding the three')
+    ok(same(ks.map((k) => k.w)), `on screen the three have one width (${fmt(ks.map((k) => k.w))})`)
+    ok(same(gaps(ks, 'x', 'w')) && gaps(ks, 'x', 'w')[0] > 0, `and equal gaps (${fmt(gaps(ks, 'x', 'w'))})`)
+    ok(ks.every((k) => k.sizing?.w === 'fill'), 'every child is set to fill its share')
+    const findings = await p.evaluate(() => window.bento.validate().findings.filter((x) => x.severity !== 'info').map((x) => x.code))
+    ok(!findings.length, `validate() reports nothing on the result (${findings.join(', ')})`)
+    await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
+    ok(JSON.stringify(await els()) === drawn, 'one ⌘Z gives the three loose rectangles back exactly')
+    await p.evaluate(() => window.bento.redo()); await p.waitForTimeout(250)
+
+    console.log('\nthe columns stay equal\n')
+    const pickId = async (id, shift = false) => {
+      await p.evaluate(([id, add]) => document.querySelector(`.ed-layer[data-id="${id}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: add })), [id, shift])
+      await p.waitForTimeout(200)
+    }
+    ks = (await onScreen()).sort((a, b) => a.x - b.x)
+    await pickId(ks[1].id)
+    await p.keyboard.press('Delete'); await p.waitForTimeout(300)
+    let left = (await onScreen()).sort((a, b) => a.x - b.x)
+    ok(left.length === 2 && same(left.map((k) => k.w)) && left[0].w > ks[0].w * 1.3, `deleting one: the other two share the width (${fmt(left.map((k) => k.w))}, was ${ks[0].w.toFixed(1)})`)
+    await pickId(left[0].id)
+    await p.keyboard.press('Control+d'); await p.waitForTimeout(300)
+    await p.keyboard.press('Control+d'); await p.waitForTimeout(300)
+    left = (await onScreen()).sort((a, b) => a.x - b.x)
+    ok(left.length === 4 && same(left.map((k) => k.w)) && same(gaps(left, 'x', 'w')), `duplicating one twice: four equal widths, equal gaps (${fmt(left.map((k) => k.w))})`)
+
+    console.log('\nsizing on two children of one frame\n')
+    await pickId(left[0].id); await pickId(left[1].id, true)
+    const segs = await p.$$eval('.ed-props .ed-seg[data-axis]', (ss) => ss.map((s) => s.dataset.axis))
+    ok(segs.join() === 'w,h', `two children selected: the sizing control shows (${segs.join()})`)
+    const wSeg = p.locator('.ed-props .ed-seg[data-axis="w"]')
+    ok((await wSeg.locator('[aria-checked="true"]').getAttribute('data-value')) === 'fill', 'both fill: Fill is pressed')
+    await wSeg.locator('[data-value="fixed"]').click(); await p.waitForTimeout(250)
+    let after = await onScreen()
+    ok(after.filter((k) => k.id === left[0].id || k.id === left[1].id).every((k) => !k.sizing) && after.filter((k) => k.sizing?.w === 'fill').length === 2, 'Fixed writes to both, and only to them')
+    ok((await p.$$eval('.ed-props .ed-seg[data-axis="w"] [aria-checked="true"]', (b) => b.map((x) => x.dataset.value))).join() === 'fixed', 'the control now reads Fixed')
+    await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
+    after = await onScreen()
+    ok(after.every((k) => k.sizing?.w === 'fill'), 'one ⌘Z gives both back their Fill')
+    // one fill, one fixed: mixed, nothing pressed
+    await pickId(left[0].id)
+    await p.locator('.ed-props .ed-seg[data-axis="w"] [data-value="fixed"]').click(); await p.waitForTimeout(250)
+    await pickId(left[0].id); await pickId(left[2].id, true)
+    ok((await p.locator('.ed-props .ed-seg[data-axis="w"] [aria-checked="true"]').count()) === 0, 'one Fixed and one Fill selected: the control shows them mixed, nothing pressed')
+    await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
+    await pickId(left[0].id); await pickId(left[1].id, true)
+
+    console.log('\nwords, glyphs when narrow\n')
+    const words = () => p.$$eval('.ed-props .ed-seg[data-axis="w"] button', (bs) => bs.map((b) => {
+      const w = b.querySelector('.ed-seg-word'), g = b.querySelector('svg')
+      return { v: b.dataset.value, name: b.getAttribute('aria-label'), word: w?.getBoundingClientRect().width > 0 ? w.textContent : '', glyph: g?.getBoundingClientRect().width > 0 }
+    }))
+    let w = await words()
+    ok(w.map((b) => b.word).join(' / ') === 'Fixed / Fill space' && w.every((b) => !b.glyph), `at the default panel width the control reads in words (${w.map((b) => b.word).join(' / ')})`)
+    ok(w.map((b) => b.name).join(' / ') === 'Fixed / Fill container', 'the long forms stay the accessible names')
+    const fitsRow = await p.$eval('.ed-props .ed-seg[data-axis="w"] button:last-child', (b) => b.scrollWidth <= b.clientWidth)
+    ok(fitsRow, 'no word is cut off')
+    await p.evaluate(() => document.querySelector('.ed-props').style.setProperty('--panew', '190px')); await p.waitForTimeout(300)
+    w = await words()
+    ok(w.every((b) => b.word && !b.glyph) && await p.$eval('.ed-props .ed-seg[data-axis="w"]', (s) => s.parentElement.classList.contains('ed-row-wide')), 'at the narrowest the panel drags to, the words take a line of their own under the caption')
+    // narrower than any English word list fits (a long translation does this at real widths)
+    await p.evaluate(() => document.querySelector('.ed-props').style.setProperty('--panew', '110px')); await p.waitForTimeout(300)
+    w = await words()
+    ok(w.every((b) => b.glyph && !b.word) && w.map((b) => b.name).join(' / ') === 'Fixed / Fill container', `too narrow: glyphs only, still named in words (${JSON.stringify(w.map((b) => [b.word, b.glyph]))})`)
+    await p.evaluate(() => document.querySelector('.ed-props').style.removeProperty('--panew')); await p.waitForTimeout(300)
+    w = await words()
+    ok(w.every((b) => b.word && !b.glyph), 'wide again: words again')
+
+    console.log('\nequal rows, grid, and where they are offered\n')
+    const box2 = (id, x, y, w, h) => ({ id, type: 'shape', shape: 'rect', x, y, w, h, rotation: 0, opacity: 1, fill: '#5E7699', stroke: 'none', strokeWidth: 0, radius: 0 })
+    await load([box2('a', 100, 100, 150, 90), box2('b', 420, 110, 200, 80), box2('c', 740, 120, 120, 100)])
+    await pickId('a')
+    ok(!(await palette('Equal rows')).some((c) => c?.startsWith('layout-')), 'one loose element: the palette does not offer the presets')
+    {
+      const b = await p.locator('.ed-stage-scale [data-el-id="a"]').boundingBox()
+      await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { button: 'right' }); await p.waitForTimeout(200)
+      ok((await p.locator('[data-cmd^="layout-"]').count()) === 0, 'nor does its element menu')
+      await p.keyboard.press('Escape'); await p.waitForTimeout(100)
+    }
+    await pickId('a'); await pickId('b', true); await pickId('c', true)
+    {
+      const b = await p.locator('.ed-stage-scale [data-el-id="a"]').boundingBox()
+      await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { button: 'right' }); await p.waitForTimeout(200)
+      const items = await p.$$eval('[data-cmd^="layout-"]', (xs) => xs.map((x) => `${x.dataset.cmd}:${x.textContent.trim()}`))
+      ok(items.join() === 'layout-equal-columns:Equal columns,layout-equal-rows:Equal rows,layout-grid:Grid', `three selected: the element menu offers all three (${items.join()})`)
+      await p.locator('[data-cmd="layout-equal-rows"]').click(); await p.waitForTimeout(300)
+    }
+    f = await frameNow()
+    ks = (await onScreen()).sort((a, b) => a.y - b.y)
+    ok(f?.layout.dir === 'col' && !f.layout.hug && ks.map((k) => k.id).join() === 'a,b,c', `Equal rows: a column, in the order they stood (${ks.map((k) => k.id).join()})`)
+    ok(same(ks.map((k) => k.h)) && same(ks.map((k) => k.w)) && same(gaps(ks, 'y', 'h')), `three equal heights, one width, equal gaps (${fmt(ks.map((k) => k.h))})`)
+    await pickId(f.id)
+    ok((await p.locator('.ed-props .ed-section[data-key="Auto layout"] .ed-sec-menu').count()) === 1, 'the frame\'s Auto layout header carries the presets menu')
+    await p.locator('.ed-props .ed-section[data-key="Auto layout"] .ed-sec-menu').click(); await p.waitForTimeout(200)
+    await p.locator('[data-cmd="layout-grid"]').click(); await p.waitForTimeout(300)
+    f = await frameNow()
+    ks = await onScreen()
+    ok(f?.layout.dir === 'grid' && f.layout.cols === 2 && same(ks.map((k) => k.w)) && same(ks.map((k) => k.h)), `Grid on the frame: two columns of equal cells (${fmt(ks.map((k) => k.w))})`)
+    const g0 = ks.find((k) => k.id === 'a'), g1 = ks.find((k) => k.id === 'b'), g2 = ks.find((k) => k.id === 'c')
+    ok(Math.abs(g0.y - g1.y) < 1 && g2.y > g0.y + g0.h && Math.abs(g2.x - g0.x) < 1, 'filled row by row in their order')
+    await pickId('b'); await p.keyboard.press('Delete'); await p.waitForTimeout(300)
+    ks = await onScreen()
+    ok(ks.length === 2 && same(ks.map((k) => k.w)) && Math.abs(ks[0].y - ks[1].y) < 1, 'deleting one: the rest close up into equal cells')
+
+    console.log('\nwhy Fill is off, and Turn off Hug\n')
+    await load([box2('a', 100, 100, 150, 90), box2('b', 420, 110, 200, 80), box2('c', 740, 120, 120, 100)])
+    await pickId('a'); await pickId('b', true); await pickId('c', true)
+    await p.keyboard.press('Shift+A'); await p.waitForTimeout(300)
+    const hugged = await frameNow()
+    await pickId('a')
+    const why = p.locator('.ed-props .ed-fill-why')
+    ok(hugged.layout.hug && await why.isVisible(), 'under a hugging frame the reason shows without hovering')
+    ok((await why.textContent()).startsWith('The frame hugs its contents, so there is nothing to fill.'), 'it says why in a sentence')
+    ok(await p.locator('.ed-props .ed-seg[data-axis="w"] [data-value="fill"]').isDisabled(), 'and Fill is off')
+    await why.locator('button', { hasText: 'Turn off Hug' }).click(); await p.waitForTimeout(300)
+    const freed = await frameNow()
+    ok(!freed.layout.hug && ['x', 'y', 'w', 'h'].every((k) => freed[k] === hugged[k]), `Turn off Hug: the frame stops hugging and does not move (${hugged.x},${hugged.y} ${hugged.w}×${hugged.h})`)
+    ok(!(await p.locator('.ed-props .ed-seg[data-axis="w"] [data-value="fill"]').isDisabled()) && (await why.count()) === 0, 'Fill is on, the hint is gone')
+    await p.locator('.ed-props .ed-seg[data-axis="w"] [data-value="fill"]').click(); await p.waitForTimeout(300)
+    ok((await els()).find((e) => e.id === 'a').sizing?.w === 'fill', 'and pressing Fill now takes')
   }
   ok(!errors.length, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
