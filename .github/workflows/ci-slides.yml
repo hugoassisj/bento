@@ -738,3 +738,13 @@ jobs:
         # Shift+Tab un-bullets a first-level item and does nothing on a plain
         # line; nested bullets and table cells are unchanged.
         run: node scripts/test-slides-tab-in-text-browser.mjs
+      - name: Code blocks indent on Tab and paste as code in Chromium
+        if: ${{ !cancelled() }}
+        # In an open Code element Tab indents and focus never leaves (it used
+        # to, and the next letters fired shortcuts); Enter keeps the
+        # indentation, Shift+Tab outdents, a selection indents as a block, Esc
+        # commits exactly what was typed. Code pasted onto the canvas, plain or
+        # with an editor's html, becomes one Code element with its language
+        # guessed; Paste as text, sentences, lists and fences behave as before;
+        # a paste onto a selected Code element replaces its code, with Undo.
+        run: node scripts/test-slides-code-tab-browser.mjs

@@ -751,3 +751,11 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Code paste and code indent rules
+      # Which text pasted onto the canvas is code (indented lines with code
+      # punctuation, or code punctuation ending most lines) and which stays
+      # text (sentences, single lines, URLs, lists, an address); the language
+      # guessed for it, and no guess when unclear; a tagless fence gets the
+      # guess; Tab, Shift+Tab and Enter on the lines of a code block.
+      shell: bento-step {0}
+      run: node scripts/test-slides-code-paste.ts
