@@ -60,6 +60,14 @@ export function clipboardToHtml(dt: DataTransfer | null | undefined): string {
   return check.textContent?.trim() || check.querySelector('br, li') ? clean : ''
 }
 
+/** A clipboard whose html flavour is a table — what a spreadsheet copies. It
+ *  is a grid, not formatted text, so a paste onto the slide leaves it to the
+ *  plain-text path (a table paste of its own is separate work). Read as a
+ *  string only: nothing is parsed. */
+export function clipboardIsGrid(dt: DataTransfer | null | undefined): boolean {
+  return /<table[\s>]/i.test(dt?.getData('text/html') ?? '')
+}
+
 /** Text the source painted as preformatted — a `<pre>`, or an ancestor whose
  *  inline style says `white-space: pre…` (what a terminal, an editor or a web
  *  page's code block copies as) — keeps its spaces and line breaks. The

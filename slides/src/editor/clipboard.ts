@@ -194,7 +194,7 @@ function rewriteRefs(els: SlideElement[], remap: Map<string, string>) {
  * so repeated pastes still cascade. Payload-independent, so a clip written by
  * an older build behaves the same.
  */
-function pasteOffset(els: SlideElement[], slide: Slide): number {
+export function pasteOffset(els: SlideElement[], slide: Slide): number {
   const sits = (e: SlideElement, d: number) => slide.elements.some((o) =>
     o.type === e.type && o.w === e.w && o.h === e.h && o.x === (e.x ?? 0) + d && o.y === (e.y ?? 0) + d)
   let d = 0

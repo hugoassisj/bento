@@ -833,6 +833,17 @@ export class SlideCanvas {
     return p && p.x >= 0 && p.y >= 0 && p.x <= width && p.y <= height ? p : null
   }
 
+  /** The centre of the part of the slide in view, in slide px — zoomed in,
+   *  not the slide's own centre. */
+  viewCentre(): { x: number; y: number } {
+    const v = this.scroller.getBoundingClientRect()
+    const s = this.scaleHost.getBoundingClientRect()
+    const l = Math.max(v.left, s.left), r = Math.min(v.right, s.right)
+    const t = Math.max(v.top, s.top), b = Math.min(v.bottom, s.bottom)
+    const { width, height } = this.store.doc.size
+    return r > l && b > t ? this.slidePointAt((l + r) / 2, (t + b) / 2) : { x: width / 2, y: height / 2 }
+  }
+
   setGhost(ghost: { slideId: string; ids: string[] } | null) {
     this.ghost = ghost
     this.render()

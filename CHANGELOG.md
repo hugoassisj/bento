@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Text pasted onto the slide keeps its formatting.** Copy a paragraph with
+  bold words and a bulleted list and paste it with no text box open: the new
+  box keeps the bold and the list, is sized to its text instead of a fixed
+  box it overflows, and lands in the middle of what you are looking at.
+  Pasting again no longer stacks the copies on the same spot. Plain text,
+  code in ``` fences and cells copied from a spreadsheet paste as before.
+
 - **Text boxes size themselves.** Press T and click: the box starts where you
   clicked, left-aligned, and grows and shrinks with what you type, so short
   labels line up by their words when you align them. Drag instead to choose

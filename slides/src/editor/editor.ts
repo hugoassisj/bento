@@ -39,7 +39,10 @@ import { createSaveQueue, saveRevision } from '../saving'
 import type { SaveQueue } from '../../../kernel/src/savequeue.ts'
 import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, onRecoveryOff, pruneOld, putRecovery, recoveryLooksOlder, type Snapshot } from '../autosave'
-import { freshGroups, insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
+import { freshGroups, insertElements, insertSlides, parseClip, pasteOffset, serializeElements, serializeSlides } from './clipboard'
+import { clipboardIsGrid, clipboardToHtml } from './paste'
+import { bulletsToLists } from './bullets'
+import { measureHug } from '../measure'
 import { estimatedFrames, fencedElements, splitFences } from './codefence'
 import { keepSpaces } from './markdown'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
@@ -2859,7 +2862,7 @@ export class Editor {
         const file = imgItem.getAsFile()
         if (file) { ev.preventDefault(); this.pasteImageFile(file); return }
       }
-      if (this.pasteFromText(dt.getData('text/plain'))) ev.preventDefault()
+      if (this.pasteFromText(dt.getData('text/plain'), dt)) ev.preventDefault()
     })
   }
 
@@ -2870,8 +2873,12 @@ export class Editor {
    * Split out of the paste EVENT so the context menu's Paste is the same code
    * rather than a second, drifting copy — the menu has to fetch the clipboard
    * itself (`readText`), because a click carries no clipboardData.
+   *
+   * This is the one place a slide paste is classified, in order: a Bento
+   * clip, a ``` fence, the html flavour (`dt`, the paste event's clipboard),
+   * plain text. A new kind of clipboard (a spreadsheet grid) is one more step.
    */
-  private pasteFromText(text: string): boolean {
+  private pasteFromText(text: string, dt?: DataTransfer | null): boolean {
     // 2) Bento elements / slides copied from this or another deck
     const clip = parseClip(text)
     if (clip?.kind === 'elements') {
@@ -2890,8 +2897,8 @@ export class Editor {
       this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
       return true
     }
-    // 3) plain text → a text element; a ``` fenced block in it → a Code
-    // element (with any text around it as text boxes above and below)
+    // 3) a ``` fenced block → a Code element (with any text around it as
+    // text boxes above and below)
     if (text && text.trim()) {
       const { width } = this.store.doc.size
       const parts = splitFences(text.slice(0, 20000))
@@ -2903,14 +2910,39 @@ export class Editor {
         this.toast(made.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: made.length }))
         return true
       }
+    }
+    // 4) the html flavour keeps bold, italic, links and lists — through the
+    // one sanitizer, in an inert document (paste.ts), then the same finishing
+    // an edited box gets at commit. No markdown conversion: it is not typed.
+    // A spreadsheet grid is not text: it keeps the plain path it always took.
+    const rich = clipboardIsGrid(dt) ? '' : clipboardToHtml(dt)
+    if (rich) return this.pasteTextBox(bulletsToLists(rich))
+    // 5) plain text, escaped
+    if (text && text.trim()) {
       const esc = text.replace(/^\s*\n/, '').trimEnd().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').split('\n').map(keepSpaces).join('<br>')
-      const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
-      this.store.commit(() => this.store.slide.elements.push(el))
-      this.store.select([el.id])
-      this.toast(t('Text pasted'))
-      return true
+      return this.pasteTextBox(esc)
     }
     return false
+  }
+
+  /** A pasted text box: left/top-aligned, as wide as its text up to the
+   *  slide's content width, as tall as it needs (measure.ts), centred in the
+   *  view, and stepped +20/+20 off an identical box a paste already left. */
+  private pasteTextBox(html: string): boolean {
+    const { width, height } = this.store.doc.size
+    const margin = Math.round(96 * width / 1280)
+    const el = defaultText({ html, color: readableInk(this.store.slide.background), align: 'left', valign: 'top' })
+    Object.assign(el, measureHug(el, this.store.doc, width - 2 * margin))
+    const c = this.canvas.viewCentre()
+    el.x = Math.round(Math.min(Math.max(c.x - el.w / 2, 0), Math.max(width - el.w, 0)))
+    el.y = Math.round(Math.min(Math.max(c.y - el.h / 2, 0), Math.max(height - el.h, 0)))
+    const d = pasteOffset([el], this.store.slide)
+    el.x += d
+    el.y += d
+    this.store.commit(() => this.store.slide.elements.push(el))
+    this.store.select([el.id])
+    this.toast(t('Text pasted'))
+    return true
   }
 
   private pasteImageFile(file: File) {
