@@ -22,6 +22,8 @@
 //   * with align "stretch" every card is as tall as the tallest card's content
 //     (padding + texts + gap), not the 100px written in the file; without it,
 //     each card keeps its own content height;
+//   * each auto text is measured once, and again only when the layout changed
+//     its width (a deck without frames: no second measure at all);
 //   * validate() reports no text-overflow and no out-of-canvas (the decks that
 //     keep the row's width: wrap, as the docs say a hugging wrapping frame does).
 //
@@ -92,15 +94,28 @@ try {
 
   const run = (json) => page.evaluate(async (json) => {
     const T = window.__loadFit
-    // what the editor gets on `replace`, and what its own derive pass then does with it
-    const pre = T.parseDocInputReport(json, { live: window.bento.doc })
+    // count text measurements: measure.ts reads one .bento-text-inner box per text
+    const gbcr = Element.prototype.getBoundingClientRect
+    let measures = 0
+    Element.prototype.getBoundingClientRect = function () { if (this.classList?.contains('bento-text-inner')) measures++; return gbcr.call(this) }
+    let pre, inValidate
+    try {
+      // what the editor gets on `replace`, and what its own derive pass then does with it
+      pre = T.parseDocInputReport(json, { live: window.bento.doc })
+      const inLoad = measures
+      measures = 0
+      window.bento.validate(pre.doc) // the report's own validate() measures too: take it out
+      inValidate = measures
+      measures = inLoad - inValidate
+    } finally { Element.prototype.getBoundingClientRect = gbcr }
     const again = T.derive(pre.doc, T.deriveMemory(pre.doc))
     const geo = (els) => JSON.stringify(els.map((e) => [e.id, e.x, e.y, e.w, e.h]))
     const report = window.bento.loadDoc(json)
     const els = window.bento.doc.slides[0].elements
     const v = await window.bento.validate()
     return {
-      again, same: geo(pre.doc.slides[0].elements) === geo(els), fitted: report.fitted,
+      again, same: geo(pre.doc.slides[0].elements) === geo(els), fitted: report.fitted, measures, inValidate,
+      auto: JSON.parse(json).slides.flatMap((s) => s.elements).filter((e) => e.h === 'auto').map((e) => !!e.parentId),
       codes: v.findings.map((f) => f.code),
       els: Object.fromEntries(els.map((e) => [e.id, { x: e.x, y: e.y, w: e.w, h: e.h, parentId: e.parentId, m: e.type === 'text' ? window.bento.measure(e.id).height : undefined }])),
     }
@@ -111,6 +126,10 @@ try {
     ok(r.again === false, `the editor's derive on replace has nothing left to do (derive returned ${r.again})`)
     ok(r.same, 'the store holds exactly the geometry the loader produced')
     ok(r.fitted > 0, `${r.fitted} text(s) fitted`)
+    // each auto text is measured once, and measured again only if the layout
+    // changed its width (here: every text inside a frame, once)
+    const framed = r.auto.filter(Boolean).length
+    ok(r.inValidate > 0 && r.measures === r.auto.length + framed, `the fit measured ${r.measures} times for ${r.auto.length} auto texts, ${framed} of them resized by the layout (validate's own ${r.inValidate} excluded)`)
     const texts = Object.entries(r.els).filter(([, e]) => e.m !== undefined)
     const off = texts.filter(([, e]) => Math.abs(e.h - e.m) > 2)
     ok(!off.length, `every text's h is within 2px of measure() at its laid-out width${off.length ? ': ' + off.map(([id, e]) => `${id} h ${e.h} vs ${e.m} at w ${e.w}`).join('; ') : ''}`)
@@ -138,6 +157,18 @@ try {
   ok(Math.abs(w.els.title0.w - (1152 - 48 - 48) / 3 + 2 * PAD) < 0.01 && w.els.row.w === 1152, `the texts were widened from the 100px placeholder to ${w.els.title0.w}px by the layout`)
   check('the same row without stretch', await run(JSON.stringify(deck({ stretch: false, wrap: true }))), { stretch: false, clean: true })
   check('scripts/fixtures/agent-decks/equal-cards.json', await run(fixture), { stretch: true, clean: true, cards: ['card-1', 'card-2', 'card-3'] })
+
+  // a deck without frames: one fit, no second measure (the derive pass moves no width)
+  console.log('\na deck without frames\n')
+  const plain = { compact: true, slides: [{ id: 'p', elements: [
+    { id: 'h', type: 'text', x: 64, y: 48, w: 1152, h: 'auto', html: 'A heading long enough that it may wrap onto a second line at this size', fontSize: 48 },
+    ...[0, 1, 2, 3].map((k) => ({ id: `b${k}`, type: 'text', x: 64, y: 220 + k * 110, w: 1152, h: 'auto', html: 'Body text. '.repeat(3 + 6 * k), fontSize: 20 })),
+  ] }] }
+  const p = await run(JSON.stringify(plain))
+  ok(p.again === false && p.same, "the editor's derive on replace has nothing left to do")
+  ok(p.measures === 5, `5 auto texts are measured exactly 5 times: no re-measure after the first fit (${p.measures}, validate's own ${p.inValidate} excluded)`)
+  const poff = Object.entries(p.els).filter(([, e]) => e.m !== undefined && Math.abs(e.h - e.m) > 2)
+  ok(!poff.length, "every text's h is within 2px of measure()")
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {

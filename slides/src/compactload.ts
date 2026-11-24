@@ -27,8 +27,8 @@
 // A text inside an auto-layout frame gets its real width from the layout
 // (derive.ts → layout.ts), not from the file: an agent writes a placeholder w
 // and lets the frame size it. So the fit runs again on the laid-out width:
-// fit, derive, re-fit what layout resized, derive again, until a round
-// changes nothing (capped at 4, like derive's own settle). layout.ts stays
+// fit, derive, re-fit only the texts whose width the layout changed, derive
+// again, until no width moves (capped at 4, like derive's own settle). layout.ts stays
 // pure geometry; text heights stay its inputs. The document reaches the store
 // already derived, so the editor's own pass on `replace` finds nothing to do.
 
@@ -48,7 +48,7 @@ export interface LoadReport {
   dropped: Dropped[]
   /** fields expansion filled from the editor's defaults */
   expanded: number
-  /** text elements whose h was fitted to their text */
+  /** text elements whose h the fit changed (their measured height differed from the provisional one) */
   fitted: number
   /** validate() on the loaded document */
   findings: ValidateResult
@@ -110,14 +110,25 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
   let fitted = 0
   let refit: ExpandStats['autoHeight'] = []
   if (fit && stats.autoHeight.length) {
-    const h = () => stats.autoHeight.map(({ slide, id }) => doc.slides.find((s) => s.id === slide)?.elements.find((e) => e.id === id)?.h)
-    const provisional = h()
+    const slides = new Map(doc.slides.map((s) => [s.id, s]))
+    const read = (k: 'w' | 'h') => stats.autoHeight.map(({ slide, id }) => slides.get(slide)?.elements.find((e) => e.id === id)?.[k])
+    const provisional = read('h')
     const mem = deriveMemory(doc) // the memory the editor seeds on `replace`
     fitAutoHeights(doc, stats)
     restack(doc, stats)
+    // re-fit only the texts whose width the layout changed: a deck without
+    // frames pays one derive and no second measure
+    let w = read('w')
     derive(doc, mem)
-    for (let i = 0; i < 4 && fitAutoHeights(doc, stats); i++) { restack(doc, stats); derive(doc, mem) }
-    fitted = h().filter((v, i) => v !== provisional[i]).length
+    for (let i = 0; i < 4; i++) {
+      const now = read('w')
+      const resized = stats.autoHeight.filter((_, k) => now[k] !== w[k])
+      if (!resized.length || !fitAutoHeights(doc, { autoHeight: resized })) break
+      restack(doc, stats)
+      w = now
+      derive(doc, mem)
+    }
+    fitted = read('h').filter((v, i) => v !== provisional[i]).length
     if (document.fonts?.status === 'loading') refit = stats.autoHeight
   }
   // a role the layout had no slot for is reported beside the gate's drops:

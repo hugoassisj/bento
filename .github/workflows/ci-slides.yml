@@ -724,7 +724,9 @@ jobs:
         if: ${{ !cancelled() }}
         # window.bento.loadDoc on a row of column-frame cards whose texts carry
         # a placeholder width and h "auto": every text's h is within 2px of
-        # measure() at the width the layout gave it, the editor's derive on
+        # measure() at the width the layout gave it (measured once, and again
+        # only when the layout changed its width; a deck without frames is
+        # never measured twice), the editor's derive on
         # replace has nothing left to do, a hugging row that stretches its
         # hugging cards makes them all as tall as the tallest card's content
         # (without stretch each keeps its own), and validate() finds no
