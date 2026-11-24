@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "This deck is read-only": "このデッキは読み取り専用です",
+  "Not while editing a path": "パスの編集中は使えません",
+  "Select something first": "先に何かを選択してください",
+  "Select two or more": "2つ以上選択してください",
+  "Select three or more": "3つ以上選択してください",
+  "Select a text box first": "先にテキストボックスを選択してください",
+  "Not available right now": "今は使えません",
   "New slide from layout…": "レイアウトから新規スライド…",
   "Move slide earlier": "スライドを前へ移動",
   "Move slide later": "スライドを後ろへ移動",

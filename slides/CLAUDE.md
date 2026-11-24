@@ -419,7 +419,12 @@ anim, charts, i18n, sync), shared by every app.
   condition sits in `match`, so the element meaning still runs), and ⌫ is
   the slide's only from the slide list. ⌘C, element Delete/Backspace, the
   plain arrows and Esc stay hand-coded in the keydown handler because they
-  branch on canvas state.
+  branch on canvas state. A command whose `when` fails still shows in ⌘K
+  (never for a key press): greyed, after the runnable ones, with `why` — by
+  default the reason its condition recorded as it failed (`fail()` in the
+  getter: read-only, editing a path, "Select two or more"…), else "Not
+  available right now". `keywords` are other tools' words for a command,
+  English search aids only, never shown and never translated.
 - **Panel accordion**: every `.ed-section` header is retrofitted into a
   collapsible group after each rebuild (panels.applyAccordion) — open state
   persisted per title in localStorage; Presenting/Interactivity/Layout

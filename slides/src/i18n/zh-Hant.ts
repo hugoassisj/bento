@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "This deck is read-only": "此簡報為唯讀",
+  "Not while editing a path": "編輯路徑時無法使用",
+  "Select something first": "請先選取物件",
+  "Select two or more": "請選取兩個或更多",
+  "Select three or more": "請選取三個或更多",
+  "Select a text box first": "請先選取一個文字方塊",
+  "Not available right now": "目前無法使用",
   "New slide from layout…": "從版面配置新增投影片…",
   "Move slide earlier": "將投影片前移",
   "Move slide later": "將投影片後移",

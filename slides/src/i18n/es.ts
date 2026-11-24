@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
+  "This deck is read-only": "Esta presentación es de solo lectura",
+  "Not while editing a path": "No mientras se edita un trazado",
+  "Select something first": "Selecciona algo primero",
+  "Select two or more": "Selecciona dos o más",
+  "Select three or more": "Selecciona tres o más",
+  "Select a text box first": "Selecciona primero un cuadro de texto",
+  "Not available right now": "No disponible ahora",
   "New slide from layout…": "Nueva diapositiva desde un diseño…",
   "Move slide earlier": "Mover diapositiva antes",
   "Move slide later": "Mover diapositiva después",

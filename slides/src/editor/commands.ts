@@ -26,8 +26,14 @@ export interface Command {
   scope: Scope
   /** also runs while a text field has focus (save, zoom, present) */
   inField?: boolean
-  /** offered (palette) and run (keys) only while this holds */
+  /** run (keys) only while this holds; the palette lists it greyed otherwise */
   when?: () => boolean
+  /** while `when` fails: why, shown (already translated) on the palette's
+   *  greyed row; absent or undefined = "Not available right now" */
+  why?: () => string | undefined
+  /** other tools' words for it ("line up", "tidy"), space-separated. A search
+   *  aid in English, never shown and never translated — not a t() string. */
+  keywords?: string
   /** while `when` fails, the chord is the browser's again (⌘L with nothing
    *  selected is the address bar, #838) — the exception to owned chords */
   yields?: boolean
@@ -84,21 +90,35 @@ export function fuzzy(query: string, text: string): number {
 
 const RECENT = 'bento-cmd-recent'
 
-/** The palette's order for a query: matches by score, recently used first when empty. */
-export function rank(cmds: Command[], query: string): Command[] {
+/** A keyword match: the query as typed must appear in the keywords (a
+ *  subsequence across a list of loose words would find nearly anything). */
+const kw = (c: Command, query: string) =>
+  c.keywords?.includes(query.trim().toLowerCase()) ? fuzzy(query, c.keywords) - 1 : -1
+
+/** A palette row: the command, and why it cannot run now (unset = it can). */
+export interface Ranked { c: Command; off?: string }
+
+/**
+ * The palette's order for a query: matches by score, the ones that can run
+ * now first, then the rest greyed with their reason — so "align" with nothing
+ * selected teaches what align needs instead of saying it does not exist.
+ * Empty query: what can run now, recently used first. (Keys never see the
+ * greyed ones: dispatch still honours `when`.)
+ */
+export function rank(cmds: Command[], query: string): Ranked[] {
   const recent = lsJson<string[]>(RECENT, [])
-  const live = cmds.filter((c) => !c.when || c.when())
+  const rows = cmds.map((c): Ranked => (!c.when || c.when() ? { c } : { c, off: c.why?.() ?? t('Not available right now') }))
   if (!query.trim()) {
-    const r = (c: Command) => { const i = recent.indexOf(c.id); return i < 0 ? 1e9 : i }
-    return [...live].sort((a, b) => r(a) - r(b))
+    const r = (x: Ranked) => { const i = recent.indexOf(x.c.id); return i < 0 ? 1e9 : i }
+    return rows.filter((x) => !x.off).sort((a, b) => r(a) - r(b))
   }
-  return live
-    // the id too: it holds the other tools' word ("distribute-x" for "Space
-    // evenly across"), so a Figma or PowerPoint habit finds the command
-    .map((c) => ({ c, s: Math.max(fuzzy(query, t(c.label)), fuzzy(query, c.label), fuzzy(query, c.id.replace(/-/g, ' ')) - 1) }))
+  return rows
+    // the id and the keywords too, a little lower: they hold the other tools'
+    // words ("distribute-x" for "Space evenly across", "line up" for align),
+    // so a Figma or PowerPoint habit finds the command
+    .map((x) => ({ ...x, s: Math.max(fuzzy(query, t(x.c.label)), fuzzy(query, x.c.label), fuzzy(query, x.c.id.replace(/-/g, ' ')) - 1, kw(x.c, query)) }))
     .filter((x) => x.s >= 0)
-    .sort((a, b) => b.s - a.s)
-    .map((x) => x.c)
+    .sort((a, b) => Number(!!a.off) - Number(!!b.off) || b.s - a.s)
 }
 
 /** ⌘K: search every command, ↑↓ to choose, Enter runs, Esc closes. */
@@ -125,12 +145,12 @@ export function openPalette(cmds: Command[]) {
   box.append(input, list)
   overlay.appendChild(box)
 
-  let shown: Command[] = []
+  let shown: Ranked[] = []
   let at = 0
   const paint = () => {
     shown = rank(cmds, input.value)
     at = Math.min(at, Math.max(0, shown.length - 1))
-    list.replaceChildren(...shown.map((c, i) => {
+    list.replaceChildren(...shown.map(({ c, off }, i) => {
       const li = document.createElement('li')
       li.id = `ed-cmdk-${i}`
       li.setAttribute('role', 'option')
@@ -139,6 +159,14 @@ export function openPalette(cmds: Command[]) {
       const name = document.createElement('span')
       name.textContent = t(c.label)
       li.appendChild(name)
+      if (off) {
+        // greyed, with the reason inside the option, so it is part of its name
+        li.setAttribute('aria-disabled', 'true')
+        const why = document.createElement('span')
+        why.className = 'ed-cmdk-why'
+        why.textContent = off
+        li.appendChild(why)
+      }
       if (c.keys) {
         const keys = document.createElement('span')
         keys.className = 'ed-tip-keys'
@@ -152,6 +180,8 @@ export function openPalette(cmds: Command[]) {
       li.addEventListener('pointerdown', (e) => { e.preventDefault(); runAt(i) })
       return li
     }))
+    // nothing matched: the place for a fall-through row (ask the assistant,
+    // find in the deck) once one exists; until then, say so
     if (!shown.length) {
       const li = document.createElement('li')
       li.className = 'ed-cmdk-empty'
@@ -163,9 +193,10 @@ export function openPalette(cmds: Command[]) {
   }
   // Esc and a run hand focus back to where ⌘K was pressed; a click elsewhere keeps its own
   const close = (restore = false) => { overlay.remove(); if (restore && opener?.isConnected) opener.focus({ preventScroll: true }) }
+  // a greyed row never runs, and the palette stays open on it
   const runAt = (i: number) => {
-    const c = shown[i]
-    if (!c) return
+    const { c, off } = shown[i] ?? {}
+    if (!c || off) return
     close(true)
     lsSetJson(RECENT, [c.id, ...lsJson<string[]>(RECENT, []).filter((x) => x !== c.id)].slice(0, 8))
     c.run()

@@ -11,6 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **⌘K shows what a command needs, and knows other tools' words.** A command
+  that cannot run right now is still listed, greyed below the ones that can,
+  with the reason: type "align" with nothing selected and the six align
+  commands say "Select something first"; "distribute" with one element says
+  "Select three or more". Choosing one does nothing and keeps the palette
+  open. The palette also matches the words people bring from other tools —
+  "tidy", "line up", "reuse", "dark", "brand", "play" — not only the names
+  shown.
 - **Slide shortcuts, and every slide action in ⌘K.** Ctrl+M (⌃M on a Mac)
   adds a slide after the current one, on the same layout. With nothing
   selected on the slide, ⌘D duplicates the slide and ⌘↑ / ⌘↓ (Ctrl on Windows

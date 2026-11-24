@@ -7,6 +7,13 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "This deck is read-only": "Esta apresentação é somente leitura",
+  "Not while editing a path": "Não enquanto um caminho é editado",
+  "Select something first": "Selecione algo primeiro",
+  "Select two or more": "Selecione dois ou mais",
+  "Select three or more": "Selecione três ou mais",
+  "Select a text box first": "Selecione primeiro uma caixa de texto",
+  "Not available right now": "Indisponível no momento",
   "New slide from layout…": "Novo slide a partir de um layout…",
   "Move slide earlier": "Mover slide para antes",
   "Move slide later": "Mover slide para depois",

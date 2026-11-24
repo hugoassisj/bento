@@ -3861,26 +3861,33 @@ export class Editor {
     // Nothing modal is up: a sheet, dialog, the palette or an open menu owns the
     // keyboard while it shows, so R or ⌘Z must not reach the slide behind it.
     const canvasFree = () => !this.canvas.isCropEditing && !document.querySelector(MODAL)
-    const writable = () => canvasFree() && !this.store.readOnly
+    // Why a `when` failed, for ⌘K's greyed rows: a condition that knows its
+    // reason records it as it fails, so the reason is the condition itself
+    // (each command's `why`, set below, re-runs its `when` to read it).
+    let failed: string | undefined
+    const fail = (why: string) => { failed = why; return false }
+    const writable = () => canvasFree() && (!this.store.readOnly || fail(t('This deck is read-only')))
     // the tools and selection verbs also wait while a path is being edited
-    const toolFree = () => writable() && !this.canvas.isPathEditing
+    const toolFree = () => writable() && (!this.canvas.isPathEditing || fail(t('Not while editing a path')))
+    // at least n elements selected
+    const has = (n: 1 | 2 | 3) => sel().length >= n || fail(n === 1 ? t('Select something first') : n === 2 ? t('Select two or more') : t('Select three or more'))
     // A letter as the keyboard's layout writes it (Dvorak's K is K); only when
     // Option turned it into a symbol (macOS: ⌥K is ˚) does the physical key
     // decide — the one case a layout cannot answer.
     // a selection the editor may align: not a frame's child (its frame places it)
-    const free = () => sel().length > 0 && !sel().some((e) => e.parentId && this.store.element(e.parentId))
+    const free = () => has(1) && !sel().some((e) => e.parentId && this.store.element(e.parentId))
     const letter = (ev: KeyboardEvent, code: string) => /^[a-z]$/i.test(ev.key) ? `Key${ev.key.toUpperCase()}` === code : ev.code === code
     // a bare letter: no modifier, so ⌘R, ⇧A and ⌥⇧O stay theirs
     const tool = (k: string) => (ev: KeyboardEvent, mod: boolean) => !mod && !ev.altKey && !ev.shiftKey && key(ev) === k
     // one text box selected (not open): what the list commands act on
-    const oneText = () => toolFree() && sel().length === 1 && sel()[0].type === 'text'
+    const oneText = () => toolFree() && ((sel().length === 1 && sel()[0].type === 'text') || fail(t('Select a text box first')))
     const editor = this // for the label getter, whose `this` is the command
     const list: Command[] = [
       { id: 'save', label: 'Save', keys: `${MOD}S`, scope: 'always', inField: true, match: (ev, mod) => mod && key(ev) === 's', run: () => this.save(false) },
       { id: 'zoom-in', label: 'Zoom in', keys: `${MOD}+`, scope: 'canvas', inField: true, match: (ev, mod) => mod && (ev.key === '=' || ev.key === '+'), run: () => this.canvas.zoomIn() },
       { id: 'zoom-out', label: 'Zoom out', keys: `${MOD}−`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '-', run: () => this.canvas.zoomOut() },
       { id: 'zoom-fit', label: 'Fit the slide', keys: `${MOD}0`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '0', run: () => this.canvas.zoomReset() },
-      { id: 'present', label: 'Present', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5', run: (ev) => this.present(!ev?.shiftKey) },
+      { id: 'present', label: 'Present', keywords: 'play start slideshow', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5', run: (ev) => this.present(!ev?.shiftKey) },
       { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && !ev.altKey && key(ev) === 'k', run: () => openPalette(this.commands) },
       { id: 'help', label: 'Keyboard shortcuts', keys: `? or ${MOD}/`, scope: 'always', when: canvasFree, match: (ev, mod) => (!mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey))) || (mod && !ev.shiftKey && ev.key === '/'), run: () => this.openHelp() },
       // The tools, one letter each as in Figma and Penpot (C stays Comment)
@@ -3899,32 +3906,32 @@ export class Editor {
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => writable() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
       // ⌘L / Ctrl+L locks the selection, or unlocks it when all of it is locked (#838);
       // only with a selection, so the browser keeps its address-bar key otherwise
-      { id: 'lock', label: 'Lock or unlock', keys: `${MOD}L`, scope: 'canvas', when: () => writable() && sel().length > 0, yields: true, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'l', run: () => this.panel.lock(sel()) },
-      { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => writable() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
+      { id: 'lock', label: 'Lock or unlock', keys: `${MOD}L`, scope: 'canvas', when: () => writable() && has(1), yields: true, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'l', run: () => this.panel.lock(sel()) },
+      { id: 'group', label: 'Group', keywords: 'combine', keys: `${MOD}G`, scope: 'canvas', when: () => writable() && has(2), match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
       // ⌥⇧U/S/I/E (letter(): on a Mac, Option turns the key into a symbol)
-      ...BOOL_OPS.map((op): Command => ({ id: `bool-${op}`, label: boolUi(op).label, keys: boolUi(op).key, scope: 'canvas', when: () => toolFree() && !!boolOperands(this.store, sel()), match: (ev, mod) => !mod && ev.altKey && ev.shiftKey && letter(ev, boolUi(op).code), run: () => { combine(this.store, sel(), op) } })),
+      ...BOOL_OPS.map((op): Command => ({ id: `bool-${op}`, label: boolUi(op).label, keys: boolUi(op).key, scope: 'canvas', when: () => toolFree() && has(2) && !!boolOperands(this.store, sel()), match: (ev, mod) => !mod && ev.altKey && ev.shiftKey && letter(ev, boolUi(op).code), run: () => { combine(this.store, sel(), op) } })),
       // Align and space, Figma's keys: ⌥A ⌥H ⌥D across, ⌥W ⌥V ⌥S down, ⌃⌥H ⌃⌥V even gaps.
       // A frame's child is the frame's to place, so these wait for a free selection.
       ...([['align-left', 'Align left', 'A', 'left'], ['align-center', 'Align centers', 'H', 'centerX'], ['align-right', 'Align right', 'D', 'right'],
         ['align-top', 'Align top', 'W', 'top'], ['align-middle', 'Align middles', 'V', 'middleY'], ['align-bottom', 'Align bottom', 'S', 'bottom']] as const)
-        .map(([id, label, k, edge]): Command => ({ id, label, keys: `⌥${k}`, scope: 'canvas', when: () => toolFree() && free(), match: (ev, mod) => !mod && ev.altKey && !ev.shiftKey && letter(ev, `Key${k}`), run: () => align(this.panel, sel(), edge) })),
-      { id: 'distribute-x', label: 'Space evenly across', keys: '⌃⌥H', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyH'), run: () => distribute(this.panel, sel(), 'x') },
-      { id: 'distribute-y', label: 'Space evenly down', keys: '⌃⌥V', scope: 'canvas', when: () => toolFree() && free() && sel().length >= 3, match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyV'), run: () => distribute(this.panel, sel(), 'y') },
-      { id: 'flip-h', label: 'Flip horizontal', keys: '⇧H', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'h', run: () => flip(this.panel, sel(), 'flipX') },
-      { id: 'flip-v', label: 'Flip vertical', keys: '⇧V', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'v', run: () => flip(this.panel, sel(), 'flipY') },
-      { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
-      { id: 'component', label: 'Create component', keys: `⌥${MOD}K`, scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => mod && ev.altKey && letter(ev, 'KeyK'), run: () => this.createComponent() },
+        .map(([id, label, k, edge]): Command => ({ id, label, keywords: 'line up', keys: `⌥${k}`, scope: 'canvas', when: () => toolFree() && free(), match: (ev, mod) => !mod && ev.altKey && !ev.shiftKey && letter(ev, `Key${k}`), run: () => align(this.panel, sel(), edge) })),
+      { id: 'distribute-x', label: 'Space evenly across', keywords: 'tidy line up', keys: '⌃⌥H', scope: 'canvas', when: () => toolFree() && has(3) && free(), match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyH'), run: () => distribute(this.panel, sel(), 'x') },
+      { id: 'distribute-y', label: 'Space evenly down', keywords: 'tidy line up', keys: '⌃⌥V', scope: 'canvas', when: () => toolFree() && has(3) && free(), match: (ev) => ev.ctrlKey && ev.altKey && !ev.metaKey && !ev.shiftKey && letter(ev, 'KeyV'), run: () => distribute(this.panel, sel(), 'y') },
+      { id: 'flip-h', label: 'Flip horizontal', keys: '⇧H', scope: 'canvas', when: () => toolFree() && has(1), match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'h', run: () => flip(this.panel, sel(), 'flipX') },
+      { id: 'flip-v', label: 'Flip vertical', keys: '⇧V', scope: 'canvas', when: () => toolFree() && has(1), match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'v', run: () => flip(this.panel, sel(), 'flipY') },
+      { id: 'auto-layout', label: 'Add auto layout', keywords: 'tidy stack row column equal', keys: '⇧A', scope: 'canvas', when: () => toolFree() && has(1), match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
+      { id: 'component', label: 'Create component', keywords: 'reuse symbol master', keys: `⌥${MOD}K`, scope: 'canvas', when: () => toolFree() && has(1), match: (ev, mod) => mod && ev.altKey && letter(ev, 'KeyK'), run: () => this.createComponent() },
       // tokens and components, for ⌘K (palette only: no keys of their own)
-      { id: 'component-main', label: 'Go to main component', scope: 'canvas', when: () => canvasFree() && !!selectedComponent(this.panel, sel()) && !selectedComponent(this.panel, sel())!.main, run: () => goToMain(this.panel, sel()[0].component!.id) },
+      { id: 'component-main', label: 'Go to main component', keywords: 'reuse symbol master', scope: 'canvas', when: () => canvasFree() && !!selectedComponent(this.panel, sel()) && !selectedComponent(this.panel, sel())!.main, run: () => goToMain(this.panel, sel()[0].component!.id) },
       { id: 'component-reset', label: 'Reset overrides', scope: 'canvas', when: () => writable() && sel().some((e) => e.component && !e.component.main && e.component.over?.length), run: () => this.resetSelectedOverrides() },
       { id: 'component-detach', label: 'Detach component', scope: 'canvas', when: () => writable() && sel().some((e) => e.component), run: () => this.detachComponent() },
-      { id: 'token-new-color', label: 'New color token', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('color') } },
-      { id: 'token-new-number', label: 'New number token', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('number') } },
-      { id: 'token-bind', label: 'Bind to token…', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.bindToTokenMenu() },
-      { id: 'tokens-show', label: 'Show tokens and components', scope: 'always', run: () => this.showSideView('tokens') },
+      { id: 'token-new-color', label: 'New color token', keywords: 'style variable brand', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('color') } },
+      { id: 'token-new-number', label: 'New number token', keywords: 'style variable brand', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('number') } },
+      { id: 'token-bind', label: 'Bind to token…', keywords: 'style variable brand', scope: 'canvas', when: () => writable() && has(1), run: () => this.bindToTokenMenu() },
+      { id: 'tokens-show', label: 'Show tokens and components', keywords: 'style variable brand reuse symbol dark light mode', scope: 'always', run: () => this.showSideView('tokens') },
       { id: 'redo', label: 'Redo', keys: `⇧${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && ((ev.shiftKey && key(ev) === 'z') || key(ev) === 'y'), run: () => this.store.redo() },
       { id: 'undo', label: 'Undo', keys: `${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'z', run: () => this.store.undo() },
-      { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: () => writable() && sel().length > 0, match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },
+      { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: () => writable() && has(1), match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },
       // Ghost Cut: the selection fades where it stands and ⌘V MOVES it (same
       // ids, one undo step); Esc cancels. Also copied, so pasting elsewhere
       // works as after ⌘C. Plain ⌘X is unchanged.
@@ -3946,32 +3953,32 @@ export class Editor {
       // slide. ⌘D and ⌘↑/↓ are the slide's only while no element is selected
       // (then they duplicate and nudge the elements, below and in keydown).
       // New slide is ⌃M on a Mac: ⌘M minimises the window before a page hears it.
-      { id: 'slide-new', label: 'New slide', keys: `${MOD === '⌘' ? '⌃' : MOD}M`, scope: 'canvas', when: writable, match: (ev) => ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey && key(ev) === 'm', run: () => this.newSlide() },
-      { id: 'slide-new-layout', label: 'New slide from layout…', scope: 'canvas', when: writable, run: () => this.openLayoutPicker(this.layoutAnchor(), { kind: 'insert', at: this.afterCurrent() }) },
-      { id: 'slide-duplicate', label: 'Duplicate slide', keys: `${MOD}D`, scope: 'canvas', when: writable, match: (ev, mod) => mod && key(ev) === 'd' && !sel().length, run: () => this.duplicateSlides(this.slideTargets()) },
-      { id: 'slide-move-earlier', label: 'Move slide earlier', keys: `${MOD}↑`, scope: 'canvas', when: () => writable() && stepDrop(this.store.doc.slides, this.slideTargets(), -1) !== null, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && ev.key === 'ArrowUp' && !sel().length, run: () => this.moveSlides(this.slideTargets(), -1) },
-      { id: 'slide-move-later', label: 'Move slide later', keys: `${MOD}↓`, scope: 'canvas', when: () => writable() && stepDrop(this.store.doc.slides, this.slideTargets(), 1) !== null, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && ev.key === 'ArrowDown' && !sel().length, run: () => this.moveSlides(this.slideTargets(), 1) },
-      { id: 'slide-hide', get label() { return editor.hides(editor.slideTargets()) ? 'Hide slide' : 'Show slide' }, scope: 'canvas', when: () => writable() && this.hideable(this.slideTargets()).length > 0, run: () => this.hideSlides(this.slideTargets()) },
+      { id: 'slide-new', label: 'New slide', keywords: 'add insert page', keys: `${MOD === '⌘' ? '⌃' : MOD}M`, scope: 'canvas', when: writable, match: (ev) => ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey && key(ev) === 'm', run: () => this.newSlide() },
+      { id: 'slide-new-layout', label: 'New slide from layout…', keywords: 'add insert template', scope: 'canvas', when: writable, run: () => this.openLayoutPicker(this.layoutAnchor(), { kind: 'insert', at: this.afterCurrent() }) },
+      { id: 'slide-duplicate', label: 'Duplicate slide', keywords: 'copy clone', keys: `${MOD}D`, scope: 'canvas', when: writable, match: (ev, mod) => mod && key(ev) === 'd' && !sel().length, run: () => this.duplicateSlides(this.slideTargets()) },
+      { id: 'slide-move-earlier', label: 'Move slide earlier', keywords: 'reorder up', keys: `${MOD}↑`, scope: 'canvas', when: () => writable() && stepDrop(this.store.doc.slides, this.slideTargets(), -1) !== null, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && ev.key === 'ArrowUp' && !sel().length, run: () => this.moveSlides(this.slideTargets(), -1) },
+      { id: 'slide-move-later', label: 'Move slide later', keywords: 'reorder down', keys: `${MOD}↓`, scope: 'canvas', when: () => writable() && stepDrop(this.store.doc.slides, this.slideTargets(), 1) !== null, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && ev.key === 'ArrowDown' && !sel().length, run: () => this.moveSlides(this.slideTargets(), 1) },
+      { id: 'slide-hide', keywords: 'skip', get label() { return editor.hides(editor.slideTargets()) ? 'Hide slide' : 'Show slide' }, scope: 'canvas', when: () => writable() && this.hideable(this.slideTargets()).length > 0, run: () => this.hideSlides(this.slideTargets()) },
       // ⌫ deletes slides only from the slide list (a thumbnail's button has
       // focus) or with several selected there — never from a bare canvas
-      { id: 'slide-delete', label: 'Delete slide', keys: '⌫', scope: 'canvas', when: writable,
+      { id: 'slide-delete', label: 'Delete slide', keywords: 'remove', keys: '⌫', scope: 'canvas', when: writable,
         match: (ev, mod) => !mod && (ev.key === 'Delete' || ev.key === 'Backspace') && !sel().length && (this.thumbSel.length > 1 || (ev.target instanceof Node && this.thumbs.contains(ev.target))),
         run: (ev) => {
           const th = ev?.target instanceof Element ? ev.target.closest<HTMLElement>('.ed-thumb') : null
           this.deleteSlides(th && this.thumbs.contains(th) ? this.thumbTargets(Number(th.dataset.index)) : this.slideTargets())
         } },
-      { id: 'layout-apply', label: 'Apply layout…', scope: 'canvas', when: writable, run: () => this.openLayoutPicker(this.layoutAnchor(), { kind: 'apply' }) },
-      { id: 'notes-toggle', label: 'Speaker notes', scope: 'canvas', when: writable, run: () => this.toggleNotes() },
-      { id: 'list-bullets', label: 'Bulleted list', scope: 'text', when: oneText, run: () => this.listSelectedText('insertUnorderedList') },
-      { id: 'list-numbers', label: 'Numbered list', scope: 'text', when: oneText, run: () => this.listSelectedText('insertOrderedList') },
+      { id: 'layout-apply', label: 'Apply layout…', keywords: 'template master arrange', scope: 'canvas', when: writable, run: () => this.openLayoutPicker(this.layoutAnchor(), { kind: 'apply' }) },
+      { id: 'notes-toggle', label: 'Speaker notes', keywords: 'presenter', scope: 'canvas', when: writable, run: () => this.toggleNotes() },
+      { id: 'list-bullets', label: 'Bulleted list', keywords: 'bullet points unordered', scope: 'text', when: oneText, run: () => this.listSelectedText('insertUnorderedList') },
+      { id: 'list-numbers', label: 'Numbered list', keywords: 'ordered', scope: 'text', when: oneText, run: () => this.listSelectedText('insertOrderedList') },
       // palette only: what the topbar inserts, and its other one-click actions
       { id: 'insert-image', when: toolFree, label: 'Add an image', scope: 'canvas', run: () => this.pickImage() },
       { id: 'insert-table', when: toolFree, label: 'Add a table', scope: 'canvas', run: () => this.canvas.insert(this.newTable()) },
       { id: 'insert-chart', when: toolFree, label: 'Add a chart', scope: 'canvas', run: () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))) },
       { id: 'insert-code', when: toolFree, label: 'Add a code snippet', scope: 'canvas', run: () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true) },
-      { id: 'copy', label: 'Copy', keys: `${MOD}C`, scope: 'canvas', when: () => sel().length > 0, run: () => this.copySelection() },
-      { id: 'delete', label: 'Delete', keys: '⌫', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.deleteSelection() },
-      { id: 'slideshow', label: 'Slideshow', scope: 'always', run: () => this.present(false, true) },
+      { id: 'copy', label: 'Copy', keys: `${MOD}C`, scope: 'canvas', when: () => has(1), run: () => this.copySelection() },
+      { id: 'delete', label: 'Delete', keys: '⌫', scope: 'canvas', when: () => writable() && has(1), run: () => this.deleteSelection() },
+      { id: 'slideshow', label: 'Slideshow', keywords: 'play start', scope: 'always', run: () => this.present(false, true) },
       { id: 'use-morph', label: 'Use Morph', scope: 'always', when: () => writable() && this.store.slide.transition !== 'morph' && !!walkSource(this.store.doc, this.store.slide), run: () => { const sl = this.store.slide; this.store.commit(() => { sl.transition = 'morph' }) } },
       // ⌘A: every top-level element on the slide (a frame's children come with
       // it) — or, with focus in the slide list, every slide
@@ -3984,7 +3991,7 @@ export class Editor {
       { id: 'select-parent', label: 'Select parent', keys: 'Esc', scope: 'canvas', when: () => canvasFree() && sel().length > 0 && sel().every((e) => !!e.parentId && !!this.store.element(e.parentId)), run: () => this.store.select([...new Set(sel().map((e) => e.parentId!))]) },
       { id: 'play-transition', label: 'Play transition', scope: 'always', when: () => !!walkSource(this.store.doc, this.store.slide), run: () => this.playTransition() },
       { id: 'export-pdf', label: 'Print or save as PDF…', keys: `${MOD}P`, scope: 'always', inField: true, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'p', run: () => this.exportPdf() },
-      { id: 'preferences', label: 'Preferences', keys: `${MOD},`, scope: 'always', inField: true, match: (ev, mod) => mod && ev.key === ',', run: () => this.openPreferences() },
+      { id: 'preferences', label: 'Preferences', keywords: 'appearance dark light theme', keys: `${MOD},`, scope: 'always', inField: true, match: (ev, mod) => mod && ev.key === ',', run: () => this.openPreferences() },
       { id: 'doc-props', label: 'Document properties…', scope: 'always', run: () => this.openDocProps() },
       { id: 'version-history', label: 'Version history…', scope: 'always', run: () => void this.openVersionHistory() },
       { id: 'export-images', label: 'Export slides as images…', scope: 'always', run: () => this.exportImages() },
@@ -3994,12 +4001,16 @@ export class Editor {
       { id: 'copy-json', label: 'Copy document JSON', scope: 'always', run: () => void this.copyDocJson() },
       { id: 'copy-compact-json', label: 'Copy compact JSON (for agents)', scope: 'always', run: () => void this.copyDocJson(true) },
       { id: 'replace-json', label: 'Replace from JSON…', scope: 'always', when: writable, run: () => this.openReplaceJson() },
-      { id: 'start-scratch', label: 'Start from scratch…', scope: 'always', when: writable, run: () => this.startFromScratch() },
+      { id: 'start-scratch', label: 'Start from scratch…', keywords: 'new blank', scope: 'always', when: writable, run: () => this.startFromScratch() },
       { id: 'save-copy', label: 'Save a copy…', scope: 'always', run: () => void this.save(true) },
       { id: 'language', label: 'Language', scope: 'always', run: () => this.openPreferences() },
       { id: 'speaker', label: 'Speaker view', scope: 'always', run: () => this.openSpeakerView() },
       { id: 'about', label: 'About bento/slides', scope: 'always', run: () => this.openAbout() },
     ]
+    for (const c of list) {
+      const w = c.when
+      if (w && !c.why) c.why = () => { failed = undefined; w(); return failed }
+    }
     this.commandList = list
     return [...list, ...this.modeCommands()]
   }
@@ -4009,8 +4020,8 @@ export class Editor {
     const tk = this.store.doc.theme.tokens
     if (!tk || modesOf(tk).length < 2) return []
     return modesOf(tk).filter((m) => m !== activeMode(tk)).map((m): Command => ({
-      id: `mode-${m}`, label: t('Switch mode → {mode}', { mode: m === 'default' ? t('Default') : m }), scope: 'canvas',
-      when: () => !this.store.readOnly, run: () => this.tokensPane.switchMode(m),
+      id: `mode-${m}`, label: t('Switch mode → {mode}', { mode: m === 'default' ? t('Default') : m }), scope: 'canvas', keywords: 'dark light theme',
+      when: () => !this.store.readOnly, why: () => t('This deck is read-only'), run: () => this.tokensPane.switchMode(m),
     }))
   }
 

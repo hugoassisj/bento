@@ -3651,6 +3651,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-cmdk-list li[aria-selected="true"] { background: var(--chrome-2); }
 .ed-cmdk-list .ed-cmdk-empty { color: var(--muted); cursor: default; }
+.ed-cmdk-list li[aria-disabled="true"] { color: var(--muted); cursor: default; }
+.ed-cmdk-why { margin-inline-start: auto; font-size: 12px; }
+.ed-cmdk-why + .ed-tip-keys { margin-inline-start: 0; opacity: 0.6; }
 .ed-cmdk-list kbd {
   font: 11px system-ui, sans-serif; padding: 1px 6px; min-width: 18px; text-align: center;
   color: var(--muted); background: var(--chrome); border: 1px solid var(--line); border-radius: 4px;
