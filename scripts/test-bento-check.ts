@@ -12,7 +12,11 @@
 // the same findings; --png writes one PNG per shown slide at the deck's pixel
 // size plus a contact sheet; exit codes follow --fail-on; a compact document
 // loads, expands and reports what was filled and dropped (#484/#490) rather
-// than a stack trace. A browser rig: it needs Chrome and the built shell, and
+// than a stack trace. When Chrome fails, the CLI says where (AI-05): fake
+// Chrome binaries that exit at once, never ask for the page, or leave a
+// profile that cannot be removed must produce a fatal with Chrome's stderr, the
+// stage that never happened and the --timeout that ran out, or exit 0 with one
+// warning line, never a trace. A browser rig: it needs Chrome and the built shell, and
 // SKIPS (with the reason printed) where either is missing locally — in CI
 // both exist and a skip is a failure.
 
@@ -178,6 +182,94 @@ const r5 = run([bad, '--json'])
 ok(r5.code === 2, `a non-deck JSON exits 2 (exit ${r5.code})`)
 ok(run([p, '--fail-on', 'maybe']).code === 2, 'an unknown --fail-on value exits 2')
 ok(fs.readFileSync(cli, 'utf8').includes("rasterizeSlide") && fs.readFileSync(cli, 'utf8').includes('editor/exportimages.ts'), 'pixels come from #480\'s rasterizeSlide, not a second renderer')
+
+console.log('\na Chrome that fails says where and why (AI-05)\n')
+{
+  // Fake "Chrome" binaries: small node scripts behind BENTO_CHROME. They stand
+  // in for the three ways the audit's trial run failed: a binary that exits
+  // at once with a reason on stderr, one that never asks for the page, and a
+  // profile its helper processes are still writing to when the run ends.
+  const fake = (name: string, body: string) => {
+    const p = path.join(tmp, name)
+    fs.writeFileSync(p, `#!${process.execPath}\n${body}\n`)
+    fs.chmodSync(p, 0o755)
+    return p
+  }
+  const runWith = (bin: string, args: string[], timeout = 120_000) => {
+    const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', timeout, env: { ...process.env, BENTO_CHROME: bin } })
+    return { code: r.status, out: r.stdout, err: r.stderr }
+  }
+  const noStack = (s: string) => !/^\s+at .+[:(]/m.test(s) && !/Node\.js v\d/.test(s)
+
+  const exits = fake('chrome-exits.mjs', `process.stderr.write('FAKE-CHROME: cannot open display :99\\n'); process.exit(1)`)
+  const e1 = runWith(exits, [shell])
+  ok(e1.code === 2, `a Chrome that exits at once is a fatal, exit 2 (exit ${e1.code})`)
+  ok(e1.err.includes('FAKE-CHROME: cannot open display :99'), `the fatal carries Chrome's own stderr (${JSON.stringify(e1.err.slice(0, 160))})`)
+  ok(/exit(ed)?[^\n]*code 1/i.test(e1.err) && e1.err.includes(exits), 'it names the binary and its exit code')
+  ok(/never requested the page/i.test(e1.err), 'it names the stage: the page was never requested')
+  const e1j = runWith(exits, [shell, '--json'])
+  let j1: any = null
+  try { j1 = JSON.parse(e1j.out) } catch {}
+  ok(j1?.ok === false && j1?.stage === 'page' && j1?.chrome?.path === exits && j1?.chrome?.exitCode === 1 && String(j1?.chrome?.stderr).includes('FAKE-CHROME'),
+    `--json carries stage, binary, exit code and stderr (${JSON.stringify(j1 && { stage: j1.stage, chrome: j1.chrome && { ...j1.chrome, stderr: undefined } })})`)
+
+  const hangs = fake('chrome-hangs.mjs', `setTimeout(() => process.exit(0), 60_000)`)
+  const t1 = Date.now()
+  const e2 = runWith(hangs, [shell, '--timeout', '3'], 30_000)
+  const e2ms = Date.now() - t1
+  ok(e2.code === 2 && e2ms < 20_000, `--timeout 3 is honoured: exit ${e2.code} after ${e2ms} ms`)
+  ok(/never requested the page/i.test(e2.err), `a Chrome that never asks for the page is named as such (${JSON.stringify(e2.err.split('\n')[0].slice(0, 140))})`)
+  ok(/\b3 ?s\b/.test(e2.err) && /--timeout <?seconds>?/.test(e2.err), 'the message says the timeout was 3 s and how to raise it')
+
+  // A profile that cannot be removed: a directory with its write bit cleared
+  // (holds for any user but root) and a helper that keeps writing into the
+  // profile after "Chrome" has reported (holds for root too) — the ENOTEMPTY
+  // the trial hit. The run must still exit 0, without a trace.
+  const writer = path.join(tmp, 'helper.mjs')
+  fs.writeFileSync(writer, [
+    `import fs from 'node:fs'; import path from 'node:path'`,
+    `const dir = process.argv[2], until = Date.now() + 4000; let i = 0`,
+    `while (Date.now() < until) { try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'f' + (i++ % 40)), 'x') } catch {} }`,
+  ].join('\n'))
+  const sticky = fake('chrome-sticky.mjs', [
+    `import fs from 'node:fs'; import http from 'node:http'; import path from 'node:path'; import { spawn } from 'node:child_process'`,
+    `const profile = process.argv.find((a) => a.startsWith('--user-data-dir=')).slice(16)`,
+    `const url = new URL(process.argv[process.argv.length - 1])`,
+    `const locked = path.join(profile, 'Default', 'locked')`,
+    `fs.mkdirSync(locked, { recursive: true }); fs.writeFileSync(path.join(locked, 'stuck'), 'x'); fs.chmodSync(locked, 0o555)`,
+    `spawn(process.execPath, [${JSON.stringify(writer)}, path.join(profile, 'Default', 'Cache')], { stdio: 'ignore' })`,
+    `const report = JSON.stringify({ ok: true, title: 'Fake', size: { width: 1280, height: 720 }, slides: 1, shown: 1, counts: { error: 0, warning: 0, info: 0 }, measured: true, findings: [], load: null, pages: [], contact: null })`,
+    `http.get(new URL('/deck.html', url), (res) => { res.resume(); res.on('end', () => {`,
+    `  const req = http.request(new URL('/report', url), { method: 'POST', headers: { 'content-type': 'application/json' } }, (r) => r.resume())`,
+    `  req.end(report)`,
+    `}) })`,
+    `setTimeout(() => process.exit(0), 60_000)`,
+  ].join('\n'))
+  const e3 = runWith(sticky, [shell])
+  ok(e3.code === 0, `a temp profile that cannot be removed does not change the exit code (exit ${e3.code})`)
+  ok(noStack(e3.err) && noStack(e3.out), `…and prints no stack trace (${JSON.stringify(e3.err.slice(0, 200))})`)
+  const left = /could not remove the temp directory (\S+)/.exec(e3.err)?.[1]
+  if (typeof process.getuid === 'function' && process.getuid() !== 0) ok(!!left, 'one warning line names the directory it left behind')
+  if (left && left.includes('bento-check-')) {
+    spawnSync('chmod', ['-R', 'u+w', left])
+    fs.rmSync(left, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  }
+
+  // --keep-tmp: the profile and the probe stay, and the path is printed
+  const e4 = runWith(sticky, [shell, '--keep-tmp', '--json'])
+  const kept = /kept the temp directory[^:]*: (\S+)/.exec(e4.err)?.[1]
+  let j4k: any = null
+  try { j4k = JSON.parse(e4.out) } catch {}
+  ok(e4.code === 0 && !!kept && fs.existsSync(path.join(kept, 'probe.js')) && fs.existsSync(path.join(kept, 'profile')), `--keep-tmp leaves the profile and the probe and prints where (${kept})`)
+  ok(!!j4k && j4k.ok === true, '--keep-tmp keeps stdout parseable JSON (the path goes to stderr)')
+  if (kept && kept.includes('bento-check-')) {
+    spawnSync('chmod', ['-R', 'u+w', kept])
+    fs.rmSync(kept, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  }
+
+  const missing = runWith(path.join(tmp, 'no-such-chrome'), [shell])
+  ok(missing.code === 2 && missing.err.includes('no-such-chrome') && /BENTO_CHROME/.test(missing.err), `a BENTO_CHROME that does not exist is named, not skipped (${JSON.stringify(missing.err.split('\n')[0].slice(0, 120))})`)
+}
 
 fs.rmSync(tmp, { recursive: true, force: true })
 console.log(`\n${checks - failures}/${checks} checks passed`)
