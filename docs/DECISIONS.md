@@ -15423,6 +15423,9 @@ Amends one line of 2026-11-19 ("the overlay stand-in keeps the `?` help").
 - **A typed character with Ctrl, ⌘ or Alt is the browser's**: the show no
   longer answers ⌘S, Ctrl+P, ⌘L and the like with its letter keys. Arrows,
   PageUp/PageDown, Space and Esc are handled with or without modifiers, as
-  before.
+  before. While the ? sheet is open every chord passes and leaves it open;
+  only a plain key or a click closes it.
+- **↑ and ↓ stay navigation** (they were Reveal's): they share the ← / →
+  row, steps, state skipping and MP-07's wake-first under black included.
 - `scripts/test-slides-show-keys-browser.mjs` guards all of it with real keys
   (17 of 43 checks pass on the parent).

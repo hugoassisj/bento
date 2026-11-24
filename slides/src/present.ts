@@ -1310,7 +1310,7 @@ export function startPresentation(
   const SHOW_KEYS: Array<{ label?: string; does: Array<[keys: string[], run: (ev: KeyboardEvent) => void]> }> = [
     { label: 'Previous · next slide, or the next reveal step on a slide that has them',
       // a press on a black screen only wakes it (wakeIfBlack): nobody can see the deck move
-      does: [[['ArrowLeft', 'PageUp', 'p'], () => { if (!wakeIfBlack()) goPrev() }], [['ArrowRight', 'PageDown', ' ', 'n'], () => { if (!wakeIfBlack()) goNext() }]] },
+      does: [[['ArrowLeft', 'ArrowUp', 'PageUp', 'p'], () => { if (!wakeIfBlack()) goPrev() }], [['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'n'], () => { if (!wakeIfBlack()) goNext() }]] },
     { label: 'First slide', does: [[['Home'], goFirst]] },
     { label: 'Last slide', does: [[['End'], goLast]] },
     { label: 'Speaker view — notes on a second screen if you have one', does: [[['s'], () => openSpeaker()]] },
@@ -1323,7 +1323,7 @@ export function startPresentation(
     // Reveal's overview, kept as it was until the show has a slide grid of its own
     { does: [[['o'], () => deck.toggleOverview()]] },
   ]
-  const CAP: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→', ' ': 'Space', Escape: 'Esc' }
+  const CAP: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', ' ': 'Space', Escape: 'Esc' }
 
   // the ? sheet: local chrome inside the overlay, so it never reaches a live
   // audience (only nav/black/laser frames do) or the speaker window, whose
@@ -1389,14 +1389,16 @@ export function startPresentation(
     const raw = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
     if (!raw || raw === 'Shift' || raw === 'Control' || raw === 'Alt' || raw === 'Meta') return
     if (keysHint) { keysHint = false; hidePresentMsg() }
-    if (keysSheet) { // any key closes the sheet, and does nothing else
+    // a typed character with Ctrl, ⌘ or Alt is the browser's (print, find…);
+    // with the sheet open, so is any chord: only a plain key closes it
+    const chord = ev.ctrlKey || ev.metaKey || ev.altKey
+    if (chord && (keysSheet || (raw.length === 1 && raw !== ' '))) return
+    if (keysSheet) { // a plain key closes the sheet, and does nothing else
       ev.preventDefault()
       ev.stopPropagation()
       closeKeys()
       return
     }
-    // a typed character with Ctrl, ⌘ or Alt is the browser's (print, find…)
-    if (raw.length === 1 && raw !== ' ' && (ev.ctrlKey || ev.metaKey || ev.altKey)) return
     const key = raw === '/' && ev.shiftKey ? '?' : raw.length === 1 ? raw.toLowerCase() : raw
     if (key === 'Escape' && deck.isOverview()) { // Esc closes the overview first
       ev.preventDefault()
