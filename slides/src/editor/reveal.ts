@@ -84,7 +84,7 @@ export function advanceStep(slide: ReadonlyArray<Stepped>, el: Stepped, dir: 1 |
   const cur = stepOf(el)
   if (!cur) return []
   const order = stepsOf(slide)
-  const groups = order.map((s) => slide.filter((e) => stepOf(e) === s).map((e) => e.id))
+  const groups = stepGroups(slide)
   const i = order.indexOf(cur)
   if (i < 0) return []
   if (groups[i].length > 1) {
@@ -95,8 +95,68 @@ export function advanceStep(slide: ReadonlyArray<Stepped>, el: Stepped, dir: 1 |
     else groups.unshift(groups.pop()!)
   } else if (i > 0) [groups[i - 1], groups[i]] = [groups[i], groups[i - 1]]
   else groups.push(groups.shift()!)
+  return renumber(slide, groups)
+}
+
+/** The slide's steps in build order, each the ids revealed on that press. */
+export const stepGroups = (slide: ReadonlyArray<Stepped>): string[][] =>
+  stepsOf(slide).map((s) => slide.filter((e) => stepOf(e) === s).map((e) => e.id))
+
+/** Number the groups 1..k in the order given: a patch for each element whose
+ *  step changes, none for the rest (no spurious undo step). */
+function renumber(slide: ReadonlyArray<Stepped>, groups: string[][]): StepPatch[] {
   const next = new Map(groups.flatMap((ids, k) => ids.map((id) => [id, k + 1] as const)))
   return slide.filter((e) => next.has(e.id) && next.get(e.id) !== stepOf(e)).map((e) => ({ id: e.id, step: next.get(e.id)! }))
+}
+
+/*
+ * The Build order list (inspector/buildorder.ts). Every verb below works on
+ * the slide's groups — the steps in order, each the elements revealed on that
+ * press — and hands back a contiguous 1..k numbering, so a list that shows
+ * "Click 1, Click 2, Click 3" never has a hole or an accidental pair to show.
+ * Only stepped elements move: putting an element on a step is a Reveal verb.
+ */
+
+/** Drag a row between groups: the element leaves its group (which closes up
+ *  if it was alone there) and becomes a step of its own at `toIndex` among
+ *  the groups that remain (0 = first, their count = last). */
+export function moveStep(slide: ReadonlyArray<Stepped>, id: string, toIndex: number): StepPatch[] {
+  const el = slide.find((e) => e.id === id)
+  if (!el || !stepOf(el)) return []
+  const groups = stepGroups(slide).map((g) => g.filter((x) => x !== id)).filter((g) => g.length)
+  groups.splice(Math.max(0, Math.min(groups.length, Math.floor(toIndex))), 0, [id])
+  return renumber(slide, groups)
+}
+
+/** Drop a row onto a group: the element is revealed with the elements on
+ *  `step` (an existing step; any other number changes nothing). */
+export function joinStep(slide: ReadonlyArray<Stepped>, id: string, step: number): StepPatch[] {
+  const el = slide.find((e) => e.id === id)
+  const at = stepsOf(slide).indexOf(step)
+  if (!el || !stepOf(el) || at < 0) return []
+  const groups = stepGroups(slide).map((g, k) => (k === at ? (g.includes(id) ? g : [...g, id]) : g.filter((x) => x !== id))).filter((g) => g.length)
+  return renumber(slide, groups)
+}
+
+/** Close the gaps: 2, 5, 9 becomes 1, 2, 3, elements sharing a step still share it. */
+export const compactSteps = (slide: ReadonlyArray<Stepped>): StepPatch[] => renumber(slide, stepGroups(slide))
+
+/** A row's remove: the element is shown with the slide again, and the steps
+ *  after it close up when it was alone on its step. */
+export function removeStep(slide: ReadonlyArray<Stepped>, id: string): StepPatch[] {
+  const el = slide.find((e) => e.id === id)
+  if (!el || !stepOf(el)) return []
+  return [{ id, step: 0 }, ...compactSteps(slide.filter((e) => e.id !== id))]
+}
+
+/**
+ * The elements of one step in the order they enter, each with its stagger —
+ * the show's own rule (present.ts runEnterFx): sorted by `fx.order` (unset
+ * counts as 0, ties keep slide order), and each starts `fx.order` beats in,
+ * or its place in that order when it has none. Equal staggers enter together.
+ */
+export function staggered<E extends Stepped & { fx?: { order?: number } }>(group: ReadonlyArray<E>): { el: E; at: number }[] {
+  return [...group].sort((a, b) => (a.fx?.order ?? 0) - (b.fx?.order ?? 0)).map((el, i) => ({ el, at: el.fx?.order ?? i }))
 }
 
 /** Does the canvas show badges for this slide? Only when there is a step to
