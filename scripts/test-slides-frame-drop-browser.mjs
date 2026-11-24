@@ -14,6 +14,14 @@
 //   step). ⌘/Ctrl held while dragging moves it over the frame instead; a
 //   locked frame takes nothing; a child dragged past its frame's edge still
 //   comes out.
+//   Drawing: whatever a box tool (F R O T) draws with its start point inside
+//   an auto-layout frame joins the innermost visible, unlocked frame there —
+//   whatever is selected — and the frame lays it out; the frame is outlined
+//   while the gesture lasts (gone on release and on Esc, which also draws
+//   nothing). Alt held at the press draws on top instead. One undo takes the
+//   drawn element out and the layout back. An empty frame says "Draw or drop
+//   here" on the editor canvas only: never in the model, the thumbnails, the
+//   show or print.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -37,15 +45,16 @@ const deck = () => [
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-  await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1'); localStorage.setItem('bento-side-view', 'layers') } catch {} })
+  await ctx.addInitScript(() => { try { localStorage.setItem('bento-offline', 'on'); localStorage.setItem('bento-slideshow-started', '1'); localStorage.setItem('bento-side-view', 'layers') } catch {} })
   await ctx.route(/^https?:/, (r) => r.abort())
+  if (ctx.routeWebSocket) await ctx.routeWebSocket(/.*/, (ws) => ws.close())
   const p = await ctx.newPage()
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
   await p.goto('file://' + SHELL)
   await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-props .ed-tabs'))
-  const load = async () => {
-    await p.evaluate((els) => { const d = JSON.parse(JSON.stringify(window.bento.doc)); d.slides = [{ id: 's1', background: '#ffffff', transition: 'none', notes: '', elements: els }]; window.bento.loadDoc(JSON.stringify(d)) }, deck())
+  const load = async (elements = deck()) => {
+    await p.evaluate((els) => { const d = JSON.parse(JSON.stringify(window.bento.doc)); d.slides = [{ id: 's1', background: '#ffffff', transition: 'none', notes: '', elements: els }]; window.bento.loadDoc(JSON.stringify(d)) }, elements)
     await p.waitForTimeout(400)
   }
   const els = () => p.evaluate(() => JSON.parse(JSON.stringify(window.bento.doc.slides[0].elements)))
@@ -143,6 +152,132 @@ try {
     await pick('a')
     await canvasDrag('a', 300, 700)
     ok(!(await el('a')).parentId && (await kids('row')) === 'b', 'a child dragged past its frame\'s edge still comes out')
+  })
+  console.log('\ndrawing into a frame\n')
+  const stage = async () => {
+    const host = await p.locator('.ed-stage-scale').boundingBox()
+    const k = await p.evaluate(() => document.querySelector('.ed-stage-scale').getBoundingClientRect().width / window.bento.doc.size.width)
+    return (x, y) => [host.x + x * k, host.y + y * k]
+  }
+  // arm a tool by its key, then drag on the slide from (x0,y0) to (x1,y1) in slide px;
+  // `alt` holds Alt from the press; `esc` presses Escape mid-drag; `mid` reads the outline before release
+  const draw = async (key, x0, y0, x1, y1, { alt = false, esc = false } = {}) => {
+    await p.evaluate(() => document.activeElement?.blur?.())
+    await p.keyboard.press(key)
+    await p.waitForTimeout(60)
+    const at = await stage()
+    await p.mouse.move(...at(x0, y0))
+    if (alt) await p.keyboard.down('Alt')
+    await p.mouse.down()
+    let mid = null
+    for (let i = 1; i <= 8; i++) {
+      await p.mouse.move(...at(x0 + (x1 - x0) * i / 8, y0 + (y1 - y0) * i / 8)); await p.waitForTimeout(16)
+    }
+    mid = await p.evaluate(() => [...document.querySelectorAll('.ed-stage-scale .ed-drop-frame')].map((n) => n.dataset.frame).join() || null)
+    if (esc) { await p.keyboard.press('Escape'); await p.waitForTimeout(60) }
+    const afterEsc = esc ? await p.evaluate(() => !!document.querySelector('.ed-stage-scale .ed-drop-frame')) : null
+    await p.mouse.up()
+    if (alt) await p.keyboard.up('Alt')
+    await p.waitForTimeout(300)
+    const after = await p.evaluate(() => !!document.querySelector('.ed-stage-scale .ed-drop-frame'))
+    return { mid, afterEsc, after }
+  }
+  const newest = async (before) => (await els()).filter((e) => !before.includes(e.id))
+  const ids = async () => (await els()).map((e) => e.id)
+  const screenBox = (id) => p.evaluate((id) => { const r = document.querySelector(`.ed-stage-scale [data-el-id="${id}"]`).getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom } }, id)
+  // a drawn box lands within a pixel of the slide point (screen px round to slide px)
+  const near = (v, w) => Math.abs(v - w) <= 1.5
+  const overlap = (m, n) => m.l < n.r - 0.5 && n.l < m.r - 0.5 && m.t < n.b - 0.5 && n.t < m.b - 0.5
+  const hints = () => p.evaluate(() => [...document.querySelectorAll('.ed-frame-hint')].map((n) => ({ frame: n.dataset.frame, text: n.textContent, inStage: !!n.closest('.ed-stage-scale'), shown: n.getBoundingClientRect().width > 0 })))
+  await run(async () => {
+    await load([])
+    let before = await ids()
+    await draw('f', 200, 150, 800, 450)
+    const [frame] = await newest(before)
+    ok(!!frame?.layout, 'F draws an auto-layout frame')
+    let h = await hints()
+    ok(h.length === 1 && h[0].frame === frame?.id && h[0].inStage && h[0].shown && /Draw or drop here/.test(h[0].text), `the empty frame shows "Draw or drop here" on the editor canvas (${JSON.stringify(h)})`)
+    ok(!JSON.stringify(await p.evaluate(() => window.bento.doc)).includes('Draw or drop here'), '…and the hint is not in the document')
+    ok(!(await p.evaluate(() => [...document.querySelectorAll('.ed-frame-hint')].some((n) => !n.closest('.ed-stage-scale') || n.closest('.ed-thumb, .ed-thumbs, .ed-sidebar')))), '…nor in the slide thumbnails')
+    before = await ids()
+    const first = await draw('r', 250, 200, 350, 300)
+    const [r1] = await newest(before)
+    ok(r1?.parentId === frame.id, `R drawn inside the selected frame joins it (${r1?.parentId})`)
+    ok(first.mid === frame.id && !first.after, `while drawing the frame is outlined as the target, and the outline goes on release (${JSON.stringify(first)})`)
+    ok((await hints()).length === 0, 'a frame with a child shows no hint')
+    const r1box = (await el(r1.id))
+    before = await ids()
+    const second = await draw('r', 450, 200, 550, 300)
+    const [r2] = await newest(before)
+    ok(r2?.parentId === frame.id, `R drawn inside the frame again, with its first child selected, joins it too (${r2?.parentId ?? 'no parentId'})`)
+    ok(second.mid === frame.id, `…outlining the frame while drawing (${second.mid})`)
+    const kidsNow = (await els()).filter((e) => e.parentId === frame.id)
+    const b1 = await screenBox(r1.id), b2 = r2 ? await screenBox(r2.id) : null
+    ok(kidsNow.length === 2 && b2 && !overlap(b1, b2), `the frame has two children and lays them out side by side (${kidsNow.length} children, ${JSON.stringify([b1, b2])})`)
+    await undo()
+    const back = await el(r1.id)
+    ok(!(await els()).some((e) => e.id === r2?.id) && back.x === r1box.x && back.y === r1box.y && back.w === r1box.w, `one undo takes the drawn element out and restores the layout (${JSON.stringify(back && { x: back.x, y: back.y, w: back.w })})`)
+    before = await ids()
+    const esc = await draw('r', 450, 200, 550, 300, { esc: true })
+    ok(esc.mid === frame.id && esc.afterEsc === false && (await newest(before)).length === 0, `Esc mid-drag clears the outline and draws nothing (${JSON.stringify(esc)})`)
+    before = await ids()
+    await draw('r', 900, 500, 1000, 600)
+    const [free] = await newest(before)
+    ok(free && !free.parentId && near(free.x, 900) && near(free.y, 500), `a box started outside every frame is a free element where it was drawn (${free && JSON.stringify({ p: free.parentId, x: free.x, y: free.y })})`)
+    before = await ids()
+    const alt = await draw('r', 450, 200, 550, 300, { alt: true })
+    const [onTop] = await newest(before)
+    ok(onTop && !onTop.parentId && near(onTop.x, 450) && near(onTop.y, 200) && !alt.mid, `Alt held at the press draws on top of the frame, not in it (${onTop && JSON.stringify({ p: onTop.parentId, x: onTop.x, y: onTop.y })}, outline ${alt.mid})`)
+  })
+  const nested = () => [
+    rect('out', 100, 100, 760, 420, { fill: '#f4f4f4', layout: { dir: 'row', gap: 20, pad: [20, 20, 20, 20] } }),
+    rect('in', 120, 120, 400, 380, { parentId: 'out', fill: '#e8e8ff', layout: { dir: 'col', gap: 10, pad: [10, 10, 10, 10] } }),
+    rect('lk', 900, 100, 300, 200, { fill: '#eeeeff', locked: true, layout: { dir: 'row', gap: 10, pad: [10, 10, 10, 10] } }),
+    rect('hid', 900, 400, 300, 200, { fill: '#eeffee', hidden: true, layout: { dir: 'row', gap: 10, pad: [10, 10, 10, 10] } }),
+  ]
+  await run(async () => {
+    await load(nested())
+    const inner = await el('in')
+    const cx = inner.x + inner.w / 2, cy = inner.y + inner.h / 2
+    let before = await ids()
+    const d = await draw('r', cx - 40, cy - 40, cx + 40, cy + 40)
+    let [n] = await newest(before)
+    ok(n?.parentId === 'in' && d.mid === 'in', `with nothing selected, a box drawn in a nested frame joins the innermost one (${n?.parentId}, outline ${d.mid})`)
+    await undo()
+    await pick('out')
+    before = await ids()
+    await draw('o', cx - 40, cy - 40, cx + 40, cy + 40)
+    ;[n] = await newest(before)
+    ok(n?.parentId === 'in', `…even while the outer frame is selected (${n?.parentId})`)
+    const outer = await el('out')
+    before = await ids()
+    await draw('r', outer.x + outer.w - 120, outer.y + 40, outer.x + outer.w - 40, outer.y + 120)
+    ;[n] = await newest(before)
+    ok(n?.parentId === 'out', `a box drawn in the outer frame beside the inner one joins the outer (${n?.parentId})`)
+    before = await ids()
+    await draw('r', 950, 150, 1050, 250)
+    ;[n] = await newest(before)
+    ok(n && !n.parentId, `a locked frame never adopts (${n?.parentId})`)
+    before = await ids()
+    await draw('r', 950, 450, 1050, 550)
+    ;[n] = await newest(before)
+    ok(n && !n.parentId, `a hidden frame never adopts (${n?.parentId})`)
+    ok(!(await hints()).some((h) => h.frame === 'lk' || h.frame === 'hid'), 'a locked or hidden empty frame shows no hint')
+  })
+  await run(async () => {
+    await load([rect('ef', 200, 150, 600, 300, { fill: '#ffffff', layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] } })])
+    ok((await hints()).length === 1, 'an empty frame on load shows the hint')
+    await p.emulateMedia({ media: 'print' })
+    const printed = await p.evaluate(() => ({ app: getComputedStyle(document.getElementById('app')).display, inPrint: !!document.querySelector('#bento-print .ed-frame-hint'), shown: [...document.querySelectorAll('.ed-frame-hint')].some((n) => n.getBoundingClientRect().width > 0) }))
+    await p.emulateMedia({ media: 'screen' })
+    ok(!printed.inPrint && !printed.shown, `print never shows the hint (${JSON.stringify(printed)})`)
+    await p.evaluate(() => document.activeElement?.blur?.())
+    await p.keyboard.press('F5')
+    await p.waitForFunction(() => document.querySelector('.bento-present-overlay .reveal .slides > section'), null, { timeout: 10000 }).catch(() => {})
+    await p.waitForTimeout(400)
+    const shown = await p.evaluate(() => ({ overlay: !!document.querySelector('.bento-present-overlay'), hint: !!document.querySelector('.bento-present-overlay .ed-frame-hint') || (document.querySelector('.bento-present-overlay')?.textContent ?? '').includes('Draw or drop here') }))
+    ok(shown.overlay && !shown.hint, `the show never shows the hint (${JSON.stringify(shown)})`)
+    await p.keyboard.press('Escape'); await p.waitForTimeout(300)
   })
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
