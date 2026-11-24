@@ -49,7 +49,10 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH,
 const dir = mkdtempSync(join(tmpdir(), 'bento-notes-'))
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  // a saved deck may carry a live session: nothing leaves the machine
+  await ctx.addInitScript(() => { try { localStorage.setItem('bento-offline', 'on') } catch {} })
   await ctx.route(/^https?:/, (r) => r.abort())
+  await ctx.routeWebSocket(/.*/, (ws) => ws.close())
   const p = await ctx.newPage()
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
@@ -87,6 +90,7 @@ try {
   })
   const fresh = async (w, h) => {
     const c = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: w < 700, isMobile: w < 700 })
+    await c.addInitScript(() => { try { localStorage.setItem('bento-offline', 'on') } catch {} })
     await c.route(/^https?:/, (r) => r.abort())
     await c.routeWebSocket(/.*/, (ws) => ws.close())
     const q = await c.newPage()
