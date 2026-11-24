@@ -3233,7 +3233,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-mini:has(> .ed-corners-btn) > .ed-token-pill { inset-inline-end: 29px; }
 /* the input under the pill draws nothing: an RTL field puts its LTR number at
    the left, where the corners button now sits, and it printed under it */
-.ed-mini:has(> .ed-token-pill) > input { color: transparent; caret-color: var(--ink); }
+.ed-mini:has(> .ed-token-pill) > input:not(:focus) { color: transparent; }
+/* typing into a bound number shows what is typed: the pill steps aside while the input has focus */
+.ed-mini:has(> input:focus) > .ed-token-pill { visibility: hidden; }
 /* the detach floats over the pill's end, so at rest the name has the whole width */
 .ed-color-token { position: relative; }
 .ed-token-pill > .ed-color-detach, .ed-color-token > .ed-color-detach { position: absolute; inset-inline-end: 2px; top: 50%; translate: 0 -50%; margin: 0; background: var(--chrome-2); box-shadow: 0 0 5px 4px var(--chrome-2); }
