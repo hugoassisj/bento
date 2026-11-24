@@ -149,6 +149,16 @@ ok(png.subarray(1, 4).toString() === 'PNG' && dims(png).w === 1280 && dims(png).
 const contact = fs.readFileSync(path.join(outDir, 'contact.png'))
 ok(dims(contact).w > 300 && dims(contact).h > 150, `contact.png has real dimensions (${JSON.stringify(dims(contact))})`)
 ok(Array.isArray(j3?.pages) && j3.pages.length === 1 && j3.contact?.endsWith('contact.png'), 'the JSON lists the page paths and the contact sheet')
+ok(j3?.renderer === 'window.bento.render', `a shell with window.bento.render draws its own pages (renderer: ${j3?.renderer})`)
+{
+  // a shell from before window.bento.render (1.2.10, kept as a gate-1 fixture)
+  const old = path.join(root, 'home/fixtures/gate1/real/slides-1.2.10/Bento_Slides.bento.html')
+  const ro = run([old, '--png', path.join(tmp, 'png-old'), '--json'])
+  let jo: any = null
+  try { jo = JSON.parse(ro.out) } catch {}
+  ok(ro.code === 0 && jo?.renderer === 'bundled probe' && jo.pages?.length === jo.shown && jo.shown > 0,
+    `an older shell without it falls back to the bundled probe (renderer: ${jo?.renderer}, ${jo?.pages?.length} pages)`)
+}
 // not blank: a PNG of a dark slide with orange and white ink is not one colour
 ok(png.length > 5_000, `the page is not a blank image (${png.length} bytes)`)
 

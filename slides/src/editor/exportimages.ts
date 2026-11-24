@@ -55,10 +55,11 @@ function runtimeCss(): string {
 }
 
 /** Draw one slide at `scale` and encode it. Rejects (SecurityError) when the
- *  canvas is tainted — see the header for when that happens. */
-export async function rasterizeSlide(doc: BentoDoc, slide: Slide, format: ImageFormat, scale: ImageScale, box?: Box): Promise<Blob> {
+ *  canvas is tainted — see the header for when that happens. `hide`: element
+ *  ids drawn invisible, as the show hides a build step not yet revealed. */
+export async function rasterizeSlide(doc: BentoDoc, slide: Slide, format: ImageFormat, scale: ImageScale, box?: Box, hide?: ReadonlySet<string>): Promise<Blob> {
   const { width: pw, height: ph } = box ? { width: Math.round(box.w * scale), height: Math.round(box.h * scale) } : pixelSize(doc, scale)
-  const svg = slideSvg(doc, slide, pw, ph, box)
+  const svg = slideSvg(doc, slide, pw, ph, box, hide)
   const img = new Image()
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
   await img.decode()
@@ -81,10 +82,16 @@ export interface Box { x: number; y: number; w: number; h: number }
 
 /** The slide (or the `box` of it) as a standalone SVG of `pw`×`ph`: the
  *  render inside a foreignObject with the stylesheet and fonts it needs. */
-export function slideSvg(doc: BentoDoc, slide: Slide, pw: number, ph: number, box?: Box): string {
+export function slideSvg(doc: BentoDoc, slide: Slide, pw: number, ph: number, box?: Box, hide?: ReadonlySet<string>): string {
   const { width: w, height: h } = doc.size
   const v = box ?? { x: 0, y: 0, w, h }
   const surface = renderSlide(slide, doc, { svgAsImage: true, hidePlaceholders: true })
+  // the show's own mechanism (present.ts applyStep): hidden, still laid out
+  if (hide?.size) {
+    for (const node of Array.from(surface.querySelectorAll<HTMLElement>('[data-el-id]'))) {
+      if (hide.has(node.dataset.elId!)) node.style.visibility = 'hidden'
+    }
+  }
   const css = runtimeCss() + '\n' + (document.getElementById('bento-fonts')?.textContent ?? '')
   const xhtml = new XMLSerializer().serializeToString(surface)
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${pw}" height="${ph}" viewBox="${v.x} ${v.y} ${v.w} ${v.h}">` +

@@ -15,8 +15,9 @@
 // asset refs), the load report when the input was JSON (what the gate dropped,
 // what compact expansion filled — fields a shell without #484 does not carry,
 // tolerated), and with --png one PNG per slide in show order through the same
-// render→canvas path Save ▾ Export slides as images uses (#480), plus a
-// contact sheet so an agent can look at the whole deck in one image.
+// render→canvas path Save ▾ Export slides as images uses (#480) — the shell's
+// own window.bento.render() where it has one (AI-06) — plus a contact sheet so
+// an agent can look at the whole deck in one image.
 //
 // HOW IT DRIVES CHROME. The harness the sanitize and embed rigs use, reused:
 // a local http server hands Chrome the deck with a probe module appended and
@@ -212,12 +213,23 @@ async function main() {
   const pages = []
   let contact = null
   const shown = exportableSlides(doc)
+  // A shell with window.bento.render (AI-06) draws its own pages — the same
+  // rasterizeSlide, from the shell's own code; an older shell gets the copy
+  // bundled here from the repo's sources.
+  const renderer = typeof bento.render === 'function' ? 'window.bento.render' : 'bundled probe'
   if (WANT_PNG) {
     const thumbs = []
     for (const slide of shown) {
       stage('rendering slide ' + (pages.length + 1) + ' of ' + shown.length)
-      const blob = await rasterizeSlide(doc, slide, 'png', 1)
-      const url = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob) })
+      let url
+      if (renderer === 'window.bento.render') {
+        const r = await bento.render(slide.id, { format: 'png', scale: 1 })
+        if (!r.ok) return post({ fatal: 'window.bento.render could not draw slide ' + slide.id + ': ' + r.err + ' (' + r.detail + ')', stage: 'render' })
+        url = r.dataUrl
+      } else {
+        const blob = await rasterizeSlide(doc, slide, 'png', 1)
+        url = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob) })
+      }
       pages.push(url)
       thumbs.push(url)
     }
@@ -252,6 +264,7 @@ async function main() {
     load,
     pages,
     contact,
+    renderer: WANT_PNG ? renderer : null,
     ms: Math.round(performance.now() - t0),
   })
 }
@@ -445,6 +458,7 @@ const out = {
   expanded: report.load?.expanded ?? null,
   pages: written.filter((p) => !p.endsWith('contact.png')),
   contact: written.find((p) => p.endsWith('contact.png')) ?? null,
+  renderer: report.renderer ?? null,
   chrome: chromeInfo,
   ms: wall,
 }

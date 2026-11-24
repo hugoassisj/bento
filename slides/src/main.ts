@@ -37,6 +37,7 @@ import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
 import { Store } from './store'
 import { Editor } from './editor/editor'
+import { renderOne, renderShown, type RenderOpts } from './editor/renderapi'
 import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
 import { onlineTransport, startSharing, stopSharing, disconnectOnline, joinFromDoc } from './sync/online'
@@ -415,6 +416,24 @@ dismissSplash()
    */
   validate(target?: BentoDoc, opts?: ValidateOpts) {
     return validateDoc(target ?? store.doc, opts)
+  },
+  /**
+   * A slide as an image: `render(target?, opts?)` resolves `{ ok: true,
+   * dataUrl, width, height, slideId }` or `{ ok: false, err, detail }`, never
+   * throws. `target` is a slide id or a 1-based index over doc.slides (state
+   * and hidden slides included); omitted, the open slide. `opts`: `format`
+   * 'png' | 'jpeg', `scale` (snapped to 0.5–4), `step` (the build step to
+   * show; default all revealed), `doc` (render a document you have not
+   * loaded). The pixels are Export slides as images'. Read-only: the store,
+   * the selection and the undo stack are untouched. editor/renderapi.ts.
+   */
+  render(target?: string | number, opts?: RenderOpts) {
+    return renderOne(store.doc, store.slide, target, opts)
+  },
+  /** Every slide of the show, in show order, as render() results (state and
+   *  hidden slides left out, as the export leaves them out). */
+  renderAll(opts?: RenderOpts) {
+    return renderShown(store.doc, opts)
   },
   /**
    * How tall does this text need to be? The format is absolute pixels, so

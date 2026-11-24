@@ -255,6 +255,41 @@ column, deciding whether a heading needs two lines or three, sizing a caption
 under a photo. In the editor, the same thing is a **Fit height to text** button
 in the Typography panel.
 
+### `window.bento.render()` — look at a slide
+
+Any harness that can open the file in a browser can see a slide, with no
+screenshot of the editor and no slideshow:
+
+```js
+const r = await window.bento.render(3)            // the third slide in doc.slides
+// → { ok: true, dataUrl: 'data:image/png;base64,…', width: 1280, height: 720, slideId: 's3' }
+await window.bento.render('s1', { step: 0 })      // before the first click of a build
+await window.bento.render('pie', { format: 'jpeg', scale: 2 })
+await window.bento.renderAll()                    // every slide of the show, in show order
+```
+
+`target` is a slide id or a 1-based index over `doc.slides` — state and hidden
+slides included, so a state slide renders by its id or its place; omitted, the
+open slide. Options: `format` (`'png'`, the default, or `'jpeg'`), `scale` (1 by
+default, snapped to the export's 0.5, 1, 1.5, 2, 3 or 4), `step` (the build step
+to show; by default every step is revealed) and `doc` (a document you have not
+loaded, full or compact; it passes the same gate as `loadDoc` and is drawn with
+the open deck's embedded fonts). `renderAll()` takes the same options and
+leaves out state and hidden slides, as *Export slides as images* does; it makes
+no contact sheet — compose one from the images if you want one.
+
+Mistakes are results, not exceptions: `{ ok: false, err, detail }` with `err`
+one of `no-such-slide`, `bad-option`, `tainted` (the browser would not let the
+image be read back) or `render-failed`. It only reads: the document, the
+selection, the undo stack and the canvas are left as they were.
+
+The pixels are *Export slides as images*' own, so the image holds what that
+export holds: a chart is its static snapshot (the finished chart, without its
+entrance or tooltips), video and audio their poster or icon, an embed its
+placeholder card, and a picture whose `src` is an `http(s)` URL is blank.
+`render` is on the editor's surface; a presentation package or an audience copy
+exposes only `format`, `doc` and `readonly`.
+
 ### `window.bento.validate()`
 
 Open the deck and run it in the browser console. It reports, in one pass, the

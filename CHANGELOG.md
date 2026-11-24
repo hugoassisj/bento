@@ -11,6 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Agents can look at a slide without a screenshot.**
+  `window.bento.render()` draws any slide — by id or by number, state slides
+  included, at a chosen build step — to a PNG or JPEG through the same path as
+  *Export slides as images*, and `renderAll()` draws the whole show. It changes
+  nothing in the deck, and `bento check` now uses it on decks that have it.
+
 - **`bento check` finishes, or says exactly why it could not.** A run no
   longer crashes after a good result because Chrome was still writing to its
   temporary profile. When Chrome cannot start or the deck never reports, the
