@@ -16,7 +16,8 @@ pre-1.0.
   also spoken by screen readers, and failures are announced at once. A save
   that fails now says why when the browser knows (permission lost, disk full,
   file moved or deleted), never sends you to the developer console, and stays
-  on screen until you dismiss it, with a Download a copy button that saves
+  on screen until you dismiss it (Escape works too), even while other
+  messages come and go, with a Download a copy button that saves
   the deck as a download instead. Cancelling a save dialog still says
   nothing. A picture the browser cannot read, chosen with the Image button
   or pasted, is named in a message and nothing is inserted, where before the

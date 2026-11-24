@@ -228,6 +228,7 @@ export class Editor {
   ) {
     // before any message: a live region only speaks when text changes in it
     ensureLiveRegions()
+    this.wireToastEscape()
     this.build()
     this.wireKeyboard()
     // a slide-list change makes the sidebar selection's indices stale: drop it
@@ -2764,10 +2765,14 @@ export class Editor {
     lsSet('bento-slideshow-started', '1')
     document.querySelector('.ed-hint-pulse')?.classList.remove('ed-hint-pulse')
     this.canvas.commitTextEdit()
-    document.querySelector('.ed-toast')?.remove() // never drawn over the show
+    // never drawn over the show; a failure waits under it, still unanswered
+    document.querySelectorAll('.ed-toast:not([data-kind="error"])').forEach((n) => n.remove())
+    const waiting = document.querySelector<HTMLElement>('.ed-toast[data-kind="error"]')
+    if (waiting) waiting.hidden = true
     this.presenting = true
     return startPresentation(this.store.doc, at, (last) => {
       this.presenting = false
+      if (waiting) waiting.hidden = false
       this.store.goTo(last)
       this.canvas.render()
     }, { fullscreen, broadcast: this.presenterBroadcast() })
@@ -4905,22 +4910,31 @@ export class Editor {
 
   /** The one transient message. Its words also go to a live region (announce.ts),
    *  so a screen reader hears what the eye sees. Kind `error` speaks in the alert
-   *  region and STAYS — with a Dismiss button — until it is dismissed, acted on or
-   *  replaced by the next message: a failure that fades after two seconds is
-   *  missed by anyone who looked away. */
+   *  region and STAYS — with a Dismiss button, and Escape — until it is dismissed,
+   *  acted on or replaced by a newer failure: a failure that fades after two
+   *  seconds is missed by anyone who looked away. An ordinary message never
+   *  removes it; it shows just under it instead. */
   toast(message: string, action?: { label: string; run: () => void }, kind?: string) {
-    document.querySelector('.ed-toast')?.remove()
     const error = kind === 'error'
+    document.querySelectorAll(error ? '.ed-toast' : '.ed-toast:not([data-kind="error"])').forEach((n) => n.remove())
     announce(message, error)
     const box = div('ed-toast')
     if (kind) box.dataset.kind = kind
     box.textContent = message
+    // focus goes back where it was when a button inside is pressed and the
+    // toast goes with it — not to <body>
+    const back = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const close = () => {
+      const inside = box.contains(document.activeElement)
+      box.remove()
+      if (inside && back?.isConnected) back.focus()
+    }
     if (action) {
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'ed-toast-act'
       b.textContent = action.label
-      b.addEventListener('click', () => { action.run(); box.remove() })
+      b.addEventListener('click', () => { action.run(); close() })
       box.append(' ', b)
       box.classList.add('has-act')
     }
@@ -4930,15 +4944,18 @@ export class Editor {
       x.className = 'ed-toast-x'
       x.textContent = '×'
       x.setAttribute('aria-label', t('Dismiss'))
-      x.addEventListener('click', () => box.remove())
+      x.addEventListener('click', close)
       box.append(x)
       box.classList.add('has-act')
+      this.closeError = close
     }
     // dock at the top of the canvas, centred on it: the window's foot covered
     // the speaker notes, and the canvas's foot the zoom and Slideshow controls
+    // — or just under a failure still waiting there
     const canvas = document.querySelector('.ed-scroll')?.getBoundingClientRect()
     if (canvas?.height) {
-      box.style.top = `${canvas.top + 12}px`
+      const above = error ? null : document.querySelector<HTMLElement>('.ed-toast[data-kind="error"]:not([hidden])')
+      box.style.top = `${above ? above.getBoundingClientRect().bottom + 8 : canvas.top + 12}px`
       box.style.bottom = 'auto'
       box.style.left = `${canvas.left + canvas.width / 2}px`
     }
@@ -4959,6 +4976,27 @@ export class Editor {
    * (`doc`, or the open deck at the moment of the click) as a download, which
    * needs no permission and no picker.
    */
+  /** The visible failure's close (Dismiss), for Escape. */
+  private closeError: (() => void) | null = null
+
+  /** Escape answers a waiting failure — unless it belongs to something nearer:
+   *  a field, an open dialog or a menu keeps its own Escape. */
+  private wireToastEscape() {
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape' || ev.defaultPrevented) return
+      const box = document.querySelector<HTMLElement>('.ed-toast[data-kind="error"]:not([hidden])')
+      if (!box || !this.closeError) return
+      const at = document.activeElement
+      const typing = at instanceof HTMLElement && !box.contains(at) && (at.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(at.tagName))
+      const nearer = !!document.querySelector(MODAL) || [...document.querySelectorAll('[role="dialog"], [role="menu"]')].some((n) => n.getClientRects().length > 0)
+      if (typing || nearer) return
+      ev.preventDefault()
+      ev.stopPropagation()
+      this.closeError()
+      this.closeError = null
+    }, true)
+  }
+
   private saveFailed(err: unknown, copy?: { doc: import('../model').BentoDoc; suffix: string }) {
     console.error(err)
     const name = (err as { name?: unknown } | null)?.name
@@ -4971,7 +5009,10 @@ export class Editor {
       run: () => {
         if (!copy) this.session?.stampInto(this.store.doc) // as a save would: the copy can rejoin
         const doc = copy?.doc ?? this.store.doc
-        void serializeAuto(doc).then((html) => downloadFile(html, suggestedFileName(doc, copy?.suffix)))
+        void serializeAuto(doc).then((html) => downloadFile(html, suggestedFileName(doc, copy?.suffix))).catch((e) => {
+          console.error(e)
+          this.toast(t('Something went wrong while saving'), undefined, 'error')
+        })
       },
     }, 'error')
   }

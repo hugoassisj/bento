@@ -120,6 +120,18 @@ try {
   ok(!!alert1?.text && alert1.text === failed?.text, `the alert region says it (${alert1?.text})`)
   await p.waitForTimeout(3000)
   ok((await toast())?.text === failed?.text, 'it is still on screen 3 s later')
+  // an ordinary message (a paste; a collaborator joining) never wipes it
+  await p.evaluate(() => {
+    const dt = new DataTransfer(); dt.setData('text/plain', 'Pasted over a failure')
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }))
+  })
+  await p.waitForTimeout(400)
+  const both = await p.evaluate(() => [...document.querySelectorAll('.ed-toast')].map((n) => {
+    const r = n.getBoundingClientRect(); return { kind: n.dataset.kind ?? '', text: n.firstChild?.textContent ?? '', top: r.top, bottom: r.bottom }
+  }))
+  const err = both.find((b) => b.kind === 'error'), later = both.find((b) => b.kind !== 'error')
+  ok(err?.text === failed?.text, `a paste after it leaves the failure on screen (${both.map((b) => b.text).join(' | ')})`)
+  ok(later?.text === 'Text pasted' && err && later.top >= err.bottom, 'and the paste shows beneath it, not over it')
   const [dl] = await Promise.all([
     p.waitForEvent('download', { timeout: 5000 }).catch(() => null),
     p.locator('.ed-toast button', { hasText: 'Download a copy' }).click().catch(() => {}),
@@ -132,16 +144,38 @@ try {
     ok(body.includes('id="bento-doc"'), 'carrying the deck')
   }
   await p.waitForTimeout(400)
-  ok(!(await toast()), 'acting on it puts it away')
+  ok(await p.evaluate(() => !document.querySelector('.ed-toast[data-kind="error"]')), 'acting on it puts it away')
 
   await stubPicker('TypeError')
+  const home = () => p.evaluate(() => document.activeElement?.getAttribute('data-cmd') ?? document.activeElement?.tagName)
+  await p.evaluate(() => document.querySelector('[data-cmd="insert-text"]').focus())
   await save()
   const generic = await toast()
   ok(!!generic && !/console/i.test(generic.all), `a failure with no known reason names no console (${generic?.text})`)
   ok(generic?.buttons.includes('Download a copy'), 'and still offers Download a copy')
-  await p.locator('.ed-toast button[aria-label="Dismiss"]').click().catch(() => {})
+  await p.evaluate(() => document.querySelector('.ed-toast button[aria-label="Dismiss"]')?.focus())
+  await p.keyboard.press('Enter')
   await p.waitForTimeout(400)
   ok(!(await toast()), 'Dismiss puts it away')
+  ok(await home() === 'insert-text', `and focus goes back where it was (${await home()})`)
+
+  await save()
+  ok(!!(await toast()), 'another failure')
+  await p.keyboard.press('Escape')
+  await p.waitForTimeout(300)
+  ok(!(await toast()), 'Escape puts it away')
+  await save()
+  await p.evaluate(() => document.querySelector('.ed-toast .ed-toast-act')?.focus())
+  await p.keyboard.press('Escape')
+  await p.waitForTimeout(300)
+  ok(!(await toast()) && await home() === 'insert-text', `Escape from its own button puts it away and focus back (${await home()})`)
+  await save()
+  await p.evaluate(() => { const t = document.createElement('textarea'); t.id = 'rig-field'; document.body.append(t); t.focus() })
+  await p.keyboard.press('Escape')
+  await p.waitForTimeout(300)
+  ok(!!(await toast()), 'Escape typed in a field leaves it to the field')
+  await p.evaluate(() => { document.getElementById('rig-field')?.remove(); document.querySelector('.ed-toast button[aria-label="Dismiss"]')?.click() })
+  await p.waitForTimeout(300)
 
   console.log('\n5. cancelling the picker is quiet\n')
   await stubPicker('AbortError')

@@ -435,7 +435,7 @@ export class PropsPanel {
   }
 
   toast(message: string) {
-    document.querySelector('.ed-toast')?.remove()
+    document.querySelectorAll('.ed-toast:not([data-kind="error"])').forEach((n) => n.remove()) // a failure waits for its answer
     announce(message) // heard as well as seen (announce.ts)
     const t = document.createElement('div')
     t.className = 'ed-toast'
