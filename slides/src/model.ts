@@ -1455,8 +1455,18 @@ export function instantiateLayout(layout: Slide): Slide {
   return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '' }
 }
 
-const textHasContent = (e: SlideElement) =>
+export const textHasContent = (e: SlideElement) =>
   e.type !== 'text' || !!e.html.replace(/<br\s*\/?>/gi, '').replace(/\u200B/g, '').trim()
+
+/** An `image` slot is a text placeholder ("Add an image") that an IMAGE
+ *  donor replaces outright — the picture takes the slot's frame and id, so
+ *  slides from the same layout still morph their pictures. */
+const replacesSlot = (lel: SlideElement, d: SlideElement) => lel.type === 'text' && lel.role === 'image' && d.type === 'image'
+
+/** Can donor `d` fill layout slot `lel`? Its own type with content, or a
+ *  replacing donor (an image for an image slot). */
+export const slotTakes = (lel: SlideElement, d: SlideElement): boolean =>
+  replacesSlot(lel, d) || (d.type === lel.type && textHasContent(d))
 
 /**
  * Apply a layout to an existing slide's elements. The matching ladder:
@@ -1477,25 +1487,18 @@ export function applyLayout(
 ): SlideElement[] {
   const donors = slide.elements
   const consumed = new Set<SlideElement>()
-  // An `image` slot is a text placeholder ("Add an image") that an IMAGE
-  // donor replaces outright — the picture takes the slot's frame and id, so
-  // slides from the same layout still morph their pictures.
-  const imageSlot = (lel: SlideElement) => lel.role === 'image' && lel.type === 'text'
   const findDonor = (lel: SlideElement): SlideElement | undefined => {
     const byId = donors.find((e) => !consumed.has(e) && e.id === lel.id)
     if (byId) return byId
     if (!lel.role) return undefined
-    return donors.find(
-      (e) => !consumed.has(e) && e.role === lel.role &&
-        ((e.type === lel.type && textHasContent(e)) || (imageSlot(lel) && e.type === 'image')),
-    )
+    return donors.find((e) => !consumed.has(e) && e.role === lel.role && slotTakes(lel, e))
   }
   const out: SlideElement[] = layout.elements.map((lel) => {
     const copy = JSON.parse(JSON.stringify(lel)) as SlideElement
     const d = findDonor(lel)
     if (d) {
       consumed.add(d)
-      if (imageSlot(lel) && d.type === 'image') {
+      if (replacesSlot(lel, d)) {
         const pic = JSON.parse(JSON.stringify(d)) as SlideElement
         return { ...pic, id: lel.id, x: lel.x, y: lel.y, w: lel.w, h: lel.h, rotation: lel.rotation, role: 'image' }
       }

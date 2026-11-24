@@ -104,7 +104,7 @@ import { markdownToHtml } from './editor/markdown.ts'
 import {
   FORMAT, FORMAT_VERSION, FONT_STACK,
   defaultText, defaultShape, defaultImage, defaultChart, defaultCode, defaultTable, defaultMedia,
-  readableInk, isLightBg, newDoc, builtinLayouts, applyLayout,
+  readableInk, isLightBg, newDoc, builtinLayouts, applyLayout, slotTakes, textHasContent,
   type BentoDoc, type Slide, type SlideElement, type ShapeKind,
 } from './model.ts'
 import { PALETTE_SLOTS, paletteOf, parseThemeRef, resolveRef, formatThemeRef } from './palette.ts'
@@ -326,57 +326,73 @@ export const LAYOUT_ALIASES: Record<string, string> = {
 
 const hasFrame = (el: Obj) => ['x', 'y', 'w', 'h'].every((k) => typeof el[k] === 'number')
 
+/** The prefix of every placement note, so a reader of the load report (and
+ *  the findings built on it) can tell "where your content went" from a drop. */
+export const LAYOUT_NOTE = 'layout: '
+
 /**
  * Lay a compact slide's elements onto a layout. `els` are the expanded
  * elements (full defaults, md converted); `raw` the author's originals, to
  * know which carried a frame. Returns the slide's element list.
+ *
+ * The NAME decides the slot. Each slot's first donor is given the slot's own
+ * id, so applyLayout matches it by id and never by position (by position,
+ * `right` written before `left` swapped the columns, and an unknown role
+ * routed to the body slot pushed the left column's text into the right one
+ * and lost the right column's). The slot's further donors stack under it;
+ * an unknown role stacks AFTER the slot's named content. Invariant: every
+ * element that carried content comes out exactly once — what cannot sit in a
+ * slot keeps its own (default) frame, with a note.
  */
 function layOut(layout: Slide, els: Obj[], raw: Obj[], slideId: string, si: number, stats: ExpandStats): Obj[] {
   const roles = layoutRoles(layout)
-  const donors: Obj[] = []
+  const have = Object.keys(roles).join(', ') || 'none'
   const extras: Obj[] = []
-  const bySlot = new Map<string, Obj[]>() // slot id → donors wanting it, in order
+  const named = new Map<string, Obj[]>(), fallback = new Map<string, Obj[]>()
+  const push = (m: Map<string, Obj[]>, slot: string, d: Obj) => m.set(slot, [...(m.get(slot) ?? []), d])
+  const index = new Map<Obj, number>()
+  const note = (d: Obj, reason: string) => stats.notes.push({ path: `/slides/${si}/elements/${index.get(d)}/role`, reason: LAYOUT_NOTE + reason })
+  const aside = (d: Obj, reason: string) => { note(d, reason); extras.push(d) }
   els.forEach((el, i) => {
     const role = typeof el.role === 'string' ? el.role : ''
     if (!role || hasFrame(raw[i])) { extras.push(el); return }
-    let slot = roles[role]
-    if (!slot) {
-      if (roles.body) {
-        slot = roles.body
-        stats.notes.push({ path: `/slides/${si}/elements/${i}/role`, reason: `no \`${role}\` slot in layout \`${layout.id}\`; placed as body` })
-      } else {
-        stats.notes.push({ path: `/slides/${si}/elements/${i}/role`, reason: `no \`${role}\` slot in layout \`${layout.id}\` and no body slot; placed at the default frame` })
-        extras.push(el); return
-      }
-    }
-    // the slot's own role is what applyLayout matches on
-    const slotEl = layout.elements.find((e) => e.id === slot)!
-    const d = { ...el, role: slotEl.role }
-    const list = bySlot.get(slot) ?? []
-    list.push(d); bySlot.set(slot, list)
-    donors.push(d)
+    if (el.type === 'text' && !textHasContent(el as unknown as SlideElement)) return // nothing to place
+    index.set(el, i)
+    const slot = roles[role]
+    if (slot) push(named, slot, el)
+    else if (roles.body) { note(el, `no \`${role}\` slot in layout \`${layout.id}\` (its roles: ${have}); placed after the body slot's content`); push(fallback, roles.body, el) }
+    else aside(el, `no \`${role}\` slot in layout \`${layout.id}\` (its roles: ${have}) and no body slot; placed at the default frame`)
   })
-  // applyLayout consumes donors in document order, one per slot
+  const firsts: Obj[] = []
+  const rests = new Map<string, Obj[]>()
+  for (const slotEl of layout.elements) {
+    const list = [...(named.get(slotEl.id) ?? []), ...(fallback.get(slotEl.id) ?? [])]
+    const fit = list.filter((d) => slotTakes(slotEl, d as unknown as SlideElement))
+    for (const d of list) if (!fit.includes(d)) aside(d, `a ${d.type} element cannot fill the \`${slotEl.role}\` slot of \`${layout.id}\`; placed at the default frame`)
+    if (!fit.length) continue
+    firsts.push({ ...fit[0], id: slotEl.id, role: slotEl.role })
+    rests.set(slotEl.id, fit.slice(1))
+  }
   const known = new Set(layout.elements.map((e) => e.id))
-  const slideForApply = { id: slideId, elements: donors as unknown as SlideElement[] } as unknown as Slide
-  const placed = applyLayout(slideForApply, layout, known) as unknown as Obj[]
-  // an image donor that applyLayout turned into the slot keeps the slot id;
-  // a text donor's content is now in the slot copy. Anything unconsumed of
-  // ours is a SECOND body for its slot → stack. (applyLayout appends
-  // unconsumed donors as extras; we take them back out.)
-  const donorIds = new Set(donors.map((d) => d.id))
-  const out: Obj[] = placed.filter((e) => !donorIds.has(e.id as string))
-  for (const [slot, list] of bySlot) {
-    if (list.length < 2) continue
+  const slideForApply = { id: slideId, elements: firsts as unknown as SlideElement[] } as unknown as Slide
+  // every first donor carries its slot's id, so applyLayout takes each by id
+  const out = applyLayout(slideForApply, layout, known) as unknown as Obj[]
+  for (const [slot, rest] of rests) {
+    if (!rest.length) continue
     const slotEl = out.find((e) => e.id === slot)
-    if (!slotEl || slotEl.type !== 'text') continue
-    const n = list.length
+    if (!slotEl || slotEl.type !== 'text' || rest.some((d) => d.type !== 'text')) {
+      for (const d of rest) aside(d, `the \`${slotEl?.role ?? slot}\` slot of \`${layout.id}\` holds one ${slotEl?.type ?? 'element'}; this one is placed at the default frame`)
+      continue
+    }
+    // more than one body for a slot: stack them in it
+    const htmls = [slotEl.html, ...rest.map((d) => d.html)]
+    const n = htmls.length
     const frame = { x: slotEl.x as number, y: slotEl.y as number, w: slotEl.w as number, h: slotEl.h as number }
     const share = Math.floor((frame.h - STACK_GAP * (n - 1)) / n)
     const ids: string[] = []
-    list.forEach((d, k) => {
+    htmls.forEach((html, k) => {
       const id = k === 0 ? slot : `${slot}-${k + 1}`
-      const copy: Obj = { ...slotEl, id, y: frame.y + k * (share + STACK_GAP), h: Math.max(1, share), html: d.html }
+      const copy: Obj = { ...slotEl, id, y: frame.y + k * (share + STACK_GAP), h: Math.max(1, share), html }
       if (k === 0) Object.assign(slotEl, copy)
       else out.splice(out.indexOf(slotEl) + k, 0, copy)
       ids.push(id)
