@@ -752,10 +752,11 @@ runs:
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
     - name: Code paste and code indent rules
-      # Which text pasted onto the canvas is code (indented lines with code
-      # punctuation, or code punctuation ending most lines) and which stays
-      # text (sentences, single lines, URLs, lists, an address); the language
-      # guessed for it, and no guess when unclear; a tagless fence gets the
-      # guess; Tab, Shift+Tab and Enter on the lines of a code block.
+      # Which text pasted onto the canvas is code (half its lines or more
+      # carry code) and which stays text (sentences, single lines, URLs,
+      # lists, spreadsheet tables, CSV, indented poems, quotes, signatures,
+      # recipes, clauses); the language guessed for it, and no guess on one
+      # signal or a tie; a tagless fence gets the guess; Tab, Shift+Tab and
+      # Enter on the lines of a code block.
       shell: bento-step {0}
       run: node scripts/test-slides-code-paste.ts

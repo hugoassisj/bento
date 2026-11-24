@@ -7,10 +7,12 @@
 //   node scripts/test-slides-code-paste.ts
 //
 // WHAT THIS PROVES. Which plain text pasted onto the canvas counts as code
-// (indented lines with code punctuation, or code punctuation ending most
-// lines) and which stays text (a sentence, a single line, a URL, bulleted and
-// numbered lists, an indented address or poem); which built-in language a
-// piece of code is guessed to be, and that an unclear guess is no guess; that
+// (half its lines or more carry code: braces, calls, assignments, statement
+// keywords) and which stays text (a sentence, a single line, a URL, lists,
+// spreadsheet tables, CSV, an indented address, poem, quote, signature,
+// recipe or legal clauses, prose with arithmetic); which built-in language a
+// piece of code is guessed to be, and that one signal, a tie or prose in a
+// fence is no guess; that
 // a fence with no language tag gets the guess while an explicit tag wins; and
 // how Tab, Shift+Tab and Enter change the lines of a code block being edited.
 // test-slides-code-tab-browser.mjs drives the same rules through the editor.
@@ -45,6 +47,17 @@ const cases: [string, boolean, string][] = [
   ['The fog comes\n    on little cat feet.\n  It sits looking', false, 'an indented poem'],
   ['Agenda:\nIntro\nQuestions', false, 'a heading with a colon over lines'],
   ['', false, 'nothing'],
+  // review round 1: prose and tables that looked like code to the first rules
+  ['Region\tRevenue (USD)\tQ2\n\tNorth\t10\n\tSouth\t12', false, 'a spreadsheet table with blanks in the first column'],
+  ['Item\tMonthly\tYearly\n\tRent\t=B2*12\n\tPower\t=B3*12', false, 'a spreadsheet table with formulas'],
+  ['I wandered lonely as a cloud\n    That floats on high o\'er vales and hills,\n  When all at once I saw a crowd,\n    A host, of golden daffodils;', false, 'indented poetry'],
+  ['As the report put it:\n    "Growth will continue."\n    — Annual Report 2025', false, 'an indented quote'],
+  ['Best regards,\n  Jane Doe\n  Acme Corp (London)', false, 'an indented signature'],
+  ['Ingredients:\n  2 cups flour\n  1 egg\n  Salt (to taste)', false, 'a recipe'],
+  ['name;age;city;\nAnn;31;Paris;\nBo;42;Oslo;', false, 'semicolon CSV'],
+  ['The Licensee shall:\n  (a) pay the fees (in full);\n  (b) keep the records; and\n  (c) comply with the law.', false, 'an indented legal clause list'],
+  ['Shall I compare thee to a summer\'s day;\nThou art more lovely and more temperate;\nRough winds do shake the darling buds of May;', false, 'a poem with lines ending in ;'],
+  ['Let x = 5 and y = 3 in the example.\nThen x + y = 8, as the table shows.', false, 'prose with arithmetic'],
 ]
 for (const [text, want, what] of cases) ok(textLooksLikeCode(text) === want, `${what} → ${want ? 'code' : 'text'} ${show(text)}`)
 
@@ -75,6 +88,17 @@ const langs: [string, string | undefined][] = [
   ['Revenue grew in every region.\nCosts held flat.', undefined],
   ['x = 1', undefined],
   ['', undefined],
+  // review round 1: one rule is not evidence
+  ['func greet(name: String) -> String {\n    return "Hello, " + name\n}', undefined],
+  ["import { select } from 'd3';", undefined],
+  ['defmodule Greeter do\n  def hello(name) do\n    IO.puts("Hello #{name}")\n  end\nend', 'elixir'],
+  ['$x = 5', undefined],
+  ['$x = 5\nWrite-Host $x', 'powershell'],
+  ['Status: ok\nTests: 12 passed\nTime: 1.2s', undefined],
+  ['$ npm test\n> bento@1.3.0 test\n12 passing', undefined],
+  ['Select the slides you want from the panel,\nthen press Delete where it says so.', undefined],
+  ['Order by Friday.\nSelect two from the list.', undefined],
+  ['def first(items):\n    # select the first from the list\n    return items[0]', 'py'],
 ]
 for (const [text, want] of langs) ok(guessLanguage(text) === want, `${show(text)} → ${want ?? 'no guess'} (${guessLanguage(text) ?? 'no guess'})`)
 const every = langs.map(([s]) => guessLanguage(s)).filter((l): l is string => !!l)
