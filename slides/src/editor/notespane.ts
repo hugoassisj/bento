@@ -161,6 +161,9 @@ export function mountNotesPane(store: Store, into: HTMLElement, cluster: HTMLEle
   area.addEventListener('blur', sync) // a slide may have changed while it held the caret
   area.addEventListener('focus', () => { area.readOnly = store.readOnly }) // reader mode may have begun after mount
   const offs = [store.on('current', sync), store.on('doc', sync)]
+  // another document took the starter's place (opened, dropped, replaced
+  // from JSON): it gets the folded default, unless the viewer has chosen
+  if (openByDefault) offs.push(store.on('replace', () => { if (lsGet('bento-notes-open') === null) setOpen(false) }))
   signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
   sync()
 }

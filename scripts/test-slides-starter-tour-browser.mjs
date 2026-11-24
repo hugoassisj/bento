@@ -21,7 +21,8 @@
 //   4. the speaker-notes pane, whose notes are the rest of the tour, starts
 //      OPEN on the untouched starter with no saved choice; a saved '0' keeps
 //      it folded; any other document (the same deck, saved and reopened)
-//      starts folded as before;
+//      starts folded as before, and so does one that replaces the starter in
+//      place (loadDoc, as Open, a drop or Replace from JSON do);
 //   5. window.bento.validate() finds no error, and the tour adds no finding
 //      (the deck validates identically with its threads stripped).
 import { createHash } from 'node:crypto'
@@ -189,6 +190,18 @@ try {
     const [c, q] = await open(starter, { 'bento-notes-open': '0' })
     const s = await pane(q)
     ok(s.h === 0 && s.expanded === 'false', `the starter with a saved '0' keeps the pane folded (${s.h}px, expanded=${s.expanded})`)
+    await c.close()
+  }
+  {
+    const [c, q] = await open(starter)
+    await q.evaluate(() => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      d.slides = [{ id: 's1', background: '#ffffff', notes: 'Mine', elements: [] }]
+      window.bento.loadDoc(JSON.stringify(d))
+    })
+    await q.waitForTimeout(400)
+    const s = await pane(q)
+    ok(s.h === 0 && s.expanded === 'false', `a document loaded over the starter, with no saved choice, folds the pane (${s.h}px, expanded=${s.expanded})`)
     await c.close()
   }
   {
