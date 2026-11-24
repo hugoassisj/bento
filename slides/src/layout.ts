@@ -197,14 +197,27 @@ export function layoutSlide(slide: Slide): boolean {
     v = r2(Math.max(k === 'w' || k === 'h' ? 1 : -1e6, v))
     if (el[k] !== v) { el[k] = v; changed = true }
   }
-  // a frame that fills its own parent on an axis is sized there by that parent, not by hugging
-  const hugSet = (f: Frame): Put => (el, k, v) => { if (el !== f || !ownedByParent(f, byId, k as 'w' | 'h')) set(el, k, v) }
-  for (const { f } of [...order].sort((a, b) => b.d - a.d)) if (f.layout.hug) hug(slide, f, hugSet(f))
-  for (const { f } of [...order].sort((a, b) => a.d - b.d)) place(slide, f, set)
+  // a frame that fills its own parent on an axis is sized there by that parent,
+  // not by hugging. What its hug WOULD give is kept as its natural size: the
+  // parent's hug and a stretched line measure the child by it, not by the size
+  // the parent gave it last time. So a hugging row of stretched (or
+  // cross-filling) cards is as tall as its tallest card's content, every card
+  // is stretched to that, and they shrink with it. Inner frames hug first, so
+  // a natural size is known before the parent reads it; one pass settles.
+  const natural = new Map<SlideElement, { w?: number; h?: number }>()
+  const hugSet = (f: Frame): Put => (el, k, v) => {
+    if (el !== f || !ownedByParent(f, byId, k as 'w' | 'h')) set(el, k, v)
+    else if (Number.isFinite(v)) natural.set(f, { ...natural.get(f), [k]: r2(Math.max(1, v)) })
+  }
+  const size: Size = (el, k) => natural.get(el)?.[k] ?? el[k]
+  for (const { f } of [...order].sort((a, b) => b.d - a.d)) if (f.layout.hug) hug(slide, f, hugSet(f), size)
+  for (const { f } of [...order].sort((a, b) => a.d - b.d)) place(slide, f, set, size)
   return changed
 }
 
 type Put = (el: SlideElement, k: 'x' | 'y' | 'w' | 'h', v: number) => void
+/** A child's size across its frame: its natural (hugged) size when its frame sizes it there, else its box. */
+type Size = (el: SlideElement, k: 'w' | 'h') => number
 
 /** Grid columns as the solver uses them: a whole number 1..64, whatever the file or a token says. */
 export const colsOf = (f: Frame) => { const c = Math.round(f.layout.cols ?? 2); return Number.isFinite(c) ? Math.min(64, Math.max(1, c)) : 2 }
@@ -218,12 +231,13 @@ function ownedByParent(f: Frame, byId: Map<string, SlideElement>, k: 'w' | 'h'):
   return cross && p.layout.align === 'stretch'
 }
 
-function hug(slide: Slide, f: Frame, set: Put) {
+function hug(slide: Slide, f: Frame, set: Put, size: Size) {
   const kids = frameChildren(slide, f)
   if (!kids.length) return
   const { dir, gap, pad } = f.layout
   const sum = (ks: SlideElement[], k: 'w' | 'h') => ks.reduce((a, e) => a + e[k], 0)
-  const max = (ks: SlideElement[], k: 'w' | 'h') => Math.max(...ks.map((e) => e[k]))
+  // across the frame: the children's natural sizes (see layoutSlide)
+  const max = (ks: SlideElement[], k: 'w' | 'h') => Math.max(...ks.map((e) => size(e, k)))
   if (dir === 'grid') {
     const cols = Math.min(colsOf(f), kids.length)
     const rows = Math.ceil(kids.length / cols)
@@ -263,7 +277,7 @@ function gridGeom(f: Frame, kids: SlideElement[]) {
   return { cols, cw, ch, x0: f.x + pad[3], y0: f.y + pad[0] }
 }
 
-function place(slide: Slide, f: Frame, set: Put) {
+function place(slide: Slide, f: Frame, set: Put, size: Size) {
   const kids = frameChildren(slide, f)
   if (!kids.length) return
   const { dir, gap, pad, justify = 'start', align = 'start' } = f.layout
@@ -295,7 +309,7 @@ function place(slide: Slide, f: Frame, set: Put) {
       const fixed = line.filter((k) => k.sizing?.[M] !== 'fill').reduce((a, k) => a + k[M], 0)
       const free = room - fixed - gap * (line.length - 1)
       for (const k of lineFills) set(k, M, Math.max(minOf(k, M), free / lineFills.length))
-      const thick = Math.max(...line.map((k) => k[C]))
+      const thick = Math.max(...line.map((k) => size(k, C)))
       const used = line.reduce((a, k) => a + k[M], 0) + gap * (line.length - 1)
       let step = gap
       let pos = (row ? x0 : y0)

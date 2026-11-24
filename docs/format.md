@@ -341,7 +341,7 @@ flex/grid.
 | `align?` | `'start'\|'center'\|'end'\|'stretch'` | Cross axis. Default `start`. |
 | `cols?` | `number` | Grid columns. Default 2. |
 | `clip?` | `boolean` | Children are clipped to the frame. |
-| `hug?` | `boolean` | The frame sizes itself to its children. With `wrap`, it keeps its main-axis size and hugs across its lines. |
+| `hug?` | `boolean` | The frame sizes itself to its children. With `wrap`, it keeps its main-axis size and hugs across its lines. A hugging frame child that this frame stretches (or that fills it across) counts as its own content size, so hugging cards in a stretching, hugging row all match the tallest card's content. |
 | `wrap?` | `boolean` | Row/column only: a child that would pass the frame's edge starts a new line, `gap` apart. Order reads line by line. |
 
 **The layout is derived and written back.** `slides/src/layout.ts` computes
