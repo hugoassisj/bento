@@ -729,4 +729,11 @@ jobs:
         # height to text fix it (one undo, a font floor); a side handle stops
         # the hugging; frame children are placed as before.
         run: node scripts/test-slides-text-autosize-browser.mjs
+      - name: Text pasted onto the slide in Chromium
+        if: ${{ !cancelled() }}
+        # An html clipboard keeps bold and lists, fits its box (measure()),
+        # and repeats step off each other; plain text, fences and spreadsheet
+        # grids paste as before; hostile html leaves nothing, runs nothing,
+        # loads nothing; a paste inside an open box is unchanged.
+        run: node scripts/test-slides-paste-slide-html-browser.mjs
 
