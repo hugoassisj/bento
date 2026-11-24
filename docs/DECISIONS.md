@@ -15396,3 +15396,40 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — slides: what validate()'s visual checks leave alone
+
+`validate()` reports `low-contrast`, `text-overlap`, `outside-frame` and
+`chart-label-clipped` (slides/src/visualchecks.ts). They are advice, and a
+wrong warning costs more than a missed one: one false finding on the starter
+and nobody trusts the list, which is what F-10's Check deck panel will show.
+So each check stays quiet where it cannot be sure, by these rules. Build on
+them; do not loosen one without tuning it against the starter, the agent
+fixtures (scripts/fixtures/agent-decks/) and the gallery decks
+(scripts/build-example-decks.mjs).
+
+- **Decoration is under 0.15.** Text whose opacity, or whose colour's alpha,
+  is under 0.15 (`DECORATIVE`) is decoration: a ghost numeral, a watermark.
+  It is judged for neither contrast nor overlap. No format key marks
+  decoration; a marker for deliberate bleed is SC-01's.
+- **Field-only furniture is not judged for contrast.** A text made only of
+  field tokens (`{{page:2}}`, `{{date}}`) is slide furniture, muted on purpose
+  and repeated on every slide. The starter's page number on its peach slide is
+  2.5:1 by design.
+- **Stacked copies of the same words do not overlap.** Two texts with the
+  same words drawn over each other are a shadow, outline or offset effect.
+  Different texts still collide, in a group or not, and so do texts in the
+  same hover set (different hover sets are never on screen together).
+- **A tilt of 10° or less is level.** For overlap, a slightly turned text (a
+  playful tilt) is judged on its glyph runs as if level; a steeper one by its
+  turned extent. Glyph runs are narrowed to their middle half (`INK`), since
+  a run's box is the font's whole ascent and descent and two lines whose
+  boxes only touch there are not drawn over each other.
+- **An uncomputable backdrop is skipped, never guessed.** Contrast is judged
+  only against the slide colour and the shapes beneath, in colours it can
+  read (hex and comma rgb() as written; names, hsl() and the rest through the
+  browser's parser when there is a DOM). Text over a picture, chart, table,
+  embed, code block, a blended layer, a paint server or an unreadable colour
+  is not judged at all.
+- **Without a DOM, whole boxes; with one, glyphs.** The chart check needs the
+  renderer and is skipped without one, as overflow is.
