@@ -53,6 +53,7 @@ try {
   p.on('pageerror', (e) => errors.push(e.message))
   await p.goto('file://' + SHELL)
   await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-props .ed-tabs'))
+  const starter = await p.evaluate(() => JSON.stringify(window.bento.doc))
   const load = async (elements = deck()) => {
     await p.evaluate((els) => { const d = JSON.parse(JSON.stringify(window.bento.doc)); d.slides = [{ id: 's1', background: '#ffffff', transition: 'none', notes: '', elements: els }]; window.bento.loadDoc(JSON.stringify(d)) }, elements)
     await p.waitForTimeout(400)
@@ -191,7 +192,14 @@ try {
   const hints = () => p.evaluate(() => [...document.querySelectorAll('.ed-frame-hint')].map((n) => ({ frame: n.dataset.frame, text: n.textContent, inStage: !!n.closest('.ed-stage-scale'), shown: n.getBoundingClientRect().width > 0 })))
   await run(async () => {
     const tips = await p.evaluate(() => ['tool-frame', 'tool-rect', 'tool-ellipse', 'insert-text'].map((c) => document.querySelector(`.ed-topbar [data-cmd="${c}"]`)?.title ?? ''))
-    ok(tips.every((x) => x.includes('\nAlt: draw on top of a frame instead of inside it')), `F, R, O and T say in their tooltips how to draw over a frame without nesting (${tips.map((x) => x.split('\n')[1]).join(' | ')})`)
+    ok(tips.every((x) => /\n(Alt|Option): draw on top of a frame instead of inside it \([FROT]\)$/.test(x)), `F, R, O and T say in their tooltips how to draw over a frame without nesting, the key still last (${tips.map((x) => x.split('\n')[1]).join(' | ')})`)
+    // the hint draws the key as a chip only while the title ENDS in "(F)" (hints.ts SHORTCUT)
+    const b = await p.locator('.ed-topbar [data-cmd="tool-frame"]').boundingBox()
+    await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
+    await p.waitForFunction(() => { const t = document.querySelector('.ed-tip'); return t && !t.hidden }, null, { timeout: 3000 }).catch(() => {})
+    const tip = await p.evaluate(() => { const t = document.querySelector('.ed-tip'); return { kbd: [...(t?.querySelectorAll('kbd') ?? [])].map((k) => k.textContent).join(), text: t?.textContent ?? '' } })
+    ok(tip.kbd === 'F' && /draw on top of a frame/.test(tip.text) && !tip.text.includes('(F)'), `the Frame tool's hint shows the Alt line and F as a key chip (${JSON.stringify(tip)})`)
+    await p.mouse.move(700, 600)
   })
   await run(async () => {
     await load([])
@@ -267,6 +275,58 @@ try {
     ;[n] = await newest(before)
     ok(n && !n.parentId, `a hidden frame never adopts (${n?.parentId})`)
     ok(!(await hints()).some((h) => h.frame === 'lk' || h.frame === 'hid'), 'a locked or hidden empty frame shows no hint')
+  })
+  await run(async () => {
+    // a component's frames (Showcase: three copies of the Feature card in a row frame)
+    await p.evaluate((d) => { const doc = JSON.parse(d); doc.slides = doc.slides.filter((s) => s.elements.some((e) => e.id === 'sd-card-1')); window.bento.loadDoc(JSON.stringify(doc)) }, starter)
+    await p.waitForTimeout(500)
+    const head1 = await el('sd-card-head-1'), body1 = await el('sd-card-body-1'), head0 = await el('sd-card-head')
+    ok(!!head1 && !!head0, 'the Showcase feature cards are on the slide')
+    const card1 = await el('sd-card-1'), card0 = await el('sd-card-0')
+    let before = await ids()
+    const d1 = await draw('r', card1.x + 60, card1.y + card1.h - 90, card1.x + 140, card1.y + card1.h - 40)
+    let [n] = await newest(before)
+    const h1 = await el('sd-card-head-1'), b1 = await el('sd-card-body-1')
+    ok(n && !n.parentId && !d1.mid, `a box drawn on a component copy is drawn on top: not in the copy's frame, nor the row around it (${n?.parentId}, outline ${d1.mid})`)
+    ok(h1.y === head1.y && b1.h === body1.h && (await els()).filter((e) => e.groupId === card1.groupId).length === 4, `…and the copy keeps its layout and its group (heading y ${head1.y}→${h1.y}, body h ${body1.h}→${b1.h})`)
+    before = await ids()
+    await draw('r', card0.x + 60, card0.y + card0.h - 90, card0.x + 140, card0.y + card0.h - 40)
+    ;[n] = await newest(before)
+    ok(n && !n.parentId && (await el('sd-card-head')).y === head0.y, `a box drawn on the component's main is drawn on top too (${n?.parentId})`)
+    ok(!(await hints()).some((h) => /^sd-card/.test(h.frame)), 'no hint on a component\'s frames')
+  })
+  await run(async () => {
+    await load([
+      rect('gf', 100, 100, 500, 250, { groupId: 'g1', fill: '#f4f4f4', layout: { dir: 'row', gap: 10, pad: [10, 10, 10, 10] } }),
+      rect('gx', 100, 400, 100, 100, { groupId: 'g1' }),
+      rect('out2', 700, 100, 500, 400, { fill: '#f4f4f4', layout: { dir: 'row', gap: 10, pad: [10, 10, 10, 10] } }),
+      rect('lin', 710, 110, 300, 300, { parentId: 'out2', locked: true, fill: '#eeeeff', layout: { dir: 'col', gap: 10, pad: [10, 10, 10, 10] } }),
+    ])
+    let before = await ids()
+    await draw('r', 300, 200, 360, 260)
+    let [n] = await newest(before)
+    ok(n?.parentId === 'gf' && n?.groupId === 'g1', `a box drawn in a frame inside a group joins the frame and its group (${n?.parentId}, ${n?.groupId})`)
+    const lin = await el('lin')
+    before = await ids()
+    await draw('r', lin.x + 100, lin.y + 100, lin.x + 160, lin.y + 160)
+    ;[n] = await newest(before)
+    const lin2 = await el('lin')
+    ok(n && !n.parentId && lin2.x === lin.x && lin2.y === lin.y, `a press inside a locked frame draws on top — it never falls through to the frame around it (${n?.parentId}, locked frame at ${lin2.x},${lin2.y})`)
+  })
+  await run(async () => {
+    await load([rect('ef', 200, 150, 600, 300, { fill: '#ffffff', layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] } }), rect('cov', 150, 100, 700, 400, { fill: '#ff6666' })])
+    const order = await p.evaluate(() => {
+      const hint = document.querySelector('.ed-stage-scale .ed-frame-hint'), cov = document.querySelector('.ed-stage-scale [data-el-id="cov"]')
+      return !!hint && !!cov && !!(hint.compareDocumentPosition(cov) & Node.DOCUMENT_POSITION_FOLLOWING) && hint.parentElement === cov.parentElement
+    })
+    ok(order, 'the hint paints under an element that covers its frame (in paint order, before it)')
+    const px = async () => p.evaluate(() => { const h = document.querySelector('.ed-stage-scale .ed-frame-hint'); const k = document.querySelector('.ed-stage-scale').getBoundingClientRect().width / window.bento.doc.size.width; return parseFloat(getComputedStyle(h).fontSize) * k })
+    const f0 = await px()
+    await p.locator('.ed-zoombtn', { hasText: '+' }).click(); await p.waitForTimeout(300)
+    await p.locator('.ed-zoombtn', { hasText: '+' }).click(); await p.waitForTimeout(300)
+    const f1 = await px()
+    ok(Math.abs(f0 - 13) < 0.5 && Math.abs(f1 - 13) < 0.5, `the hint stays 13px on screen as you zoom (${f0.toFixed(2)} → ${f1.toFixed(2)})`)
+    await p.locator('.ed-zoomlabel').click(); await p.waitForTimeout(300)
   })
   await run(async () => {
     await load([rect('ef', 200, 150, 600, 300, { fill: '#ffffff', layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] } })])
