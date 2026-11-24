@@ -40,6 +40,22 @@ pre-1.0.
   instead of 375px). They now measure the value the slide shows (`02`, the
   deck's title, the author, today's date), so a box sized to fit its field
   checks clean.
+- **Check deck: what could go wrong in a deck, shown in the editor.** The
+  deck check used to answer only in the browser console. Now a small chip
+  beside Slideshow counts the errors and warnings (it is not there when the
+  deck is clean), and File ▸ Check deck (or the command palette) opens a list
+  of them in plain words: "Slide 4 · Table · Rows run past the box", with the
+  exact measurement underneath. Click a row to go to that slide with the
+  element selected. Where the fix is safe and obvious it is one click and one
+  undo: fit a text box to its text, fit a table's box to its rows, remove a
+  link to a slide that no longer exists, or show an element's font. Design
+  choices such as contrast, overlap or a deliberate bleed are pointed out,
+  never changed, and tips stay folded and uncounted. File ▸ Replace from JSON
+  now opens the list on the problems the pasted JSON brought in, instead of
+  "see console". The list works from the keyboard (arrows, Enter, Escape),
+  is in all eight languages, and a read-only copy shows it without the fix
+  buttons. The check runs when the deck opens and again once your edits
+  settle, never while you type.
 
 ## [1.3.0] — 2026-11-22
 

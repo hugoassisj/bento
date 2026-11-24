@@ -15435,3 +15435,45 @@ fixtures (scripts/fixtures/agent-decks/) and the gallery decks
   starter's clean contrast result says little: it is skipped, not passed.
 - **Without a DOM, whole boxes; with one, glyphs.** The chart check needs the
   renderer and is skipped without one, as overflow is.
+
+## 2026-11-24 — slides: Check deck shows validate()'s findings; where it lives and when it runs
+
+F-10 put `validate()` in front of people (slides/src/editor/checkdeck.ts).
+What is settled, so the next change does not undo it:
+
+- **Display only.** The panel shows what `validate()` returns and decides
+  nothing of its own: no finding is hidden, softened or re-ranked, so the
+  quiet-where-unsure rules of the visual checks (the entry above) hold as
+  they are. Tips (`info`) are folded under a toggle and never counted.
+- **Words per code.** Each finding code has one short sentence in
+  slides/src/findinglabels.ts, translated through t(); the finding's own
+  message stays as the second, precise line. A code without a sentence shows
+  its raw message. `scripts/test-slides-check-deck.ts` enumerates the codes
+  in validate.ts and visualchecks.ts and fails on a missing or stale
+  sentence or a missing translation: a new code needs its sentence in the
+  same change.
+- **The chip leads the bottom-end cluster**: [chip] [notes] [Slideshow]
+  [zoom]. Status about the deck sits with the output controls, and it adds no
+  corner of its own (the notes entry's reason against one). It exists only
+  while there are errors or warnings. In a row too narrow for it, Slideshow
+  drops its word by the measured rule that entry set, so with findings that
+  happens at 390px; the notes rig asserts the word's presence only without
+  the chip, and the fit of the row either way.
+- **The panel is not modal.** A labelled region floating in the canvas's
+  top-end corner: a row jumps to its element and the panel stays, so a person
+  can look, fix and go on. The kernel dialog primitive is for modal sheets
+  and was not used. The panel keeps its own keys (an arrow is not a nudge,
+  Delete does not delete the element a row selected); ⌘/Ctrl chords pass, so
+  ⌘Z undoes a fix. Whether it is open is viewer state, never saved.
+- **When it runs.** Once on open (after the fonts load); with the panel open,
+  300ms after a change; closed, 2s after the last change, on a slide change
+  and on save if the deck changed since. A canvas text edit changes nothing
+  until it commits, so typing runs nothing. Measured cost on the starter
+  (19 slides, 336 elements): about 55–100ms headless, 12ms without the
+  measured checks — hence "once things settle" while closed.
+- **Fixes only where safe and obvious**, each one commit: fit a text box to
+  its text (measured with its slide's fields, as the validator does), fit a
+  table's box to its rows, remove a link to a missing slide, show an
+  element's font. No fix for design findings. None in a read-only viewer. A
+  presentation package (`doc.readonly`) never boots the editor, so it has no
+  panel at all.
