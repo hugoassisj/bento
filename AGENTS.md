@@ -131,7 +131,10 @@ with no body slot, keeps its own frame), and the load report says so:
 `dropped` carries a note with the path that starts `layout: ` and names the
 layout's roles. Nothing you wrote is ever dropped or swapped: an element that
 cannot sit in its slot keeps its own frame, with a note. An `image` role takes
-an image element and puts the picture in the slot.
+an image element and puts the picture in the slot; a `chart` role takes a chart
+or a table the same way. In `stats`, `big-number`, `timeline` and
+`chart-figures` the slots sit in auto-layout frames and follow the deck's
+theme: leave out `stat3` or `step4` and the rest close up, no hole.
 
 ```json
 { "compact": true, "slides": [
@@ -157,6 +160,12 @@ The built-in layouts and their roles (this list is generated from the code by
 - `quote` — quote, attribution
 - `image-left` — image, title, body
 - `image-right` — title, body, image
+- `stats` — title, stat1, label1, stat2, label2, stat3, label3 (also
+  `statistics`)
+- `big-number` — kicker, figure, caption, body (also `big-stat`)
+- `timeline` — title, step1, stepbody1, step2, stepbody2, step3, stepbody3, step4, stepbody4 (also `roadmap`)
+- `chart-figures` — title, chart, stat1, label1, stat2, label2, stat3, label3
+  (also `chart`)
 
 A deck's own `layouts` (full Slide objects, the shape *Save slide as layout*
 writes) may be named the same way.

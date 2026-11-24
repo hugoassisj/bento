@@ -90,6 +90,17 @@ console.log('\nthe deck\'s design system (AI-08)\n')
   ok(sl.slides.every((s) => s.background === '#F5F7FA' && (s as unknown as R).themeRefs?.background === 'bg2' && s.transition === 'morph'), 'slide-like: every slide shares the source\'s bg2 binding and morph transition')
 }
 
+console.log('\nthe layouts decks are made of (AI-09)\n')
+{
+  const d = parseDocInputReport(readFileSync(join(dir, 'stats-timeline.json'), 'utf8'), false)!.doc
+  const ids = (i: number) => d.slides[i].elements.map((e) => e.id)
+  ok(['lst-stat1', 'lst-stat2', 'lst-stat3'].every((id) => ids(0).includes(id)), 'stats-timeline: three stats in the stats layout')
+  ok(!ids(1).includes('lbn-body') && ids(1).includes('lbn-figure'), 'stats-timeline: the big number without a body has no empty body slot')
+  ok(!ids(2).includes('ltl-item4') && ids(2).includes('ltl-stepbody3'), 'stats-timeline: three steps, no fourth column')
+  ok(d.slides[3].elements.find((e) => e.id === 'lcf-chart')?.type === 'chart', 'stats-timeline: the chart sits in the chart slot')
+  ok(d.slides.every((s) => s.background === '#0F1720'), 'stats-timeline: every slide wears the deck background, not the layouts\' white')
+}
+
 console.log('\nnames that do not resolve, through the real loader\n')
 {
   const bad = JSON.stringify({ compact: true, theme: { tokens: { set: { 'color.card': { type: 'color', values: { default: '#16273E' } } } } }, slides: [{ elements: [

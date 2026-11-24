@@ -33,6 +33,10 @@ pre-1.0.
   longer pushes one column's text into the other and drops the rest:
   everything written arrives once, in its place, and the load report says
   where anything unusual went and which roles the layout has.
+- **Four new layouts: Statistics, Big number, Timeline and Chart + figures.**
+  They join the layout picker and use your theme's colours and font. When a deck written by an assistant leaves out a third number or a
+  fourth step, the others close up instead of leaving a gap. A chart or table
+  takes the chart's place in *Chart + figures*.
 
 ## [1.3.0] — 2026-11-22
 
