@@ -20,8 +20,12 @@ saves itself; this document specifies the JSON.
 
 This spec is for people writing tools, generators, or agents against the
 format. If you want to *author a good-looking deck*, read
-[agents.md](agents.md) — it maps content to the right feature. This one is the
-dry reference of every field.
+[agents.md](agents.md) — it maps content to the right feature. This one
+explains how the fields work together. The complete list of keys, each with
+its type, allowed values and a one-line meaning, is generated from the code:
+[the field reference](../plugins/bento-slides/skills/bento-slides/references/format.md)
+(also the last section of agents.md), indexed at the [end of this
+file](#every-key-generated).
 
 ---
 
@@ -483,3 +487,52 @@ JSON in the block, so the splice contract holds.
 
 `docId` is omitted above for brevity — `parseDoc` mints one on load. When a
 tool *creates* a document from scratch, generate a fresh uuid for `docId`.
+
+## Every key (generated)
+
+<!-- generated:format-index -->
+Every key the format has, by object, generated from the code. The type and meaning of each are in the [generated reference](../plugins/bento-slides/skills/bento-slides/references/format.md); the sections above explain how they work together.
+
+| Object | Keys |
+|---|---|
+| [Document](../plugins/bento-slides/skills/bento-slides/references/format.md#document) | `assets` `blobs` `collab` `docId` `fonts` `format` `layouts` `meta` `modified` `present` `readonly` `size` `slides` `template` `theme` `title` `version` |
+| [`theme`](../plugins/bento-slides/skills/bento-slides/references/format.md#theme) | `accent` `background` `chartPalette` `codeFontFamily` `codePalette` `color` `fontFamily` `headingFamily` `palette` `table` `tokens` |
+| [`theme.palette`](../plugins/bento-slides/skills/bento-slides/references/format.md#themepalette) | `accent2` `accent3` `accent4` `accent5` `accent6` `bg2` `folHlink` `hlink` `tx2` |
+| [`theme.codePalette`](../plugins/bento-slides/skills/bento-slides/references/format.md#themecodepalette) | `a` `c` `d` `f` `k` `n` `p` `s` |
+| [`theme.tokens`](../plugins/bento-slides/skills/bento-slides/references/format.md#themetokens) | `mode` `modes` `set` |
+| [`present`](../plugins/bento-slides/skills/bento-slides/references/format.md#present) | `controls` `morphSeconds` `numberHidden` `progress` `slideNumber` `typeWriterSeconds` |
+| [`size`](../plugins/bento-slides/skills/bento-slides/references/format.md#size) | `height` `width` |
+| [`meta`](../plugins/bento-slides/skills/bento-slides/references/format.md#meta) | `author` `company` `event` `keywords` `subject` |
+| [`fonts[]`](../plugins/bento-slides/skills/bento-slides/references/format.md#fonts) | `asset` `family` `style` `weight` |
+| [Slide](../plugins/bento-slides/skills/bento-slides/references/format.md#slide) | `background` `comments` `elements` `hidden` `hover` `id` `name` `notes` `stateOf` `themeRefs` `transition` `unnumbered` |
+| [`slide.hover`](../plugins/bento-slides/skills/bento-slides/references/format.md#slidehover) | `default` `dim` `type` |
+| [`slide.comments[]`](../plugins/bento-slides/skills/bento-slides/references/format.md#slidecomments) | `at` `author` `elementId` `id` `replies` `resolved` `text` `x` `y` |
+| [Every element](../plugins/bento-slides/skills/bento-slides/references/format.md#every-element) | `alt` `backdropFilter` `blend` `blur` `blurHidden` `component` `fillHidden` `flipX` `flipY` `fx` `group` `groupId` `groupName` `h` `hidden` `id` `keepAspectRatio` `link` `locked` `morphId` `name` `opacity` `parentId` `role` `rotation` `shadow` `shadowHidden` `showOnHover` `sizing` `strokeHidden` `themeRefs` `type` `w` `x` `y` |
+| [Element: `text`](../plugins/bento-slides/skills/bento-slides/references/format.md#element-text) | `align` `color` `colorGradient` `fontFamily` `fontSize` `fontWeight` `html` `letterSpacing` `lineHeight` `placeholder` `textStroke` `valign` |
+| [Element: `shape`](../plugins/bento-slides/skills/bento-slides/references/format.md#element-shape) | `bool` `d` `fill` `fillGradient` `fills` `from` `heads` `layout` `lineEnd` `lineStart` `pathBox` `radii` `radius` `shape` `stroke` `strokeAlign` `strokeDash` `strokeDashes` `strokeGradient` `strokeStyle` `strokeWidth` `strokes` `to` |
+| [Element: `image`](../plugins/bento-slides/skills/bento-slides/references/format.md#element-image) | `crop` `fit` `radius` `src` |
+| [Element: `svg`](../plugins/bento-slides/skills/bento-slides/references/format.md#element-svg) | `asset` `css` `markup` |
+| [Element: `chart`](../plugins/bento-slides/skills/bento-slides/references/format.md#element-chart) | `option` `preset` `source` |
+| [Element: `table`](../plugins/bento-slides/skills/bento-slides/references/format.md#element-table) | `columns` `header` `rows` `style` |
+| [Element: `media`](../plugins/bento-slides/skills/bento-slides/references/format.md#element-media) | `autoplay` `controls` `fit` `kind` `loop` `muted` `poster` `radius` `src` |
+| [Element: `embed`](../plugins/bento-slides/skills/bento-slides/references/format.md#element-embed) | `app` `doc` `live` `url` `view` |
+| [Element: `code`](../plugins/bento-slides/skills/bento-slides/references/format.md#element-code) | `align` `color` `content` `fontFamily` `fontSize` `grammarAssetId` `grammarName` `lineHeight` `themeAssetId` `themeName` `valign` |
+| [`component`](../plugins/bento-slides/skills/bento-slides/references/format.md#component) | `id` `key` `main` `off` `over` `sig` |
+| [`fx`](../plugins/bento-slides/skills/bento-slides/references/format.md#fx) | `ambient` `countUp` `enter` `enterDur` `ken` `loop` `order` `step` `typeWriter` |
+| [`fx.ken`](../plugins/bento-slides/skills/bento-slides/references/format.md#fxken) | `dir` `duration` `scale` |
+| [`fx.loop`](../plugins/bento-slides/skills/bento-slides/references/format.md#fxloop) | `delay` `distance` `duration` `ease` `path` `speeds` `type` |
+| [`shadow`](../plugins/bento-slides/skills/bento-slides/references/format.md#shadow) | `blur` `color` `x` `y` |
+| [Gradient](../plugins/bento-slides/skills/bento-slides/references/format.md#gradient) | `angle` `cx` `cy` `kind` `r` `stops` |
+| [`fills[]` layer](../plugins/bento-slides/skills/bento-slides/references/format.md#fills-layer) | `blend` `color` `gradient` `hidden` |
+| [`strokes[]` layer](../plugins/bento-slides/skills/bento-slides/references/format.md#strokes-layer) | `align` `blend` `color` `dashes` `gradient` `hidden` `width` |
+| [`from` / `to`](../plugins/bento-slides/skills/bento-slides/references/format.md#from--to) | `el` `side` |
+| [`layout` (frame)](../plugins/bento-slides/skills/bento-slides/references/format.md#layout-frame) | `align` `clip` `cols` `dir` `gap` `hug` `justify` `pad` `wrap` |
+| [`sizing`](../plugins/bento-slides/skills/bento-slides/references/format.md#sizing) | `h` `minH` `minW` `w` |
+| [`bool`](../plugins/bento-slides/skills/bento-slides/references/format.md#bool) | `op` `shapes` |
+| [`textStroke`](../plugins/bento-slides/skills/bento-slides/references/format.md#textstroke) | `color` `fill` `width` |
+| [`crop`](../plugins/bento-slides/skills/bento-slides/references/format.md#crop) | `scale` `x` `y` |
+| [`source`](../plugins/bento-slides/skills/bento-slides/references/format.md#source) | `tableId` |
+| [Table `style`](../plugins/bento-slides/skills/bento-slides/references/format.md#table-style) | `borderColor` `borderWidth` `cellPadX` `cellPadY` `color` `fontFamily` `fontSize` `headerBg` `headerColor` `radius` `zebra` |
+| [Table `rows[]`](../plugins/bento-slides/skills/bento-slides/references/format.md#table-rows) | `cells` |
+| [Table `cells[]`](../plugins/bento-slides/skills/bento-slides/references/format.md#table-cells) | `align` `bg` `bold` `color` `html` |
+<!-- /generated -->

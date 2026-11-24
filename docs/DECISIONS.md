@@ -15396,3 +15396,33 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — The agent reference is generated; the guide keeps the prose
+
+The published agent guide (`docs/agents.md`, bento.page/agents.md) was
+hand-written and fell behind the format: frames, tokens, components, paint
+stacks and click builds never reached it, and the compact form lived only in
+`AGENTS.md`, which nobody outside the repository reads.
+
+- **Facts come from the code, prose from people.** `scripts/build-agent-docs.mjs`
+  writes the bento-slides skill's `references/format.md` (every key: type,
+  enum, range and required flag from the schema, the key list from
+  `MODEL_KEYS`), `references/compact.md` (the built-in layouts and roles, and
+  every default, read by running `compact.ts`'s own expansion) and
+  `references/verify.md` (validate.ts `FINDINGS`), and fills the
+  `<!-- generated:<name> -->` blocks of `docs/agents.md` and `docs/format.md`
+  from the same functions. The prose around the blocks stays hand-written.
+  `--check` runs in CI, like build-modelkeys and build-schema.
+- **A key cannot ship without a line.** Meanings are the one hand-written
+  fact, kept in `scripts/agent-docs/meanings.json`; a key without one, or a
+  meaning for a key the format no longer has, fails the build.
+- **A finding code cannot ship without a row.** validate.ts's `add()` takes
+  only a code listed in `FINDINGS`, at one of the severities its row allows.
+  The table is not read at run time, so the shell bundle drops it (0 bytes).
+- **One home for agent instructions.** The compact form, the load report,
+  `bento check` and the schema moved from `AGENTS.md` into the published
+  guide; `AGENTS.md` points there. The skill's own `SKILL.md` and the rest of
+  its package are rebuilt separately; the generated references sit in
+  `references/`, the place that rebuild names for them.
+- **No version in generated text.** The guide is stamped at release; a
+  version bump must not make the references stale.

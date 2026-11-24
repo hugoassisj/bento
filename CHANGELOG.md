@@ -25,6 +25,16 @@ pre-1.0.
   Every text tag, line ending, element type and slideshow setting is listed,
   including how to turn off the slide counter when a deck numbers its own
   slides. A test now fails when these drift from the code.
+- **The guide for AI agents covers the whole format, and cannot fall behind
+  it.** It now teaches the compact form (leave out every default, write
+  markdown, let text size itself, place content by layout and role), the
+  load report and `bento check`, and has a worked example for click builds,
+  code and code morph, maths, frames, design tokens and modes, components and
+  layered fills and strokes. It ends with a reference of every field in the
+  format and lists every finding `validate()` can report; both are generated
+  from the app's own tables, and the bento-slides skill carries the same
+  reference beside it. A field without a description, or a reference that no
+  longer matches the code, now fails the build.
 
 ## [1.3.0] — 2026-11-22
 

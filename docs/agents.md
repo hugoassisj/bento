@@ -14,6 +14,21 @@ carry features beyond this guide; unknown keys are ignored, never fatal.
 > edit a file, check its `"format"` field and use the matching guide; if the
 > format is one you have no guide for, don't guess at its shape.
 
+**Contents.** [Make a great deck](#make-a-great-deck-not-just-a-correct-one) ·
+[Minimal valid document](#minimal-valid-document) ·
+[The compact form](#the-compact-form-write-only-what-you-choose) ·
+[Load, read the report, fix](#load-read-the-report-fix) ·
+[Check your deck](#check-your-deck-bento-check) ·
+[The document schema](#the-document-schema) ·
+[Element types](#element-types-all-share-idxywhrotationopacity) ·
+[The rules that make decks feel designed](#the-rules-that-make-decks-feel-designed) ·
+[Layout guardrails](#layout-guardrails) · [Layouts and `role`](#layouts-and-role) ·
+[Dynamic fields](#dynamic-fields-tokens-in-text-html) ·
+[Features, with an example each](#features-with-an-example-each) (click builds,
+code and code morph, maths, frames, tokens and modes, components, paint
+stacks) · [Gotchas](#gotchas) · [Field reference](#field-reference): every key
+of the format, generated from the code.
+
 *Drop this file into your context (or point your harness at it) and you can
 author and edit Bento presentations directly. Also published at
 [bento.page/agents.md](https://bento.page/agents.md). For **Claude Code**,
@@ -281,6 +296,40 @@ refusal. `severity: "info"` is deliberately quiet (a photo bleeding off the
 canvas is a design move, not a defect); `error` means something is broken, like
 a link to a slide that does not exist.
 
+Every code it can report (generated from the code's own table):
+
+<!-- generated:verify -->
+| Code | Severity | Meaning |
+|---|---|---|
+| `unknown-key` | warning | A key the format does not define (often a typo). It is ignored, so what it was meant to do does not happen. |
+| `missing-asset` | error | An asset: reference, or a doc.fonts entry, names an asset that is not in doc.assets (or a builtin: face the app does not carry). Nothing renders. |
+| `collab-secrets-present` | info | The deck carries live-session keys; anything that receives the file holds the same access. Read it with window.bento.read() before handing it on. |
+| `font-not-embedded` | info | A font stack starts with a face the document does not carry, so viewers without it installed get the next family. Use a builtin: face or embed the woff2. |
+| `token-unknown` | warning | A themeRefs entry names a $token that theme.tokens does not define, so the value never follows it. |
+| `theme-ref-malformed` | warning | A themeRefs entry is neither a palette slot (optionally with a shift like "accent1 -20%") nor a $token. |
+| `theme-ref-unknown-slot` | warning | A themeRefs entry names a palette slot the theme leaves empty, so the colour never follows the palette. |
+| `theme-ref-dangling` | warning | A themeRefs entry points at a property the element or slide does not have; it controls nothing. |
+| `theme-ref-stale` | info | A palette-bound colour differs from what its slot resolves to, so the next palette edit will replace it. |
+| `unreachable-hidden-slide` | info | A hidden slide that no element links to: it cannot be reached while presenting. |
+| `broken-state-parent` | error | stateOf names a slide that does not exist, so the state is unreachable. |
+| `duplicate-id` | error | Two elements on one slide share an id; selection, morph and comment anchors all key off it. |
+| `morph-key-collision` | error | Two elements on one slide share a morph key (morphId, else id), so one of them will not tween. |
+| `out-of-canvas` | warning or info | The element extends past the canvas. A warning for text and tables (words are cropped), info for anything else (a bleed may be deliberate). |
+| `past-margin` | info | Text or a table reaches past the 96 px side margin (scaled to the deck width) where the rest of the content stops short. |
+| `overridden-enter-fx` | warning | The element morphs in from the previous slide, so its fx.enter is skipped. Give it a morph key new to the slide to make it enter. |
+| `entrance-on-motion-path` | warning | fx.enter and a motion-path loop fight over the same transform; use one or the other. |
+| `inert-countup` | info | The element morphs in already showing its number, so fx.countUp is skipped by design. |
+| `dash-march-no-dash` | warning | A dash-march loop needs a visible stroke and strokeStyle "dashed" or "dotted"; as set, nothing moves. |
+| `broken-link` | error | link names a slide that does not exist and is not an http(s) URL; clicking it does nothing. |
+| `dangling-connector` | warning | A connector end (from/to) names an element that is not on the slide; that end stops following. |
+| `embed-missing-view` | error | An embed has no view, so it is an empty box offline, in thumbnails and in print. |
+| `embed-remote-view` | warning | An embed view is a URL: it needs the network and paints nothing offline. Capture it into doc.assets. |
+| `embed-live-no-url` | warning | An embed has live on but no http(s) url, so no frame is created and only the view shows. |
+| `chart-key-ignored` | warning | A chart option key charts-lite does not implement (label on a bar or line series is the common one); it is ignored silently. |
+| `text-overflow` | warning | Measured with the real renderer, the text needs more height than its box; the finding says by how many px. Needs a browser. |
+| `table-overflow` | warning | Measured with the real renderer, the rows need more height than the table box; the finding says by how many px. Needs a browser. |
+<!-- /generated -->
+
 This does not replace looking at the deck. It catches what is checkable; the
 rest — whether a slide is any good — still needs eyes.
 
@@ -326,7 +375,8 @@ leave `fontFamily` off a text box and it renders in `theme.fontFamily`, which
 is what lets the deck's font be changed in one place. Writing the same stack
 on every element is what stops text following the theme.
 
-To leave the defaults out safely, write the **compact form** instead:
+To leave the defaults out safely, write the **compact form** instead (the
+next section has the whole of it):
 `"compact": true` at the top level, and every field you omit is filled on load
 with what the editor would insert (`format` and the rest of the document
 level too; ids are minted from the slide id). In this form an omitted
@@ -345,6 +395,232 @@ document.
         "align": "left", "valign": "top" } ] } ] }
 ```
 
+## The compact form: write only what you choose
+
+The JSON in `#bento-doc` is the full document: every element carries every
+field, including a dozen defaults no author chose. Write the **compact** form
+instead: `"compact": true` at the top level, and leave out every field that
+equals what the editor would insert (rotation 0, opacity 1, the font stack,
+weight 400, centre/middle, line height 1.25, a shape's transparent stroke, a
+slide's theme background, `transition: "fade"` …; the full list is below).
+`x y w h` and the type's content (`html`, `shape`, `src`, `option`, `content`,
+`columns`/`rows`) are always written. Two conveniences: `elements` may nest
+arrays (a helper that returns a card as `[bg, title, body]` needs no spread),
+and `id` may be omitted: it is minted deterministically as
+`<slideId>-<type>-<index>`, so a re-run yields the same ids.
+
+```json
+{ "compact": true, "title": "Q3 review",
+  "slides": [ { "id": "s1", "elements": [
+    { "type": "text", "x": 96, "y": 80, "w": 1088, "h": 100, "html": "Q3 review", "fontSize": 48 },
+    [ { "type": "shape", "shape": "rect", "x": 96, "y": 220, "w": 500, "h": 300, "fill": "#F3F0EA" },
+      { "type": "text", "x": 120, "y": 240, "w": 452, "h": 60, "html": "Revenue" } ] ] } ] }
+```
+
+A compact document is expanded when it is loaded (`window.bento.loadDoc(json)`
+or *Replace from JSON…*); the FILE is always saved full, so the on-disk format
+is unchanged and every shipped shell reads it as before. Do not write
+`"compact": true` into a file's `#bento-doc` block: a file is opened as a full
+document and is not expanded. To turn compact JSON into a file, load it into
+the app and save.
+
+### Text that sizes itself, and markdown
+
+Two more things a compact text element may do. Leave `h` out (or write
+`"h": "auto"`) and the box is sized to its text on load, measured on the
+deck's real fonts: the same number *Fit height to text* would set. You cannot
+know how tall three lines of 24 px are; the runtime can. Write `md` instead of
+`html` and it converts exactly as pasted markdown does: `**bold**`,
+`*italic*`, `` `code` ``, `~~strike~~`, `- bullets` (indent two spaces for a
+sub-bullet), `[caption](https://…)`; when both are present `html` wins.
+
+```json
+{ "compact": true, "slides": [ { "id": "s1", "elements": [
+  { "type": "text", "x": 96, "y": 96, "w": 1088, "fontSize": 28, "align": "left", "valign": "top",
+    "md": "**Revenue** grew 40%, led by *enterprise*.\n- New logos: 38\n  - 12 in EMEA\n- Net retention: 118%" } ] } ] }
+```
+
+### Placing by layout and role
+
+You need not place anything. Give a slide a `layout` and its elements a
+`role`, leave out geometry and typography, and the layout's frames and type
+are used: the same matching the editor's *Apply layout* does, and slides born
+from the same layout share element ids, so their titles morph. An element that
+DOES carry `x y w h` is placed as given, on top. More `body` elements than the
+layout has body slots stack into the slot top-to-bottom, each sized to its
+text. A role the layout lacks falls back to the body slot and the load report
+says so (`dropped` carries a note with the path). An `image` role takes an
+image element and puts the picture in the slot. A deck's own `layouts` (full
+Slide objects, the shape *Save slide as layout* writes) may be named the same
+way.
+
+```json
+{ "compact": true,
+  "assets": { "photo": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" },
+  "slides": [
+  { "layout": "title-body", "elements": [
+    { "role": "title", "md": "Three things went right" },
+    { "role": "body", "md": "**Latency** fell 40%." },
+    { "role": "body", "md": "**Uptime** held at 99.97%." } ] },
+  { "layout": "image-right", "elements": [
+    { "role": "title", "md": "The tile" },
+    { "role": "body", "md": "It stays put." },
+    { "type": "image", "role": "image", "src": "asset:photo", "fit": "cover" } ] } ] }
+```
+
+The layouts, their roles and every default below are generated from the code
+by `scripts/build-agent-docs.mjs`, so they cannot drift.
+
+<!-- generated:compact -->
+### Built-in layouts and their roles
+
+Name one in a slide's `layout` (by id, with or without the `layout-` prefix, or by an alias) and give its elements a `role`:
+
+- `title` — title, subtitle
+- `title-content` — title, body (also `title-body`)
+- `two-col` — title, body, left, right (also `two-column`)
+- `section` — title, kicker
+- `three-cards` — title, card1, card2, card3 (also `cards`)
+- `quote` — quote, attribution
+- `image-left` — image, title, body
+- `image-right` — title, body, image
+- `blank` — no roles (an empty slide; every element carries its own frame)
+
+Where each role's content lands on a 1280×720 deck (a deck of another size gets the layout scaled to it). An element with its own `x y w h` is placed as given instead.
+
+| Layout | Role | Slot (x, y, w, h) | Font size |
+|---|---|---|---|
+| `title` | `title` | 128, 323, 1024, 112 | 61 |
+| `title` | `subtitle` | 128, 445, 880, 48 | 22 |
+| `title-content` | `title` | 96, 58, 1088, 67 | 35 |
+| `title-content` | `body` | 96, 166, 1088, 480 | 21 |
+| `two-col` | `title` | 96, 58, 1088, 67 | 35 |
+| `two-col` | `body` | 96, 166, 528, 480 | 19 |
+| `two-col` | `left` | 96, 166, 528, 480 | 19 |
+| `two-col` | `right` | 656, 166, 528, 480 | 19 |
+| `section` | `title` | 128, 336, 1024, 96 | 51 |
+| `section` | `kicker` | 128, 280, 640, 32 | 14 |
+| `three-cards` | `title` | 96, 58, 1088, 67 | 35 |
+| `three-cards` | `card1` | 122, 202, 290, 397 | 19 |
+| `three-cards` | `card2` | 495, 202, 290, 397 | 19 |
+| `three-cards` | `card3` | 869, 202, 290, 397 | 19 |
+| `quote` | `quote` | 166, 240, 986, 240 | 38 |
+| `quote` | `attribution` | 166, 496, 986, 35 | 19 |
+| `image-left` | `image` | 96, 96, 512, 528 | 19 |
+| `image-left` | `title` | 656, 96, 528, 96 | 35 |
+| `image-left` | `body` | 656, 211, 528, 413 | 19 |
+| `image-right` | `title` | 96, 96, 528, 96 | 35 |
+| `image-right` | `body` | 96, 211, 528, 413 | 19 |
+| `image-right` | `image` | 672, 96, 512, 528 | 19 |
+
+### Defaults you can leave out
+
+In a compact document every field below is filled on load with the value shown, which is what the editor itself inserts. Write a field only when you mean a different value. The saved file is always the full document.
+
+**Document**
+
+| Key | Filled with |
+|---|---|
+| `format` | `"bento/slides"` |
+| `version` | `1` |
+| `title` | `"Untitled"` |
+| `size` | `{"width":1280,"height":720}` |
+| `theme.background` | `"#FFFFFF"` |
+| `theme.color` | `"#1E2A3A"` |
+| `theme.accent` | `"#F7A600"` |
+| `theme.fontFamily` | `"-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"` |
+| `theme.codeFontFamily` | `"ui-monospace, 'SFMono-Regular', 'Berkeley Mono', 'Menlo', 'Consolas', monospace"` |
+
+**Slide**
+
+| Key | Filled with |
+|---|---|
+| `background` | `theme.background` (a compact slide only; a full document's slide without one is white) |
+| `transition` | `"fade"` |
+| `notes` | `""` |
+| `id` | `s<n>` (1-based position, e.g. `"s2"`) |
+
+**Elements.** An omitted `id` is minted as `<slideId>-<type>-<index>` (index = position on the slide, e.g. `s1-text-0`), so a re-run yields the same ids. Per type, the fields filled when left out:
+
+| Type | Filled when omitted | Always written |
+|---|---|---|
+| `text` | `rotation` `0`, `opacity` `1`, `fontSize` `32`, `fontFamily` `"-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"`, `fontWeight` `400`, `color` `"#1E2A3A"` on a light slide, `"#F5F7FA"` on a dark one, `align` `"center"`, `valign` `"middle"`, `lineHeight` `1.25` | `x` `y` `w` `h` `html` |
+| `shape` | `rotation` `0`, `opacity` `1`, `fill` `"#F7A600"`, `stroke` `"transparent"`, `strokeWidth` `0`, `radius` `12` | `x` `y` `w` `h` `shape` |
+| `image` | `rotation` `0`, `opacity` `1`, `fit` `"contain"`, `radius` `0` | `x` `y` `w` `h` `src` |
+| `svg` | nothing: write every field | `x` `y` `w` `h` |
+| `chart` | `rotation` `0`, `opacity` `1`, `preset` `"bar"` | `x` `y` `w` `h` `option` |
+| `table` | `rotation` `0`, `opacity` `1`, `header` `true`, `style` (themed; lighter lines on a dark slide) | `x` `y` `w` `h` `columns` `rows` |
+| `media` | `rotation` `0`, `opacity` `1`, `fit` `"contain"`, `radius` `8`, `controls` `true`, `muted` `true`, `loop` `false`, `autoplay` `false` | `x` `y` `w` `h` `kind` `src` |
+| `embed` | nothing: write every field | `x` `y` `w` `h` |
+| `code` | `rotation` `0`, `opacity` `1`, `fontSize` `32`, `fontFamily` `"ui-monospace, 'SFMono-Regular', 'Berkeley Mono', 'Menlo', 'Consolas', monospace"`, `color` `"#1E2A3A"` on a light slide, `"#F5F7FA"` on a dark one, `align` `"left"`, `valign` `"middle"`, `lineHeight` `1.25` | `x` `y` `w` `h` `content` |
+
+A text element may also leave out `h` (or write `"h": "auto"`): it is sized to its text on load. A slide with a `layout` fills its role'd elements' frame and typography from the slot instead; bodies beyond the layout's body slots stack in the slot 16 px apart.
+<!-- /generated -->
+
+## Load, read the report, fix
+
+A document you hand the running app (compact or full) passes the untrusted
+shape gate on the way in, and `loadDoc` RETURNS what happened:
+
+```js
+const r = window.bento.loadDoc(json)
+// r === false      → not a document at all (nothing changed)
+// r.dropped        → [{ path: '/slides/0/elements/2/fontSze', reason: 'unknown key for a text element' }, …]
+// r.expanded       → fields filled from the editor's defaults
+// r.fitted         → text boxes sized to their text
+// r.laidOut        → slides placed by layout + role
+// r.findings       → window.bento.validate() on the loaded deck (overflow, off-canvas, dead links …)
+```
+
+The loop is: load → read `dropped` and `findings` → fix the JSON → load
+again. A dropped key is one the format does not have (a typo, or a field that
+does not exist for that element type); an invalid value is the right key with
+the wrong type or range, and is dropped the same way. `window.bento.compact()`
+(or *Copy compact JSON (for agents)* in the File menu) gives an open deck back
+in the compact shape, the easiest starting point for an edit.
+
+## Check your deck: `bento check`
+
+From a checkout of the repository, `bento check` loads a deck in headless
+Chrome (the real shell, the real fonts), tells you what the runtime would
+otherwise swallow, then hands you pictures:
+
+```sh
+node scripts/bento-check.mjs deck.bento.html                # findings, by slide, with element ids
+node scripts/bento-check.mjs doc.json --png out/            # a document JSON in the built shell, + one PNG per slide
+node scripts/bento-check.mjs doc.json --json --fail-on warning   # machine-readable, strict exit code
+```
+
+The loop: write the document JSON (compact where the shell accepts it) →
+`bento check --png` → read `findings` (`text-overflow` and `table-overflow`
+say how many px the box is short and on which element; the list of every code
+is under [`validate()`](#windowbentovalidate)) → look at `contact.png`, one
+image of every slide, or a single `page-NN.png` when a finding points at it →
+fix → run again. Exit 0 means no finding at or above `--fail-on` (default
+`error`). Needs Chrome (`BENTO_CHROME` to point at a binary) and the built
+shell (`cd slides && npm run build:single`, or `--shell path`).
+
+## The document schema
+
+The format has a machine-readable JSON Schema, generated from the runtime's
+own validation tables, so it describes exactly what the load gate accepts:
+
+- **URL**: `https://bento.page/schema/slides.json`, with a version-pinned
+  twin at `schema/slides-<version>.json`. Put
+  `"$schema": "https://bento.page/schema/slides.json"` at the top of a deck
+  you write and any JSON-Schema-aware editor validates it; the runtime strips
+  the key on load and writes it back on save, so every saved deck carries it.
+- **In the file**: the Tooling comment at the top of every `.bento.html`
+  names the URL, and the saved JSON's first key is `$schema`.
+- **`window.bento.schema()`**: the same JSON, built at runtime, for an agent
+  driving the browser.
+- **The [field reference](#field-reference)** at the end of this guide: the
+  same tables as prose, one line per key.
+
+Which door for which reader: a model that READS the file gets the Tooling
+comment, `$schema` and the URL; a model that DRIVES the app gets `schema()`,
+`validate()`, `measure()` and `loadDoc()`.
+
 ## Element types (all share `id,x,y,w,h,rotation,opacity`)
 
 - **text**: `html`, `fontSize`, `fontFamily` (omit it to follow
@@ -360,7 +636,7 @@ document.
   Optional, newer: `fillGradient.kind:"radial"` (+`cx`,`cy`,`r`),
   `strokeAlign` (`inside|center|outside`), `strokeDashes:[dash,gap]`, rect
   `radii:[tl,tr,br,bl]`, `flipX`/`flipY`, `hidden`, `alt`. A frame is a `rect`
-  with `layout`, and its children carry `parentId` (see format.md). Lines take
+  with `layout`, and its children carry `parentId` (see *Frames* below). Lines take
   their color from `fill` and draw horizontally across the box (rotate for
   vertical); `strokeStyle: solid|dashed|dotted`; tips `lineStart`/`lineEnd`
   = `none|arrow|arrow-open|triangle|triangle-open|diamond|diamond-open|square|circle-open|dot|bar`.
@@ -574,6 +850,163 @@ set `"present": { "slideNumber": false }`, or the show stacks its counter on
 top of yours; add `"progress": false` when the design has its own progress
 mark.
 
+## Features, with an example each
+
+Each example below is a whole compact document: load it with
+`window.bento.loadDoc()` to see it, or lift the elements into your own deck.
+CI loads every one of them and fails on a dropped key or an error finding.
+
+### Click builds: `fx.step`
+
+`fx.step` reveals an element on a click instead of with the slide: `1` waits
+for the first →, `2` for the second, and so on. It runs its `fx.enter` when it
+appears (a plain fade without one); ← hides it again, and → leaves the slide
+only once every step is shown. Arriving backward shows every step. Equal
+steps appear together. It is one slide, one page number, one morph pairing,
+so prefer it to copying a slide three times. An older shell shows every
+element at once.
+
+```json
+{ "compact": true, "slides": [ { "id": "why", "elements": [
+  { "type": "text", "x": 96, "y": 72, "w": 1088, "h": 84, "html": "Why now", "fontSize": 48, "fontWeight": 700, "align": "left" },
+  { "type": "text", "x": 96, "y": 208, "w": 1088, "md": "**1.** Costs fell by half", "fontSize": 32, "align": "left", "valign": "top", "fx": { "step": 1, "enter": "fade-up" } },
+  { "type": "text", "x": 96, "y": 288, "w": 1088, "md": "**2.** Demand doubled", "fontSize": 32, "align": "left", "valign": "top", "fx": { "step": 2, "enter": "fade-up" } },
+  { "type": "text", "x": 96, "y": 368, "w": 1088, "md": "**3.** Two rivals left the market", "fontSize": 32, "align": "left", "valign": "top", "fx": { "step": 3, "enter": "fade-up" } } ] } ] }
+```
+
+When a build has to change layout (a diagram that rearranges, not just items
+that appear), use consecutive slides with `transition: "morph"` and mark every
+slide after the first `"unnumbered": true`: each stays in the walk but takes
+the page number of the slide before it, so the audience sees one page, not
+three.
+
+### Code, and code morph
+
+A `code` element draws syntax-coloured source: `content` is the plain text and
+`grammarName` the language (the [field reference](#element-code) lists the
+built-in ones). Token colours come from `theme.codePalette`, the font from
+`theme.codeFontFamily`. Two code elements that pair across a `morph` (same
+`id` or `morphId`) animate token by token: tokens found on both sides glide to
+their new places, the others fade out or in. A token travels about one line height, which reads as
+a blink at the default morph speed, so set `present.morphSeconds` to 1 or more
+for a deck built on code morphs. `fx.typeWriter: true` types a code element in
+when it appears (pace: `present.typeWriterSeconds`).
+
+```json
+{ "compact": true, "present": { "morphSeconds": 1.2 }, "slides": [
+  { "id": "c1", "elements": [
+    { "id": "snippet", "type": "code", "x": 96, "y": 160, "w": 1088, "h": 400, "grammarName": "ts", "fontSize": 28,
+      "content": "function total(items) {\n  return items.length\n}" } ] },
+  { "id": "c2", "transition": "morph", "elements": [
+    { "id": "snippet", "type": "code", "x": 96, "y": 160, "w": 1088, "h": 400, "grammarName": "ts", "fontSize": 28,
+      "content": "function total(items: Item[]): number {\n  return items.reduce((n, i) => n + i.qty, 0)\n}" } ] } ] }
+```
+
+### Maths
+
+Text `html` renders LaTeX between `$…$` (inline) or `$$…$$` (display);
+`\(…\)` and `\[…\]` work too, and `$typst: …$` switches to Typst syntax. The
+document keeps the source, so an older shell shows it as typed. Inline `$`
+needs no space just inside the delimiters and no digit straight after the
+closer, so "it costs $5 and $10" stays prose. In JSON, double every backslash.
+
+```json
+{ "compact": true, "slides": [ { "id": "m1", "elements": [
+  { "type": "text", "x": 96, "y": 120, "w": 1088, "h": 80, "html": "Euler: $e^{i\\pi} + 1 = 0$", "fontSize": 40, "align": "left" },
+  { "type": "text", "x": 96, "y": 260, "w": 1088, "h": 200, "html": "$$\\int_0^1 x^2\\,dx = \\frac{1}{3}$$", "fontSize": 48 } ] } ] }
+```
+
+### Frames (auto layout)
+
+A frame is a `rect` with a `layout`; elements whose `parentId` names it are
+laid out inside it in a row, a column or a grid, with `gap` and `pad`, Figma's
+auto layout. The app computes each child's `x y w h` (and the frame's own size
+when it `hug`s) and writes them into the document, so an older shell, the
+morph and every export see plain positioned elements. Write the children's
+geometry roughly; it is replaced on load. `sizing: { "w": "fill" }` shares the
+frame's free width between the children that ask for it. Order along the main
+axis is the children's position, then their array order. A `parentId` that
+names no frame is removed silently.
+
+```json
+{ "compact": true, "slides": [ { "id": "f1", "elements": [
+  { "id": "stats", "type": "shape", "shape": "rect", "x": 96, "y": 208, "w": 1088, "h": 200, "fill": "#F3F0EA", "radius": 16,
+    "layout": { "dir": "row", "gap": 24, "pad": [32, 32, 32, 32], "align": "stretch" } },
+  { "id": "stat-1", "parentId": "stats", "type": "text", "x": 128, "y": 240, "w": 300, "h": 136, "md": "**38**\nnew logos", "fontSize": 32, "sizing": { "w": "fill" } },
+  { "id": "stat-2", "parentId": "stats", "type": "text", "x": 452, "y": 240, "w": 300, "h": 136, "md": "**118%**\nnet retention", "fontSize": 32, "sizing": { "w": "fill" } },
+  { "id": "stat-3", "parentId": "stats", "type": "text", "x": 776, "y": 240, "w": 300, "h": 136, "md": "**4.8**\nNPS change", "fontSize": 32, "sizing": { "w": "fill" } } ] } ] }
+```
+
+### Tokens and modes
+
+`theme.tokens` holds named values (colours, numbers, font sizes, font stacks,
+opacities, shadows), each with a value per mode. An element binds a property
+to one with `themeRefs: { "<path>": "$<name>" }` and keeps the literal beside
+it, equal to the token's value in the active mode. In the app, editing a token
+or switching the mode (⌘K, *Switch mode*) rewrites every bound literal, so one
+switch turns a light deck dark. A document you write or load is read as it
+stands: a bound literal that differs from its token's value in the document's
+`mode` is taken as a hand edit, so the binding is dropped and the literal
+kept. Writing `"mode": "dark"` therefore means writing the dark values too. A
+slide's `background` binds the same way. If a deck already has tokens, bind to
+them rather than writing new literals.
+
+```json
+{ "compact": true,
+  "theme": { "background": "#FFFFFF", "tokens": { "modes": ["light", "dark"], "mode": "light", "set": {
+    "paper": { "type": "color", "values": { "light": "#FFFFFF", "dark": "#101418" } },
+    "ink": { "type": "color", "values": { "light": "#1E2A3A", "dark": "#F2F0EA" } },
+    "title.size": { "type": "fontSize", "values": { "light": 56, "dark": 56 } } } } },
+  "slides": [ { "id": "t1", "background": "#FFFFFF", "themeRefs": { "background": "$paper" }, "elements": [
+    { "type": "text", "x": 96, "y": 96, "w": 1088, "h": 120, "html": "One switch, two looks", "align": "left",
+      "fontSize": 56, "color": "#1E2A3A", "themeRefs": { "color": "$ink", "fontSize": "$title.size" } } ] } ] }
+```
+
+### Components
+
+A component is a set of ordinary elements sharing `component.id`. The set
+marked `main: true` is the main; every other set (one per `groupId`) is a
+copy, and `component.key` pairs each copy element with its counterpart in the
+main. A copy takes every property from the main except its identity, its
+position and the keys it overrides: write a copy equal to the main except
+where it differs (here, the label), leave out `sig` and `off`, and the
+differences are kept as that copy's overrides. Editing the main later updates
+every copy. An older shell sees plain grouped elements.
+
+```json
+{ "compact": true, "slides": [
+  { "id": "k1", "elements": [
+    { "id": "btn-bg", "type": "shape", "shape": "rect", "x": 96, "y": 560, "w": 280, "h": 64, "fill": "#1E2A3A", "radius": 32,
+      "groupId": "btn-main", "groupName": "Button", "component": { "id": "button", "key": "bg", "main": true } },
+    { "id": "btn-label", "type": "text", "x": 96, "y": 560, "w": 280, "h": 64, "html": "Get started", "fontSize": 24, "color": "#FFFFFF",
+      "groupId": "btn-main", "groupName": "Button", "component": { "id": "button", "key": "label", "main": true } } ] },
+  { "id": "k2", "elements": [
+    { "id": "cta-bg", "type": "shape", "shape": "rect", "x": 96, "y": 560, "w": 280, "h": 64, "fill": "#1E2A3A", "radius": 32,
+      "groupId": "cta", "groupName": "Button", "component": { "id": "button", "key": "bg" } },
+    { "id": "cta-label", "type": "text", "x": 96, "y": 560, "w": 280, "h": 64, "html": "Book a demo", "fontSize": 24, "color": "#FFFFFF",
+      "groupId": "cta", "groupName": "Button", "component": { "id": "button", "key": "label" } } ] } ] }
+```
+
+### Paint stacks
+
+A shape may carry several fills and strokes, bottom first: `fills` and
+`strokes`, two or more layers each. A fill layer is a colour, optionally a
+`gradient` (the colour is then its fallback) and a `blend` mode; a stroke
+layer adds `width`, `align` and `dashes`. The plain keys stay and mirror the
+TOP visible layer (`fill`, `stroke`, `strokeWidth` …), which is what an older
+shell draws, so write them equal to the last layer.
+
+```json
+{ "compact": true, "slides": [ { "id": "p1", "background": "#101418", "elements": [
+  { "type": "shape", "shape": "rect", "x": 96, "y": 208, "w": 520, "h": 320, "radius": 24,
+    "fill": "rgba(255,255,255,0.2)",
+    "fills": [
+      { "color": "#7A5CFF", "gradient": { "angle": 135, "stops": [ { "at": 0, "color": "#7A5CFF" }, { "at": 1, "color": "#00C2A8" } ] } },
+      { "color": "rgba(255,255,255,0.2)", "blend": "overlay" } ],
+    "stroke": "#FFFFFF", "strokeWidth": 2,
+    "strokes": [ { "color": "#1E2A3A", "width": 8 }, { "color": "#FFFFFF", "width": 2 } ] } ] } ] }
+```
+
 ## Gotchas
 
 - Escape `<` as `\u003c` anywhere in the JSON when writing the file block.
@@ -593,3 +1026,534 @@ mark.
 
 Working examples of everything above: the template decks at
 [bento.page](https://bento.page) — open one and read its JSON block.
+
+## Field reference
+
+Every key of the format, object by object, generated from the app's own
+tables by `scripts/build-agent-docs.mjs`: the type and the allowed values are
+what the load gate accepts, so a key that is not listed here does not exist
+and is dropped on load. The same reference ships with the bento-slides skill
+as `references/format.md`.
+
+<!-- generated:format -->
+Every key of the format, read from the app's own tables: the type, enum and range are what the load gate accepts (a value outside them is dropped on load), and **required** keys are the ones a document or an element cannot do without. Objects: [Document](#document) · [theme](#theme) · [theme.palette](#themepalette) · [theme.codePalette](#themecodepalette) · [theme.tokens](#themetokens) · [present](#present) · [size](#size) · [meta](#meta) · [fonts[]](#fonts) · [Slide](#slide) · [slide.hover](#slidehover) · [slide.comments[]](#slidecomments) · [Every element](#every-element) · [Element: text](#element-text) · [Element: shape](#element-shape) · [Element: image](#element-image) · [Element: svg](#element-svg) · [Element: chart](#element-chart) · [Element: table](#element-table) · [Element: media](#element-media) · [Element: embed](#element-embed) · [Element: code](#element-code) · [component](#component) · [fx](#fx) · [fx.ken](#fxken) · [fx.loop](#fxloop) · [shadow](#shadow) · [Gradient](#gradient) · [fills[] layer](#fills-layer) · [strokes[] layer](#strokes-layer) · [from / to](#from--to) · [layout (frame)](#layout-frame) · [sizing](#sizing) · [bool](#bool) · [textStroke](#textstroke) · [crop](#crop) · [source](#source) · [Table style](#table-style) · [Table rows[]](#table-rows) · [Table cells[]](#table-cells).
+
+### Document
+
+The top level of the `#bento-doc` JSON. Only `format` and a non-empty `slides` are required; the rest is filled from the editor's defaults when missing.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `assets` | map of string | Shared data: key → data: URI or raw SVG markup, referenced as `asset:<key>`. Written last in a saved file. |
+| `blobs` | object | Written by live collaboration for large assets. Never author it. |
+| `collab` | object | Live-session credentials. Any key in it is access to the room: read the deck without it and write it back unchanged. |
+| `docId` | string | The document's identity (uuid), minted on first open. Omit it in a new deck; never change it in an existing one. |
+| `fonts` | array → [fonts[]](#fonts) | Faces the deck carries, each an @font-face at boot. |
+| `format` | `"bento/slides"` **required** | Format discriminant, always "bento/slides". Check it before editing a file. |
+| `layouts` | array → [Slide](#slide) | The deck's own slide templates (Slide-shaped), offered beside the built-ins under Apply layout. |
+| `meta` | object → [meta](#meta) | Document properties for {{author}}, {{company}}, {{subject}}, {{event}}. |
+| `modified` | string | Last-saved timestamp, written by the app. |
+| `present` | object → [present](#present) | How the show draws its own chrome and paces morphs and typewriters. |
+| `readonly` | boolean | true makes a player file: it boots into the show with no editor. |
+| `size` | object → [size](#size) | The slide coordinate space in px. Default 1280×720. |
+| `slides` | array → [Slide](#slide) **required** | The slides in show order; a state slide sits right after its parent. Must be non-empty. |
+| `template` | boolean | true makes a template: every open mints a fresh document. |
+| `theme` | object → [theme](#theme) | Deck-wide defaults: colours, fonts, palette slots, tokens. |
+| `title` | string | Deck title; also the HTML title and {{title}}. |
+| `version` | integer | Format version. The current shells write 1. |
+
+### `theme`
+
+The schema marks four keys required; a document that leaves any of them out still opens, with the editor's value for it.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `accent` | colour **required** | The accent colour (palette slot accent1); seeds derived chart colours. |
+| `background` | colour **required** | Default slide background (palette slot bg1). |
+| `chartPalette` | array of colour | Ordered series colours for new charts. Absent = derived from accent. |
+| `codeFontFamily` | string | Font stack for code elements without their own fontFamily. Absent = fontFamily. |
+| `codePalette` | object → [theme.codePalette](#themecodepalette) | Token colours for code elements. |
+| `color` | colour **required** | Default text colour (palette slot tx1). |
+| `fontFamily` | string **required** | Font stack for body text; a full-document text box without fontFamily draws in it. |
+| `headingFamily` | string | Display face for headings. Absent = fontFamily. |
+| `palette` | object → [theme.palette](#themepalette) | Further named brand slots that themeRefs can point at. |
+| `table` | object → [Table style](#table-style) | Defaults for newly inserted tables; existing tables keep their own style. |
+| `tokens` | object → [theme.tokens](#themetokens) | Design tokens: named values element properties bind to with themeRefs "$name". |
+
+### `theme.palette`
+
+`theme.background`, `theme.color` and `theme.accent` are the slots `bg1`, `tx1` and `accent1`; these are the rest.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `accent2` | colour | Accent slot 2. |
+| `accent3` | colour | Accent slot 3. |
+| `accent4` | colour | Accent slot 4. |
+| `accent5` | colour | Accent slot 5. |
+| `accent6` | colour | Accent slot 6. |
+| `bg2` | colour | Second background slot. |
+| `folHlink` | colour | Followed-hyperlink colour slot. |
+| `hlink` | colour | Hyperlink colour slot. |
+| `tx2` | colour | Second text slot. |
+
+### `theme.codePalette`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `a` | colour | Diff additions. |
+| `c` | colour | Comments. |
+| `d` | colour | Diff deletions. |
+| `f` | colour | Function calls. |
+| `k` | colour | Keywords. |
+| `n` | colour | Numbers. |
+| `p` | colour | Punctuation. |
+| `s` | colour | Strings. |
+
+### `theme.tokens`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `mode` | string | The active mode. Absent = the first. Switching it rewrites every bound literal. |
+| `modes` | array of string | Mode names in order (e.g. light, dark). Absent = the single mode "default". |
+| `set` | map of { type, values } **required** | Token name → { type, values: { mode → value } }. Names match `[A-Za-z][\w.-]*`, up to 64 characters. Token types: `color`, `number`, `fontFamily`, `fontSize`, `shadow`, `opacity`. |
+
+### `present`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `controls` | boolean | Arrow buttons in the corner while presenting. Default false. |
+| `morphSeconds` | number 0–60 | Morph duration in seconds. Absent = 0.65; clamped to 0.1–6 on read. |
+| `numberHidden` | boolean | true: hidden slides keep their page number. Default false (skipped slides are uncounted). |
+| `progress` | boolean | The show's progress bar along the bottom. Default true. |
+| `slideNumber` | boolean | The show's "3 / 12" counter. Default true; switch it off when the slides number themselves. |
+| `typeWriterSeconds` | number 0.08–1 | Typewriter pace, seconds per character. Absent = 0.08; a whole run never takes longer than 6 s. |
+
+### `size`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `height` | number **required** | Slide height in px. |
+| `width` | number **required** | Slide width in px. |
+
+### `meta`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `author` | string | Fills {{author}}. |
+| `company` | string | Fills {{company}}. |
+| `event` | string | Fills {{event}}. |
+| `keywords` | string | Keywords; provenance only, no field token. |
+| `subject` | string | Fills {{subject}}. |
+
+### `fonts[]`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `asset` | string **required** | `asset:<key>` (a woff2 data URI in assets), or a face the app carries by builtin: key, with no bytes in the file. Built in: `builtin:fraunces-900`, `builtin:instrument-sans`. |
+| `family` | string **required** | The family name text uses in its font stack. |
+| `style` | string | CSS font-style ("normal", "italic"). |
+| `weight` | string | CSS font-weight the face covers ("900", "400 700"). |
+
+### Slide
+
+| Key | Type | Meaning |
+|---|---|---|
+| `background` | colour | Slide background colour. A full document's slide without it is white, not theme.background. |
+| `comments` | array → [slide.comments[]](#slidecomments) | Review threads. Saved in the file, never drawn in the show or print. |
+| `elements` | array → [Every element](#every-element) | The slide's elements. Array order is paint order: the first is at the back. |
+| `hidden` | boolean | Out of the show (arrow keys skip it, PDF leaves it out) but reachable by a link: backup and appendix slides. |
+| `hover` | object → [slide.hover](#slidehover) | Present-mode hover: focus-group dims elements outside the hovered group; reveal swaps showOnHover sets. |
+| `id` | string **required** | Stable slide id; links, stateOf and morphs reference it. |
+| `name` | string | Friendly name for link pickers and state badges. |
+| `notes` | string | Speaker notes; they travel in the file. |
+| `stateOf` | string | This slide is a hidden variant of the named slide, reached only by links; ← returns to the parent. |
+| `themeRefs` | map of string | Palette slot or $token for the slide's own colours (background). A token can drive `background`. |
+| `transition` | `none`, `fade`, `slide`, `zoom`, `morph` | How the slide arrives; morph tweens elements that share a morph key with the previous slide. |
+| `unnumbered` | boolean | In the walk but takes no page number: {{page}} shows the previous slide's, so a build over several morph slides reads as one page. |
+
+### `slide.hover`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `default` | string | reveal: the showOnHover set visible while nothing is hovered. |
+| `dim` | number 0–1 | focus-group: opacity of the elements outside the hovered group. Absent = 0.13. |
+| `type` | `focus-group`, `reveal` **required** | focus-group or reveal. |
+
+### `slide.comments[]`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `at` | string | ISO timestamp. |
+| `author` | string | Who wrote it. |
+| `elementId` | string | The element the thread is pinned to. Absent (or dangling) = the slide. |
+| `id` | string | Thread id. |
+| `replies` | array of { id, author, text, at } | Replies: { id, author, text, at }. |
+| `resolved` | boolean | The thread is resolved. |
+| `text` | string | The comment. |
+| `x` | number | Point anchor in slide px, when no elementId. |
+| `y` | number | Point anchor in slide px, when no elementId. |
+
+### Every element
+
+Keys every element type has (`text`, `shape`, `image`, `svg`, `chart`, `table`, `media`, `embed`, `code`). `x y w h` are slide px from the top-left.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `alt` | string | What a screen reader says for a non-text element. Absent = decorative. |
+| `backdropFilter` | number | Frosted-glass blur of what lies behind, px. Screen only: print drops it. |
+| `blend` | string | CSS mix-blend-mode (screen, multiply, overlay …). Absent = normal. |
+| `blur` | number | Gaussian blur on the element, px. |
+| `blurHidden` | boolean | The blur is switched off but kept. |
+| `component` | object → [component](#component) | Component membership: elements sharing component.id form a component; main marks the main, every other set is a copy. |
+| `fillHidden` | boolean | The fill is switched off but kept. |
+| `flipX` | boolean | Drawn mirrored across the vertical centre line; the box is unchanged. |
+| `flipY` | boolean | Drawn mirrored across the horizontal centre line; the box is unchanged. |
+| `fx` | object → [fx](#fx) | Presentation effects: entrance, click step, count-up, ambient motion, loops. Run while presenting only. |
+| `group` | string | Semantic group tag that hover focus and reveal target. |
+| `groupId` | string | Editor grouping: elements sharing it select and move as one. |
+| `groupName` | string | The group's name in the layer list, carried by every member. |
+| `h` | number | Height in slide px. |
+| `hidden` | boolean | Not drawn anywhere (canvas, show, print, preview); still listed in Layers. |
+| `id` | string **required** | Identity on the slide, and the default morph key: elements sharing it across adjacent slides morph. |
+| `keepAspectRatio` | boolean | Resizing keeps the proportions. Images read absent as true, everything else as false. |
+| `link` | string | Click target while presenting: a slide id, or an http(s) URL (opens in a new tab). |
+| `locked` | boolean | Editor lock: canvas clicks and marquees skip it. Ignored by present and print. |
+| `morphId` | string | Morph key override: pairs with an element whose morphId or id matches, without touching id. Unique within a slide. |
+| `name` | string | The author's name for it in the layer list. Display only. |
+| `opacity` | number 0–1 | 0 transparent to 1 opaque. |
+| `parentId` | string | The auto-layout frame (a rect with layout) this element sits in; the frame derives its x/y/w/h. |
+| `role` | string | What it is on the slide; a layout (and compact input) places content by role. The built-in layouts use `title`, `subtitle`, `body`, `left`, `right`, `kicker`, `card1`, `card2`, `card3`, `quote`, `attribution`, `image`. |
+| `rotation` | number | Degrees, clockwise. |
+| `shadow` | object → [shadow](#shadow) or array → [shadow](#shadow) | Drop shadow(s) following the element's alpha shape; an array stacks. |
+| `shadowHidden` | boolean | The shadow is switched off but kept. |
+| `showOnHover` | string | Visible only while an element whose group equals this value is hovered (slide hover type reveal). |
+| `sizing` | object → [sizing](#sizing) | Inside a frame: fill takes the frame's free space on that axis; absent = fixed. |
+| `strokeHidden` | boolean | The stroke is switched off but kept. |
+| `themeRefs` | map of string | Property path → palette slot ("accent1", "accent1 -20%") or design token ("$name"). The literal stays on the element and must equal what the ref resolves to. A token can drive a path under `fill`, `fillGradient`, `fills`, `stroke`, `strokeWidth`, `strokeGradient`, `strokes`, `strokeDashes`, `radius`, `radii`, `opacity`, `color`, `colorGradient`, `textStroke`, `fontSize`, `fontFamily`, `fontWeight`, `letterSpacing`, `lineHeight`, `shadow`, `blur`, `backdropFilter`, `layout`, `w`, `h`, `style`. |
+| `type` | `"text"` **required** | The element type. |
+| `w` | number | Width in slide px. |
+| `x` | number | Left edge in slide px. |
+| `y` | number | Top edge in slide px. |
+
+### Element: `text`
+
+Its own keys, beside the ones [every element](#every-element) has.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `align` | `left`, `center`, `right` | Horizontal alignment. |
+| `color` | colour | Text colour. |
+| `colorGradient` | object → [Gradient](#gradient) | A gradient painted into the glyphs; wins over color. |
+| `fontFamily` | string | CSS font stack. Omit it in a full document and the box follows theme.fontFamily. |
+| `fontSize` | number | Font size in px. |
+| `fontWeight` | number | CSS font weight (400 regular, 700 bold). |
+| `html` | string **required** | The text as sanitized HTML. Inline b strong i em u s code br span a, blocks p div h1 h2 ul ol li; attributes stripped except an http(s) href. $…$ and $$…$$ are maths; {{page}} and friends resolve at render. |
+| `letterSpacing` | number | Tracking in px. |
+| `lineHeight` | number 0–100 | Line height as a multiple of the font size. |
+| `placeholder` | string | Dimmed prompt shown in the editor while html is empty; the element is hidden in the show and print while empty. |
+| `textStroke` | object → [textStroke](#textstroke) | Outline glyphs; fill "none" makes them hollow. |
+| `valign` | `top`, `middle`, `bottom` | Vertical alignment inside the box. |
+
+### Element: `shape`
+
+Its own keys, beside the ones [every element](#every-element) has.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `bool` | object → [bool](#bool) | A vector boolean: d/pathBox hold the computed outline; the operands ride along for re-editing. |
+| `d` | string | Path only: SVG path data in pathBox coordinates. |
+| `fill` | colour **required** | Fill colour; on a line, the line's colour. Mirrors the top layer when fills is set. |
+| `fillGradient` | object → [Gradient](#gradient) | Gradient fill; wins over fill, which stays as the solid fallback. |
+| `fills` | array → [fills[] layer](#fills-layer) | Fill stack, bottom first (two or more layers). When set, fill/fillGradient mirror the top visible layer. |
+| `from` | object → [from / to](#from--to) | Connector start: follows an element's border (line or path only). |
+| `heads` | `2` | Arrow only: 2 puts a head at both ends. |
+| `layout` | object → [layout (frame)](#layout-frame) | Makes a rect a frame that lays out the elements whose parentId names it. |
+| `lineEnd` | `none`, `arrow`, `dot`, `bar`, `arrow-open`, `triangle`, `triangle-open`, `diamond`, `diamond-open`, `square`, `circle-open` | Tip at a line's or open path's end. |
+| `lineStart` | `none`, `arrow`, `dot`, `bar`, `arrow-open`, `triangle`, `triangle-open`, `diamond`, `diamond-open`, `square`, `circle-open` | Tip at a line's or open path's start. |
+| `pathBox` | [4 numbers] | Path only: [x, y, w, h] viewBox the path was drawn in, stretched into the element box. |
+| `radii` | [4 numbers] | Per-corner radius [top-left, top-right, bottom-right, bottom-left], rect only; wins over radius. |
+| `radius` | number | Corner radius, rect only. |
+| `shape` | `rect`, `ellipse`, `triangle`, `arrow`, `line`, `path` **required** | Which shape. |
+| `stroke` | colour | Outline colour ("transparent" or "none" for none). |
+| `strokeAlign` | `inside`, `center`, `outside` | Where the stroke sits on the outline. Absent = inside on rect, ellipse, triangle; centred on arrow and path. |
+| `strokeDash` | number | Legacy dash length, px; strokeStyle wins. |
+| `strokeDashes` | [2 numbers] | [dash, gap] in px; wins over strokeStyle. |
+| `strokeGradient` | object → [Gradient](#gradient) | Gradient along the stroke; wins over stroke (a line's fill). |
+| `strokeStyle` | `solid`, `dashed`, `dotted` | Stroke pattern; dash-march loops need dashed or dotted. |
+| `strokeWidth` | number | Outline width, px. |
+| `strokes` | array → [strokes[] layer](#strokes-layer) | Stroke stack, bottom first (two or more layers). When set, stroke/strokeWidth/strokeAlign/strokeDashes mirror the top visible layer. |
+| `to` | object → [from / to](#from--to) | Connector end: follows an element's border (line or path only). |
+
+### Element: `image`
+
+Its own keys, beside the ones [every element](#every-element) has.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `crop` | object → [crop](#crop) | Pan and zoom inside the frame. Absent = fit alone. |
+| `fit` | `contain`, `cover`, `fill` | How the picture fills the box. |
+| `radius` | number | Corner radius, px. |
+| `src` | string **required** | data: URI or `asset:<key>`. |
+
+### Element: `svg`
+
+Its own keys, beside the ones [every element](#every-element) has.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `asset` | string | Key into assets holding raw SVG markup (preferred: dedupes). |
+| `css` | string | CSS injected inside the svg, scoped to it (hover states, animations). |
+| `markup` | string | Raw inline SVG markup, used when asset is unset. |
+
+### Element: `chart`
+
+Its own keys, beside the ones [every element](#every-element) has.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `option` | object **required** | ECharts-shaped option as plain JSON, drawn by charts-lite. Bar and line data are plain numbers; template formatters only. |
+| `preset` | string | The panel's re-seed key: bar, line, pie or scatter. |
+| `source` | object → [source](#source) | Live binding: labels and series values track a table element. |
+
+### Element: `table`
+
+Its own keys, beside the ones [every element](#every-element) has.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `columns` | array of { w } **required** | Column weights, normalised at render; one entry per column. |
+| `header` | boolean | Row 0 is a styled header row. |
+| `rows` | array → [Table rows[]](#table-rows) **required** | The rows, each { cells: [...] }. |
+| `style` | object → [Table style](#table-style) | The table-wide look; cells carry only overrides. |
+
+### Element: `media`
+
+Its own keys, beside the ones [every element](#every-element) has.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `autoplay` | boolean | Starts on arrival, in the show only; video needs muted. |
+| `controls` | boolean | Shows the player controls. |
+| `fit` | `contain`, `cover`, `fill` | Video only: how the frame fills the box. |
+| `kind` | `video`, `audio` **required** | video or audio. |
+| `loop` | boolean | Restarts at the end. |
+| `muted` | boolean | No sound; required for video autoplay. |
+| `poster` | string | Video only: still shown before playback. |
+| `radius` | number | Corner radius, px. |
+| `src` | string **required** | data: URI (embedded), URL or relative path (referenced), or `asset:<key>`. |
+
+### Element: `embed`
+
+Its own keys, beside the ones [every element](#every-element) has.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `app` | string | The app that made it (bento/dash, bento/type …), or web for a page. |
+| `doc` | string or object | The source: plain JSON or `asset:<key>`. |
+| `live` | boolean | Opt in to a sandboxed live frame over the view while online. |
+| `url` | string | app web only: the http(s) page a live frame loads. |
+| `view` | string | The static render that always paints: raw `<svg>` markup or `asset:<key>`. Required in practice. |
+
+### Element: `code`
+
+Its own keys, beside the ones [every element](#every-element) has.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `align` | `left`, `center`, `right` | Horizontal alignment. |
+| `color` | colour | Base text colour before token colours apply. |
+| `content` | string | The source text, plain (not HTML). |
+| `fontFamily` | string | CSS font stack. Absent = theme.codeFontFamily, then theme.fontFamily. |
+| `fontSize` | number | Font size in px. |
+| `grammarAssetId` | string | Reserved: a grammar carried as a deck asset. Not used by the current shell. |
+| `grammarName` | string | The language that colours it. Absent = js. Built in: `js`, `ts`, `py`, `rust`, `go`, `java`, `sh`, `sql`, `c`, `cpp`, `csharp`, `kotlin`, `swift`, `scala`, `dart`, `zig`, `php`, `ruby`, `perl`, `lua`, `r`, `julia`, `powershell`, `haskell`, `elixir`, `erlang`, `clojure`, `ocaml`, `fsharp`, `json`, `yaml`, `toml`, `ini`, `xml`, `html`, `css`, `graphql`, `proto`, `dockerfile`, `makefile`, `asm`, `elm`, `nim`, `crystal`, `solidity`, `hcl`, `nix`, `matlab`, `fortran`, `pascal`, `groovy`, `verilog`, `vhdl`, `latex`, `objc`, `scheme`, `lisp`, `prolog`, `ada`, `d`, `gleam`, `batch`, `awk`, `tcl`, `vb`, `scss`, `nginx`, `jinja`, `sparql`, `cypher`, `fish`, `apex`, `purescript`, `odin`, `zsh`, `diff`, `patch`, `md`, `markdown`; anything else is coloured as `js`. |
+| `lineHeight` | number 0–100 | Line height as a multiple of the font size. |
+| `themeAssetId` | string | Reserved: a colour theme carried as a deck asset. Not used by the current shell. |
+| `themeName` | string | Reserved: a named colour theme. Token colours come from theme.codePalette. |
+| `valign` | `top`, `middle`, `bottom` | Vertical alignment inside the box. |
+
+### `component`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `id` | string **required** | The component; every element of the main and of each copy carries it. |
+| `key` | string **required** | Pairs a copy's element with its counterpart in the main. |
+| `main` | `true` | Marks the main's elements. |
+| `off` | [2 numbers] | A copy's [dx, dy] offset from its main, written by the app. |
+| `over` | array of string | A copy's own overrides: the keys it does not take from the main. |
+| `sig` | string | Hash of the main state a copy last followed, written by the app. Omit it: without it a copy's differences count as overrides. |
+
+### `fx`
+
+Presentation effects. They run while presenting only.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `ambient` | `kenburns` | Continuous ambient motion: kenburns, for full-bleed photos. |
+| `countUp` | boolean | Animate the numbers in the text from 0. |
+| `enter` | `fade-up`, `fade`, `fade-down`, `slide-left`, `slide-right`, `slide-up`, `slide-down` | Entrance animation when the slide shows. Skipped for an element that morphs in from the previous slide. |
+| `enterDur` | number | Entrance duration in seconds. Absent = 0.75 for slide-*, 0.55 for fade-*. |
+| `ken` | object → [fx.ken](#fxken) | Ken-burns tuning. |
+| `loop` | object → [fx.loop](#fxloop) | A continuous loop: dash-march or motion-path. |
+| `order` | number | Stagger order in the entrance sequence; equal values enter together. |
+| `step` | number | Click build: 1 or more hides the element until the n-th → reveals it (with its enter, or a fade). Absent/0 = shown with the slide. |
+| `typeWriter` | boolean | Code only: the text types in a character at a time when it appears. |
+
+### `fx.ken`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `dir` | `drift`, `out`, `in` | drift (default) loops a slow zoom; out and in play once per arrival. |
+| `duration` | number | Seconds. |
+| `scale` | number 0–100 | The far end of the zoom, e.g. 1.08. |
+
+### `fx.loop`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `delay` | number | motion-path: seconds before the first lap. |
+| `distance` | number | dash-march: px the dashes travel per lap. |
+| `duration` | number | Seconds per lap (required for motion-path). |
+| `ease` | string | motion-path: easing over each lap. Default none (constant tempo). |
+| `path` | string | motion-path: SVG path data relative to the element's resting position (the first anchor is where it sits). |
+| `speeds` | array of number | motion-path: one speed multiplier per anchor (1 normal, below 1 dwells, above 1 rushes). |
+| `type` | `dash-march`, `motion-path` **required** | dash-march marches a dashed stroke; motion-path moves the element along path. |
+
+### `shadow`
+
+One shadow, or an array of them (they stack).
+
+| Key | Type | Meaning |
+|---|---|---|
+| `blur` | number **required** | Blur radius, px. |
+| `color` | colour **required** | Shadow colour (rgba for softness). |
+| `x` | number | Horizontal offset, px. |
+| `y` | number | Vertical offset, px. |
+
+### Gradient
+
+The shape of `fillGradient`, `strokeGradient`, `colorGradient` and a paint layer's `gradient`.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `angle` | number | Degrees, CSS convention: 0 = bottom→top, 90 = left→right. |
+| `cx` | number -10–10 | Radial centre x as a fraction of the box. Default 0.5. |
+| `cy` | number -10–10 | Radial centre y as a fraction of the box. Default 0.5. |
+| `kind` | `radial` | radial: stops run from (cx, cy) out to r. Absent = linear. |
+| `r` | number 0–100 | Radial radius as a fraction of the box. Default 0.5. |
+| `stops` | array of { at, color } **required** | Ordered stops { at: 0..1, color }. |
+
+### `fills[]` layer
+
+| Key | Type | Meaning |
+|---|---|---|
+| `blend` | `multiply`, `screen`, `overlay`, `darken`, `lighten`, `color-dodge`, `color-burn`, `hard-light`, `soft-light`, `difference`, `exclusion`, `hue`, `saturation`, `color`, `luminosity` | How the layer mixes with what lies beneath it. Absent = normal. |
+| `color` | colour **required** | The layer's colour; with a gradient, its solid fallback. |
+| `gradient` | object → [Gradient](#gradient) | A gradient for this layer. |
+| `hidden` | boolean | Kept but not drawn. |
+
+### `strokes[]` layer
+
+| Key | Type | Meaning |
+|---|---|---|
+| `align` | `inside`, `center`, `outside` | Where the stroke sits on the outline. |
+| `blend` | `multiply`, `screen`, `overlay`, `darken`, `lighten`, `color-dodge`, `color-burn`, `hard-light`, `soft-light`, `difference`, `exclusion`, `hue`, `saturation`, `color`, `luminosity` | How the layer mixes with what lies beneath it. Absent = normal. |
+| `color` | colour **required** | The layer's colour; with a gradient, its solid fallback. |
+| `dashes` | [2 numbers] | [dash, gap] in px. |
+| `gradient` | object → [Gradient](#gradient) | A gradient along the stroke. |
+| `hidden` | boolean | Kept but not drawn. |
+| `width` | number **required** | Stroke width, px. |
+
+### `from` / `to`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `el` | string **required** | Id of the element this end follows, on the same slide. |
+| `side` | `auto`, `top`, `right`, `bottom`, `left` | Which border to attach to; auto picks the nearest. |
+
+### `layout` (frame)
+
+| Key | Type | Meaning |
+|---|---|---|
+| `align` | `start`, `center`, `end`, `stretch` | Cross-axis alignment; stretch fills it. Default start. |
+| `clip` | boolean | Children are clipped to the frame. |
+| `cols` | number 1–64 | Grid only: number of columns. Default 2. |
+| `dir` | `row`, `col`, `grid` **required** | Main axis: row, col, or a grid of equal cells. |
+| `gap` | number **required** | Space between children, px. |
+| `hug` | boolean | The frame sizes itself to its children. |
+| `justify` | `start`, `center`, `end`, `space-between` | Main-axis distribution. Default start. |
+| `pad` | [4 numbers] **required** | Padding inside the frame [top, right, bottom, left], px. |
+| `wrap` | boolean | Row/col only: a child that would pass the edge starts a new line. |
+
+### `sizing`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `h` | `fixed`, `fill` | fill takes the frame's free height; fixed (or absent) keeps h. |
+| `minH` | number | In a wrapping frame, the least height a fill child counts as when lines break. |
+| `minW` | number | In a wrapping frame, the least width a fill child counts as when lines break. |
+| `w` | `fixed`, `fill` | fill takes the frame's free width; fixed (or absent) keeps w. |
+
+### `bool`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `op` | `union`, `subtract`, `intersect`, `exclude` **required** | The operation. |
+| `shapes` | array of { align, alt, backdropFilter, blend, blur, blurHidden, color, colorGradient, component, fillHidden, flipX, flipY, fontFamily, fontSize, fontWeight, fx, group, groupId, groupName, h, hidden, html, id, keepAspectRatio, letterSpacing, lineHeight, link, locked, morphId, name, opacity, parentId, placeholder, role, rotation, shadow, shadowHidden, showOnHover, sizing, strokeHidden, textStroke, themeRefs, type, valign, w, x, y } or { alt, backdropFilter, blend, blur, blurHidden, bool, component, d, fill, fillGradient, fillHidden, fills, flipX, flipY, from, fx, group, groupId, groupName, h, heads, hidden, id, keepAspectRatio, layout, lineEnd, lineStart, link, locked, morphId, name, opacity, parentId, pathBox, radii, radius, role, rotation, shadow, shadowHidden, shape, showOnHover, sizing, stroke, strokeAlign, strokeDash, strokeDashes, strokeGradient, strokeHidden, strokeStyle, strokeWidth, strokes, themeRefs, to, type, w, x, y } or { alt, backdropFilter, blend, blur, blurHidden, component, crop, fillHidden, fit, flipX, flipY, fx, group, groupId, groupName, h, hidden, id, keepAspectRatio, link, locked, morphId, name, opacity, parentId, radius, role, rotation, shadow, shadowHidden, showOnHover, sizing, src, strokeHidden, themeRefs, type, w, x, y } or { alt, asset, backdropFilter, blend, blur, blurHidden, component, css, fillHidden, flipX, flipY, fx, group, groupId, groupName, h, hidden, id, keepAspectRatio, link, locked, markup, morphId, name, opacity, parentId, role, rotation, shadow, shadowHidden, showOnHover, sizing, strokeHidden, themeRefs, type, w, x, y } or { alt, backdropFilter, blend, blur, blurHidden, component, fillHidden, flipX, flipY, fx, group, groupId, groupName, h, hidden, id, keepAspectRatio, link, locked, morphId, name, opacity, option, parentId, preset, role, rotation, shadow, shadowHidden, showOnHover, sizing, source, strokeHidden, themeRefs, type, w, x, y } or { alt, backdropFilter, blend, blur, blurHidden, columns, component, fillHidden, flipX, flipY, fx, group, groupId, groupName, h, header, hidden, id, keepAspectRatio, link, locked, morphId, name, opacity, parentId, role, rotation, rows, shadow, shadowHidden, showOnHover, sizing, strokeHidden, style, themeRefs, type, w, x, y } or { alt, autoplay, backdropFilter, blend, blur, blurHidden, component, controls, fillHidden, fit, flipX, flipY, fx, group, groupId, groupName, h, hidden, id, keepAspectRatio, kind, link, locked, loop, morphId, muted, name, opacity, parentId, poster, radius, role, rotation, shadow, shadowHidden, showOnHover, sizing, src, strokeHidden, themeRefs, type, w, x, y } or { alt, app, backdropFilter, blend, blur, blurHidden, component, doc, fillHidden, flipX, flipY, fx, group, groupId, groupName, h, hidden, id, keepAspectRatio, link, live, locked, morphId, name, opacity, parentId, role, rotation, shadow, shadowHidden, showOnHover, sizing, strokeHidden, themeRefs, type, url, view, w, x, y } or { align, alt, backdropFilter, blend, blur, blurHidden, color, component, content, fillHidden, flipX, flipY, fontFamily, fontSize, fx, grammarAssetId, grammarName, group, groupId, groupName, h, hidden, id, keepAspectRatio, lineHeight, link, locked, morphId, name, opacity, parentId, role, rotation, shadow, shadowHidden, showOnHover, sizing, strokeHidden, themeAssetId, themeName, themeRefs, type, valign, w, x, y } **required** | The operand shapes, bottom first, in slide coordinates as they were when combined. |
+
+### `textStroke`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `color` | colour **required** | Outline colour. |
+| `fill` | colour | Glyph interior; "none" for hollow letters. Absent = the text colour. |
+| `width` | number **required** | Outline width, px. |
+
+### `crop`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `scale` | number 1–64 **required** | Zoom beyond cover-fit, 1 or more. |
+| `x` | number 0–1 **required** | Which edge of the enlarged picture the frame aligns to horizontally: 0 left, 0.5 centre, 1 right. |
+| `y` | number 0–1 **required** | Vertical alignment the same way: 0 top, 1 bottom. |
+
+### `source`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `tableId` | string **required** | The table element's id on the same slide. |
+
+### Table `style`
+
+Also the shape of `theme.table`, where every key is optional.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `borderColor` | colour | Cell border colour. |
+| `borderWidth` | number | Cell border width, px. |
+| `cellPadX` | number | Horizontal cell padding, px. |
+| `cellPadY` | number | Vertical cell padding, px. |
+| `color` | colour | Body cell text colour. |
+| `fontFamily` | string | Cell font stack. Absent = theme.fontFamily. |
+| `fontSize` | number | Cell font size, px. |
+| `headerBg` | colour | Header row background. |
+| `headerColor` | colour | Header row text colour. |
+| `radius` | number | Outer corner radius, px. |
+| `zebra` | colour | Stripe colour for alternate body rows. Absent = no stripes. |
+
+### Table `rows[]`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `cells` | array → [Table cells[]](#table-cells) **required** | The row's cells, one per column. |
+
+### Table `cells[]`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `align` | `left`, `center`, `right` | Horizontal alignment in the cell. |
+| `bg` | colour | Background override. |
+| `bold` | boolean | Bold override. |
+| `color` | colour | Text colour override. |
+| `html` | string | Cell content: the same sanitized subset as text html. |
+<!-- /generated -->
