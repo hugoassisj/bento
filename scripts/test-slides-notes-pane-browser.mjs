@@ -65,10 +65,7 @@ try {
     const hit = document.elementsFromPoint(t.left + t.width / 2, t.top + t.height / 2)[0]
     const clash = ['.ed-present-pill', '.ed-zoombar'].map((s) => [s, r(s)]).filter(([, q]) => q && t.left < q.right && q.left < t.right && t.top < q.bottom && q.top < t.bottom).map(([s]) => s)
     return { pane: r('.ed-notespane').height, canvas: r('.ed-centre > .ed-canvas-wrap').height, centre: r('.ed-centre'), wrap: r('.ed-canvas-wrap'), row: r('.ed-corner-br'),
-      btn: t, pill: r('.ed-present-pill'), zoom: r('.ed-zoombar'), onTop: btn.contains(hit), clash,
-      // the Check deck chip, when the deck has findings, leads the row; the toggle comes next
-      chip: !!document.querySelector('.ed-check-chip:not([hidden])'),
-      first: ((kids) => kids[0] === btn || (kids[0]?.classList.contains('ed-check-chip') && kids[1] === btn))([...row.children].filter((k) => !k.hidden)),
+      btn: t, pill: r('.ed-present-pill'), zoom: r('.ed-zoombar'), onTop: btn.contains(hit), clash, first: row.firstElementChild === btn,
       shown: getComputedStyle(btn).visibility === 'visible', expanded: btn.getAttribute('aria-expanded'), tag: btn.tagName, name: btn.getAttribute('aria-label'),
       controls: !!btn.getAttribute('aria-controls') && btn.getAttribute('aria-controls') === document.querySelector('.ed-notespane').id,
       // the dot is a pseudo-element: read whether it is DRAWN, and what the description says
@@ -83,8 +80,28 @@ try {
     q.on('pageerror', (e) => errors.push(e.message))
     await q.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
     await q.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-notespane')); await q.waitForTimeout(500)
+    // A deck with nothing for Check deck to report, so the cluster is the
+    // notes decision's own [notes] [Slideshow] [zoom]: the starter, on a base
+    // where it still has findings, would add the chip. Slide 1 keeps notes
+    // (the dot). Waits for the check the load starts, so no stale chip.
+    await loadDeck(q, CLEAN)
     return [c, q]
   }
+  /** load a deck, and wait for Check deck's run on it to finish */
+  const loadDeck = (q, slides) => q.evaluate(async (slides) => {
+    const before = Number(document.querySelector('#ed-check')?.dataset.runs || 0)
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    d.slides = slides
+    window.bento.loadDoc(JSON.stringify(d))
+    for (let i = 0; i < 100 && Number(document.querySelector('#ed-check')?.dataset.runs || 0) <= before; i++) await new Promise((r) => setTimeout(r, 50))
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  }, slides)
+  const CLEAN = [
+    { id: 'c1', background: '#ffffff', notes: 'First slide notes', elements: [{ id: 'cb', type: 'shape', shape: 'rect', x: 200, y: 200, w: 300, h: 200, rotation: 0, opacity: 1, fill: '#5E7699' }] },
+    { id: 'c2', background: '#ffffff', notes: '', elements: [] },
+  ]
+  // the same, with a text box too short for its words: one warning
+  const FINDINGS = [{ ...CLEAN[0], elements: [...CLEAN[0].elements, { id: 'ct', type: 'text', x: 200, y: 450, w: 300, h: 30, rotation: 0, opacity: 1, html: '<p>Far too many words for a box only thirty pixels tall, surely</p>', fontSize: 24, color: '#1E2A3A' }] }, CLEAN[1]]
   for (const [w, h] of [[1440, 900], [390, 844]]) {
     const [c, q] = await fresh(w, h)
     const g = await geom(q)
@@ -95,10 +112,7 @@ try {
       `${w}px: at the head of the bottom-end cluster, on the pills' line, 10px before Slideshow (${Math.round(g.pill.left - g.btn.right)}px; tops ${g.btn.top} / ${g.pill.top})`)
     ok(g.wrap.right - g.row.right < 40 && g.wrap.bottom - g.row.bottom < 40, `${w}px: the cluster is the canvas's bottom-end corner (${Math.round(g.wrap.right - g.row.right)}px in, ${Math.round(g.wrap.bottom - g.row.bottom)}px up)`)
     ok(!g.clash.length && g.row.left >= g.wrap.left && g.row.right <= g.wrap.right, `${w}px: clear of the Slideshow and zoom pills, the whole row inside the canvas (${g.clash.join(', ') || 'clear'}; row ${Math.round(g.row.left)}–${Math.round(g.row.right)} in ${Math.round(g.wrap.left)}–${Math.round(g.wrap.right)})`)
-    // a deck with findings adds the Check deck chip to the row; where that
-    // leaves no room, Slideshow drops its word by the same measured rule
-    if (!g.chip) ok(!g.tight && g.word > 20, `${w}px: with room for the row, Slideshow keeps its word (${g.word.toFixed(1)}px)`)
-    else ok(g.tight === (g.word <= 1) && g.row.left >= g.wrap.left, `${w}px: with the Check deck chip in the row, Slideshow keeps its word only where the row has room (${g.word.toFixed(1)}px, tight ${g.tight})`)
+    ok(!g.tight && g.word > 20, `${w}px: with room for the row, Slideshow keeps its word (${g.word.toFixed(1)}px)`)
     const sizes = [g.btn.height, g.pill.height, g.zoom.height]
     ok(sizes.every((x) => Math.abs(x - 32) < 0.5) && Math.abs(g.btn.width - 32) < 0.5, `${w}px: the toggle is a circle as tall as the Slideshow and zoom pills (${g.btn.width}×${sizes.join(' / ')}px)`)
     ok(g.dot && g.says === 'This slide has notes' && g.title === 'Show speaker notes · This slide has notes', `${w}px: its dot says the slide has notes, and so do its description and its tooltip (dot ${g.dot}, "${g.says}", "${g.title}")`)
@@ -141,9 +155,27 @@ try {
     ok(Math.abs(g.btn.top - g.pill.top) < 1 && Math.abs(g.btn.height - g.pill.height) < 0.5, `320px: on one line (tops ${g.btn.top} / ${g.pill.top})`)
     await q.setViewportSize({ width: 390, height: 844 }); await q.waitForTimeout(300)
     const back = await geom(q)
-    if (!back.chip) ok(!back.tight && back.word > 20, `and at 390px the word is back (${back.word.toFixed(1)}px)`)
-    else ok(back.tight === (back.word <= 1) && back.row.left >= back.wrap.left, `and at 390px, with the Check deck chip in the row, the row still fits (${back.word.toFixed(1)}px, tight ${back.tight})`)
+    ok(!back.tight && back.word > 20, `and at 390px the word is back (${back.word.toFixed(1)}px)`)
     await c.close()
+  }
+  {
+    // a deck WITH findings puts the Check deck chip at the head of the row; the
+    // row refits when the chip comes and goes, and stays one row in the canvas
+    for (const [w, h] of [[390, 844], [375, 812], [360, 740], [320, 568]]) {
+      const [c, q] = await fresh(w, h)
+      await loadDeck(q, FINDINGS)
+      const g = await geom(q)
+      const chip = await q.evaluate(() => { const r = document.querySelector('.ed-check-chip')?.getBoundingClientRect(); return r ? { w: r.width, top: r.top } : null })
+      ok(chip && chip.w > 20 && Math.abs(chip.top - g.pill.top) < 1, `${w}px with findings: the Check deck chip shows, on the pills' line (${chip && Math.round(chip.w)}px wide)`)
+      ok(g.row.left >= g.wrap.left && g.row.right <= g.wrap.right && !g.clash.length && g.onTop && Math.abs(g.btn.top - g.pill.top) < 1,
+        `${w}px with findings: the whole row stays one row inside the canvas (row ${Math.round(g.row.left)}–${Math.round(g.row.right)} in ${Math.round(g.wrap.left)}–${Math.round(g.wrap.right)}, tight ${g.tight})`)
+      await loadDeck(q, CLEAN)
+      const back = await geom(q)
+      const gone = await q.evaluate(() => { const ch = document.querySelector('.ed-check-chip'); return !ch || ch.getBoundingClientRect().width === 0 })
+      ok(gone && back.first && back.row.left >= back.wrap.left && (w < 390 || (!back.tight && back.word > 20)),
+        `${w}px clean again: the chip goes and the row refits (${w >= 390 ? `word ${back.word.toFixed(1)}px, ` : ''}tight ${back.tight})`)
+      await c.close()
+    }
   }
   {
     // the fold animates mid-way; reduced motion snaps; the keyboard lands in the notes

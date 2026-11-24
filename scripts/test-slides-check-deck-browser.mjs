@@ -65,23 +65,36 @@ try {
   await p.waitForFunction(() => document.querySelector('#ed-check')?.dataset.runs, null, { timeout: 5000 })
 
   const runs = () => p.evaluate(() => Number(document.querySelector('#ed-check').dataset.runs || 0))
+  // measured, not read back: what the page DRAWS (a button whose [hidden] a
+  // display rule overrides still takes room and a tab stop), and whether
+  // anything in the cluster is a focusable chip at all
   const chip = () => p.evaluate(() => {
-    const c = document.querySelector('.ed-check-chip')
-    return { shown: !!c && !c.hidden && c.offsetParent !== null, name: c?.getAttribute('aria-label'), text: c?.textContent }
+    const c = document.querySelector('.ed-corner-br .ed-check-chip')
+    const r = c?.getBoundingClientRect()
+    return { shown: !!r && r.width > 0 && r.height > 0 && getComputedStyle(c).display !== 'none', name: c?.getAttribute('aria-label'), text: c?.textContent }
   })
-  /** load a deck and wait for the check that follows it (closed: once things settle) */
+  /** load a deck and wait for the check that follows it (a replaced deck re-checks at once) */
+  let lastLoadMs = 0
   const load = async (json) => {
     const before = await runs()
+    const t0 = Date.now()
     await p.evaluate((j) => window.bento.loadDoc(j), json)
     await p.waitForFunction((n) => Number(document.querySelector('#ed-check').dataset.runs) > n, before, { timeout: 6000 })
+    lastLoadMs = Date.now() - t0
     await p.waitForTimeout(50)
   }
   const panelRows = () => p.evaluate(() => [...document.querySelectorAll('#ed-check .ed-check-jump')]
     .filter((b) => b.offsetParent).map((b) => ({ where: b.querySelector('.ed-check-where')?.textContent, what: b.querySelector('.ed-check-what')?.textContent, key: b.dataset.key })))
   const openPanel = async () => {
     if (!(await p.evaluate(() => !document.querySelector('#ed-check').hidden))) {
-      const box = await p.locator('.ed-check-chip').boundingBox()
-      await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+      if ((await chip()).shown) {
+        const box = await p.locator('.ed-corner-br .ed-check-chip').boundingBox()
+        await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+      } else {
+        // no chip without errors or warnings: the File menu is the way in
+        await clickIn('.ed-logo')
+        await p.locator('.ed-file.open .ed-menu-row[data-cmd="check-deck"]').click()
+      }
     }
     await p.waitForSelector('#ed-check:not([hidden])')
   }
@@ -101,7 +114,9 @@ try {
   // 4. a clean deck --------------------------------------------------------
   console.log('clean deck')
   await load(CLEAN)
-  ok(!(await chip()).shown, 'a clean deck shows no chip')
+  ok(!(await chip()).shown, 'a clean deck shows no chip (nothing drawn in the cluster)')
+  ok(lastLoadMs < 1500, `a loaded deck is re-checked at once, not after the 2s settle (${lastLoadMs}ms)`)
+  ok(await p.evaluate(() => [...document.querySelectorAll('.ed-corner-br button')].every((b) => b.getBoundingClientRect().width > 0 && b.getAttribute('aria-label') !== null || b.textContent.trim())), 'no empty or unnamed button is left in the cluster')
   // opened from the File menu, as a person finds it
   await clickIn('.ed-logo')
   const fileItem = p.locator('.ed-file.open .ed-menu-row[data-cmd="check-deck"]')
@@ -158,6 +173,8 @@ try {
   // Delete pressed in the panel is the panel's, never the selected table's
   await p.keyboard.press('Delete')
   ok(await p.evaluate(() => window.bento.doc.slides[1].elements.some((e) => e.id === 'tbl')), 'Delete pressed in the panel does not delete the element it selected')
+  await p.keyboard.press('Control+Backspace')
+  ok(await p.evaluate(() => window.bento.doc.slides[1].elements.some((e) => e.id === 'tbl')), 'nor does Ctrl+Backspace')
 
   // 3. Fit box to rows + undo
   const hBefore = await elH('tbl')
@@ -240,6 +257,29 @@ try {
   const esc = await p.evaluate(() => ({ hidden: document.querySelector('#ed-check').hidden, focus: document.activeElement?.classList.contains('ed-check-chip'), expanded: document.querySelector('.ed-check-chip').getAttribute('aria-expanded') }))
   ok(esc.hidden && esc.focus && esc.expanded === 'false', `Escape closes the panel and returns focus to the chip (${JSON.stringify(esc)})`)
   ok(k.sel.length === 1 && (await p.evaluate(() => window.bento.selection))[0] === 'k2', 'Escape in the panel did not also clear the canvas selection')
+  // Home / End
+  await p.evaluate(() => document.querySelector('.ed-check-chip').focus())
+  await p.keyboard.press('Enter')
+  await p.waitForSelector('#ed-check:not([hidden])')
+  await p.keyboard.press('End')
+  const endKey = await p.evaluate(() => { const r = [...document.querySelectorAll('#ed-check .ed-check-jump')].filter((b) => b.offsetParent); return document.activeElement === r[r.length - 1] && r.length > 1 })
+  await p.keyboard.press('Home')
+  const homeKey = await p.evaluate(() => document.activeElement === [...document.querySelectorAll('#ed-check .ed-check-jump')].find((b) => b.offsetParent))
+  ok(endKey && homeKey, 'End and Home go to the last and first row')
+  // a row's jump, then a click on the canvas: the keys are the canvas's again
+  await clickIn('#ed-check .ed-check-row[data-code="text-overflow"] .ed-check-jump')
+  await p.waitForTimeout(150)
+  const selId = (await p.evaluate(() => window.bento.selection))[0]
+  const elBox = await p.locator(`.ed-stage-scale [data-el-id="${selId}"]`).boundingBox()
+  await p.mouse.click(elBox.x + elBox.width / 2, elBox.y + elBox.height / 2)
+  await p.waitForTimeout(150)
+  const x0 = await p.evaluate((id) => window.bento.doc.slides.flatMap((s) => s.elements).find((e) => e.id === id).x, selId)
+  await p.keyboard.press('ArrowRight')
+  await p.waitForTimeout(100)
+  const x1 = await p.evaluate((id) => window.bento.doc.slides.flatMap((s) => s.elements).find((e) => e.id === id).x, selId)
+  const nudge = await p.evaluate(() => ({ open: !document.querySelector('#ed-check').hidden, inPanel: !!document.activeElement?.closest('#ed-check') }))
+  ok(nudge.open && !nudge.inPanel && x1 === x0 + 1, `after a row jump, a click on the canvas gives the keys back: → nudges the element (x ${x0} → ${x1}), the panel still open`)
+  await closePanel()
 
   // 7. Replace from JSON opens the panel on what the load brought in ------------
   console.log('replace from JSON')
