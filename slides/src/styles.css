@@ -2010,6 +2010,44 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .bento-present-toast.show { opacity: 1; }
 
+/* the show's ? sheet: the keys of the show (present.ts SHOW_KEYS); any key or
+   click closes it. Above the blackout, so a presenter on one screen can read it. */
+.bento-show-keys {
+  position: absolute;
+  inset: 0;
+  z-index: 62;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.55);
+  font: 14px/1.4 system-ui, sans-serif;
+}
+.bento-show-keys-box {
+  max-width: min(640px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: rgb(20 30 45 / 0.95);
+  color: #f2f0ea;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.5);
+  outline: none;
+}
+.bento-show-keys h2 { margin: 0 0 10px; font-size: 17px; font-weight: 650; }
+.bento-show-keys table { border-collapse: collapse; }
+.bento-show-keys td { padding: 5px 0; vertical-align: top; }
+.bento-show-keys td:first-child { padding-inline-end: 20px; white-space: nowrap; }
+.bento-show-keys kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-inline-end: 4px;
+  padding: 1px 6px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: 5px;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+}
+
 /* --- live broadcast, audience side ------------------------------------- */
 /* Follow chip: the viewer's toggle (browse ⇄ follow); disabled under lock. */
 .bento-follow-chip {

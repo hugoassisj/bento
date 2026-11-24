@@ -11,6 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Press ? while presenting to see the show's keys.** A sheet lists every
+  key the slideshow answers to, in your language: next and previous, first and
+  last slide, speaker view, fullscreen, black screen, laser pointer, reduced
+  motion and Esc. Shift+/ (?), F1 or H opens it; any key or a click closes it,
+  and the show carries on where it was. Your first slideshow in a browser
+  says once where to find it. Keys the show never offered no longer do
+  anything: / . and V used to dim the slide, and ? opened an English list of
+  keys that mostly did not apply. N and P used to skip reveal steps and land
+  on hidden state slides; they now move exactly like → and ←, and Home and End
+  stay on the slides of the show. O still opens the slide overview.
+
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the

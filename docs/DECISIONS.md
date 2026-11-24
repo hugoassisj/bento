@@ -15396,3 +15396,33 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — The show owns its keyboard; Reveal binds no key
+
+Amends one line of 2026-11-19 ("the overlay stand-in keeps the `?` help").
+
+- **`keyboard: false`, `help: false`** in present.ts's Reveal config. Every
+  key of the audience window goes through one table, `SHOW_KEYS` in
+  present.ts; a key not in it does nothing. Left on, Reveal's defaults dimmed
+  the slide (`/` `.` `V` pause), opened its own English shortcut table on a
+  real Shift+/ (after which Esc ended the whole show), and walked N, P, Home
+  and End past reveal steps and into state slides. Measured on the Showcase
+  before the change: N visited 8, 9, 14 and 15, the state slides → skips.
+- **The `?` sheet is bento's.** `SHOW_KEYS` is also the sheet's source, so it
+  cannot drift from what the keys do; its labels are the editor shortcut
+  sheet's Present rows (editor/shortcuts.ts), so both sheets say the same.
+  Shift+/, `/` with Shift, F1 and H open it; any key or click closes it and
+  does nothing else (Esc included). It is overlay chrome: never streamed to a
+  live audience (only nav/black/laser frames are) and never in the speaker
+  window, whose previews render from the model.
+- **The overlay controller stand-in is now fully inert** (reveal-lite.ts),
+  and reveal.css's `.r-overlay` rules are dropped with it.
+- **O keeps Reveal's overview** from bento's handler (Esc closes it first),
+  unlisted, until the show has a slide grid of its own; the jump-to-slide box
+  (G) is unreachable now that Reveal has no keyboard.
+- **A typed character with Ctrl, ⌘ or Alt is the browser's**: the show no
+  longer answers ⌘S, Ctrl+P, ⌘L and the like with its letter keys. Arrows,
+  PageUp/PageDown, Space and Esc are handled with or without modifiers, as
+  before.
+- `scripts/test-slides-show-keys-browser.mjs` guards all of it with real keys
+  (17 of 43 checks pass on the parent).

@@ -7,8 +7,8 @@
 // Reveal's click-to-preview overlay binds to ANY element carrying a
 // data-preview-* attribute, and a deck's svg keeps data-* names. The overlay
 // is ABSENT from the bundle: slides/reveal-lite.ts builds Reveal from its ES
-// sources and swaps controllers/overlay.js for a stand-in that keeps only the
-// `?` help, and edits the background-iframe branch out of slidecontent.js
+// sources and swaps controllers/overlay.js for an inert stand-in (the show's
+// `?` sheet is present.ts's own), and edits the background-iframe branch out of slidecontent.js
 // (backgrounds.js, its only caller, is a stand-in too). This rig clicks, with a
 // real mouse, every kind of hostile shape through each way a deck arrives:
 // file boot, window.bento.loadDoc, and pasting a bento clip.

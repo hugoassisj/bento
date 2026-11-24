@@ -761,7 +761,12 @@ export function startPresentation(
     // Reveal uses distance < viewDistance; 2 is the minimum that keeps adjacent
     // sections mounted so fade/slide/zoom transitions can animate.
     viewDistance: 2,
-    keyboardCondition: null,
+    // Reveal binds no key: every key of the show is in SHOW_KEYS below, the
+    // one table the handler and the ? sheet both read. Left on, Reveal's own
+    // defaults dimmed the slide (/ . V pause), opened its English shortcut
+    // table, and walked N/P/Home/End past reveal steps and into state slides.
+    keyboard: false,
+    help: false,
     plugins: [],
   })
 
@@ -894,13 +899,17 @@ export function startPresentation(
   // A brief centred pill so a keypress (M) gives visible confirmation — the
   // audience overlay otherwise changes silently.
   let toastTimer = 0
-  const flashPresentMsg = (text: string) => {
+  const flashPresentMsg = (text: string, ms = 1400) => {
     let el = overlay.querySelector<HTMLElement>('.bento-present-toast')
     if (!el) { el = document.createElement('div'); el.className = 'bento-present-toast'; overlay.appendChild(el) }
     el.textContent = text
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show') // restart the fade
     clearTimeout(toastTimer)
-    toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
+    toastTimer = window.setTimeout(() => el!.classList.remove('show'), ms)
+  }
+  const hidePresentMsg = () => {
+    clearTimeout(toastTimer)
+    overlay.querySelector('.bento-present-toast')?.classList.remove('show')
   }
 
   const stopShow = async () => {
@@ -1154,8 +1163,8 @@ export function startPresentation(
     // drive the show FROM the speaker window (its keys fire in its own document)
     d.addEventListener('keydown', (ev: KeyboardEvent) => {
       const k = ev.key
-      if (k === 'ArrowRight' || k === 'PageDown' || k === ' ' || k === 'n') { ev.preventDefault(); goNext() }
-      else if (k === 'ArrowLeft' || k === 'PageUp' || k === 'p') { ev.preventDefault(); goPrev() }
+      if (k === 'ArrowRight' || k === 'PageDown' || k === ' ' || k === 'n' || k === 'N') { ev.preventDefault(); goNext() }
+      else if (k === 'ArrowLeft' || k === 'PageUp' || k === 'p' || k === 'P') { ev.preventDefault(); goPrev() }
       else if (k === 'Home') { ev.preventDefault(); goFirst() }
       else if (k === 'End') { ev.preventDefault(); goLast() }
       else if (k === 'b' || k === 'B') { ev.preventDefault(); toggleBlack() }
@@ -1274,57 +1283,115 @@ export function startPresentation(
     onExit(last)
   }
 
-  // Capture-phase keys: Esc exits; arrows navigate unconditionally. Reveal
-  // drops key events when focus sits in odd places (a leftover form field, a
-  // host-embedded frame) — present mode has no fields, so arrows are always
-  // navigation. Handled here exclusively (stopPropagation avoids double-steps).
+  // ——— the show's keys: ONE table drives the handler and the ? sheet ———
+  // Reveal's own keyboard is off (`keyboard: false`), so a key that is not
+  // here does nothing. `keys` are KeyboardEvent.key values, letters lower
+  // case; a row without a label works but is not listed. The labels are the
+  // editor shortcut sheet's own Present rows, so both sheets say the same.
+  const SHOW_KEYS: Array<{ label?: string; does: Array<[keys: string[], run: (ev: KeyboardEvent) => void]> }> = [
+    { label: 'Previous · next slide, or the next reveal step on a slide that has them',
+      does: [[['ArrowLeft', 'PageUp', 'p'], goPrev], [['ArrowRight', 'PageDown', ' ', 'n'], goNext]] },
+    { label: 'First slide', does: [[['Home'], goFirst]] },
+    { label: 'Last slide', does: [[['End'], goLast]] },
+    { label: 'Speaker view — notes on a second screen if you have one', does: [[['s'], () => openSpeaker()]] },
+    { label: 'Toggle fullscreen while presenting', does: [[['f'], () => toggleFullscreen()]] },
+    { label: 'Black screen — and back', does: [[['b'], () => toggleBlack()]] },
+    { label: 'Toggle laser pointer while presenting', does: [[['l'], (ev) => { if (!ev.repeat) toggleLaser() }]] },
+    { label: 'Reduce motion — pause animations (also honours your OS setting)', does: [[['m'], () => toggleReduceMotion()]] },
+    { label: 'Keyboard shortcuts', does: [[['?', 'F1', 'h'], () => openKeys()]] },
+    { label: 'End the show', does: [[['Escape'], () => exit()]] },
+    // Reveal's overview, kept as it was until the show has a slide grid of its own
+    { does: [[['o'], () => deck.toggleOverview()]] },
+  ]
+  const CAP: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→', ' ': 'Space', Escape: 'Esc' }
+
+  // the ? sheet: local chrome inside the overlay, so it never reaches a live
+  // audience (only nav/black/laser frames do) or the speaker window, whose
+  // previews are rendered from the model
+  let keysSheet: HTMLElement | null = null
+  let keysOpener: Element | null = null
+  const closeKeys = () => {
+    if (!keysSheet) return
+    keysSheet.remove()
+    keysSheet = null
+    const back = keysOpener as HTMLElement | null
+    keysOpener = null
+    if (back?.isConnected && back !== document.body) back.focus?.()
+  }
+  const openKeys = () => {
+    keysOpener = document.activeElement
+    const sheet = keysSheet = document.createElement('div')
+    sheet.className = 'bento-show-keys'
+    // the overlay is pinned LTR (it draws the document); this is chrome
+    sheet.dir = document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'
+    const box = document.createElement('div')
+    box.className = 'bento-show-keys-box'
+    box.setAttribute('role', 'dialog')
+    box.setAttribute('aria-modal', 'true')
+    box.setAttribute('aria-labelledby', 'bento-show-keys-title')
+    box.tabIndex = -1
+    const title = document.createElement('h2')
+    title.id = 'bento-show-keys-title'
+    title.textContent = t('Keyboard shortcuts')
+    const table = document.createElement('table')
+    for (const row of SHOW_KEYS) {
+      if (!row.label) continue
+      const tr = table.insertRow()
+      const keys = tr.insertCell()
+      row.does.forEach(([ks], i) => {
+        if (i) keys.append(' · ')
+        for (const k of ks) keys.appendChild(document.createElement('kbd')).textContent = CAP[k] ?? (k.length === 1 ? k.toUpperCase() : k)
+      })
+      tr.insertCell().textContent = t(row.label)
+    }
+    box.append(title, table)
+    sheet.appendChild(box)
+    // any click closes it, and never reaches a link on the slide underneath
+    sheet.addEventListener('click', (ev) => { ev.stopPropagation(); closeKeys() })
+    overlay.appendChild(sheet)
+    box.focus()
+  }
+
+  // first show in this browser: say once where the keys are (not on an
+  // audience copy, which follows someone else's show)
+  let keysHint = false
+  if (!bc?.audience && !lsGet('bento-show-keys-hint')) {
+    lsSet('bento-show-keys-hint', '1')
+    flashPresentMsg(t('Press ? for keyboard shortcuts'), 5000)
+    keysHint = true
+  }
+
+  // Capture-phase keys, dispatched through SHOW_KEYS. Reveal drops key events
+  // when focus sits in odd places (a leftover form field, a host-embedded
+  // frame) — present mode has no fields, so arrows are always navigation.
+  // Handled here exclusively (stopPropagation avoids double-steps).
   const onKeydown = (ev: KeyboardEvent) => {
-    if (ev.key === 'Escape') {
-      if (deck.isOverview()) return // let Reveal close its overview first
+    const raw = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
+    if (!raw || raw === 'Shift' || raw === 'Control' || raw === 'Alt' || raw === 'Meta') return
+    if (keysHint) { keysHint = false; hidePresentMsg() }
+    if (keysSheet) { // any key closes the sheet, and does nothing else
       ev.preventDefault()
       ev.stopPropagation()
-      exit()
+      closeKeys()
       return
     }
-    if (ev.key === 's' || ev.key === 'S') {
+    // a typed character with Ctrl, ⌘ or Alt is the browser's (print, find…)
+    if (raw.length === 1 && raw !== ' ' && (ev.ctrlKey || ev.metaKey || ev.altKey)) return
+    const key = raw === '/' && ev.shiftKey ? '?' : raw.length === 1 ? raw.toLowerCase() : raw
+    if (key === 'Escape' && deck.isOverview()) { // Esc closes the overview first
       ev.preventDefault()
       ev.stopPropagation()
-      openSpeaker()
+      deck.toggleOverview(false)
       return
     }
-    if (ev.key === 'f' || ev.key === 'F') {
-      ev.preventDefault()
-      ev.stopPropagation()
-      toggleFullscreen()
-      return
-    }
-    if (ev.key === 'm' || ev.key === 'M') {
-      ev.preventDefault()
-      ev.stopPropagation()
-      toggleReduceMotion()
-      return
-    }
-    if (ev.key === 'l' || ev.key === 'L') {
-      ev.preventDefault()
-      ev.stopPropagation()
-      if (!ev.repeat) toggleLaser()
-      return
-    }
-    if (ev.key === 'b' || ev.key === 'B') {
-      ev.preventDefault()
-      ev.stopPropagation()
-      toggleBlack()
-      return
-    }
-    const key = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
-    if (key === 'ArrowRight' || key === 'PageDown' || key === ' ') {
-      ev.preventDefault()
-      ev.stopPropagation()
-      goNext()
-    } else if (key === 'ArrowLeft' || key === 'PageUp') {
-      ev.preventDefault()
-      ev.stopPropagation()
-      goPrev()
+    for (const row of SHOW_KEYS) {
+      for (const [keys, run] of row.does) {
+        if (!keys.includes(key)) continue
+        ev.preventDefault()
+        ev.stopPropagation()
+        run(ev)
+        return
+      }
     }
   }
   document.addEventListener('keydown', onKeydown, true)

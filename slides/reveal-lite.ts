@@ -71,21 +71,12 @@ const STUBS: Record<string, string> = {
     'load(){return Promise.resolve()}hasPlugin(){return false}getRegisteredPlugins(){return{}}' + noop('destroy', 'registerPlugin', 'getPlugin')),
   // The link/image/video preview lightbox is gone: no config switches it off
   // (a data-preview-link attribute binds it even with previewLinks: false) and
-  // it opens an UNSANDBOXED iframe on a click. What stays is the `?` help.
+  // it opens an UNSANDBOXED iframe on a click. Its `?` help went with Reveal's
+  // keyboard (`keyboard: false`): the show's ? sheet is present.ts's own, so
+  // nothing here ever opens an overlay.
   'controllers/overlay.js': stub(
-    'isOpen(){return!!this.dom}getState(){return{}}destroy(){this.close()}' +
-    'close(){if(!this.dom)return false;this.dom.remove();this.dom=null;this.Reveal.dispatchEvent({type:"closeoverlay"});return true}' +
-    'toggleHelp(o){(typeof o=="boolean"?o:!this.dom)?this.showHelp():this.close()}' +
-    'showHelp(){const R=this.Reveal;if(!R.getConfig().help)return;this.close();' +
-    'const d=this.dom=document.createElement("div");d.className="r-overlay r-overlay-help";' +
-    'const k=R.keyboard,s=k.getShortcuts(),b=k.getBindings();let h="";' +
-    'for(const i in s)h+=`<tr><td>${i}</td><td>${s[i]}</td></tr>`;' +
-    'for(const i in b)if(b[i].key&&b[i].description)h+=`<tr><td>${b[i].key}</td><td>${b[i].description}</td></tr>`;' +
-    'd.innerHTML=`<div class="r-overlay-viewport"><header class="r-overlay-header"><button class="r-overlay-button r-overlay-close">Esc <span class="icon"></span></button></header>' +
-    '<div class="r-overlay-content"><div class="r-overlay-help-content"><p class="title">Keyboard Shortcuts</p><table><th>KEY</th><th>ACTION</th>${h}</table></div></div></div>`;' +
-    'd.querySelector(".r-overlay-close").addEventListener("click",e=>{this.close();e.preventDefault()});' +
-    'R.getRevealElement().appendChild(d);R.dispatchEvent({type:"showhelp"})}' +
-    noop('update', 'setState', 'previewIframe', 'previewImage', 'previewVideo')),
+    'isOpen(){return false}getState(){return{}}close(){return false}' +
+    noop('destroy', 'toggleHelp', 'showHelp', 'update', 'setState', 'previewIframe', 'previewImage', 'previewVideo')),
   // autoSlide: 0 — the play/pause ring is never built
   // constructed only for ?autoSlide=N, which Reveal reads from the URL; the
   // ring is not drawn, but the show must still start and advance
@@ -117,6 +108,7 @@ const CSS_DROP: RegExp[] = [
   /\.backgrounds\b|\.slide-background|has-parallax-background|has-(dark|light)-background|data-background-interactive/, // backgrounds.js
   /data-auto-animate/, // autoanimate.js
   /data-preview-|\.r-overlay-(preview|spinner|external|error|content-inner)\b|\.x-frame-error/, // the preview lightbox
+  /\.r-overlay\b/, // what the overlay stand-in kept: the help table, its frame and close button
   /\.playback\b/, // autoSlide
   /\.hljs/, /\.roll\b/, /\.zoomed\b/, // highlight / zoom plugins, 3D links
   /\.speaker-notes|\.show-notes/, // notes.js (aside.notes{display:none} stays)
