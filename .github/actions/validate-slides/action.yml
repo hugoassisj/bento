@@ -751,3 +751,10 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Tidy up rig
+      # editor/tidy.ts: three roughly aligned boxes become a row on the first
+      # box's top edge with equal gaps (the median they had); a 2×3 scatter a
+      # grid with equal row and column gaps; a diagonal is not a grid; overlaps
+      # get 16px; sizes and input order kept; tidying again moves nothing.
+      shell: bento-step {0}
+      run: node scripts/test-slides-tidy.ts
