@@ -81,8 +81,9 @@
  *     (elements whose ids recur on other slides, role'd slots excepted).
  *   - Theme-first defaults: a text element's omitted `fontFamily` stays
  *     ABSENT (it renders in the theme font, as in a full document), a shape's
- *     omitted `fill` is bound to `accent1`, and a slide's omitted background
- *     is bound to `bg1`. compactDoc strips such a pair only when both halves
+ *     omitted `fill` is bound to `accent1`, a slide's omitted background is
+ *     bound to `bg1`, and on a slide bound to bg1 (bg2) an omitted text or
+ *     code colour is bound to tx1 (tx2), so the two move together. compactDoc strips such a pair only when both halves
  *     match, so the round-trip still holds.
  *   - A `$token` binding written beside a literal that disagrees with the
  *     token is reported: the open-time rule (tokens.ts syncTokenRefs) drops it.
@@ -135,6 +136,14 @@ const deepEqual = (a: unknown, b: unknown): boolean => {
  * is a fixed spot on the canvas, so compactDoc keeps geometry always.
  */
 function elementDefaults(el: Obj, slide: Obj, doc: Obj): Obj | null {
+  const d = editorDefaults(el, slide, doc)
+  // a key filled as a binding is never also a plain default
+  if (d) for (const k of Object.keys(elementBound(el, slide, doc))) delete d[k]
+  return d
+}
+
+/** The editor's own insert for this element type on this slide. */
+function editorDefaults(el: Obj, slide: Obj, doc: Obj): Obj | null {
   const theme = (doc.theme ?? {}) as BentoDoc['theme']
   const bg = typeof slide.background === 'string' ? slide.background : (theme?.background ?? '#FFFFFF')
   const ink = readableInk(bg)
@@ -184,9 +193,17 @@ type Bound = Record<string, [unknown, string]>
 const themeOf = (doc: Obj) => (isObj(doc.theme) ? doc.theme : {}) as { background?: string; accent?: string }
 
 /** Defaults that are a BINDING: the literal and the palette ref expansion
- *  writes together when the author leaves the key out. */
-const elementBound = (el: Obj, doc: Obj): Bound =>
-  el.type === 'shape' ? { fill: [themeOf(doc).accent ?? '#F7A600', 'accent1'] } : {}
+ *  writes together when the author leaves the key out. A shape's fill is
+ *  accent 1. On a slide whose background follows bg1 (bg2), text and code
+ *  take tx1 (tx2), the slot drawn to be read on it: an unbound ink would stay
+ *  put while a theme change turned the background under it. */
+function elementBound(el: Obj, slide: Obj, doc: Obj): Bound {
+  if (el.type === 'shape') return { fill: [themeOf(doc).accent ?? '#F7A600', 'accent1'] }
+  if (el.type !== 'text' && el.type !== 'code') return {}
+  const bg = isObj(slide.themeRefs) ? slide.themeRefs.background : undefined
+  const tx = bg === 'bg1' ? 'tx1' : bg === 'bg2' ? 'tx2' : null
+  return tx && isObj(doc.theme) ? { color: [paletteOf(doc as unknown as BentoDoc)[tx], tx] } : {}
+}
 const slideBound = (doc: Obj): Bound => ({ background: [themeOf(doc).background ?? '#FFFFFF', 'bg1'] })
 
 /** compactDoc's half: drop a bound pair only when the literal AND the ref
@@ -247,7 +264,7 @@ export function compactDoc(full: BentoDoc): Obj {
         if (deepEqual(v, defaults[k])) continue
         e[k] = v
       }
-      stripBound(el, e, elementBound(el, doc))
+      stripBound(el, e, elementBound(el, slide, doc))
       return e
     })
     if (els.length) s.elements = els
@@ -651,7 +668,7 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
       const defaults = elementDefaults(el, slide, doc) ?? {}
       const out: Obj = { ...defaults, ...el }
       stats.expanded += Object.keys(defaults).filter((k) => !(k in el)).length + (el === el0 ? 0 : 1)
-      bindNames(el, out, defaults, elementBound(el, doc), bdoc, `/slides/${si}/elements/${i}`, stats)
+      bindNames(el, out, defaults, elementBound(el, slide, doc), bdoc, `/slides/${si}/elements/${i}`, stats)
       if (typeof out.id !== 'string' || !out.id) { out.id = mintId(slide, el, i); stats.minted++ }
       if (el.type === 'text') {
         // md → html by the editor's own paste conversion; html wins when both

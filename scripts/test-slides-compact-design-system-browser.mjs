@@ -113,12 +113,31 @@ try {
   await tokField.fill('#335577'); await tokField.press('Enter'); await p.waitForTimeout(400)
   ok((await el('card')).fill.toLowerCase() === '#335577' && await paint('card') === rgb('#335577'), `editing the color.card token re-paints the bound shape (${await paint('card')})`)
 
+  console.log('\ntext and its background move together (real input)\n')
+  const lum = (c) => { const m = c.match(/[\d.]+/g).map(Number); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]) }
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) }
+  const drawn = () => p.evaluate(() => {
+    const surface = document.querySelector('.ed-stage-scale .bento-slide')
+    const host = document.querySelector('.ed-stage-scale [data-el-id="hello"]')
+    const leaf = host && [...host.querySelectorAll('*')].find((n) => n.textContent === 'Hello' && !n.children.length)
+    return { bg: surface ? getComputedStyle(surface).backgroundColor : null, ink: leaf ? getComputedStyle(leaf).color : null }
+  })
+  const before = await drawn()
+  ok(!!before.bg && !!before.ink && ratio(before.ink, before.bg) >= 4.5, `before: the text reads on its slide (${before.ink} on ${before.bg}, ${ratio(before.ink, before.bg).toFixed(2)}:1)`)
+  for (const [slot, v] of [['bg1', 'FFFFFF'], ['tx1', '1E2A3A']]) {
+    await p.locator(`.ed-token-builtin[data-slot="${slot}"] .ed-token-value`).click()
+    const f = p.locator(`.ed-token-builtin[data-slot="${slot}"] input.ed-edit-field`)
+    await f.fill(v); await f.press('Enter'); await p.waitForTimeout(400)
+  }
+  const after = await drawn()
+  ok(after.bg === 'rgb(255, 255, 255)' && ratio(after.ink, after.bg) >= 4.5, `after switching Background and Text to a light theme in the Tokens view, the canvas text still reads (${after.ink} on ${after.bg}, ${ratio(after.ink, after.bg).toFixed(2)}:1)`)
+
   console.log('\nuse and like through the real loader\n')
   const s1 = await p.evaluate(() => window.bento.doc.slides[0].elements.map((e) => ({ id: e.id, html: e.html, c: e.component })))
   const copy = s1.filter((e) => e.c && !e.c.main)
   ok(copy.length === 2 && copy.every((e) => e.c.sig && e.c.id === 'tile') && copy.find((e) => e.c.key === 'label')?.html === 'Copy' && JSON.stringify(copy.find((e) => e.c.key === 'label')?.c.over) === '["html"]', `the use is a copy of the Tile component with only its label overridden (${copy.map((e) => e.id).join(', ')})`)
-  const s3 = await p.evaluate(() => { const s = window.bento.doc.slides[2]; return { ids: s.elements.map((e) => e.id), bg: s.background, ref: s.themeRefs?.background } })
-  ok(s3.ids[0] === 'logo' && s3.ids.length === 2 && s3.bg === '#0B3D2E' && s3.ref === 'bg1', `the like slide carries the recurring logo and the source's bg1 background (${s3.ids.join(', ')})`)
+  const s3 = await p.evaluate(() => { const s = window.bento.doc.slides[2]; return { ids: s.elements.map((e) => e.id), bg: s.background, ref: s.themeRefs?.background, theme: window.bento.doc.theme.background } })
+  ok(s3.ids[0] === 'logo' && s3.ids.length === 2 && s3.bg.toLowerCase() === s3.theme.toLowerCase() && s3.ref === 'bg1', `the like slide carries the recurring logo and the source's bg1 background (${s3.ids.join(', ')})`)
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

@@ -479,8 +479,10 @@ saved full). In it, reuse what the deck defines instead of copying values:
   places a copy of a component that follows its main;
 - `"like": "<slide id>"` starts a slide from an earlier one (background,
   transition, recurring furniture);
-- leave a text's `fontFamily` out and it uses the theme font; leave a shape's
-  `fill` out and it is the deck's accent (bound to `accent1`).
+- leave a text's `fontFamily` out and it uses the theme font; leave its
+  `color` out on a theme-background slide and it is the theme's text colour
+  (bound to `tx1`); leave a shape's `fill` out and it is the deck's accent
+  (bound to `accent1`).
 
 A name that does not resolve is listed in the load report's `dropped`, with the
 names that exist. The repository's `AGENTS.md` has the full compact reference.

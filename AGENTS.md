@@ -176,7 +176,9 @@ out follows them:
 
 - A text element with no `fontFamily` renders in the theme font (none is
   written). A shape with no `fill` is the deck's accent, bound to `accent1`. A
-  slide with no `background` is the theme's, bound to `bg1`.
+  slide with no `background` is the theme's, bound to `bg1`, and text or code
+  with no `color` on it is the theme's text colour, bound to `tx1` (on a `bg2`
+  slide, `tx2`), so a later theme change keeps the two readable together.
 - Name a slot or a token as the value: `"fill": "accent2"`,
   `"color": "tx1 -20%"`, `"background": "bg2"` (slots: `bg1 tx1 bg2 tx2
   accent1`…`accent6 hlink folHlink`, with an optional lightness shift), or
