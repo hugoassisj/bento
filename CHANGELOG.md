@@ -17,6 +17,9 @@ pre-1.0.
   box it overflows, and lands in the middle of what you are looking at.
   Pasting again no longer stacks the copies on the same spot. Plain text,
   code in ``` fences and cells copied from a spreadsheet paste as before.
+  Bold, italic and underlined text from Google Docs, and bulleted and
+  numbered lists from Google Docs and Word, now come through too, also when
+  you paste into a text box you are editing.
 
 - **Text boxes size themselves.** Press T and click: the box starts where you
   clicked, left-aligned, and grows and shrinks with what you type, so short

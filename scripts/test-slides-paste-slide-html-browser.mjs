@@ -22,7 +22,16 @@
 //      nothing: no clipboard node ever reaches the live document unsanitised.
 //   5. Pasting inside an open text box behaves as before: formatting kept in
 //      that box, no new element.
+//   6. Real clipboards (scripts/fixtures/clipboard): Google Docs (bold,
+//      italic, underline as span styles; a <p> inside every list item) and
+//      Word (mso-list paragraphs) keep bold, italic, underline, a bulleted
+//      and a numbered list, and the box is as tall as its text renders;
+//      `<p>• item</p>` becomes a list; a huge html paste is cut like a plain
+//      one.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
+const { readFileSync } = await import('node:fs')
+// clipboards as Google Docs and Word put them on the system clipboard
+const fixture = (name) => readFileSync(new URL(`./fixtures/clipboard/${name}`, import.meta.url), 'utf8').trim()
 
 let checks = 0
 let failures = 0
@@ -37,6 +46,9 @@ try {
   // anything the pasted html manages to load shows up here
   const fetched = []
   await ctx.route(/^https?:/, (r) => { fetched.push(r.request().url()); return r.abort() })
+  // never the network: no sockets either, and the app told it is offline
+  await ctx.routeWebSocket(/.*/, (ws) => ws.close())
+  await ctx.addInitScript(() => { try { localStorage.setItem('bento-offline', 'on') } catch {} })
   const p = await ctx.newPage()
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
@@ -126,6 +138,46 @@ try {
   ok(/href="https:\/\/ok\.example\/"/.test(h), 'a web link survives as a link')
   ok(await p.evaluate(() => window.__pwned) === 0, 'nothing in the clipboard ran')
   ok(fetched.slice(before).every((u) => !u.includes('evil.example')), `nothing in the clipboard loaded (${fetched.slice(before).join(' ')})`)
+
+  console.log('\nreal clipboards: Google Docs and Word\n')
+  const GPLAIN = 'Revenue grew sharply in Q3\nEMEA\nAPAC\nFirst\nSecond'
+  // the rendered text's height on the canvas, in slide px
+  const rendered = (id) => p.evaluate((id) => {
+    const inner = document.querySelector(`.ed-stage-scale [data-el-id="${CSS.escape(id)}"] .bento-text-inner`)
+    const st = document.querySelector('.ed-stage-scale').getBoundingClientRect()
+    return inner.getBoundingClientRect().height / (st.width / window.bento.doc.size.width)
+  }, id)
+  for (const [name, file] of [['Google Docs', 'gdocs-revenue.html'], ['Word', 'word-revenue.html']]) {
+    await load()
+    await paste({ 'text/html': fixture(file), 'text/plain': GPLAIN })
+    all = await els()
+    const e = all[0]
+    // spans are inert once bare, and spaces may arrive as no-break spaces
+    const h = (e?.html ?? '').replace(/<\/?span>/g, '').replace(/\u00a0|&nbsp;/g, ' ')
+    ok(all.length === 1 && e?.type === 'text', `${name}: one text element`)
+    ok(/<b>grew<\/b>/.test(h), `${name}: bold kept (${h.slice(0, 140)})`)
+    ok(/<i>sharply<\/i>/.test(h), `${name}: italic kept`)
+    ok(/<u>in Q3<\/u>/.test(h), `${name}: underline kept`)
+    ok(/<ul>\s*<li>\s*EMEA\s*<\/li>\s*<li>\s*APAC\s*<\/li>\s*<\/ul>/.test(h), `${name}: a bulleted list of two (${(h.match(/<ul>.*?<\/ul>/) ?? [''])[0]})`)
+    ok(/<ol>\s*<li>\s*First\s*<\/li>\s*<li>\s*Second\s*<\/li>\s*<\/ol>/.test(h), `${name}: a numbered list of two (${(h.match(/<ol>.*?<\/ol>/) ?? [''])[0]})`)
+    ok(!/<li>\s*<p>|\u00b7|\u2022/.test(e?.html ?? ''), `${name}: no paragraph inside an item, no marker left as text`)
+    ok(!/<br>\s*$/.test(e?.html ?? ''), `${name}: no stray line break at the end`)
+    if (e) {
+      const r = await rendered(e.id)
+      const mm = await measure(e.id)
+      ok(Math.abs(e.h - r) <= 2 && Math.abs(e.h - mm.height) <= 2, `${name}: the box is as tall as its text renders (box ${e.h}, rendered ${r.toFixed(1)}, measured ${mm.height})`)
+    }
+  }
+  await load()
+  await paste({ 'text/html': '<p>\u2022 Alpha</p><p>\u2022&nbsp;Beta</p><p>After</p>', 'text/plain': '\u2022 Alpha\n\u2022 Beta\nAfter' })
+  all = await els()
+  ok(/<ul><li>Alpha<\/li><li>Beta<\/li><\/ul>/.test(all[0]?.html ?? ''), `paragraphs starting with a bullet become a list (${all[0]?.html})`)
+  await load()
+  const huge = '<p>' + 'word '.repeat(4000) + '</p><p>' + 'tail '.repeat(4000) + '</p>'
+  await paste({ 'text/html': huge, 'text/plain': 'word '.repeat(8000) })
+  all = await els()
+  const len = await p.evaluate((h) => { const d = document.createElement('template'); d.innerHTML = h; return d.content.textContent.length }, all[0]?.html ?? '')
+  ok(all.length === 1 && len <= 4000 && len > 3000, `a huge html paste is cut like a plain one (${len} characters)`)
 
   console.log('\npasting inside an open text box\n')
   await load([{ id: 'box', type: 'text', x: 200, y: 200, w: 600, h: 60, rotation: 0, opacity: 1, html: 'Start', fontSize: 24, fontFamily: 'system-ui, sans-serif', fontWeight: 400, color: '#1E2A3A', align: 'left', valign: 'top', lineHeight: 1.25 }])

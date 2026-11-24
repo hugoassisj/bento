@@ -2916,7 +2916,7 @@ export class Editor {
     // one sanitizer, in an inert document (paste.ts), then the same finishing
     // an edited box gets at commit. No markdown conversion: it is not typed.
     // A spreadsheet grid is not text: it keeps the plain path it always took.
-    const rich = clipboardIsGrid(dt) ? '' : clipboardToHtml(dt)
+    const rich = clipboardIsGrid(dt) ? '' : clipboardToHtml(dt, 4000)
     if (rich) return this.pasteTextBox(bulletsToLists(rich))
     // 5) plain text, escaped
     if (text && text.trim()) {

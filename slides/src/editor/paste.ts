@@ -19,7 +19,11 @@
  * turn that into a real bold. So the quirks are handled before it runs: meta
  * and style elements removed, a `<b>`/`<strong>` whose inline style says
  * `font-weight: normal` (or ≤ 400) unwrapped. Spans survive the sanitizer as
- * bare `<span>`s, which render as nothing.
+ * bare `<span>`s, which render as nothing — so a span whose style says bold,
+ * italic, underline or strike (all Google Docs writes) gets the tag first.
+ * Lists come in three shapes and leave as one: a real list (Google Docs adds
+ * a `<p>` inside each item, unwrapped), Word's `mso-list` paragraphs, and
+ * paragraphs that start with a bullet glyph.
  *
  * Everything above happens in a document of its own, made by DOMParser and
  * never attached to the page: untrusted nodes are parsed, tidied and
@@ -33,15 +37,22 @@
 import { sanitizeHtml } from '../render'
 import { keepSpaces } from './markdown'
 
+/** Past this much html the clipboard is not read as html at all: the
+ *  plain-text path, with its own cap, takes it. */
+const MAX_HTML = 500_000
+
 /** The html to insert for this clipboard, or '' when the plain-text path
- *  should run instead (no html flavour, or nothing left after cleaning). */
-export function clipboardToHtml(dt: DataTransfer | null | undefined): string {
+ *  should run instead (no html flavour, or nothing left after cleaning).
+ *  `maxText` cuts the text after that many characters, as the slide's
+ *  plain-text paste does. */
+export function clipboardToHtml(dt: DataTransfer | null | undefined, maxText = Infinity): string {
   const html = dt?.getData('text/html')
-  if (!html || typeof DOMParser === 'undefined') return ''
+  if (!html || html.length > MAX_HTML || typeof DOMParser === 'undefined') return ''
   // an inert document: no loads, no scripts, no handlers ever fire in it
   const inert = new DOMParser().parseFromString(html, 'text/html')
   const body = inert.body
-  for (const junk of Array.from(body.querySelectorAll('meta, style, script, title, link, head'))) junk.remove()
+  // (and the line break Chrome appends when a copy ends on a block)
+  for (const junk of Array.from(body.querySelectorAll('meta, style, script, title, link, head, br.Apple-interchange-newline'))) junk.remove()
   for (const b of Array.from(body.querySelectorAll('b, strong'))) {
     const w = (b as HTMLElement).style.fontWeight.trim().toLowerCase()
     const light = w === 'normal' || w === 'lighter' || (/^\d+$/.test(w) && Number(w) <= 400)
@@ -52,12 +63,128 @@ export function clipboardToHtml(dt: DataTransfer | null | undefined): string {
       b.remove()
     }
   }
+  styleToTags(inert, body)
+  wordLists(inert, body)
+  glyphLists(inert, body)
+  paragraphsInItems(inert, body)
   keepPreformatted(inert, body)
+  if (maxText < Infinity) clipText(inert, body, maxText)
   const clean = sanitizeHtml(body.innerHTML)
   // nothing but whitespace/empty tags → let the plain path decide. Checked
   // in an inert document too: the cleaned string is parsed back there.
   const check = new DOMParser().parseFromString(clean, 'text/html').body
   return check.textContent?.trim() || check.querySelector('br, li') ? clean : ''
+}
+
+/** Bold, italic, underline and strike written as an inline style — every
+ *  run Google Docs copies is a `<span style="font-weight:700">` or the like
+ *  — become the tags the sanitizer keeps, since it drops the style with
+ *  every other attribute. A link's own underline is the link's, not a <u>. */
+function styleToTags(doc: Document, body: HTMLElement) {
+  for (const el of Array.from(body.querySelectorAll<HTMLElement>('span[style]'))) {
+    const st = el.style
+    const w = st.fontWeight.trim().toLowerCase()
+    const deco = `${st.textDecorationLine} ${st.textDecoration}`
+    const tags: string[] = []
+    if (w === 'bold' || w === 'bolder' || (/^\d+$/.test(w) && Number(w) >= 600)) tags.push('b')
+    if (/italic|oblique/.test(st.fontStyle)) tags.push('i')
+    if (/underline/.test(deco) && !el.closest('a')) tags.push('u')
+    if (/line-through/.test(deco)) tags.push('s')
+    let inner: HTMLElement = el
+    for (const tag of tags) {
+      const wrap = doc.createElement(tag)
+      while (inner.firstChild) wrap.append(inner.firstChild)
+      inner.append(wrap)
+      inner = wrap
+    }
+  }
+}
+
+/** Wrap each run of consecutive sibling `items` (as `group` splits them)
+ *  into one list; `strip` takes an item's marker off before it moves. */
+function toLists(doc: Document, items: HTMLElement[], group: (a: HTMLElement, b: HTMLElement) => boolean,
+  ordered: (first: HTMLElement) => boolean, strip: (p: HTMLElement) => void) {
+  let i = 0
+  while (i < items.length) {
+    const run = [items[i]]
+    while (i + run.length < items.length) {
+      const next = items[i + run.length]
+      const last = run[run.length - 1]
+      if (last.nextElementSibling !== next || !group(last, next)) break
+      run.push(next)
+    }
+    const list = doc.createElement(ordered(run[0]) ? 'ol' : 'ul')
+    run[0].before(list)
+    for (const p of run) {
+      strip(p)
+      const li = doc.createElement('li')
+      while (p.firstChild) li.append(p.firstChild)
+      list.append(li)
+      p.remove()
+    }
+    i += run.length
+  }
+}
+
+/** Word writes a list as paragraphs styled `mso-list:l0 level1 lfo1`, each
+ *  with its bullet or number as text in a `mso-list:Ignore` span. A run of
+ *  them with the same list id becomes a real list; the marker goes, and a
+ *  number or letter marker makes it an ordered one. (Every level is one
+ *  list here: nesting is left flat.) */
+function wordLists(doc: Document, body: HTMLElement) {
+  const id = (p: HTMLElement) => /mso-list:\s*(l\d+)/i.exec(p.getAttribute('style') ?? '')?.[1]
+  const items = Array.from(body.querySelectorAll<HTMLElement>('p')).filter((p) => id(p))
+  const marker = (p: HTMLElement) => Array.from(p.querySelectorAll<HTMLElement>('span[style]'))
+    .find((s) => /mso-list:\s*ignore/i.test(s.getAttribute('style') ?? ''))
+  toLists(doc, items, (a, b) => id(a) === id(b),
+    (first) => /^\s*(?:\d+|[a-z]|[ivxlcdm]+)[.)]/i.test(marker(first)?.textContent ?? ''),
+    (p) => marker(p)?.remove())
+}
+
+const GLYPH = /^[\s\u00a0]*[\u2022\u00b7\u25e6\u25aa\u25cf\u2023][\s\u00a0]+/
+
+/** Paragraphs that start with a bullet glyph (`<p>• item</p>`, what many
+ *  apps and pages copy instead of a list) become one real list per run. */
+function glyphLists(doc: Document, body: HTMLElement) {
+  const items = Array.from(body.querySelectorAll<HTMLElement>('p')).filter((p) => GLYPH.test(p.textContent ?? ''))
+  toLists(doc, items, () => true, () => false, (p) => {
+    // the glyph is in the first text there is; take it off there
+    const walker = doc.createTreeWalker(p, NodeFilter.SHOW_TEXT)
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const t = n as Text
+      if (!t.data.trim()) continue
+      t.data = t.data.replace(GLYPH, '')
+      break
+    }
+  })
+}
+
+/** Google Docs puts a `<p>` in every list item. A paragraph's margins inside
+ *  an item only spread the list out, so it is unwrapped (a line break between
+ *  two in one item). */
+function paragraphsInItems(doc: Document, body: HTMLElement) {
+  for (const li of Array.from(body.querySelectorAll('li'))) {
+    const ps = Array.from(li.children).filter((c) => c.tagName === 'P')
+    ps.forEach((p, k) => {
+      if (k) p.before(doc.createElement('br'))
+      p.replaceWith(...Array.from(p.childNodes))
+    })
+  }
+}
+
+/** Keep the first `max` characters of text and drop everything after them. */
+function clipText(doc: Document, body: HTMLElement, max: number) {
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+  let left = max
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const t = n as Text
+    if (t.data.length <= left) { left -= t.data.length; continue }
+    t.data = t.data.slice(0, left)
+    for (let cur: Node | null = t; cur && cur !== body; cur = cur.parentNode) {
+      while (cur.nextSibling) cur.nextSibling.remove()
+    }
+    return
+  }
 }
 
 /** A clipboard whose html flavour is a table — what a spreadsheet copies. It
