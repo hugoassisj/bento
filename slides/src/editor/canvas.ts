@@ -420,6 +420,9 @@ export class SlideCanvas {
       this.selectExactAt(ev.clientX, ev.clientY, p.target)
     }, true)
 
+    // a fresh press (not the second of a double-click) is a new gesture; the
+    // comment tool's own press never gets here (it stops it at the document)
+    this.stage.addEventListener('mousedown', (ev) => { if (ev.detail <= 1) this.commentPress = false }, true)
     this.stage.addEventListener('dblclick', (ev) => {
       if (this.enterFrameAt(ev.clientX, ev.clientY)) return
       // Look for TextElement, and then CodeElement
@@ -439,8 +442,10 @@ export class SlideCanvas {
       const pic = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-image')
       if (pic?.dataset.elId) { this.startCropEdit(pic.dataset.elId); return }
       // an empty slide: a text box where the pointer is, open for typing — the
-      // Text tool's click, which is what the empty-slide hint promises
-      if (this.store.slide.elements.length || this.store.readOnly || this.drawOverlay || this.isCommenting) return
+      // Text tool's click, which is what the empty-slide hint promises. Not
+      // when the pair's first press placed a comment: that press disarmed the
+      // comment tool, so only the press itself can say so.
+      if (this.store.slide.elements.length || this.store.readOnly || this.drawOverlay || this.isCommenting || this.commentPress) return
       const r = this.scaleHost.getBoundingClientRect()
       const el = defaultText({ color: readableInk(this.store.slide.background) })
       el.x = Math.round((ev.clientX - r.left) / this.scale - el.w / 2)
@@ -983,6 +988,7 @@ export class SlideCanvas {
       }
       const a = this.commentAnchorAt(ev.clientX, ev.clientY)
       cleanup()
+      this.commentPress = true
       ev.preventDefault()
       ev.stopPropagation()
       if (!a) this.comments.openNew() // off-slide canvas click = whole slide
@@ -1408,6 +1414,8 @@ export class SlideCanvas {
   }
 
   private emptyHint: HTMLElement | null = null
+  /** the last press placed a comment (its double-click must not add text) */
+  private commentPress = false
 
   /** One quiet line on a slide with no elements, saying how to start. It is
    *  editor chrome beside the render, never in it, so thumbnails, the show,

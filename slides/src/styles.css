@@ -540,6 +540,8 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   pointer-events: none;
   user-select: none;
 }
+/* a read-only viewer cannot add anything (it turns read-only after the first render) */
+.ed-reader .ed-empty-hint { display: none; }
 
 /* hover-set switcher chips, floating above the canvas */
 .ed-setbar {
