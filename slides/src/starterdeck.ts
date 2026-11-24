@@ -1264,7 +1264,7 @@ export function starterDoc(): BentoDoc {
       notes:
         'A chart as scenery: full-width live area chart on ink. While presenting, scroll inside it to zoom ' +
         'and drag to pan. The +975% is honest: it’s the data’s own range.',
-      ...tryThis('sd-legend', 'Press Slideshow, then scroll in the chart to zoom and drag to pan.'),
+      ...tryThis('sd-trend', 'Press Slideshow, then scroll in this chart to zoom and drag to pan.'),
       elements: [
         grain(),
         glow(200, [
@@ -1287,7 +1287,7 @@ export function starterDoc(): BentoDoc {
           shape('rect', { id: T_A, x: 1152, y: 208, w: 20, h: 20, radius: 6, fill: PEACH }),
           shape('rect', { id: T_C, x: 1180, y: 208, w: 4, h: 20, radius: 2, fill: TILE_PAPER }),
         ]),
-        { ...defaultChart(trendOption()), name: 'Momentum chart', x: 64, y: 244, w: 1152, h: 420 },
+        { ...defaultChart(trendOption()), id: 'sd-trend', name: 'Momentum chart', x: 64, y: 244, w: 1152, h: 420 },
       ],
     }),
 
