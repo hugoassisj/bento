@@ -453,15 +453,15 @@ if (app.ownsSiteContent) {
   // SKILL.md ships inside a zip people upload to claude.ai.
   cpSync(join(site, `${app.dir}/agents.md`), join(site, 'agents.md'))
   // The harness skill (canonical home: the Claude Code plugin at
-  // plugins/bento-slides). Published three ways: the folder (SKILL.md plus
-  // its references, so the raw-SKILL.md curl one-liner still works), a
-  // claude.ai-uploadable zip of the whole folder (bento-slides/SKILL.md and
-  // bento-slides/references/…, folder-inside-zip), and a compat copy at the
-  // old bento-deck URL. scripts/test-skill-package.ts replays the zip step.
-  const skillSrc = join(root, 'plugins/bento-slides/skills/bento-slides')
-  cpSync(skillSrc, join(site, 'skills/bento-slides'), { recursive: true })
-  cpSync(skillSrc, join(site, 'skills/bento-deck'), { recursive: true })
-  execFileSync('zip', ['-q', '-X', '-r', '-o', 'bento-slides.zip', 'bento-slides'], { cwd: join(site, 'skills') })
+  // plugins/bento-slides). Published three ways: the raw SKILL.md (curl
+  // one-liner), a claude.ai-uploadable zip (must contain bento-slides/SKILL.md,
+  // folder-inside-zip), and a compat copy at the old bento-deck URL.
+  const skillSrc = join(root, 'plugins/bento-slides/skills/bento-slides/SKILL.md')
+  mkdirSync(join(site, 'skills/bento-slides'), { recursive: true })
+  cpSync(skillSrc, join(site, 'skills/bento-slides/SKILL.md'))
+  mkdirSync(join(site, 'skills/bento-deck'), { recursive: true })
+  cpSync(skillSrc, join(site, 'skills/bento-deck/SKILL.md'))
+  execFileSync('zip', ['-q', '-X', '-o', 'bento-slides.zip', 'bento-slides/SKILL.md'], { cwd: join(site, 'skills') })
 
   // MIT license — travels to the public site repo so the published tree carries it.
   cpSync(join(root, 'LICENSE'), join(site, 'LICENSE'))
