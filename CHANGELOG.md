@@ -20,7 +20,9 @@ pre-1.0.
   layout now take the deck's Background, Text and Accent 1 colours and its
   theme font, and so do new text boxes and new shapes. Change a theme colour
   in Tokens and they all change with it, and the layout picker shows each
-  layout in your deck's colours. Slides you already have keep their colours:
+  layout in your deck's colours. Layout text is always in the theme's Text
+  colour (Background on a section divider), so it stays readable whichever
+  theme you switch to. Slides you already have keep their colours:
   only what you add from now on follows the theme.
 
 ## [1.3.0] — 2026-11-22

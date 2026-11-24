@@ -3,7 +3,7 @@
 // The bento/slides document model. This JSON is what lives inside the
 // <script type="application/bento+json"> block of a .bento.html file.
 
-import { applyRefs, contrastRatio, paletteOf, type Palette } from './palette.ts'
+import { applyRefs, paletteOf, type Palette } from './palette.ts'
 
 export const FORMAT = 'bento/slides'
 export const FORMAT_VERSION = 1
@@ -1332,10 +1332,6 @@ const card = (id: string, frame: { x: number; y: number; w: number; h: number },
   groupId: `l3c-g${role.slice(-1)}`,
 })
 
-/** Muted text tones, as lightness shifts of the Text colour. */
-const SUBTLE = { color: '#3b5272', themeRefs: { color: 'tx1 +20%' } }
-const MUTED = { color: '#49668d', themeRefs: { color: 'tx1 +30%' } }
-const PROMPT = { color: '#50709b', themeRefs: { color: 'tx1 +35%' } }
 /** A slide painted in the theme Background. */
 const PAPER = { background: '#FFFFFF', themeRefs: { background: 'bg1' } }
 
@@ -1386,11 +1382,12 @@ function scaleLayout(ly: Slide, sx: number, sy: number): Slide {
  * resolve to in that deck; omitted, they are the default theme's.
  */
 export function builtinLayouts(size?: { width: number; height: number }, palette: Palette = defaultPalette()): Slide[] {
-  // The Section divider inverts (Text-coloured slide, Background-coloured
-  // title). Its kicker is Accent 1 when the accent reads on the Text colour,
-  // else the Background colour: an orange kicker on a dark theme's light
-  // section slide would fail 4.5:1.
-  const kicker = (contrastRatio(palette.accent1, palette.tx1) ?? 0) >= 4.5 ? 'accent1' : 'bg1'
+  // Every placeholder is in the plain Text colour (Background on the
+  // inverted Section divider): the one pairing a theme promises reads, and it
+  // keeps reading after the theme changes. A lighter tone of Text, or Accent 1
+  // on a Text-coloured slide, holds only for some palettes, and a binding is
+  // decided once but re-derived under every theme the deck will ever have.
+  // Hierarchy comes from size and weight; the accent is carried by the bars.
   const base: Slide[] = [
     {
       id: 'layout-title', name: 'Title', ...PAPER, transition: 'fade', notes: '', elements: [
@@ -1398,7 +1395,7 @@ export function builtinLayouts(size?: { width: number; height: number }, palette
         ph('lt-title', 'Click to add title', { x: 160, y: 404, w: 1280, h: 140 },
           { fontSize: 76, fontWeight: 700, valign: 'middle', role: 'title' }),
         ph('lt-sub', 'Click to add subtitle', { x: 160, y: 556, w: 1100, h: 60 },
-          { fontSize: 28, ...SUBTLE, valign: 'middle', role: 'subtitle' }),
+          { fontSize: 28, valign: 'middle', role: 'subtitle' }),
       ],
     },
     {
@@ -1407,7 +1404,7 @@ export function builtinLayouts(size?: { width: number; height: number }, palette
           { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         bar('ltc-rule', { x: 120, y: 168, w: 1360, h: 3 }),
         ph('ltc-body', 'Click to add content', { x: 120, y: 208, w: 1360, h: 600 },
-          { fontSize: 26, ...MUTED, valign: 'top', lineHeight: 1.5, role: 'body' }),
+          { fontSize: 26, valign: 'top', lineHeight: 1.5, role: 'body' }),
       ],
     },
     {
@@ -1427,7 +1424,7 @@ export function builtinLayouts(size?: { width: number; height: number }, palette
         ph('lsec-title', 'Section title', { x: 160, y: 420, w: 1280, h: 120 },
           { fontSize: 64, fontWeight: 700, color: '#FFFFFF', themeRefs: { color: 'bg1' }, valign: 'middle', role: 'title' }),
         ph('lsec-kicker', 'PART 1', { x: 160, y: 350, w: 800, h: 40 },
-          { fontSize: 18, fontWeight: 600, color: '#F7A600', themeRefs: { color: kicker }, letterSpacing: 3, valign: 'middle', role: 'kicker' }),
+          { fontSize: 18, fontWeight: 600, color: '#FFFFFF', themeRefs: { color: 'bg1' }, letterSpacing: 3, valign: 'middle', role: 'kicker' }),
       ],
     },
     // Four layouts an agent reaches for (compact input: `layout` + `role`,
@@ -1454,17 +1451,17 @@ export function builtinLayouts(size?: { width: number; height: number }, palette
         ph('lq-quote', 'Click to add a quote', { x: 208, y: 300, w: 1232, h: 300 },
           { fontSize: 48, fontWeight: 500, valign: 'middle', lineHeight: 1.3, role: 'quote' }),
         ph('lq-attr', 'Who said it', { x: 208, y: 620, w: 1232, h: 44 },
-          { fontSize: 24, ...MUTED, valign: 'middle', role: 'attribution' }),
+          { fontSize: 24, valign: 'middle', role: 'attribution' }),
       ],
     },
     {
       id: 'layout-image-left', name: 'Image left', ...PAPER, transition: 'fade', notes: '', elements: [
         ph('lil-image', 'Add an image', { x: 120, y: 120, w: 640, h: 660 },
-          { fontSize: 24, ...PROMPT, align: 'center', valign: 'middle', role: 'image' }),
+          { fontSize: 24, align: 'center', valign: 'middle', role: 'image' }),
         ph('lil-title', 'Click to add title', { x: 820, y: 120, w: 660, h: 120 },
           { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         ph('lil-body', 'Click to add content', { x: 820, y: 264, w: 660, h: 516 },
-          { fontSize: 24, ...MUTED, valign: 'top', lineHeight: 1.5, role: 'body' }),
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'body' }),
       ],
     },
     {
@@ -1472,9 +1469,9 @@ export function builtinLayouts(size?: { width: number; height: number }, palette
         ph('lir-title', 'Click to add title', { x: 120, y: 120, w: 660, h: 120 },
           { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         ph('lir-body', 'Click to add content', { x: 120, y: 264, w: 660, h: 516 },
-          { fontSize: 24, ...MUTED, valign: 'top', lineHeight: 1.5, role: 'body' }),
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'body' }),
         ph('lir-image', 'Add an image', { x: 840, y: 120, w: 640, h: 660 },
-          { fontSize: 24, ...PROMPT, align: 'center', valign: 'middle', role: 'image' }),
+          { fontSize: 24, align: 'center', valign: 'middle', role: 'image' }),
       ],
     },
     { id: 'layout-blank', name: 'Blank', ...PAPER, transition: 'fade', notes: '', elements: [] },

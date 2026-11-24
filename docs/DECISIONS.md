@@ -15418,13 +15418,19 @@ renders as `theme.fontFamily`. No new key, no schema change.
 - **Cards are `bg1 -5%`, not `bg2`.** `paletteOf` fills an unset `bg2` from
   the Text colour, so a `bg2` card is navy under navy text on a fresh deck. A
   darkened Background keeps Text legible on the card in light and dark themes.
-- **Muted text is a lightness shift of Text** (`tx1 +20%` subtitle, `+30%`
-  body, `+35%` the image prompt), each at least 4.5:1 on white with the
-  default Text colour; in a dark theme they lighten and stay legible.
-- **The Section divider inverts:** a Text-coloured slide, Background-coloured
-  title, Accent 1 bar. Its kicker is Accent 1 only when the accent reads on
-  the Text colour at 4.5:1, else Background, decided when the layout is built
-  for the deck (an orange kicker on a dark theme's light divider is 1.9:1).
+- **Every placeholder is the plain Text colour** (Background on the inverted
+  Section divider: a Text-coloured slide, Background title and kicker, Accent
+  1 bar). A binding is chosen once but re-derived under every theme the deck
+  will ever have, so only a pairing that holds for ANY theme is safe, and the
+  theme's Text on its Background is the one a theme promises. Two versions
+  were rejected in review: muted tones as lightness shifts of Text (`tx1
+  +20/+30/+35%`) fell to 3.2-4.0:1 under a mid-tone brand Text such as
+  `#4A5560` on white, and a kicker in Accent 1 picked by contrast when the
+  layout was built kept the accent after a switch to a dark theme (1.86:1 on
+  the now-light divider). Hierarchy comes from size and weight; the accent is
+  carried by the bars. `scripts/test-slides-layout-theme.ts` builds every
+  layout under one theme, switches to dark and brand palettes through the
+  derive pass, and asserts 4.5:1 for every placeholder.
 - **A new text box binds to Text, or to Background on a slide painted in
   Text, whichever reads at 4.5:1** (`readableSlot`). Only where neither does
   (a mid-tone literal background) is it an unbound `readableInk` literal.

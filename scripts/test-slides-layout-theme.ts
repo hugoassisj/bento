@@ -81,6 +81,9 @@ for (const ly of layouts) {
 }
 const bars = layouts.flatMap((l) => l.elements).filter((e) => e.type === 'shape' && !e.id.includes('-bg'))
 ok(bars.length > 0 && bars.every((e) => (e as unknown as Holder).themeRefs?.fill === 'accent1'), `every accent bar follows Accent 1 (${bars.length})`)
+const texts = layouts.flatMap((l) => l.elements.filter((e) => e.type === 'text').map((e) => [l.id, e] as const))
+ok(texts.every(([lid, e]) => (e as unknown as Holder).themeRefs?.color === (lid === 'layout-section' ? 'bg1' : 'tx1')),
+  `every placeholder is the plain Text colour (Background on the divider), no tone that holds only for some palettes (${texts.length})`)
 const titles = layouts.flatMap((l) => l.elements.filter((e) => e.role === 'title' && l.id !== 'layout-section'))
 ok(titles.every((e) => (e as unknown as Holder).themeRefs?.color === 'tx1'), `every title outside the divider follows Text (${titles.length})`)
 {
