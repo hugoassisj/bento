@@ -7,8 +7,9 @@
 // WHAT THIS PROVES, on the Showcase a fresh profile opens with:
 //   1. Start from scratch opens a dialog (the kernel primitive, no native
 //      confirm) with two choices and Cancel, saying how many slides go and how
-//      to undo; Escape, Cancel, and ⌘Z pressed while it is up change
-//      nothing; the ⌘K palette's start-scratch entry opens the same dialog.
+//      to undo; Escape, Cancel, and ⌘Z, Delete, Backspace or an arrow
+//      pressed while it is up (an element selected behind it) change nothing;
+//      Up and Down move between the choices; the ⌘K palette's start-scratch entry opens the same dialog.
 //   2. Keep this look leaves one slide that paints in the deck's palette (a
 //      Background edit in the Tokens tab repaints it), tokens intact, no demo
 //      slide; the Showcase's title becomes "Untitled deck", the caret is in
@@ -34,6 +35,8 @@ async function boot(browser, locale) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale })
   await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1') } catch {} })
   await ctx.route(/^https?:/, (r) => r.abort())
+  // route() does not see WebSockets: a live session must never reach a relay
+  await ctx.routeWebSocket(/.*/, (ws) => ws.close())
   const p = await ctx.newPage()
   const errors = [], natives = []
   p.on('pageerror', (e) => errors.push(e.message))
@@ -113,6 +116,38 @@ try {
     if (await openFromMenu(p)) {
       await p.locator('.bkd-actions button', { hasText: 'Cancel' }).click()
       ok(!(await dialogUp(p)) && (await state(p)).json === s0.json, 'Cancel closes it and changes nothing')
+    }
+    // an element selected behind the dialog: no key may delete or nudge it
+    const box = await p.evaluate(() => {
+      const r = document.querySelector('.ed-stage-scale .bento-slide [data-el-id="sd-title"]').getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    })
+    await p.mouse.click(box.x, box.y)
+    await p.waitForTimeout(100)
+    const picked = await p.evaluate(() => window.bento.selection.length)
+    ok(picked > 0, `an element is selected (${picked})`)
+    const sSel = await state(p)
+    const KEYS = ['Delete', 'Backspace', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Shift+ArrowLeft', 'Shift+ArrowRight', 'Shift+ArrowUp', 'Shift+ArrowDown']
+    if (await openFromMenu(p)) {
+      const focus = () => p.evaluate(() => document.activeElement?.dataset?.choice ?? document.activeElement?.textContent)
+      const f0 = await focus()
+      await p.keyboard.press('ArrowDown')
+      const f1 = await focus()
+      await p.keyboard.press('ArrowUp')
+      const f2 = await focus()
+      ok(f0 === 'keep' && f1 === 'blank' && f2 === 'keep', `Up and Down move between the choices (${f0} → ${f1} → ${f2})`)
+      for (const k of KEYS) await p.keyboard.press(k)
+      await p.keyboard.press('Shift+Tab') // onto Cancel: a plain button, outside the list
+      const onCancel = await focus()
+      for (const k of KEYS) await p.keyboard.press(k)
+      await p.keyboard.press('Escape')
+      const after = await state(p)
+      ok(!(await dialogUp(p)) && after.json === sSel.json, `Delete, Backspace, arrows and Shift+arrows behind the dialog change nothing (focus on a choice, then on ${onCancel})${after.json === sSel.json ? '' : ` — ${after.slideIds.length} slides, selection ${await p.evaluate(() => window.bento.selection.length)}`}`)
+    }
+    if (await openFromMenu(p)) {
+      for (const k of KEYS) await p.keyboard.press(k)
+      await p.locator('.bkd-actions button', { hasText: 'Cancel' }).click()
+      ok((await state(p)).json === sSel.json, 'the same keys, then Cancel: nothing changed')
     }
     // the command palette entry
     await p.locator('.ed-stage-scale').click({ position: { x: 4, y: 4 }, force: true })
