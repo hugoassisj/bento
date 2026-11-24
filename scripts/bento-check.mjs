@@ -6,6 +6,7 @@
 //
 //   node scripts/bento-check.mjs <deck.bento.html | doc.json>
 //        [--shell path] [--png outdir] [--json] [--fail-on error|warning]
+//        [--timeout seconds] [--keep-tmp]
 //
 // Loads the deck in headless Chrome — the real shell, the real renderer, the
 // deck's own fonts — and reports what the runtime would otherwise swallow:
@@ -22,8 +23,17 @@
 // a load gate (an <img> the server answers only once the probe has POSTed its
 // report), Chrome runs `--headless=new --dump-dom` and exits at load. No
 // puppeteer, no CDP client, no new dependency — system Chrome via the same
-// BENTO_CHROME lookup the rigs share. The probe is bundled by esbuild against
-// the repo's own sources, so the pixels are the shipping code path.
+// BENTO_CHROME lookup the rigs share, then Playwright's browsers. The probe is
+// bundled by esbuild against the repo's own sources, so the pixels are the
+// shipping code path.
+//
+// WHEN IT FAILS it says where (AI-05). The server records each request and the
+// probe posts a beacon at each step, so a fatal names the stage that never
+// happened — Chrome never asked for the page, never asked for the probe, the
+// shell never booted, or the report never came — with Chrome's exit code and
+// the tail of its stderr. Cleanup of the temp profile can never fail a run:
+// Chrome's helper processes outlive the browser process and keep writing into
+// it, which turned successful runs into an uncaught ENOTEMPTY.
 //
 // INPUT. A .bento.html is used as-is (it IS shell + document). A .json is a
 // document — full, or compact once the shell accepts `"compact": true` — and
@@ -44,30 +54,88 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const argv = process.argv.slice(2)
 const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined }
 const flag = (name) => argv.includes(name)
-const input = argv.find((a, i) => !a.startsWith('--') && !['--shell', '--png', '--fail-on'].includes(argv[i - 1]))
+const input = argv.find((a, i) => !a.startsWith('--') && !['--shell', '--png', '--fail-on', '--timeout'].includes(argv[i - 1]))
 const asJson = flag('--json')
 const pngDir = opt('--png')
 const failOn = opt('--fail-on') ?? 'error'
 const shellPath = opt('--shell') ?? path.join(root, 'slides/dist-single/Bento_Slides.bento.html')
+const timeoutArg = opt('--timeout')
+const TIMEOUT_S = timeoutArg === undefined ? 90 : Number(timeoutArg)
+const keepTmp = flag('--keep-tmp')
 
+const USAGE = 'usage: node scripts/bento-check.mjs <deck.bento.html | doc.json> [--shell path] [--png outdir] [--json] [--fail-on error|warning] [--timeout seconds] [--keep-tmp]'
 const die = (msg, code = 2) => { console.error(`bento check: ${msg}`); process.exit(code) }
-if (!input) die('usage: node scripts/bento-check.mjs <deck.bento.html | doc.json> [--shell path] [--png outdir] [--json] [--fail-on error|warning]')
+if (!input) die(USAGE)
 if (!['error', 'warning'].includes(failOn)) die(`--fail-on takes error or warning, not "${failOn}"`)
+if (!(TIMEOUT_S > 0) || !Number.isFinite(TIMEOUT_S)) die(`--timeout takes a number of seconds, not "${timeoutArg}"`)
 if (!fs.existsSync(input)) die(`no such file: ${input}`)
 
-// ---- Chrome — the rigs' lookup ------------------------------------------------
-const findChrome = () => [
-  process.env.BENTO_CHROME,
+// ---- Chrome — the rigs' lookup, then Playwright's browsers ----------------------
+// BENTO_CHROME wins and is never skipped silently: a path that does not exist
+// is an error that names it. Then the usual install paths, then the browsers
+// Playwright downloads (PLAYWRIGHT_BROWSERS_PATH, its per-user cache, the
+// /opt/pw-browsers of many CI images), full Chromium before the headless shell.
+const playwrightChromes = () => {
+  const roots = [
+    process.env.PLAYWRIGHT_BROWSERS_PATH && process.env.PLAYWRIGHT_BROWSERS_PATH !== '0' ? process.env.PLAYWRIGHT_BROWSERS_PATH : null,
+    path.join(os.homedir(), '.cache/ms-playwright'),
+    path.join(os.homedir(), 'Library/Caches/ms-playwright'),
+    '/opt/pw-browsers',
+  ].filter(Boolean)
+  const full = [], shells = []
+  for (const r of roots) {
+    let dirs = []
+    try { dirs = fs.readdirSync(r) } catch { continue }
+    // newest revision first
+    const byRev = (re) => dirs.filter((d) => re.test(d)).sort((a, b) => Number(b.split('-').pop()) - Number(a.split('-').pop()))
+    for (const d of byRev(/^chromium-\d+$/)) {
+      full.push(
+        path.join(r, d, 'chrome-linux64/chrome'),
+        path.join(r, d, 'chrome-linux/chrome'),
+        path.join(r, d, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'),
+        path.join(r, d, 'chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'),
+        path.join(r, d, 'chrome-mac/Chromium.app/Contents/MacOS/Chromium'),
+      )
+    }
+    for (const d of byRev(/^chromium_headless_shell-\d+$/)) {
+      shells.push(
+        path.join(r, d, 'chrome-headless-shell-linux64/chrome-headless-shell'),
+        path.join(r, d, 'chrome-linux/headless_shell'),
+        path.join(r, d, 'chrome-headless-shell-mac-arm64/chrome-headless-shell'),
+        path.join(r, d, 'chrome-headless-shell-mac-x64/chrome-headless-shell'),
+      )
+    }
+  }
+  return [...full, ...shells]
+}
+const SYSTEM_CHROMES = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
   '/usr/bin/google-chrome',
   '/usr/bin/google-chrome-stable',
   '/usr/bin/chromium',
   '/usr/bin/chromium-browser',
-].find((p) => !!p && fs.existsSync(p))
-  ?? (spawnSync('which', ['google-chrome']).status === 0 ? 'google-chrome' : undefined)
+]
+const findChrome = () => {
+  const env = process.env.BENTO_CHROME
+  if (env) {
+    if (!fs.existsSync(env)) die(`BENTO_CHROME is ${env}, which does not exist — point it at a Chrome or Chromium binary, or unset it to search the usual places`)
+    return env
+  }
+  return [...SYSTEM_CHROMES, ...playwrightChromes()].find((p) => fs.existsSync(p))
+    ?? (spawnSync('which', ['google-chrome']).status === 0 ? 'google-chrome' : undefined)
+}
 const chrome = findChrome()
-if (!chrome) die('no Chrome found — install Google Chrome or set BENTO_CHROME to a binary')
+if (!chrome) {
+  die('no Chrome found. Looked for BENTO_CHROME (unset), ' + SYSTEM_CHROMES.join(', ') +
+    ', google-chrome on PATH, and Playwright\'s browsers (PLAYWRIGHT_BROWSERS_PATH, ~/.cache/ms-playwright, ~/Library/Caches/ms-playwright, /opt/pw-browsers). ' +
+    'Install Google Chrome, or set BENTO_CHROME to a Chrome or Chromium binary')
+}
+// A headless-shell build has only the old headless mode; give it the flag it
+// knows rather than rely on it ignoring --headless=new.
+let chromeReal = chrome
+try { chromeReal = fs.realpathSync(chrome) } catch {}
+const headlessShell = /headless[_-]shell/i.test(chrome + ' ' + chromeReal)
 
 // ---- input → the html Chrome will load + the JSON the probe will load --------
 const isHtml = /\.html?$/i.test(input)
@@ -84,9 +152,17 @@ if (isHtml) {
 if (!deckHtml.includes('id="bento-doc"')) die(`${isHtml ? input : shellPath} carries no #bento-doc block — not a Bento file`)
 
 // ---- the probe, bundled against the repo's own sources ----------------------
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-check-'))
 const esbuild = path.join(root, 'slides/node_modules/.bin/esbuild')
 if (!fs.existsSync(esbuild)) die('slides/node_modules is missing — run `cd slides && npm install`')
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-check-'))
+// Removing the temp directory never fails the run: wait for Chrome first, retry
+// what its late writes make transiently undeletable, and say in one line what
+// was left behind if it still cannot go.
+const cleanup = () => {
+  if (keepTmp) { console.error(`bento check: kept the temp directory (Chrome profile, probe): ${tmp}`); return }
+  try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
+  catch (e) { console.error(`bento check: warning: could not remove the temp directory ${tmp} (${e.code ?? e.message}) — delete it by hand`) }
+}
 const exportImagesPath = path.join(root, 'slides/src/editor/exportimages.ts')
 const exportDecisionsPath = path.join(root, 'slides/src/exportimages.ts')
 
@@ -97,15 +173,20 @@ import { exportableSlides, pixelSize } from ${JSON.stringify(exportDecisionsPath
 
 const WANT_PNG = ${JSON.stringify(!!pngDir)}
 const DOC_JSON = ${JSON.stringify(docJson)}
+const BOOT_MS = ${Math.max(500, Math.min(30_000, TIMEOUT_S * 1000 - 1000))}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const post = (body) => fetch('/report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+// a beacon per step, so a run that never reports can say how far it got
+const stage = (name) => fetch('/stage', { method: 'POST', body: name }).catch(() => {})
 
 async function main() {
+  stage('started')
   const t0 = performance.now()
   let bento
-  for (let i = 0; i < 600 && !(bento = window.bento?.doc && window.bento); i++) await sleep(50)
-  if (!bento) return post({ fatal: 'the shell did not boot (window.bento never appeared)' })
+  for (let i = 0; i < BOOT_MS / 50 && !(bento = window.bento?.doc && window.bento); i++) await sleep(50)
+  if (!bento) return post({ fatal: 'the shell did not boot within ' + (BOOT_MS / 1000) + ' s (the probe ran, but window.bento never appeared)', stage: 'boot' })
+  stage('booted')
   if (document.fonts?.ready) await document.fonts.ready
 
   let load = null
@@ -123,15 +204,18 @@ async function main() {
     if (r === false) return post({ fatal: 'the shell refused the document: loadDoc() returned false (not valid bento/slides JSON, or a compact document on a shell without #484)' })
     load = r && typeof r === 'object' ? r : { ok: true }
     await sleep(50)
+    stage('loaded the document')
   }
   const doc = bento.doc
   const v = bento.validate()
+  stage('validated')
   const pages = []
   let contact = null
   const shown = exportableSlides(doc)
   if (WANT_PNG) {
     const thumbs = []
     for (const slide of shown) {
+      stage('rendering slide ' + (pages.length + 1) + ' of ' + shown.length)
       const blob = await rasterizeSlide(doc, slide, 'png', 1)
       const url = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob) })
       pages.push(url)
@@ -178,7 +262,7 @@ const built = spawnSync(esbuild, [
   path.join(tmp, 'probe-entry.js'), '--bundle', '--format=esm', '--log-level=error',
   '--outfile=' + path.join(tmp, 'probe.js'),
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
-if (built.status !== 0) die(`could not bundle the probe:\n${built.stderr}`)
+if (built.status !== 0) { cleanup(); die(`could not bundle the probe:\n${built.stderr}`) }
 const probe = fs.readFileSync(path.join(tmp, 'probe.js'), 'utf8')
 
 // The deck, with the probe appended and the load gate after it. The gate is
@@ -195,11 +279,25 @@ let releaseGate = null
 let child = null
 const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64')
 const dbg = (...a) => { if (process.env.BENTO_CHECK_DEBUG) console.error(`[${Date.now() - started} ms]`, ...a) }
+// What the server has seen, in order — the stage a failure stopped at.
+const seen = { page: false, probe: false, started: false, booted: false, last: '' }
 const server = http.createServer((req, res) => {
   const url = (req.url ?? '/').split('?')[0]
   dbg(req.method, url)
-  if (url === '/deck.html') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(page); return }
-  if (url === '/probe.js') { res.writeHead(200, { 'content-type': 'text/javascript' }); res.end(probe); return }
+  if (url === '/deck.html') { seen.page = true; res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(page); return }
+  if (url === '/probe.js') { seen.probe = true; res.writeHead(200, { 'content-type': 'text/javascript' }); res.end(probe); return }
+  if (url === '/stage' && req.method === 'POST') {
+    let body = ''
+    req.on('data', (b) => { body += b })
+    req.on('end', () => {
+      if (body === 'started') seen.started = true
+      else if (body === 'booted') seen.booted = true
+      seen.last = body.slice(0, 80)
+      dbg('stage', body)
+      res.writeHead(204); res.end()
+    })
+    return
+  }
   if (url === '/report' && req.method === 'POST') {
     let body = ''
     req.on('data', (b) => { body += b })
@@ -211,7 +309,8 @@ const server = http.createServer((req, res) => {
       // The report is the deliverable, not the dump: the shell keeps the page
       // busy past load (measured: Chrome sat 88 s after the gate opened), so
       // Chrome is closed the moment the report is in.
-      setTimeout(() => child?.kill('SIGTERM'), 100)
+      setTimeout(() => stopChrome('SIGTERM'), 100)
+      setTimeout(() => stopChrome('SIGKILL'), 5000)
     })
     return
   }
@@ -225,28 +324,90 @@ const server = http.createServer((req, res) => {
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 const port = server.address().port
 
+// The stage a run that never reported stopped at, in words, with its key.
+const stageNow = () => {
+  if (!seen.page) return { stage: 'page', what: 'Chrome never requested the page' }
+  if (!seen.probe) return { stage: 'probe', what: 'Chrome loaded the page but never requested the probe module' }
+  if (!seen.started) return { stage: 'probe-run', what: 'the probe module was fetched but never ran' }
+  if (!seen.booted) return { stage: 'boot', what: 'the probe ran but the shell never booted (window.bento never appeared)' }
+  return { stage: 'report', what: `the shell booted but the report never arrived (last step: ${seen.last})` }
+}
+
+// Chrome runs in its own process group (not on Windows), so stopping it stops
+// its helpers too — they are what kept writing into the profile after the
+// browser process had gone.
+const ownGroup = process.platform !== 'win32'
+const stopChrome = (sig) => {
+  if (!child?.pid) return
+  try { if (ownGroup) process.kill(-child.pid, sig); else child.kill(sig) } catch {}
+}
+let stderrTail = ''
+let exitCode = null
+let exitSignal = null
+let spawnError = null
+let timedOut = false
+const onSignal = (sig) => { stopChrome('SIGKILL'); server.close(); cleanup(); process.exit(sig === 'SIGINT' ? 130 : 143) }
+process.once('SIGINT', onSignal)
+process.once('SIGTERM', onSignal)
+
 // spawn, never spawnSync: the server lives in this process.
 child = spawn(chrome, [
-  '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run',
+  headlessShell ? '--headless' : '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run',
   '--no-default-browser-check', '--disable-background-networking',
   '--disable-component-update', '--disable-sync', '--disable-default-apps',
   '--hide-scrollbars', '--window-size=1600,1000',
   '--user-data-dir=' + path.join(tmp, 'profile'),
   '--dump-dom', `http://127.0.0.1:${port}/deck.html`,
-], { stdio: ['ignore', 'ignore', 'ignore'] })
-const TIMEOUT = 90_000
+], { stdio: ['ignore', 'ignore', 'pipe'], detached: ownGroup })
+child.stderr.on('data', (b) => { stderrTail = (stderrTail + b).slice(-4096) })
 await new Promise((resolve) => {
-  const timer = setTimeout(() => { report ??= { fatal: `no report within ${TIMEOUT / 1000}s — the shell did not boot, or Chrome hung` }; child.kill('SIGKILL') }, TIMEOUT)
-  child.on('close', (code) => { dbg('chrome exited', code); clearTimeout(timer); resolve() })
+  const timer = setTimeout(() => { timedOut = !report; stopChrome('SIGKILL') }, TIMEOUT_S * 1000)
+  // after a SIGTERM, a Chrome that lingers is killed
+  let lingering = null
+  child.on('error', (e) => { spawnError = e; clearTimeout(timer); resolve() })
+  child.on('exit', (code, signal) => {
+    exitCode = code; exitSignal = signal
+    dbg('chrome exited', code, signal)
+    lingering = setTimeout(() => stopChrome('SIGKILL'), 5000)
+  })
+  child.on('close', () => { clearTimeout(timer); clearTimeout(lingering); resolve() })
 })
+stopChrome('SIGKILL') // any helper still in the group
 server.close()
-fs.rmSync(tmp, { recursive: true, force: true })
+cleanup()
+process.off('SIGINT', onSignal)
+process.off('SIGTERM', onSignal)
 const wall = Date.now() - started
 
-if (!report) report = { fatal: 'Chrome exited before the probe reported' }
-if (report.fatal) {
-  if (asJson) console.log(JSON.stringify({ ok: false, fatal: report.fatal, ms: wall }, null, 2))
-  else console.error(`bento check: ${report.fatal}`)
+const chromeInfo = { path: chrome, headless: headlessShell ? '--headless' : '--headless=new' }
+if (!report || report.fatal) {
+  let fatal, stage
+  if (spawnError) {
+    stage = 'start'
+    fatal = `could not start Chrome at ${chrome}: ${spawnError.message} — set BENTO_CHROME to a Chrome or Chromium binary you can run`
+  } else if (report?.fatal) {
+    stage = report.stage ?? stageNow().stage
+    fatal = report.fatal
+  } else {
+    const at = stageNow()
+    stage = at.stage
+    if (timedOut) {
+      fatal = `no report within ${TIMEOUT_S} s (--timeout ${TIMEOUT_S}): ${at.what}. A long deck or a slow machine needs more time: raise it with --timeout <seconds>`
+    } else {
+      const how = exitSignal ? `was killed by ${exitSignal}` : `exited with code ${exitCode}`
+      fatal = `Chrome (${chrome}) ${how} before the probe reported: ${at.what}. ` +
+        (stage === 'page' ? 'Run the binary by hand to see why it does not start, or set BENTO_CHROME to another Chrome' : 'Rerun with BENTO_CHECK_DEBUG=1 to see each request')
+    }
+  }
+  const tail = stderrTail.trim()
+  if (asJson) {
+    console.log(JSON.stringify({ ok: false, fatal, stage, chrome: { ...chromeInfo, exitCode, signal: exitSignal, stderr: tail }, ms: wall }, null, 2))
+  } else {
+    console.error(`bento check: ${fatal}`)
+    console.error(`  Chrome: ${chrome}${exitCode !== null ? ` (exit code ${exitCode})` : exitSignal ? ` (${exitSignal})` : ''}`)
+    // the last lines; --json carries the whole 4 KB tail
+    if (tail) console.error(`  Chrome's last output:\n${tail.split('\n').slice(-12).map((l) => '    ' + l).join('\n')}`)
+  }
   process.exit(2)
 }
 
@@ -284,6 +445,7 @@ const out = {
   expanded: report.load?.expanded ?? null,
   pages: written.filter((p) => !p.endsWith('contact.png')),
   contact: written.find((p) => p.endsWith('contact.png')) ?? null,
+  chrome: chromeInfo,
   ms: wall,
 }
 
@@ -291,6 +453,7 @@ if (asJson) {
   console.log(JSON.stringify(out, null, 2))
 } else {
   console.log(`bento check — ${report.title ?? input}`)
+  console.log(`  Chrome: ${chrome}`)
   console.log(`  ${report.slides} slides (${report.shown} shown), ${errors} error${errors === 1 ? '' : 's'}, ${warnings} warning${warnings === 1 ? '' : 's'}${report.measured === false ? ' (text not measured: no layout)' : ''}, ${wall} ms`)
   if (dropped.length) {
     console.log(`\n  dropped on load (${dropped.length}):`)

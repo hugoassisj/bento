@@ -214,8 +214,14 @@ many px the box is short and on which element; `out-of-canvas`, dead links, effe
 never run, unknown keys the gate dropped) → look at `contact.png`, one image of
 every slide, or a single `page-NN.png` when a finding points at it → fix →
 run again. Exit 0 means no finding at or above `--fail-on` (default `error`).
-Needs Chrome (`BENTO_CHROME` to point at a binary) and the built shell
-(`cd slides && npm run build:single`, or `--shell path`).
+Needs Chrome (`BENTO_CHROME` to point at a binary; otherwise the usual
+install paths, then Playwright's browsers) and the built shell
+(`cd slides && npm run build:single`, or `--shell path`). Exit 2 is a run that
+could not finish: the message names the stage that failed (Chrome did not
+start, never requested the page or the probe, the shell never booted, the
+report never came) with Chrome's exit code and the end of its output.
+`--timeout <seconds>` (default 90) for a long deck or a slow machine,
+`--keep-tmp` to keep the Chrome profile and the probe for a look.
 
 ## The document schema
 

@@ -183,7 +183,10 @@ runs:
       # path and a contact sheet. The rig drives it as a child process on
       # the built shell: a deck with an overflowing box and an off-canvas
       # rect names both; --json, --png, exit codes; a compact document is
-      # refused in plain words on a shell without compact input. Self-skips
+      # refused in plain words on a shell without compact input. Fake Chrome
+      # binaries pin the failure paths (AI-05): every fatal names its stage
+      # and carries Chrome's stderr, --timeout is honoured, and a temp
+      # profile that cannot be removed never changes the exit code. Self-skips
       # only OUTSIDE CI where Chrome or the shell is missing.
       shell: bento-step {0}
       run: node scripts/test-bento-check.ts
