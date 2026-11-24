@@ -118,7 +118,7 @@ function rows(commands: Command[]): Row[] {
 const HINT: Record<string, string> = {
   copy: 'Copy · paste — elements, or the whole slide when nothing is selected',
   'ghost-cut': 'Cut to move — the selection fades until you paste it in its new place; Esc cancels',
-  component: 'Create component — copies inserted from the Tokens view follow it',
+  component: 'Create component — copies inserted from the Library follow it',
   palette: 'Command palette — search every action by name',
   'auto-layout': 'Wrap the selection in an auto-layout frame',
 }

@@ -22,6 +22,7 @@ import { goToMain, selectedComponent } from './inspector/component'
 import { activeMode, bindToken, modesOf } from '../tokens'
 import { derive, deriveMemory, type DeriveMemory } from '../derive'
 import { TokensPane } from './tokenspane'
+import { LibraryPane } from './librarypane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { fitTabNames, iconTab, ownsArrows, slidingPill, tabBarNeed } from './inspector/controls'
@@ -200,6 +201,8 @@ export class Editor {
   private sideLayers!: HTMLElement
   private sideTokens!: HTMLElement
   private tokensPane!: TokensPane
+  private sideLibrary!: HTMLElement
+  private libraryPane!: LibraryPane
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
   private fileChip?: HTMLElement
@@ -256,6 +259,14 @@ export class Editor {
     this.tokensPane.mount(this.sideTokens)
     store.on('doc', () => this.tokensPane.refresh())
     store.on('current', () => this.tokensPane.refresh())
+    this.libraryPane = new LibraryPane(store, {
+      dropAt: (x, y, preview) => this.canvas.dropAt(x, y, preview),
+      goToMain: (id) => goToMain(this.panel, id),
+      deleteMain: (id) => { goToMain(this.panel, id); this.deleteSelection() },
+      keys: () => this.keysOf('component') ?? '',
+    })
+    this.libraryPane.mount(this.sideLibrary)
+    store.on('doc', () => this.libraryPane.refresh())
     store.on('doc', () => this.syncFonts())
     this.syncFonts()
     // A document that cannot write can ARRIVE in a running editor, not only boot
@@ -595,7 +606,8 @@ export class Editor {
     this.wireThumbDrop()
     this.sideLayers = div('ed-side-layers')
     this.sideTokens = div('ed-side-tokens')
-    this.sidebar.append(this.sideTabs(), this.thumbs, this.sideLayers, this.sideTokens)
+    this.sideLibrary = div('ed-side-library')
+    this.sidebar.append(this.sideTabs(), this.thumbs, this.sideLayers, this.sideTokens, this.sideLibrary)
     // a link in a thumbnail's text is a picture of a link, not a control: a
     // click selects the slide and never navigates the editor away
     this.sidebar.addEventListener('click', (ev) => {
@@ -752,6 +764,7 @@ export class Editor {
     // host is the fresh sideTokens above — re-home it, or a language switch
     // leaves it drawing into the detached old column and the view goes blank.
     this.tokensPane?.mount(this.sideTokens)
+    this.libraryPane?.mount(this.sideLibrary)
     const offs = (['doc', 'selection', 'current'] as const).map((e) => this.store.on(e, () => this.panel.layers.refresh()))
     this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
     this.panel.onListIndent = (dir) => { this.canvas.indentList(dir) }
@@ -2173,10 +2186,11 @@ export class Editor {
     const show = (view: string) => {
       this.sidebar.dataset.view = view
       for (const b of bar.children) b.setAttribute('aria-selected', String((b as HTMLElement).dataset.view === view))
+      if (view === 'library') this.libraryPane?.refresh() // it skips its refreshes while hidden
     }
     // Each tab is its glyph; the chosen one also says its name (fitTabNames)
-    const glyphs = { slides: ICONS.viewSlides, layers: ICONS.viewLayers, tokens: ICONS.viewTokens }
-    for (const [view, label] of [['slides', t('Slides')], ['layers', t('Layers')], ['tokens', t('Tokens')]] as const) {
+    const glyphs = { slides: ICONS.viewSlides, layers: ICONS.viewLayers, tokens: ICONS.viewTokens, library: ICONS.viewLibrary }
+    for (const [view, label] of [['slides', t('Slides')], ['layers', t('Layers')], ['tokens', t('Tokens')], ['library', t('Library')]] as const) {
       const b = iconTab(glyphs[view], label)
       b.dataset.view = view
       b.addEventListener('click', () => { show(view); lsSet('bento-side-view', view) })
@@ -2184,7 +2198,7 @@ export class Editor {
     }
     fitTabNames(bar)
     const saved = lsGet('bento-side-view')
-    show(saved === 'layers' || saved === 'tokens' ? saved : 'slides')
+    show(saved === 'layers' || saved === 'tokens' || saved === 'library' ? saved : 'slides')
     slidingPill(bar)
     // the inspector's band (panels.ts mountTabs): sticky, edge to edge
     const band = div('ed-tabs-band ed-side-band')
@@ -2963,7 +2977,7 @@ export class Editor {
     const els = withDescendants(this.store.slide, this.store.selectedElements)
     if (!els.length || els.some((e) => e.component)) return
     const id = uid('comp')
-    // named at birth, so the toast, the inspector header and the Tokens list
+    // named at birth, so the toast, the inspector header and the Library
     // all say the same thing ("Component 3"), and the name is the user's to change
     const name = els[0].groupName || t('Component {n}', { n: components(this.store.doc).length + 1 })
     this.store.commit(() => {
@@ -2971,13 +2985,13 @@ export class Editor {
       makeComponent(live, id, live[0].groupId && live.every((e) => e.groupId === live[0].groupId) ? live[0].groupId! : uid('g'))
       for (const e of live) e.groupName = name
     })
-    this.toast(t('Made {name} — rename it in its header; insert copies from Tokens', { name }))
-    this.showSideView('tokens')
-    this.tokensPane.showComponent(id)
+    this.toast(t('Made {name} — rename it in its header; insert copies from the Library', { name }))
+    this.showSideView('library')
+    this.libraryPane.showComponent(id)
   }
 
-  /** Show one of the side column's views (Slides | Layers | Tokens). */
-  showSideView(view: 'slides' | 'layers' | 'tokens') {
+  /** Show one of the side column's views (Slides | Layers | Tokens | Library). */
+  showSideView(view: 'slides' | 'layers' | 'tokens' | 'library') {
     this.sidebar.querySelector<HTMLElement>(`.ed-side-tabs [data-view="${view}"]`)?.click()
   }
 
@@ -3811,7 +3825,9 @@ export class Editor {
       { id: 'token-new-color', label: 'New color token', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('color') } },
       { id: 'token-new-number', label: 'New number token', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('number') } },
       { id: 'token-bind', label: 'Bind to token…', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.bindToTokenMenu() },
-      { id: 'tokens-show', label: 'Show tokens and components', scope: 'always', run: () => this.showSideView('tokens') },
+      { id: 'tokens-show', label: 'Show tokens', scope: 'always', run: () => this.showSideView('tokens') },
+      { id: 'library-show', label: 'Show library', scope: 'always', run: () => this.showSideView('library') },
+      { id: 'component-insert', label: 'Insert component…', scope: 'canvas', when: writable, run: () => { this.showSideView('library'); this.libraryPane.focusSearch() } },
       { id: 'redo', label: 'Redo', keys: `⇧${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && ((ev.shiftKey && key(ev) === 'z') || key(ev) === 'y'), run: () => this.store.redo() },
       { id: 'undo', label: 'Undo', keys: `${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'z', run: () => this.store.undo() },
       { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: writable, match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },

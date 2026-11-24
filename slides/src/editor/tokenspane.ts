@@ -1,21 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// The side column's Tokens view: the deck's design tokens (tokens.ts) and its
-// components (components.ts), beside Slides | Layers.
+// The side column's Tokens view: the deck's design tokens (tokens.ts), beside
+// Slides | Layers | Library (components live in the Library, librarypane.ts).
 //
 // Tokens: grouped by type, each with its value in the active mode, how many
 // properties follow it (a button that walks them), rename in place, delete
 // (bound literals stay). The deck's theme colours lead the Colors group as
 // built-in tokens: the same gesture edits them, they cannot be deleted, and
 // they write the palette (palette.ts), not `theme.tokens`. A mode switch picks
-// which column of values the deck shows and says what it changed. Components:
-// one row per main, Insert drops a copy on the current slide. Every change is
-// one store.commit — one undo step — and the editor's derivations do the rest.
+// which column of values the deck shows and says what it changed. Every change
+// is one store.commit — one undo step — and the editor's derivations do the rest.
 import type { Store } from '../store'
 import type { DesignTokens, ShadowSpec, TokenType } from '../model'
-import { uid } from '../model'
 import { TOKEN_TYPES, activeMode, deleteToken, freeTokenName, modesOf, renameToken, tokenUses, tokenName, protoName, tokenNameError, tokenTargets } from '../tokens'
-import { components, instanceOf } from '../components'
 import { PALETTE_SLOTS, eachRef, paletteOf, slotIsSet } from '../palette'
 import { parseColor, slotLabel } from './inspector/controls'
 import { openColorPopover } from './inspector/colorpopover'
@@ -102,7 +99,7 @@ function inlineName(placeholder: string, label: string, submit: (v: string) => s
  * runs after the field is gone, so the rebuild it causes is not held off by a
  * focused input.
  */
-function editing(text: string, label: string, check: (v: string) => string | null, commit: (v: string) => void, onCancel?: () => void, cls = 'ed-token-name', mono = false, placeholder = false): HTMLButtonElement {
+export function editing(text: string, label: string, check: (v: string) => string | null, commit: (v: string) => void, onCancel?: () => void, cls = 'ed-token-name', mono = false, placeholder = false): HTMLButtonElement {
   const shown = button(`ed-edit ${cls}${mono ? ' ed-mono' : ''}${placeholder ? ' ed-edit-placeholder' : ''}`, text, `${label}: ${text} — ${t('click to edit')}`)
   const start = () => {
     const i = document.createElement('input')
@@ -166,7 +163,7 @@ export class TokensPane {
   refresh() {
     const host = this.host
     if (!host || this.live || host.querySelector('input:focus, .ed-token-name[aria-invalid]')) return
-    host.replaceChildren(this.tokensSection(), this.componentsSection())
+    host.replaceChildren(this.tokensSection())
   }
 
   /** Focus a token row's first control (after it was created or renamed). */
@@ -588,84 +585,7 @@ export class TokensPane {
     row.append(lead, label, val, this.usesButton(name, used, () => tokenTargets(this.store.doc, name), name), more)
     return row
   }
-
-  private componentsSection(): HTMLElement {
-    const sec = div('ed-tokens ed-components')
-    const list = components(this.store.doc)
-    const h = document.createElement('h3')
-    h.className = 'ed-section'
-    h.dataset.key = 'Components'
-    const label = document.createElement('span')
-    label.textContent = t('Components')
-    const n = document.createElement('span')
-    n.className = 'ed-sec-count'
-    n.textContent = String(list.length)
-    h.append(label, n)
-    sec.appendChild(h)
-    if (!list.length) {
-      const empty = document.createElement('p')
-      empty.className = 'ed-hint'
-      empty.textContent = t('Select elements and choose Create component (⌘⌥K) to reuse them.')
-      sec.appendChild(empty)
-    }
-    list.forEach((c, i) => {
-      const row = div('ed-token-row ed-component-row')
-      row.dataset.component = c.id
-      // the name is the main's group name, renamed in place
-      const mark = document.createElement('span')
-      mark.className = 'ed-layer-comp'
-      mark.textContent = '◆'
-      const shown = c.name || t('Component {n}', { n: i + 1 })
-      const name = editing(shown, t('Component name'), () => null, (to) => this.store.commit(() => {
-        for (const m of components(this.store.doc).find((x) => x.id === c.id)?.main ?? []) {
-          if (to) m.groupName = to
-          else delete m.groupName
-        }
-      }), undefined, 'ed-token-name', false, !c.name)
-      const ins = button('ed-btn', t('Insert'), t('Insert a copy on this slide'))
-      ins.addEventListener('click', () => this.insertCopy(c.id))
-      row.append(mark, name, ins)
-      sec.appendChild(row)
-    })
-    return sec
-  }
-
-  /** Point at a component's row (after ⌥⌘K made it): it flashes, its name a
-   *  click away. Not focused — a focused field would keep ⌘Z from undoing the make. */
-  showComponent(id: string) {
-    const row = this.host?.querySelector<HTMLElement>(`[data-component="${CSS.escape(id)}"]`)
-    if (!row) return
-    row.scrollIntoView({ block: 'nearest' })
-    row.classList.remove('ed-flash'); void row.offsetWidth; row.classList.add('ed-flash')
-  }
-
-  /**
-   * A copy of a component on the current slide: centred on the slide, then
-   * nudged down-right until it covers nothing already there, and selected.
-   * ponytail: the slide's centre, not the scrolled viewport's — the canvas fits
-   * the slide by default; a zoomed-in view may still put it off-screen.
-   */
-  private insertCopy(id: string) {
-    const c = components(this.store.doc).find((x) => x.id === id)
-    if (!c) return
-    const box = bounds(c.main as unknown as Box[])
-    const { width, height } = this.store.doc.size
-    const others = this.store.slide.elements as unknown as Box[]
-    let x = Math.round((width - box.w) / 2), y = Math.round((height - box.h) / 2)
-    for (let i = 0; i < 24 && others.some((o) => hits({ x, y, w: box.w, h: box.h }, o)); i++) { x += 32; y += 32 }
-    if (x + box.w > width || y + box.h > height) { x = Math.round((width - box.w) / 2); y = Math.round((height - box.h) / 2) }
-    const els = instanceOf(c, () => uid('c'), x - box.x, y - box.y)
-    this.store.commit(() => { this.store.slide.elements.push(...els) })
-    this.store.select(els.map((e) => e.id))
-  }
 }
-
-interface Box { x: number; y: number; w: number; h: number }
-const bounds = (els: Box[]): Box => {
-  const x = Math.min(...els.map((e) => e.x)), y = Math.min(...els.map((e) => e.y))
-  return { x, y, w: Math.max(...els.map((e) => e.x + e.w)) - x, h: Math.max(...els.map((e) => e.y + e.h)) - y }
-}
-const hits = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
 /** Per type: caption, the + button's label, a placeholder name. */
 const TYPE_LABEL: Record<TokenType, [string, string, string]> = {

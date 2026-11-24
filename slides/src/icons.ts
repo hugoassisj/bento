@@ -205,6 +205,8 @@ export const ICONS = {
   /** a stroke's weight: three lines growing thicker */
   strokeWeight: svg('<path d="M4 6h16" stroke-width="1"/><path d="M4 12h16" stroke-width="2"/><path d="M4 18h16" stroke-width="3"/>'),
   viewTokens: svg('<circle cx="7.5" cy="7.5" r="3.5"/><circle cx="16.5" cy="16.5" r="3.5"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>'),
+  /** the Library view: Figma's four-diamond components glyph */
+  viewLibrary: svg('<path d="m12 2 3.5 3.5L12 9 8.5 5.5z"/><path d="m12 15 3.5 3.5L12 22l-3.5-3.5z"/><path d="m5.5 8.5 3.5 3.5-3.5 3.5L2 12z"/><path d="m18.5 8.5 3.5 3.5-3.5 3.5L15 12z"/>'),
   swap: svg('<path d="M7 7h13m-3-3 3 3-3 3"/><path d="M17 17H4m3-3-3 3 3 3"/>'),
 } as const
 

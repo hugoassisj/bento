@@ -810,6 +810,29 @@ export class SlideCanvas {
     return { x: (clientX - r.left) / this.scale, y: (clientY - r.top) / this.scale }
   }
 
+  /** Where something dragged in from outside (a Library tile) lands: the
+   *  slide point under a viewport point, and the topmost frame there that can
+   *  take it — the hit-test and slot a canvas drag uses — or null off the
+   *  canvas. `preview` outlines that frame until the next call without it. */
+  dropAt(clientX: number, clientY: number, preview: boolean): { x: number; y: number; frame?: string; slot: number } | null {
+    this.scaleHost.querySelector(':scope > .ed-drop-frame')?.remove()
+    const r = this.scroller.getBoundingClientRect()
+    if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return null
+    const pt = this.slidePointAt(clientX, clientY)
+    const slide = this.store.slide
+    const f = [...slide.elements].reverse().find((e) =>
+      isFrame(e) && !e.hidden && pt.x >= e.x && pt.x <= e.x + e.w && pt.y >= e.y && pt.y <= e.y + e.h && canAccept(slide, [], e.id))
+    if (f && preview) {
+      const box = document.createElement('div')
+      box.className = 'ed-drop-frame'
+      box.dataset.frame = f.id
+      Object.assign(box.style, { left: `${f.x}px`, top: `${f.y}px`, width: `${f.w}px`, height: `${f.h}px` })
+      box.style.setProperty('--k', String(1 / (this.scale || 1)))
+      this.scaleHost.appendChild(box)
+    }
+    return { x: pt.x, y: pt.y, frame: f?.id, slot: f ? this.slotIn(f, pt, []) : 0 }
+  }
+
   zoomIn() { this.setZoom(this.zoom * 1.25) }
   zoomOut() { this.setZoom(this.zoom / 1.25) }
   zoomReset() { this.setZoom(1) }

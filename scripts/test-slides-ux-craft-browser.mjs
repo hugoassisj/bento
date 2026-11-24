@@ -195,7 +195,7 @@ try {
   for (const locale of ['en-US', 'de-DE', 'es-ES', 'fr-FR', 'it-IT', 'ja-JP', 'pt-BR', 'zh-CN']) {
     const { ctx, p } = await boot(browser, { locale })
     const cut = []
-    for (const view of ['slides', 'layers', 'tokens']) {
+    for (const view of ['slides', 'layers', 'tokens', 'library']) {
       await p.locator(`.ed-side-tabs [data-view="${view}"]`).click()
       await p.waitForTimeout(150)
       cut.push(...await p.$$eval('.ed-side-tabs button', (bs) => bs.flatMap((b) => {

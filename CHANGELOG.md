@@ -16,6 +16,14 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Components have a Library of their own, with pictures.** A fourth view
+  beside Slides, Layers and Tokens shows every component as a small picture of
+  its main, with its name under it. Type in the search field to find one;
+  click it, or press Enter, to put a copy in the middle of the slide, or drag
+  it to exactly where it goes — dropped inside an auto-layout frame, it joins
+  the frame. Right-click a picture to go to its main, rename it or delete it.
+  Create component now opens the Library on the new picture, and ⌘K has
+  Insert component… and Show library. The Tokens view lists only tokens.
 
 ## [1.3.0] — 2026-11-22
 

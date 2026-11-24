@@ -6,8 +6,8 @@
 //
 // WHAT THIS PROVES:
 //   1. ⌥⌘K makes the selection a component's main, in one undo step; its
-//      layer rows show ◆, and the Tokens view lists it;
-//   2. Insert (Tokens view) drops a copy on the current slide — fresh ids, one
+//      layer rows show ◆, and the Library view lists it;
+//   2. a Library tile's click drops a copy on the current slide — fresh ids, one
 //      new group, rows marked ◇ — on free space clear of the main, selected;
 //   3. an edit to the main (the inspector's own corner-radius field) reaches the
 //      copy, which keeps its own position;
@@ -78,9 +78,9 @@ try {
   await p.keyboard.press(`${MOD}+Shift+z`); await p.waitForTimeout(250)
 
   console.log('\ninsert a copy\n')
-  await p.locator('.ed-side-tabs [data-view="tokens"]').click(); await p.waitForTimeout(200)
-  ok(await p.locator('.ed-side-tokens .ed-component-row').count() === 1, 'the Tokens view lists the component')
-  await p.locator('.ed-side-tokens .ed-component-row button', { hasText: 'Insert' }).click(); await p.waitForTimeout(300)
+  await p.locator('.ed-side-tabs [data-view="library"]').click(); await p.waitForTimeout(200)
+  ok(await p.locator('.ed-side-library .ed-lib-tile').count() === 1, 'the Library view lists the component')
+  await p.locator('.ed-side-library .ed-lib-tile .ed-lib-pic').click(); await p.waitForTimeout(300)
   const all = await els()
   const copies = all.filter((e) => e.component && !e.component.main)
   ok(copies.length === 2 && copies.every((e) => e.id !== 'a' && e.id !== 'b') && copies[0].groupId === copies[1].groupId && copies[0].groupId !== a.groupId, 'Insert adds two copies with fresh ids in a new group')
@@ -133,8 +133,8 @@ try {
 
   console.log('\na member moved alone keeps its place\n')
   {
-    await p.locator('.ed-side-tabs [data-view="tokens"]').click(); await p.waitForTimeout(150)
-    await p.locator('.ed-side-tokens .ed-component-row .ed-btn', { hasText: /^Insert/ }).first().click(); await p.waitForTimeout(300)
+    await p.locator('.ed-side-tabs [data-view="library"]').click(); await p.waitForTimeout(150)
+    await p.locator('.ed-side-library .ed-lib-tile .ed-lib-pic').first().click(); await p.waitForTimeout(300)
     await p.locator('.ed-side-tabs [data-view="layers"]').click(); await p.waitForTimeout(150)
     const fresh = await p.evaluate(() => window.bento.selection.slice()) // Insert selects the new copy
     const copy = (await els()).filter((e) => fresh.includes(e.id))
@@ -194,8 +194,9 @@ try {
   await p.keyboard.type('space.md'); await p.keyboard.press('Enter'); await p.waitForTimeout(300)
   ok(await p.evaluate(() => window.bento.doc.theme.tokens.set['space.md']?.type) === 'number', 'typing a name and Enter creates the number token')
   // a component is renamed in place
-  await p.locator('.ed-side-tokens .ed-component-row .ed-token-name').first().click()
-  const compName = p.locator('.ed-side-tokens .ed-component-row input.ed-edit-field').first()
+  await p.locator('.ed-side-tabs [data-view="library"]').click(); await p.waitForTimeout(150)
+  await p.locator('.ed-side-library .ed-lib-tile .ed-lib-name').first().click()
+  const compName = p.locator('.ed-side-library .ed-lib-tile input.ed-edit-field').first()
   await compName.fill('Card'); await compName.press('Enter'); await p.waitForTimeout(300)
   ok((await el('a')).groupName === 'Card', 'the component is renamed in place (its main\'s group name)')
 
@@ -291,8 +292,8 @@ try {
     await p.keyboard.press(`${MOD}+Alt+KeyK`); await p.waitForTimeout(300)
     let list = await els()
     ok(['card', 'ct1', 'ct2'].every((id) => list.find((e) => e.id === id).component?.main), `⌥⌘K on the frame alone makes it and its texts the main (${list.filter((e) => e.component?.main).map((e) => e.id).join(',')})`)
-    await p.locator('.ed-side-tabs [data-view="tokens"]').click(); await p.waitForTimeout(150)
-    await p.locator('.ed-side-tokens .ed-component-row .ed-btn', { hasText: /^Insert/ }).first().click(); await p.waitForTimeout(300)
+    await p.locator('.ed-side-tabs [data-view="library"]').click(); await p.waitForTimeout(150)
+    await p.locator('.ed-side-library .ed-lib-tile .ed-lib-pic').first().click(); await p.waitForTimeout(300)
     list = await els()
     const copyFrame = list.find((e) => e.layout && e.id !== 'card')
     const copyKids = list.filter((e) => copyFrame && e.parentId === copyFrame.id)

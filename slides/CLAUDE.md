@@ -633,7 +633,10 @@ anim, charts, i18n, sync), shared by every app.
   (inspector/numexpr.ts, never eval), show Mixed on a multi-selection (an
   edit there is a per-element delta), and scrub from their label under
   pointer lock, held to their min/max. The side column is Slides | Layers |
-  Tokens (tokenspane.ts: design tokens and components) — the ONE home for the
+  Tokens | Library (librarypane.ts: components as tiles drawn by renderSlide,
+  cached per tile by mainSig and drawn when scrolled into view; search; click
+  or Enter inserts at the centre, a drag drops at the pointer via
+  canvas.dropAt, into the frame there). Tokens (tokenspane.ts) is the ONE home for the
   deck's colours: its Colors group leads with the theme colours as built-in
   tokens (+ adds a palette slot, − removes an optional one; they write the
   palette), then the deck's own; names and values are text that edits in
