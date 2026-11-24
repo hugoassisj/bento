@@ -4968,14 +4968,6 @@ export class Editor {
     }, action ? 8000 : 2200)
   }
 
-  /**
-   * A save that did not happen — ⌘S or any of the copies. A cancelled picker
-   * never gets here (the kernel answers `cancelled` / false and the caller says
-   * nothing). The error goes to the console for whoever debugs it; the author
-   * gets the reason when the browser gave one, and a way out: the same bytes
-   * (`doc`, or the open deck at the moment of the click) as a download, which
-   * needs no permission and no picker.
-   */
   /** The visible failure's close (Dismiss), for Escape. */
   private closeError: (() => void) | null = null
 
@@ -4997,6 +4989,14 @@ export class Editor {
     }, true)
   }
 
+  /**
+   * A save that did not happen — ⌘S or any of the copies. A cancelled picker
+   * never gets here (the kernel answers `cancelled` / false and the caller says
+   * nothing). The error goes to the console for whoever debugs it; the author
+   * gets the reason when the browser gave one, and a way out: the same bytes
+   * (`doc`, or the open deck at the moment of the click) as a download, which
+   * needs no permission and no picker.
+   */
   private saveFailed(err: unknown, copy?: { doc: import('../model').BentoDoc; suffix: string }) {
     console.error(err)
     const name = (err as { name?: unknown } | null)?.name
