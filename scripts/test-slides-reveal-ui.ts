@@ -20,7 +20,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { readingOrder, revealInOrder, revealTogether, removeReveal, advanceStep, hasSteps, type Placed } from '../slides/src/editor/reveal.ts'
+import { readingOrder, revealInOrder, revealTogether, removeReveal, advanceStep, hasSteps, moveStep, joinStep, compactSteps, removeStep, stepGroups, staggered, type Placed } from '../slides/src/editor/reveal.ts'
 
 let failures = 0
 let checks = 0
@@ -144,6 +144,69 @@ for (let trial = 0; trial < 400 && !propFail; trial++) {
 }
 ok(!propFail && clicks > 3000, `${clicks} clicks over random slides: always 1..k, nothing newly shared${propFail ? ` — ${propFail}` : ''}`)
 ok(!hasSteps(slide) && hasSteps(withBase), 'badges show only when the slide has a step')
+
+console.log('\nbuild order list: move, join, compact, remove\n')
+// The Animate tab's Build order list (MP-02). Each verb hands back a 1..k
+// numbering, and only the elements whose number changes get a patch.
+const apply = (s: Placed[], patches: { id: string; step: number }[]): Placed[] => {
+  const m = new Map(patches.map((q) => [q.id, q.step]))
+  return s.map((e) => (m.has(e.id) ? { ...e, fx: { ...(e.fx ?? {}), step: m.get(e.id) } } : e))
+}
+const groupsAt = (s: Placed[]) => stepGroups(s).map((g) => g.join('+')).join(' | ')
+ok(groupsAt(abc) === 'a | b | c' && groupsAt(pair) === 'x | p+q', `groups read in step order, a shared step as one group (${groupsAt(pair)})`)
+ok(at(apply(abc, moveStep(abc, 'c', 0))) === 'a:2 b:3 c:1', `dragging the row on step 3 above step 1 gives c 1, a 2, b 3 (${at(apply(abc, moveStep(abc, 'c', 0)))})`)
+ok(distinct(apply(abc, moveStep(abc, 'c', 0))), '…no duplicate, no gap')
+ok(at(apply(abc, moveStep(abc, 'a', 2))) === 'a:3 b:1 c:2', `the first dragged to the end goes last, the rest close up (${at(apply(abc, moveStep(abc, 'a', 2)))})`)
+ok(at(apply(abc, moveStep(abc, 'a', 1))) === 'a:2 b:1 c:3', `toIndex counts the groups that remain: 1 = after b (${at(apply(abc, moveStep(abc, 'a', 1)))})`)
+ok(moveStep(abc, 'b', 1).length === 0 && moveStep(abc, 'a', 0).length === 0, 'dropped where it already is: nothing to write (no spurious undo step)')
+ok(at(apply(abc, moveStep(abc, 'c', -5))) === at(apply(abc, moveStep(abc, 'c', 0))) && at(apply(abc, moveStep(abc, 'a', 99))) === at(apply(abc, moveStep(abc, 'a', 2))), 'toIndex is clamped to the list')
+const moved = apply(abc, moveStep(abc, 'c', 0))
+ok(moveStep(moved, 'c', 0).length === 0, 'idempotent: the same move again changes nothing')
+ok(at(apply(pair, moveStep(pair, 'q', 0))) === 'x:2 p:3 q:1', `a member dragged out of a shared step gets its own step; its partner stays (${at(apply(pair, moveStep(pair, 'q', 0)))})`)
+ok(at(apply(pair, moveStep(pair, 'q', 2))) === 'x:1 p:2 q:3', `…or after it (${at(apply(pair, moveStep(pair, 'q', 2)))})`)
+ok(moveStep(abc, 'z', 0).length === 0 && moveStep([...abc, el('n', 0, 0, 1, 1)], 'n', 0).length === 0, 'an element that is not stepped is not moved onto a step — that is a Reveal verb')
+ok(at(apply(abc, joinStep(abc, 'c', 1))) === 'a:1 b:2 c:1', `dropping c onto step 1 reveals it with a (${at(apply(abc, joinStep(abc, 'c', 1)))})`)
+ok(at(apply(abc, joinStep(abc, 'a', 3))) === 'a:2 b:1 c:2', `joining a later step closes the hole it leaves (${at(apply(abc, joinStep(abc, 'a', 3)))})`)
+ok(joinStep(abc, 'b', 2).length === 0 && joinStep(abc, 'b', 7).length === 0, 'joining its own step, or a step nobody holds, changes nothing')
+ok(at(apply(pair, joinStep(pair, 'q', 1))) === 'x:1 p:2 q:1', `a member of a pair can join another step; its partner stays (${at(apply(pair, joinStep(pair, 'q', 1)))})`)
+ok(at(apply(gaps, compactSteps(gaps))) === 'a:1 b:2 c:3', `compact closes gaps: 2, 5, 9 → 1, 2, 3 (${at(apply(gaps, compactSteps(gaps)))})`)
+const gapPair = [el('a', 0, 0, 1, 1, 4), el('b', 0, 0, 1, 1, 4), el('c', 0, 0, 1, 1, 9), el('d', 0, 0, 1, 1)]
+ok(at(apply(gapPair, compactSteps(gapPair))) === 'a:1 b:1 c:2 d:0', `…elements sharing a step still share it; unstepped stay unstepped (${at(apply(gapPair, compactSteps(gapPair)))})`)
+ok(compactSteps(abc).length === 0 && compactSteps(apply(gaps, compactSteps(gaps))).length === 0, 'compact is idempotent: a contiguous slide gets no patch')
+ok(at(apply(abc, removeStep(abc, 'a'))) === 'a:0 b:1 c:2', `removing the row on step 1 clears it and the later steps close up (${at(apply(abc, removeStep(abc, 'a')))})`)
+ok(at(apply(pair, removeStep(pair, 'p'))) === 'x:1 p:0 q:2', `removing one of a pair leaves its partner on the step (${at(apply(pair, removeStep(pair, 'p')))})`)
+ok(removeStep(abc, 'z').length === 0, 'removing an element with no step writes nothing')
+// Property: any run of moves, joins and removes keeps the steps 1..k and
+// never loses or invents a stepped element (removes aside).
+let listFail = ''
+let ops = 0
+for (let trial = 0; trial < 300 && !listFail; trial++) {
+  let s: Placed[] = Array.from({ length: 1 + rnd(6) }, (_, i) => el('e' + i, 0, 0, 1, 1, rnd(4) === 0 ? 0 : 1 + rnd(5)))
+  for (let k = 0; k < 10; k++) {
+    const pick = s.filter((e) => e.fx?.step)
+    if (!pick.length) break
+    const id = pick[rnd(pick.length)].id
+    const before = at(s)
+    const op = rnd(5)
+    const kept = pick.length - (op === 4 ? 1 : 0)
+    const sts = [...new Set(pick.map((e) => e.fx!.step!))]
+    s = apply(s, op < 2 ? moveStep(s, id, rnd(sts.length + 1)) : op < 4 ? joinStep(s, id, sts[rnd(sts.length)]) : removeStep(s, id))
+    ops++
+    const st = s.filter((e) => e.fx?.step)
+    const uniq = [...new Set(st.map((e) => e.fx!.step!))].sort((a, b) => a - b)
+    if (!uniq.every((v, i) => v === i + 1)) { listFail = `op ${op} on ${id}: steps not 1..k: ${before} → ${at(s)}`; break }
+    if (st.length !== kept) { listFail = `op ${op} on ${id}: stepped count ${st.length}, expected ${kept}: ${before} → ${at(s)}`; break }
+  }
+}
+ok(!listFail && ops > 1500, `${ops} list operations over random slides: always 1..k${listFail ? ` — ${listFail}` : ''}`)
+const st3 = (o?: number) => (o === undefined ? {} : { order: o })
+const g3 = [{ id: 'p', fx: { step: 2, ...st3() } }, { id: 'q', fx: { step: 2, ...st3() } }, { id: 'r', fx: { step: 2, ...st3() } }]
+ok(staggered(g3).map((x) => `${x.el.id}${x.at}`).join(' ') === 'p0 q1 r2', 'no fx.order: each enters one beat after the one before, in slide order (present.ts runEnterFx)')
+const g3b = [{ id: 'p', fx: { step: 2, order: 2 } }, { id: 'q', fx: { step: 2 } }, { id: 'r', fx: { step: 2, order: 0 } }]
+ok(staggered(g3b).map((x) => `${x.el.id}${x.at}`).join(' ') === 'q0 r0 p2', `fx.order sorts and sets the beat; equal beats enter together (${staggered(g3b).map((x) => `${x.el.id}${x.at}`).join(' ')})`)
+const present = read('slides/src/present.ts')
+ok(/\.sort\(\(a, b\) => \(a\[0\]\.fx!\.order \?\? 0\) - \(b\[0\]\.fx!\.order \?\? 0\)\)/.test(present) && /const step = fx\.order \?\? i/.test(present) && /delay: \(revealing \? 0 : 0\.12\) \+ Math\.min\(step, 24\) \* 0\.05/.test(present),
+  'the show still staggers a step by fx.order the way staggered() says (the Stagger field reports the real beat)')
 
 console.log('\nbadges never reach a render output\n')
 for (const f of ['slides/src/render.ts', 'slides/src/present.ts', 'slides/src/preview.ts', 'slides/src/print.ts']) {
