@@ -735,6 +735,16 @@ export function starterDoc(): BentoDoc {
   BUTTON.reset()
   const slide = (p: Partial<Slide> & { elements: SlideElement[] }): Slide =>
     ({ id: uid('slide'), background: INK, transition: 'morph', notes: '', ...p })
+  // The tour, where the editor shows it. The notes tell the story, but their
+  // pane starts folded; so every linear slide also carries ONE "try this", a
+  // comment thread on the element it is about. Comments are editor-only —
+  // never in the show, print or an exported image — and their own Resolve
+  // button dismisses them. Pre-written, so no name prompt (that is asked only
+  // when the viewer writes a comment). Under 80 characters: the marker's
+  // tooltip shows that much.
+  const at = new Date().toISOString()
+  const tryThis = (elementId: string, text: string): Pick<Slide, 'comments'> =>
+    ({ comments: [{ id: uid('cmt'), elementId, author: 'bento', text, at }] })
 
   doc.slides = [
     // ── 1 · TITLE ──────────────────────────────────────────────────────────
@@ -743,6 +753,7 @@ export function starterDoc(): BentoDoc {
       notes:
         'Welcome! This whole deck — data, viewer, editor — lives in one HTML file. ' +
         '→ advances, Esc edits, S opens the speaker view. Watch the tiles: they morph through every slide.',
+      ...tryThis('sd-title', 'Double-click this title and type. This copy is yours to change.'),
       elements: [
         // atmosphere: breathing aurora blobs + bento tiles adrift around the logo
         ...group('Atmosphere', [
@@ -819,6 +830,7 @@ export function starterDoc(): BentoDoc {
       notes:
         'The tiles just morphed into the file anatomy. The dashed outline marches — a one-select loop effect. ' +
         'Everything on the right is ordinary rich text.',
+      ...tryThis(T_D, 'Save with ⌘S (Ctrl+S): the whole deck is one .html file to send.'),
       elements: [
         dots(false),
         glow(180, [
@@ -883,6 +895,7 @@ export function starterDoc(): BentoDoc {
         'The four tiles just collapsed into that row of chips — same four shapes, all deck long. ' +
         'The numbers counted up as the slide entered; ' +
         'that’s one checkbox on any text element. The little lines show line endings: arrow, dot, bar.',
+      ...tryThis('sd-stat-0', '⌘/Ctrl-click a number, then Animate: Count up numbers is one switch.'),
       elements: [
         // the cast, collapsed into a hugging row of chips
         ...(() => {
@@ -942,6 +955,7 @@ export function starterDoc(): BentoDoc {
       notes:
         'The tiles scattered and grew — and picked up GRADIENT fills mid-morph (solid⇄gradient tweening). ' +
         'Press ← and → to replay it. Nothing here is a video; it’s the same four elements.',
+      ...tryThis('sd-title', 'Duplicate this slide and move a tile on the copy: that move is a morph.'),
       elements: [
         grain(),
         glow(20, [
@@ -992,6 +1006,7 @@ export function starterDoc(): BentoDoc {
       transition: 'morph',
       notes:
         'Two token streams, one mechanism. Both sides of this slide morph symbol by symbol: the maths is plain \u0024\u2026\u0024 in an ordinary text box, the code is a code element with 77 languages built in (about 7KB of rules, no highlighter library). Press \u2192 and watch BOTH at once \u2014 a, b and c travel through the derivation while the callback pyramid flattens into promises.',
+      ...tryThis('sd-eq', 'Double-click the formula twice: underneath it is plain $$…$$ text.'),
       elements: [
         grain(),
         glow(20, [
@@ -1029,6 +1044,7 @@ export function starterDoc(): BentoDoc {
       transition: 'morph',
       notes:
         'Left: completing the square \u2014 a, b and c did not crossfade, they moved into their new places. Right: the pyramid flattened and confetti() rose two lines to meet it. Point-free promises really did drop the parameter names, so slides and frame fading out is the diff being honest. One more \u2192.',
+      ...tryThis(CODE_ID, 'Double-click the code, then pick any of 77 languages in Format.'),
       elements: [
         grain(),
         glow(200, [
@@ -1066,6 +1082,7 @@ export function starterDoc(): BentoDoc {
       transition: 'morph',
       notes:
         'async/await on the right, the quadratic formula on the left \u2014 and every symbol that survived the rewrite kept its identity the whole way. This is what a walkthrough is in Bento: duplicate the slide, edit the content, and the transition explains the change for you. No recording, no screenshots.',
+      ...tryThis(CODE_ID, 'Duplicate this slide and change the code on the copy: the diff morphs.'),
       elements: [
         grain(),
         glow(20, [
@@ -1104,8 +1121,9 @@ export function starterDoc(): BentoDoc {
       id: S_CHARTS,
       background: PAPER,
       notes:
-        'The chart is a live ECharts instance while presenting: hover for tooltips, scroll to zoom. ' +
+        'The chart is built in, and live while presenting: hover for tooltips, scroll to zoom. ' +
         'Click “See the split” — it jumps to a hidden state slide and the bars MORPH into a pie.',
+      ...tryThis('sd-main-chart', 'Double-click the chart, then change a number under Data in Format.'),
       elements: [
         dots(false),
         kicker('LIVE DATA', { color: PEACH_DEEP }),
@@ -1121,7 +1139,7 @@ export function starterDoc(): BentoDoc {
       name: 'pie split',
       notes:
         'A hidden STATE slide — linear navigation skips it; only the click reaches it. Same chart element id, ' +
-        'different option: ECharts’ universal transition morphs bar→pie in place. Click back.',
+        'different option: the built-in chart engine morphs bar→pie in place. Click back.',
       elements: [
         dots(false),
         kicker('LIVE DATA', { color: PEACH_DEEP }),
@@ -1155,6 +1173,7 @@ export function starterDoc(): BentoDoc {
         'Double-click a cell to edit, Tab moves across and Enter down, drag the dividers to resize columns. ' +
         'The little chart on the right is LIVE-LINKED to the table — edit a Signups cell and it updates instantly. ' +
         '(“Make a chart from this table” in the panel builds a linked chart like it in one click.)',
+      ...tryThis('sd-table', 'Double-click a Signups cell twice and type: the chart follows.'),
       elements: [
         dots(false),
         kicker('STRUCTURED DATA', { color: PEACH_DEEP }),
@@ -1243,8 +1262,9 @@ export function starterDoc(): BentoDoc {
     // ── 8 · MOMENTUM (line-chart hero) ─────────────────────────────────────
     slide({
       notes:
-        'A chart as scenery: full-width live area chart on ink. Drag horizontally inside it to zoom — ' +
-        'dataZoom is on. The +975% is honest: it’s the data’s own range.',
+        'A chart as scenery: full-width live area chart on ink. While presenting, scroll inside it to zoom ' +
+        'and drag to pan. The +975% is honest: it’s the data’s own range.',
+      ...tryThis('sd-legend', 'Press Slideshow, then scroll in the chart to zoom and drag to pan.'),
       elements: [
         grain(),
         glow(200, [
@@ -1277,6 +1297,7 @@ export function starterDoc(): BentoDoc {
       notes:
         'The dot rides a motion path drawn with the on-canvas path editor; the dashes march underneath it. ' +
         'Paths are stored relative to the element, so you can drag the whole flow around.',
+      ...tryThis('sd-flow', 'Click the dot where this dashed path begins: Animate › Edit path on canvas.'),
       elements: [
         dots(false),
         ghost(),
@@ -1285,7 +1306,7 @@ export function starterDoc(): BentoDoc {
         title('Lines that lead the eye.'),
         // the flow: a dashed path with a dot riding it, milestones as nodes
         shape('path', {
-          name: 'Flow path', x: 140, y: 240, w: 1000, h: 340, fill: 'transparent',
+          id: 'sd-flow', name: 'Flow path', x: 140, y: 240, w: 1000, h: 340, fill: 'transparent',
           stroke: 'rgba(30,42,58,0.55)', strokeWidth: 2.5, strokeStyle: 'dashed',
           d: 'M 20 300 C 260 40 520 40 640 190 C 730 305 900 305 980 110',
           pathBox: [0, 0, 1000, 340],
@@ -1362,7 +1383,7 @@ export function starterDoc(): BentoDoc {
       return SCENES.map((scene, si) =>
         slide({
           id: scene.id,
-          ...(si > 0 ? { stateOf: S_CHOREO, name: `scene ${scene.step}` } : {}),
+          ...(si > 0 ? { stateOf: S_CHOREO, name: `scene ${scene.step}` } : tryThis('sd-ch-btn', 'In the show, click this button: each scene is a hidden slide.')),
           notes: si === 0
             ? 'Click the button: each scene is a hidden STATE slide — same six elements, a new arrangement, ' +
               'and morph animates the whole choreography. Arrow keys skip the states; only clicks reach them.'
@@ -1412,6 +1433,7 @@ export function starterDoc(): BentoDoc {
         'space.cards token. The three cards are ONE component: edit the first card’s look and the other two follow, ' +
         'keeping their own words. Tokens (third tab) drive the colours, radii and gaps across the whole deck. ' +
         'Hover a card — the rest of the room dims (a per-slide switch plus a group tag).',
+      ...tryThis('sd-cards', 'Open Layers, beside Slides: this row is a frame, the cards one component.'),
       elements: [
         grain(),
         glow(160, [
@@ -1437,6 +1459,7 @@ export function starterDoc(): BentoDoc {
       notes:
         'Text editing converts markdown as you type — both panels here are ordinary text elements. ' +
         '⌘B/I/U work too, backslash escapes, and ⌘Z right after a conversion restores your literal characters.',
+      ...tryThis('sd-title', 'Double-click this title and type **bold**: it formats as you type.'),
       elements: [
         dots(false),
         ghost(),
@@ -1463,6 +1486,7 @@ export function starterDoc(): BentoDoc {
       notes:
         'The cast reassembles into the logo. Press Esc — this deck is already your copy of the app: ' +
         'edit it, save it, send it. bento.page has the latest build and the story.',
+      ...tryThis('sd-title', 'Ready for yours? Click bento/slides (top left) › Start from scratch.'),
       elements: [
         // atmosphere mirrors the title: auroras breathing, tiles adrift
         ...group('Atmosphere', [
