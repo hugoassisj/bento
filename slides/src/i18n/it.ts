@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Equal columns": "Colonne uguali",
+  "Equal rows": "Righe uguali",
+  "Hug": "Adatta",
+  "Fill space": "Riempi",
+  "The frame hugs its contents, so there is nothing to fill.": "La cornice si adatta al contenuto, quindi non c’è niente da riempire.",
+  "Turn off Hug": "Disattiva Adatta",
+  "Auto layout presets": "Preimpostazioni del layout automatico",
   "View": "Vista",
   "Current slide": "Diapositiva attuale",
   "Slide thumbnails": "Miniature delle diapositive",
@@ -1171,7 +1178,6 @@ export const it: Catalog = {
   "Set by the frame’s auto layout": "Impostato dal layout automatico della cornice",
   "Space evenly across": "Distribuisci in orizzontale",
   "Space evenly down": "Distribuisci in verticale",
-  "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "La cornice si adatta ai suoi elementi, quindi non c’è spazio da riempire: disattiva prima il suo “Adatta al contenuto”",
   "“{v}” could be read two ways — type it without the separator": "“{v}” si può leggere in due modi: scrivilo senza il separatore",
   "“{v}” isn’t a number — type a value like 24, +8 or 360/2": "“{v}” non è un numero: scrivi un valore come 24, +8 o 360/2",
   "click to edit": "fai clic per modificare",

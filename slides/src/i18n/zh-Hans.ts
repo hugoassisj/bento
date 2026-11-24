@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Equal columns": "等宽列",
+  "Equal rows": "等高行",
+  "Hug": "适应",
+  "Fill space": "填满",
+  "The frame hugs its contents, so there is nothing to fill.": "框架会适应其内容，因此没有可填充的空间。",
+  "Turn off Hug": "关闭适应内容",
+  "Auto layout presets": "自动布局预设",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",
@@ -1171,7 +1178,6 @@ export const zhHans: Catalog = {
   "Set by the frame’s auto layout": "由框架的自动布局决定",
   "Space evenly across": "水平均匀分布",
   "Space evenly down": "垂直均匀分布",
-  "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "框架会随子元素调整大小，因此没有可填充的空间 — 请先关闭其“适应内容”",
   "“{v}” could be read two ways — type it without the separator": "“{v}”有两种读法 — 请去掉分隔符再输入",
   "“{v}” isn’t a number — type a value like 24, +8 or 360/2": "“{v}”不是数字 — 请输入 24、+8 或 360/2 这样的值",
   "click to edit": "点击编辑",

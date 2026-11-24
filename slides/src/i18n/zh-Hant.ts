@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Equal columns": "等寬欄",
+  "Equal rows": "等高列",
+  "Hug": "符合",
+  "Fill space": "填滿",
+  "The frame hugs its contents, so there is nothing to fill.": "框架會符合其內容，因此沒有可填滿的空間。",
+  "Turn off Hug": "關閉符合內容",
+  "Auto layout presets": "自動版面預設",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",
@@ -1171,7 +1178,6 @@ export const zhHant: Catalog = {
   "Set by the frame’s auto layout": "由框架的自動版面決定",
   "Space evenly across": "水平平均分佈",
   "Space evenly down": "垂直平均分佈",
-  "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "框架會依子元素調整大小，所以沒有可填滿的空間 — 請先關閉它的「符合內容」",
   "“{v}” could be read two ways — type it without the separator": "「{v}」有兩種讀法 — 請去掉分隔符號再輸入",
   "“{v}” isn’t a number — type a value like 24, +8 or 360/2": "「{v}」不是數字 — 請輸入 24、+8 或 360/2 這類的值",
   "click to edit": "點按以編輯",

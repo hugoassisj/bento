@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Equal columns": "均等な列",
+  "Equal rows": "均等な行",
+  "Hug": "内容に合わせる",
+  "Fill space": "余白を埋める",
+  "The frame hugs its contents, so there is nothing to fill.": "フレームが内容に合わせて大きさを変えるため、埋める余白がありません。",
+  "Turn off Hug": "「内容に合わせる」をオフ",
+  "Auto layout presets": "自動レイアウトのプリセット",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",
@@ -1171,7 +1178,6 @@ export const ja: Catalog = {
   "Set by the frame’s auto layout": "フレームの自動レイアウトで決まります",
   "Space evenly across": "左右に均等配置",
   "Space evenly down": "上下に均等配置",
-  "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "フレームが子要素に合わせて大きさを変えるため、埋める余白がありません — 先にフレームの「内容に合わせる」をオフにしてください",
   "“{v}” could be read two ways — type it without the separator": "「{v}」は2通りに読めます — 区切り記号なしで入力してください",
   "“{v}” isn’t a number — type a value like 24, +8 or 360/2": "「{v}」は数値ではありません — 24、+8、360/2 のように入力してください",
   "click to edit": "クリックして編集",

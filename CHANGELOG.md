@@ -16,6 +16,15 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Auto layout: equal columns, equal rows or a grid in one click.** Select
+  a few elements (or a frame) and choose Equal columns, Equal rows or Grid
+  from the right-click menu, the ⌘K palette or the ⋯ on the Auto layout
+  header: they go into a frame and share its width, its height or its cells
+  equally, keeping the spacing they had, in one undo step — and they stay
+  equal when you delete or duplicate one. The Width and Height sizing now
+  reads in words (Hug, Fixed, Fill space), works on several children of one
+  frame at once, and when Fill is unavailable because the frame hugs its
+  contents, it says so under the control with a Turn off Hug button.
 
 ## [1.3.0] — 2026-11-22
 

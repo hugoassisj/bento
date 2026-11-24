@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Equal columns": "Gleiche Spalten",
+  "Equal rows": "Gleiche Zeilen",
+  "Hug": "Anpassen",
+  "Fill space": "Füllen",
+  "The frame hugs its contents, so there is nothing to fill.": "Der Rahmen passt sich seinem Inhalt an, es gibt also nichts zu füllen.",
+  "Turn off Hug": "Anpassen ausschalten",
+  "Auto layout presets": "Auto-Layout-Vorlagen",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",
@@ -1171,7 +1178,6 @@ export const de: Catalog = {
   "Set by the frame’s auto layout": "Vom Auto-Layout des Rahmens festgelegt",
   "Space evenly across": "Horizontal gleichmäßig verteilen",
   "Space evenly down": "Vertikal gleichmäßig verteilen",
-  "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Der Rahmen passt sich seinen Elementen an, es gibt also keinen Platz zum Füllen – schalte zuerst „An Inhalt anpassen“ aus",
   "“{v}” could be read two ways — type it without the separator": "„{v}“ lässt sich auf zwei Arten lesen – gib es ohne Trennzeichen ein",
   "“{v}” isn’t a number — type a value like 24, +8 or 360/2": "„{v}“ ist keine Zahl – gib einen Wert wie 24, +8 oder 360/2 ein",
   "click to edit": "zum Bearbeiten klicken",

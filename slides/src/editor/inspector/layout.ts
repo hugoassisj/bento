@@ -4,11 +4,15 @@
 import { section, row, segmented, mini, field, toggle } from './fields'
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
-import { uid, type FrameLayout, type ShapeElement, type SlideElement } from '../../model'
-import { isFrame } from '../../layout'
+import { uid, type FrameLayout, type ShapeElement, type Slide, type SlideElement } from '../../model'
+import { colsOf, frameChildren, isFrame } from '../../layout'
+import { applyPreset, gridShape, presetDir, readingOrder, type LayoutPreset } from '../../layoutpresets'
 import { tokenBind } from './tokenbind'
 import { ICONS } from '../../icons'
 import { roving } from './controls'
+import { openCtxMenu, type CtxItem } from '../ctxmenu'
+
+type Frame = ShapeElement & { layout: FrameLayout }
 
 const DIRS: Record<string, string> = { row: 'Row', col: 'Column', grid: 'Grid' }
 
@@ -21,6 +25,19 @@ export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
     ? { add: false, hint: t('Remove auto layout'), run: () => p.mutate(el.id, (e) => { delete (e as ShapeElement).layout }, true) }
     : { add: true, hint: t('Add auto layout'), run: () => p.mutate(el.id, (e) => { (e as ShapeElement).layout = { dir: 'row', gap: 16, pad: [16, 16, 16, 16], hug: true } }, true) })
   if (!L) return
+  // ⋯ on the header: the presets, one click to equal columns, rows or a grid
+  if (presetTarget(p.store.slide, [el])) {
+    const head = p.host.lastElementChild as HTMLElement
+    const more = document.createElement('button')
+    more.type = 'button'
+    more.className = 'ed-sec-act ed-sec-menu'
+    more.innerHTML = ICONS.more
+    more.title = t('Auto layout presets')
+    more.setAttribute('aria-label', more.title)
+    more.setAttribute('aria-haspopup', 'menu')
+    more.addEventListener('click', (ev) => { ev.stopPropagation(); presetMenu(p, [el], more) })
+    head.insertBefore(more, head.querySelector('.ed-sec-act'))
+  }
   row(p, 'Direction', segmented(['row', 'col', 'grid'], L.dir, (v) => set((l) => { l.dir = v as FrameLayout['dir'] }),
     Object.fromEntries(Object.entries(DIRS).map(([k, v]) => [k, t(v)])), { row: ICONS.frameRow, col: ICONS.frameCol, grid: ICONS.frameGrid }))
   // gap, columns and each padding side can follow a number token
@@ -52,19 +69,31 @@ export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
  * space to hand out — and says so. A nested frame shows this AND its own
  * Auto layout section below.
  */
-/** A frame's child: its sizing rows, laid out in the header-less top block
- *  right under W and H (arrange.ts layerBlock). Nothing for a free element. */
-export function childResizing(p: PropsPanel, el: SlideElement) {
-  const parent = el.parentId ? p.store.element(el.parentId) : undefined
-  if (isFrame(parent)) resizing(p, el, parent)
+/** A frame's child, or several children of ONE frame: their sizing rows,
+ *  laid out in the header-less top block right under W and H (arrange.ts
+ *  layerBlock). Nothing for a free element or children of different frames. */
+export function childResizing(p: PropsPanel, els: SlideElement[]) {
+  const pid = els[0]?.parentId
+  if (!pid || !els.every((e) => e.parentId === pid)) return
+  const parent = p.store.element(pid)
+  if (isFrame(parent)) resizing(p, els, parent)
 }
 
-function resizing(p: PropsPanel, el: SlideElement, parent: ShapeElement & { layout: FrameLayout }) {
-  const own = isFrame(el)
-  const modeOf = (k: 'w' | 'h') => el.sizing?.[k] === 'fill' ? 'fill' : own && el.layout.hug ? 'hug' : 'fixed'
+let hintIds = 0
+
+function resizing(p: PropsPanel, els: SlideElement[], parent: Frame) {
+  // Hug is offered when every one of them is a frame (it sizes to its own children)
+  const own = els.every((e) => isFrame(e))
+  const modeOf = (e: SlideElement, k: 'w' | 'h') => e.sizing?.[k] === 'fill' ? 'fill' : isFrame(e) && e.layout.hug ? 'hug' : 'fixed'
+  // the selection disagrees: no option pressed, and a choice writes to all of them
+  const mode = (k: 'w' | 'h') => { const m = new Set(els.map((e) => modeOf(e, k))); return m.size === 1 ? [...m][0] : '' }
+  const ids = els.map((e) => e.id)
+  const each = (fn: (e: SlideElement) => void, final: boolean) => p.edit(() => { for (const id of ids) { const e = p.store.element(id); if (e) fn(e) } }, final)
+  const hintId = `ed-fill-why-${++hintIds}`
+  let refused = false
   const axis = (k: 'w' | 'h') => {
-    const seg = segmented(own ? ['hug', 'fixed', 'fill'] : ['fixed', 'fill'], modeOf(k), (v) =>
-      p.mutate(el.id, (e) => {
+    const seg = segmented(own ? ['hug', 'fixed', 'fill'] : ['fixed', 'fill'], mode(k), (v) =>
+      each((e) => {
         const s = { ...e.sizing }
         if (v === 'fill') s[k] = 'fill'
         else delete s[k]
@@ -75,16 +104,18 @@ function resizing(p: PropsPanel, el: SlideElement, parent: ShapeElement & { layo
       }, true), { hug: t('Hug contents'), fixed: t('Fixed'), fill: t('Fill container') },
       { hug: ICONS.sizeHug, fixed: ICONS.sizeFixed, fill: ICONS.sizeFill })
     seg.dataset.axis = k
-    if (parent.layout.hug && modeOf(k) !== 'fill') {
+    worded(seg, { hug: t('Hug'), fixed: t('Fixed'), fill: t('Fill space') })
+    if (parent.layout.hug && mode(k) !== 'fill') {
       const fill = seg.querySelector<HTMLButtonElement>('[data-value="fill"]')
-      if (fill) { fill.disabled = true; fill.title = t('The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first') }
+      if (fill) { fill.disabled = true; fill.setAttribute('aria-describedby', hintId); refused = true }
     }
     return seg
   }
   // in a wrapping frame a fill child needs a least size, or every fill shares one line
   const least = (k: 'w' | 'h') => {
     const key = k === 'w' ? 'minW' : 'minH'
-    return mini(t('Min'), el.sizing?.[key] ?? 0, (v, fin) => p.mutate(el.id, (e) => {
+    const vals = new Set(els.map((e) => e.sizing?.[key] ?? 0))
+    return mini(t('Min'), vals.size === 1 ? [...vals][0] : NaN, (v, fin) => each((e) => {
       const s = { ...e.sizing }
       if (v > 0) s[key] = v; else delete s[key]
       if (Object.keys(s).length) e.sizing = s; else delete e.sizing
@@ -92,9 +123,114 @@ function resizing(p: PropsPanel, el: SlideElement, parent: ShapeElement & { layo
   }
   const wraps = !!parent.layout.wrap && parent.layout.dir !== 'grid'
   for (const [k, label] of [['w', 'Width'], ['h', 'Height']] as const) {
-    row(p, label, axis(k))
-    if (wraps && el.sizing?.[k] === 'fill') field(p, least(k))
+    fitWords(row(p, label, axis(k)))
+    if (wraps && mode(k) === 'fill') field(p, least(k))
   }
+  // why Fill is off, said where the user is looking, with the way out beside it
+  if (refused) {
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint ed-keep ed-fill-why'
+    hint.id = hintId
+    hint.textContent = t('The frame hugs its contents, so there is nothing to fill.')
+    const off = document.createElement('button')
+    off.type = 'button'
+    off.className = 'ed-btn ed-link-btn'
+    off.textContent = t('Turn off Hug')
+    // the frame keeps the size it has: hug off writes nothing else
+    off.addEventListener('click', () => p.mutate(parent.id, (e) => { delete (e as ShapeElement).layout?.hug }, true))
+    hint.append(' ', off)
+    p.host.appendChild(hint)
+  }
+}
+
+/** Words on a glyph segmented control: each button carries its short word
+ *  beside the glyph, and fitWords shows the words while they fit. The long
+ *  name stays the button's accessible name and tooltip. */
+function worded(seg: HTMLElement, words: Record<string, string>) {
+  seg.classList.add('ed-seg-fit')
+  for (const b of seg.querySelectorAll<HTMLElement>('button')) {
+    const w = document.createElement('span')
+    w.className = 'ed-seg-word'
+    w.textContent = words[b.dataset.value!] ?? ''
+    b.appendChild(w)
+  }
+}
+
+let fitObs: ResizeObserver | undefined
+let fitCtx: CanvasRenderingContext2D | undefined
+/** Words beside the caption when they fit; else on a line of their own
+ *  under it; else the glyphs alone (a narrow panel, a long translation).
+ *  Measured, not guessed: re-run whenever the row's width changes. */
+function fitWords(rowEl: HTMLElement) {
+  fitObs ??= new ResizeObserver((entries) => {
+    for (const en of entries) {
+      const r = en.target as HTMLElement
+      if (!r.isConnected) { fitObs!.unobserve(r); continue }
+      fitRow(r)
+    }
+  })
+  fitObs.observe(rowEl)
+}
+
+function fitRow(rowEl: HTMLElement) {
+  const seg = rowEl.querySelector<HTMLElement>('.ed-seg-fit')
+  const width = rowEl.clientWidth
+  if (!seg || !width || rowEl.dataset.fitW === String(width)) return
+  rowEl.dataset.fitW = String(width)
+  const btns = [...seg.querySelectorAll<HTMLElement>('button')]
+  const ctx = (fitCtx ??= document.createElement('canvas').getContext('2d')!)
+  ctx.font = getComputedStyle(btns[0]).font
+  // each word and its button's padding, the gaps, the control's own padding and border
+  const need = btns.reduce((a, b) => a + ctx.measureText(b.querySelector('.ed-seg-word')?.textContent ?? '').width + 8, 0) + 2 * (btns.length - 1) + 6 + 2
+  seg.classList.remove('ed-seg-icons')
+  rowEl.classList.remove('ed-row-wide')
+  if (need <= seg.offsetWidth) return
+  rowEl.classList.add('ed-row-wide')
+  if (need <= seg.offsetWidth) return
+  rowEl.classList.remove('ed-row-wide')
+  seg.classList.add('ed-seg-icons')
+}
+
+/** The three presets: command id, English label, and what each makes. */
+export const LAYOUT_PRESETS: ReadonlyArray<readonly [LayoutPreset, string, string]> = [
+  ['columns', 'layout-equal-columns', 'Equal columns'],
+  ['rows', 'layout-equal-rows', 'Equal rows'],
+  ['grid', 'layout-grid', 'Grid'],
+]
+
+/** What a preset acts on: a frame (one picked with children in it, or every
+ *  child of one frame picked), or two or more loose elements to wrap first. */
+function presetTarget(slide: Slide, els: readonly SlideElement[]): { frame: Frame } | { wrap: SlideElement[] } | null {
+  if (els.length === 1 && isFrame(els[0])) return slide.elements.some((e) => e.parentId === els[0].id) ? { frame: els[0] } : null
+  const pid = els[0]?.parentId
+  const f = pid ? slide.elements.find((e) => e.id === pid) : undefined
+  if (isFrame(f) && els.every((e) => e.parentId === pid) && frameChildren(slide, f).length === els.length) return { frame: f }
+  return els.length >= 2 ? { wrap: [...els] } : null
+}
+
+/** Whether a preset has something to act on (the palette hides it otherwise). */
+export const canPreset = (slide: Slide, els: readonly SlideElement[]) => !!presetTarget(slide, els)
+
+/** Equal columns, equal rows or a grid, in one undo step: on a frame, its
+ *  children are re-laid; loose elements are wrapped first (⇧A's frame). */
+export function applyLayoutPreset(p: PropsPanel, els: readonly SlideElement[], preset: LayoutPreset) {
+  const to = presetTarget(p.store.slide, els)
+  if (!to) return
+  if ('wrap' in to) { wrapInFrame(p, to.wrap, preset); return }
+  const id = to.frame.id
+  p.store.commit(() => {
+    const slide = p.store.slide
+    const f = slide.elements.find((e) => e.id === id)
+    if (!isFrame(f)) return
+    applyPreset(f, frameChildren(slide, f), preset, preset === 'grid' && f.layout.dir === 'grid' ? colsOf(f) : undefined)
+  })
+}
+
+/** The presets as a menu under `anchor` (the Auto layout header, the frame hint). */
+export function presetMenu(p: PropsPanel, els: readonly SlideElement[], anchor: HTMLElement) {
+  const r = anchor.getBoundingClientRect()
+  const icon = { columns: ICONS.frameRow, rows: ICONS.frameCol, grid: ICONS.frameGrid }
+  openCtxMenu(r.left, r.bottom + 4, LAYOUT_PRESETS.map(([preset, cmd, label]): CtxItem => ({ label: t(label), cmd, icon: icon[preset], run: () => applyLayoutPreset(p, els, preset) })))
 }
 
 /** Penpot's 3×3 alignment box: the cell is where the children sit. Columns are
@@ -130,7 +266,7 @@ function alignMatrix(L: FrameLayout, pick: (justify: FrameLayout['justify'], ali
  * goes in behind the lowest selected element, takes their bounds plus the
  * padding, and runs along the axis they are already spread on.
  */
-export function wrapInFrame(p: PropsPanel, picked: SlideElement[]) {
+export function wrapInFrame(p: PropsPanel, picked: SlideElement[], preset?: LayoutPreset) {
   // a picked element inside another picked one rides along with it: wrapping
   // a card and its own text must not pull the text out of the card
   const ids0 = new Set(picked.map((e) => e.id))
@@ -165,15 +301,22 @@ export function wrapInFrame(p: PropsPanel, picked: SlideElement[]) {
   }
   if (cards.size && els.length === 1) {
     // one card and nothing else: the card is the frame
-    p.store.commit(makeCards)
+    p.store.commit(() => {
+      makeCards()
+      const f = els[0]
+      if (preset && isFrame(f)) applyPreset(f, frameChildren(p.store.slide, f), preset)
+    })
     p.store.select([els[0].id])
     return
   }
   const x = Math.min(...els.map((e) => e.x)), y = Math.min(...els.map((e) => e.y))
   const r = Math.max(...els.map((e) => e.x + e.w)), b = Math.max(...els.map((e) => e.y + e.h))
   const spreadX = Math.max(...els.map((e) => e.x)) - x, spreadY = Math.max(...els.map((e) => e.y)) - y
-  const dir = spreadY > spreadX ? 'col' : 'row'
-  const gap = spacing(els, dir)
+  const spread = spreadY > spreadX ? 'col' : 'row'
+  // a preset runs on its own axis, with the spacing the elements have along it
+  const shape = preset === 'grid' ? gridShape(els) : undefined
+  const dir = preset ? presetDir(preset) : spread
+  const gap = shape ? shape.gap ?? spacing(els, spread) : spacing(els, dir === 'grid' ? spread : dir)
   const pad = 16
   const parent = els.every((e) => e.parentId === els[0].parentId) ? els[0].parentId : undefined
   const frame: ShapeElement = {
@@ -190,6 +333,11 @@ export function wrapInFrame(p: PropsPanel, picked: SlideElement[]) {
     const at = all.findIndex((e) => ids.has(e.id))
     for (const e of all) if (ids.has(e.id)) e.parentId = frame.id
     all.splice(at, 0, frame)
+    if (preset) {
+      const kids = all.filter((e) => ids.has(e.id))
+      const f = frame as Frame
+      applyPreset(f, preset === 'grid' ? readingOrder(kids) : frameChildren(p.store.slide, f), preset, shape?.cols)
+    }
   })
   p.store.select([frame.id])
 }

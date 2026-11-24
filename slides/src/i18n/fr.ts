@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "Equal columns": "Colonnes égales",
+  "Equal rows": "Lignes égales",
+  "Hug": "Ajuster",
+  "Fill space": "Remplir",
+  "The frame hugs its contents, so there is nothing to fill.": "Le cadre s’ajuste à son contenu : il n’y a donc rien à remplir.",
+  "Turn off Hug": "Désactiver Ajuster",
+  "Auto layout presets": "Préréglages de mise en page auto",
   "View": "Affichage",
   "Current slide": "Diapositive actuelle",
   "Slide thumbnails": "Miniatures des diapositives",
@@ -1171,7 +1178,6 @@ export const fr: Catalog = {
   "Set by the frame’s auto layout": "Défini par la mise en page auto du cadre",
   "Space evenly across": "Répartir horizontalement",
   "Space evenly down": "Répartir verticalement",
-  "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Le cadre s’ajuste à ses enfants : il n’y a pas d’espace à remplir — désactivez d’abord son « Ajuster au contenu »",
   "“{v}” could be read two ways — type it without the separator": "« {v} » peut se lire de deux façons — saisissez-le sans séparateur",
   "“{v}” isn’t a number — type a value like 24, +8 or 360/2": "« {v} » n’est pas un nombre — saisissez une valeur comme 24, +8 ou 360/2",
   "click to edit": "cliquer pour modifier",

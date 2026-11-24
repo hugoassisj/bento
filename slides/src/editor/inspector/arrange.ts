@@ -12,7 +12,7 @@ import { optLabel, relOf } from './controls'
 import { applyRel } from './numexpr'
 import { isMacOS } from '../../screens'
 import { ICONS } from '../../icons'
-import { childResizing } from './layout'
+import { childResizing, presetMenu } from './layout'
 import { openCtxMenu } from '../ctxmenu'
 
 export function buildLayoutRole(p: PropsPanel, el: SlideElement) {
@@ -101,6 +101,17 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     go.textContent = t('Select the frame')
     go.addEventListener('click', () => p.store.select(frames))
     hint.append(' ', go)
+    // the answer to "make these the same size": the frame's presets, from here
+    const frame = frames.length === 1 ? p.store.element(frames[0]) : undefined
+    if (frame?.type === 'shape' && frame.layout) {
+      const even = document.createElement('button')
+      even.type = 'button'
+      even.className = 'ed-btn ed-link-btn'
+      even.textContent = t('Auto layout presets')
+      even.setAttribute('aria-haspopup', 'menu')
+      even.addEventListener('click', () => presetMenu(p, [frame], even))
+      hint.append(' · ', even)
+    }
     block.appendChild(hint)
   } else {
     tools.push(
@@ -230,7 +241,7 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
   // further down. Inside the block, so they are Format's like W and H: rows
   // land on the panel itself, where no tab claims them and all three showed them.
   const before = p.host.children.length
-  if (els.length === 1) childResizing(p, els[0])
+  childResizing(p, els)
   block.append(...[...p.host.children].slice(before))
 }
 

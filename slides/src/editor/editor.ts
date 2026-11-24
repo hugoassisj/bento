@@ -69,6 +69,7 @@ import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
 import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
 import { align, distribute, flip } from './inspector/arrange'
+import { LAYOUT_PRESETS, applyLayoutPreset, canPreset } from './inspector/layout'
 import type { NodeKind } from './beziereditor'
 import { withDescendants, flagged, frameChildren, isFrame, moveInFrame, colsOf } from '../layout'
 import { decoratePeer, vouchAgent as vouchPeopleAgent } from './vouch'
@@ -3803,6 +3804,9 @@ export class Editor {
       { id: 'flip-h', label: 'Flip horizontal', keys: '⇧H', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'h', run: () => flip(this.panel, sel(), 'flipX') },
       { id: 'flip-v', label: 'Flip vertical', keys: '⇧V', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'v', run: () => flip(this.panel, sel(), 'flipY') },
       { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
+      // auto layout presets, for ⌘K and the element menu: offered while there is
+      // a frame or two loose elements to make equal (inspector/layout.ts)
+      ...LAYOUT_PRESETS.map(([preset, id, label]): Command => ({ id, label, scope: 'canvas', when: () => toolFree() && canPreset(this.store.slide, sel()), run: () => applyLayoutPreset(this.panel, sel(), preset) })),
       { id: 'component', label: 'Create component', keys: `⌥${MOD}K`, scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => mod && ev.altKey && letter(ev, 'KeyK'), run: () => this.createComponent() },
       // tokens and components, for ⌘K (palette only: no keys of their own)
       { id: 'component-main', label: 'Go to main component', scope: 'canvas', when: () => canvasFree() && !!selectedComponent(this.panel, sel()) && !selectedComponent(this.panel, sel())!.main, run: () => goToMain(this.panel, sel()[0].component!.id) },
@@ -4431,6 +4435,9 @@ export class Editor {
         ? { label: t('Ungroup'), hint: this.keysOf('ungroup'), cmd: 'ungroup', run: () => this.panel.ungroup(els) }
         : { label: t('Group'), hint: this.keysOf('group'), cmd: 'group', disabled: els.length < 2, run: () => this.panel.group(els) },
       { label: t('Add auto layout'), hint: this.keysOf('auto-layout'), cmd: 'auto-layout', disabled: !els.length, run: () => this.panel.addAutoLayout(els) },
+      ...(!this.store.readOnly && canPreset(this.store.slide, els)
+        ? LAYOUT_PRESETS.map(([preset, cmd, label]): CtxItem => ({ label: t(label), cmd, run: () => applyLayoutPreset(this.panel, els, preset) }))
+        : []),
       ...this.componentMenu(els),
       ...(boolOperands(this.store, els)
         ? ['sep' as const, ...BOOL_OPS.map((op) => {
