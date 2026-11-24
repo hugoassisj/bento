@@ -217,7 +217,9 @@ try {
   // ——— timer ———
   const timer = () => sp.evaluate(() => {
     const el = document.querySelector('.sv-timer')
-    return { text: el?.textContent?.trim() ?? '', cls: el?.className ?? '', title: el?.getAttribute('title') ?? '',
+    return { text: el?.textContent?.trim() ?? '', cls: el?.className ?? '',
+      // the app's hints borrow a hovered control's title into data-hint
+      title: el?.getAttribute('title') || el?.dataset.hint || '',
       tag: el?.tagName ?? '', mode: document.querySelector('.sv-timer-mode:not([hidden])')?.textContent ?? '' }
   })
   const now = await p.evaluate(() => Date.now())
@@ -233,11 +235,12 @@ try {
   const held = await timer()
   ok(held.text === paused.text && held.title === 'Resume timer',
     `paused, the text holds for 3 s ("${paused.text}" → "${held.text}", "${held.title}")`)
-  // Space advances the show even right after the timer was clicked.
+  // Space advances the show even right after the timer was clicked (and so focused).
+  const focused = await sp.evaluate(() => document.activeElement?.classList.contains('sv-timer'))
   await press('Space')
   const afterSpace = await timer()
-  ok((await panes()).steps === 'Click 1 of 3' && afterSpace.title === 'Resume timer',
-    `Space after clicking the timer advances the show and leaves the timer alone ("${(await panes()).steps}", "${afterSpace.title}")`)
+  ok(focused && (await panes()).steps === 'Click 1 of 3' && afterSpace.title === 'Resume timer',
+    `Space after clicking the timer advances the show and leaves the timer alone (focused ${focused}, "${(await panes()).steps}", "${afterSpace.title}")`)
   await soft(sp.locator('.sv-timer').click(T))
   await ctx.clock.fastForward(2000)
   const resumed = await timer()

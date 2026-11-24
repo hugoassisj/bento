@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
+  "Next click": "Siguiente clic",
+  "Click {n} of {m}": "Clic {n} de {m}",
+  "Smaller notes": "Notas más pequeñas",
+  "Larger notes": "Notas más grandes",
+  "Reset notes size": "Restablecer el tamaño de las notas",
+  "Pause timer": "Pausar el temporizador",
+  "Resume timer": "Reanudar el temporizador",
+  "Reset timer": "Reiniciar el temporizador",
+  "Target time": "Tiempo objetivo",
+  "minutes": "minutos",
+  "Remaining": "Restante",
   "View": "Vista",
   "Current slide": "Diapositiva actual",
   "Slide thumbnails": "Miniaturas de diapositivas",
@@ -93,7 +104,6 @@ export const es: Catalog = {
   "Checked automatically at launch — you're on the latest version (v{v}).": "Comprobado automáticamente al iniciar — tienes la última versión (v{v}).",
   "Checking…": "Comprobando…",
   "Checks contact the release server and send nothing about you or this document — no ids, no telemetry.": "Las comprobaciones contactan el servidor de versiones sin enviar nada sobre ti ni este documento — sin IDs, sin telemetría.",
-  "Click to reset": "Clic para reiniciar",
   "Color": "Color",
   "Comment": "Comentario",
   "Comment · element": "Comentario · elemento",

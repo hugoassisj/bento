@@ -363,8 +363,16 @@ anim, charts, i18n, sync), shared by every app.
   `hover:'reveal'` (with a default set) swap content on pointer-over. Editor previews
   one set at a time. Rule of thumb: click → state slide; hover → reveal set.
 - **Speaker view (presenter view)**: OUR OWN popup (present.ts openSpeaker) —
-  a PowerPoint-style presenter surface: elapsed timer (click resets) + clock,
-  current + next slide (renderSlide/svSlide), notes, a **nav bar** (first/prev/
+  a PowerPoint-style presenter surface: timer + clock (`src/speakertimer.ts`:
+  a click pauses/resumes, ↺ resets, View ▸ Target time counts down, amber in
+  the last 10 %, red past zero; the target lives in module memory, never the
+  doc), current + next slide (renderSlide/svSlide) that FOLLOW reveal steps
+  (`svSlide(idx, w, step, coming)` hides with `.bento-step-hidden`, which
+  styles.css scopes to `.sv-frame` as well as the show overlay; "Next" is the
+  same slide one click on while `steps.hasNext()`, then the next slide at
+  step 0; `revealStep`/`hideStep` call `updateSpeakerPreviews`), notes
+  (A−/A+/reset and -/= in speakerlayout.ts, size in localStorage
+  `bento-speaker-notes-size`), a **nav bar** (first/prev/
   next/last + live counter), a **black-screen** toggle (`.bento-blackout` over
   the audience overlay), a clickable **thumbnail rail** (all non-state slides,
   current highlighted + scrolled into view), and a lazy **all-slides grid**

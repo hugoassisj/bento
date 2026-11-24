@@ -15396,3 +15396,23 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — slides: the speaker view follows reveal steps; notes size and a timer target
+
+- **The previews show the build, not the slide.** "Current" renders at the
+  show's step; "Next" is what the next → does: the same slide one click on
+  (labelled "Next click", the coming elements outlined) while the slide has
+  builds left, then the next slide as it arrives, at step 0 ("Next slide").
+  The counter reads "Click n of m", counting clicks, not step numbers (steps
+  1, 2, 5 are three clicks). Hiding reuses `.bento-step-hidden`, scoped in
+  styles.css to `.sv-frame` too; nothing sent to an audience changes.
+- **Notes size is a browser preference** (localStorage
+  `bento-speaker-notes-size`, 16–48 px), like reduced motion — unlike the
+  pane layout, which stays in editor memory (2026-11-06). Both stay out of the
+  document and sync.
+- **The timer target lives in page memory** (`src/speakertimer.ts`): it
+  survives restarting the show, not a reload, and is never stored. A per-slide
+  target belongs to rehearsal, which would be a format change of its own.
+- **Guard.** `scripts/test-slides-speaker-steps-browser.mjs` (pane pixels and
+  computed visibility at each step, notes size across a reopen, the timer on
+  Playwright's fake clock, the popup's keys).

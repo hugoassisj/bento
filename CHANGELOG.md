@@ -16,6 +16,18 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **The speaker view follows your click builds, sizes your notes and paces
+  your talk.** On a slide that reveals its points one click at a time, the
+  current slide in the speaker view now shows exactly what the audience sees,
+  and Next shows what your next click will do: the same slide with the next
+  point outlined ("Next click"), then the following slide once everything is
+  shown ("Next slide"). "Click 1 of 3" sits beside the slide number. A−, A+
+  and reset in the notes header (or the - and = keys) make the notes smaller
+  or larger, and this browser remembers the size. Click the timer to pause it
+  during a break and again to carry on; the small button beside it resets it.
+  Set a target time in minutes under View and the timer counts down instead,
+  turning amber in the last tenth and red once you run over. None of this is
+  saved in the presentation.
 
 ## [1.3.0] — 2026-11-22
 

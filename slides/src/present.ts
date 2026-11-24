@@ -17,12 +17,13 @@ import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { hintWindow, paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { speakerWindowTitle } from './wintitle'
 import { setupSpeakerLayout } from './speakerlayout'
+import { setupSpeakerTimer } from './speakertimer'
 import { ICONS } from './icons'
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
 import type { ShowEvent, ShowVerbs } from '../../kernel/src/sync/session.ts'
 import { FollowState, laserDue } from './follow'
-import { StepState, stepOf, shownAt } from './steps'
+import { StepState, stepOf, stepsOf, shownAt } from './steps'
 import { offlineEnabled } from './update'
 import { countPlan } from './countnumber'
 
@@ -179,6 +180,7 @@ export function startPresentation(
     applyStep(section, doc.slides[cur], r.step)
     if (!reduceMotion) runEnterFx(doc.slides[cur], section, new Set(r.reveal.map((el) => el.id)), true)
     sendNav(cur)
+    updateSpeakerPreviews()
     updateSpeakerControls()
   }
   const hideStep = (r: { step: number; hide: SlideElement[] }) => {
@@ -194,6 +196,7 @@ export function startPresentation(
     }
     applyStep(section, doc.slides[cur], r.step)
     sendNav(cur)
+    updateSpeakerPreviews()
     updateSpeakerControls()
   }
   const goNext = () => {
@@ -772,9 +775,8 @@ export function startPresentation(
   // which in a Bento file boots the EDITOR. Instead: our own popup, rendered
   // with the same renderer from this one app instance and synced directly.
   let speaker: Window | null = null
-  let speakerTimer = 0
   let cleanupSpeakerLayout: (() => void) | undefined
-  let speakerStart = 0
+  let cleanupSpeakerTimer: (() => void) | undefined
   // opening the speaker popup drops the main window out of OS fullscreen on most
   // browsers; this guards the fullscreenchange handler so that bounce doesn't
   // end the show (see onFsChange).
@@ -827,7 +829,10 @@ export function startPresentation(
     }
     return -1
   }
-  const svSlide = (idx: number, w?: number): HTMLElement => {
+  // `step` renders the slide as it stands at that build (stepped elements past
+  // it hidden, as the show hides them); `coming` outlines the elements the
+  // next click reveals. Without `step` the slide is drawn fully built.
+  const svSlide = (idx: number, w?: number, step?: number, coming?: Set<string>): HTMLElement => {
     const frame = document.createElement('div')
     frame.className = 'sv-frame'
     frame.style.setProperty('--sv-doc-w', `${doc.size.width}px`)
@@ -838,6 +843,14 @@ export function startPresentation(
       const inner = document.createElement('div')
       inner.className = 'sv-scale'
       inner.appendChild(renderSlide(doc.slides[idx], doc, { hidePlaceholders: true }))
+      if (step !== undefined) {
+        for (const el of doc.slides[idx].elements ?? []) {
+          if (!stepOf(el)) continue
+          const node = inner.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+          node?.classList.toggle('bento-step-hidden', !shownAt(el, step))
+          node?.classList.toggle('sv-step-coming', !!coming?.has(el.id))
+        }
+      }
       frame.appendChild(inner)
     } else {
       frame.classList.add('end')
@@ -854,9 +867,13 @@ export function startPresentation(
     const cur = deck.getIndices().h
     const anchor = isState(cur) ? anchorOf(cur) : cur
     const count = d.querySelector('.sv-count')
-    if (count) {
-      const max = doc.slides[cur] ? Math.max(0, ...doc.slides[cur].elements.map(stepOf)) : 0
-      count.textContent = `${visibleIndex(cur)} / ${visibleTotal}` + (max ? ` · ${steps.step}/${max}` : '')
+    if (count) count.textContent = `${visibleIndex(cur)} / ${visibleTotal}`
+    const builds = d.querySelector<HTMLElement>('.sv-steps')
+    if (builds) {
+      // clicks, not step numbers: steps 1, 2, 5 are three clicks
+      const all = doc.slides[cur] ? stepsOf(doc.slides[cur].elements) : []
+      builds.hidden = !all.length
+      builds.textContent = all.length ? t('Click {n} of {m}', { n: all.filter((s) => s <= steps.step).length, m: all.length }) : ''
     }
     d.querySelectorAll<HTMLElement>('.sv-thumb').forEach((th) => {
       const on = Number(th.dataset.idx) === anchor
@@ -983,19 +1000,36 @@ export function startPresentation(
   const onMotionQuery = (e: MediaQueryListEvent) => { if (readMotionPref() === null) setReduceMotion(e.matches, false) }
   reduceQuery.addEventListener?.('change', onMotionQuery)
 
+  // The previews follow the builds: "current" is what the audience sees now,
+  // "Next" is what the next → shows — this slide one click on while it has
+  // builds left (the coming elements outlined), then the next slide as it
+  // arrives. Re-rendered on every click as well as on every slide change.
+  const updateSpeakerPreviews = () => {
+    if (!speaker || speaker.closed || !deckReady) return
+    const d = speaker.document
+    const cur = deck.getIndices().h
+    const curBox = d.querySelector('.sv-current')
+    const nxtBox = d.querySelector('.sv-nextbox')
+    if (!curBox || !nxtBox) return
+    curBox.replaceChildren(d.importNode(svSlide(cur, undefined, steps.step), true))
+    const elements = doc.slides[cur]?.elements ?? []
+    const click = steps.hasNext() ? stepsOf(elements).find((s) => s > steps.step) : undefined
+    const label = d.querySelector('.sv-next-label')
+    if (click !== undefined) {
+      const coming = new Set(elements.filter((el) => stepOf(el) > steps.step && stepOf(el) <= click).map((el) => el.id))
+      nxtBox.replaceChildren(d.importNode(svSlide(cur, undefined, click, coming), true))
+      if (label) label.textContent = t('Next click')
+    } else {
+      nxtBox.replaceChildren(d.importNode(svSlide(nextVisibleIndex(cur), undefined, 0), true))
+      if (label) label.textContent = t('Next slide')
+    }
+  }
   const updateSpeaker = () => {
     if (!speaker || speaker.closed) return
     if (!deckReady) return // opened pre-init — populated on ready
     const d = speaker.document
     const cur = deck.getIndices().h
-    const nxt = nextVisibleIndex(cur)
-    const curBox = d.querySelector('.sv-current')
-    const nxtBox = d.querySelector('.sv-nextbox')
-    if (!curBox || !nxtBox) return
-    curBox.innerHTML = ''
-    curBox.appendChild(d.importNode(svSlide(cur), true))
-    nxtBox.innerHTML = ''
-    nxtBox.appendChild(d.importNode(svSlide(nxt), true))
+    updateSpeakerPreviews()
     const notes = d.querySelector('.sv-notes')
     if (notes) notes.textContent = doc.slides[cur]?.notes || t('— no notes for this slide —')
     updateSpeakerControls()
@@ -1035,9 +1069,10 @@ export function startPresentation(
       `<button class="sv-btn" data-nav="${k}" title="${label}" aria-label="${label}"${pressed ? ' aria-pressed="false"' : ''}>${glyph}</button>`
     d.body.innerHTML =
       `<div class="sv-top">` +
-        `<div class="sv-timer" title="${t('Click to reset')}">00:00</div>` +
+        `<button type="button" class="sv-timer">00:00</button>` +
         `<div class="sv-clock"></div>` +
         `<div class="sv-count"></div>` +
+        `<div class="sv-steps" hidden></div>` +
         `<div class="sv-ctrls">` +
           navBtn('first', '⇤', t('First slide')) +
           navBtn('prev', '‹', t('Previous')) +
@@ -1062,7 +1097,7 @@ export function startPresentation(
       `<div class="sv-main">` +
         `<div class="sv-current" id="sv-current"></div>` +
         `<div class="sv-side" id="sv-side">` +
-          `<div class="sv-next-wrap" id="sv-next"><div class="sv-label">${t('Next')}</div><div class="sv-nextbox"></div></div>` +
+          `<div class="sv-next-wrap" id="sv-next"><div class="sv-label sv-next-label">${t('Next')}</div><div class="sv-nextbox"></div></div>` +
           `<div class="sv-notes-wrap" id="sv-notes"><div class="sv-label">${t('Notes')}</div><div class="sv-notes"></div></div>` +
         `</div>` +
       `</div>` +
@@ -1084,19 +1119,8 @@ export function startPresentation(
       d.head.appendChild(bcastStyle)
     }
 
-    speakerStart = performance.now()
-    d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })
-    clearInterval(speakerTimer)
-    speakerTimer = window.setInterval(() => {
-      if (!speaker || speaker.closed) { clearInterval(speakerTimer); return }
-      const el = speaker.document.querySelector('.sv-timer')
-      if (el) {
-        const s = Math.floor((performance.now() - speakerStart) / 1000)
-        el.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
-      }
-      const clock = speaker.document.querySelector('.sv-clock')
-      if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }, 1000)
+    cleanupSpeakerTimer?.()
+    cleanupSpeakerTimer = setupSpeakerTimer(speaker)
 
     // a clickable thumbnail: an imported slide render inside a button, badged
     // with its slide number; clicking jumps the live show there.
@@ -1256,7 +1280,7 @@ export function startPresentation(
     document.removeEventListener('visibilitychange', onVisibility)
     releaseWakeLock()
     reduceQuery.removeEventListener?.('change', onMotionQuery)
-    clearInterval(speakerTimer)
+    cleanupSpeakerTimer?.()
     cleanupSpeakerLayout?.()
     if (speaker && !speaker.closed) {
       if (speakerAdopted) {
@@ -1569,8 +1593,6 @@ export function startPresentation(
       deck.slide(pendingIndex, 0)
       pendingIndex = null
     }
-    // if the speaker view was opened before init (macOS reorder), fill it now
-    updateSpeaker()
     // late layout: fonts/images that finish loading after init can change
     // the measured size, and the boot viewport may still be settling
     window.addEventListener('resize', onResize)
@@ -1592,6 +1614,9 @@ export function startPresentation(
       mountLiveCharts(doc.slides[startIndex], first)
       startMediaIn(first)
     }
+    // if the speaker view was opened before init (macOS reorder, or adopted
+    // from the editor), fill it now — after the first slide's builds are set
+    updateSpeaker()
     if (opts?.onDocChange) {
       opts.onDocChange({ slidesEl, deck, buildSection })
     }

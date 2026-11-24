@@ -1828,8 +1828,34 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font: 700 30px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  border-radius: 6px;
 }
 .sv-timer:hover { color: var(--accent); }
+.sv-timer.sv-timer-paused { opacity: 0.55; }
+.sv-timer.sv-timer-warn { color: #f5b942; }
+.sv-timer.sv-timer-over { color: #ff6b5e; }
+.sv-timer-mode { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9fb0c3; margin-right: -14px; }
+.sv-timer-reset, .sv-notes-size button {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid #2b333f;
+  background: #1e242c;
+  color: #cdd6e2;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sv-timer-reset { margin-left: -14px; align-self: center; }
+.sv-timer-reset:hover, .sv-notes-size button:hover:not([disabled]) { background: #2a323c; color: #fff; }
+.sv-notes-size button[disabled] { opacity: 0.35; cursor: default; }
+.sv-timer:focus-visible, .sv-timer-reset:focus-visible, .sv-notes-size button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sv-steps { font-size: 15px; color: var(--accent); font-variant-numeric: tabular-nums; }
 .sv-clock { font-size: 15px; color: #9fb0c3; }
 .sv-count { font-size: 15px; color: #9fb0c3; font-variant-numeric: tabular-nums; }
 .sv-ctrls { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -1896,7 +1922,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   min-height: 0;
   overflow-y: auto;
   white-space: pre-wrap;
-  font-size: 24px;
+  font-size: var(--sv-notes-size, 24px);
   line-height: 1.65;
   color: #e9edf3;
   user-select: text;
@@ -1918,6 +1944,11 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .sv-view-menu label { display: flex; align-items: center; gap: 8px; padding: 9px 8px; font-size: 14px; cursor: pointer; }
 .sv-view-menu label:hover { background: #2a323c; }
 .sv-view-menu input { accent-color: var(--accent); }
+.sv-view-menu .sv-target-row { white-space: nowrap; border-top: 1px solid #2b333f; margin-top: 4px; padding-top: 11px; cursor: default; }
+.sv-view-menu .sv-target-row:hover { background: none; }
+.sv-target { width: 4.5em; padding: 4px 6px; border: 1px solid #2b333f; border-radius: 6px; background: #14181d; color: #e9edf3; font: inherit; }
+.sv-notes-wrap > .sv-label { display: flex; align-items: center; gap: 8px; }
+.sv-notes-size { margin-left: auto; display: inline-flex; gap: 4px; text-transform: none; letter-spacing: 0; font-weight: 400; }
 
 /* --- presenter view: thumbnail rail + all-slides grid ----------------- */
 .sv-rail {
@@ -1990,7 +2021,10 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
    not display — it keeps its box (nothing reflows when it appears), keeps
    morph and layout measurements honest, and its entrance tween can start
    from opacity 0 the moment the class comes off. Present-mode only. */
-.bento-present-overlay .bento-step-hidden { visibility: hidden !important; pointer-events: none; }
+.bento-present-overlay .bento-step-hidden, .sv-frame .bento-step-hidden { visibility: hidden !important; pointer-events: none; }
+/* the speaker view's "Next click" preview outlines what the click reveals
+   (drawn at slide scale, so about 2px in a typical pane) */
+.sv-frame .sv-step-coming { outline: 8px dashed var(--accent); outline-offset: 6px; }
 
 /* transient confirmation pill in present mode (e.g. Reduced motion on/off) */
 .bento-present-toast {

@@ -2,10 +2,21 @@
 // Copyright (c) 2026 The Bento authors
 // Speaker chrome only: proportions and visibility never enter the document.
 import { t } from './i18n'
+import { lsGet, lsSet } from '../../kernel/src/storage.ts'
 
 // Keep the presenter's choices across shows in this editor, including when the
 // editor-owned popup is repainted with its idle placeholder between shows.
 const layout = { current: true, next: true, notes: true, rail: true, columns: 0.6, rows: null as number | null }
+
+// Notes size is a reading preference of this browser (like reduced motion),
+// so it persists in localStorage; it never enters the document.
+const NOTES_SIZES = [16, 18, 20, 24, 28, 32, 40, 48]
+const NOTES_DEFAULT = 24
+const NOTES_KEY = 'bento-speaker-notes-size'
+const notesSize = () => {
+  const px = Number(lsGet(NOTES_KEY))
+  return NOTES_SIZES.includes(px) ? px : NOTES_DEFAULT
+}
 
 export function setupSpeakerLayout(w: Window): () => void {
   const d = w.document
@@ -48,7 +59,7 @@ export function setupSpeakerLayout(w: Window): () => void {
       ? `minmax(0, ${layout.columns}fr) 22px minmax(0, ${1 - layout.columns}fr)` : ''
     side.style.gridTemplateRows = layout.next && layout.notes && layout.rows !== null
       ? `minmax(0, ${layout.rows}fr) 16px minmax(0, ${1 - layout.rows}fr)` : ''
-    view.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
+    view.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((input) => {
       input.checked = layout[input.value as 'current' | 'next' | 'notes' | 'rail']
     })
   }
@@ -132,7 +143,7 @@ export function setupSpeakerLayout(w: Window): () => void {
   const updateColumns = bind(columns, true)
   const updateRows = bind(rows, false)
   view.addEventListener('change', () => {
-    view.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
+    view.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((input) => {
       layout[input.value as 'current' | 'next' | 'notes' | 'rail'] = input.checked
     })
     apply()
@@ -150,6 +161,51 @@ export function setupSpeakerLayout(w: Window): () => void {
   })
   const outside = (ev: MouseEvent) => { if (!view.contains(ev.target as Node)) view.open = false }
   d.addEventListener('click', outside)
+
+  // A− / A+ / reset in the notes header, and - / = from anywhere in the popup.
+  const notesText = d.querySelector<HTMLElement>('.sv-notes')
+  const sizer = d.createElement('span')
+  sizer.className = 'sv-notes-size'
+  const sizeBtn = (k: string, glyph: string, label: string) => {
+    const b = d.createElement('button')
+    b.type = 'button'
+    b.dataset.notesSize = k
+    b.title = label
+    b.setAttribute('aria-label', label)
+    b.textContent = glyph
+    sizer.appendChild(b)
+    return b
+  }
+  const smaller = sizeBtn('smaller', 'A−', t('Smaller notes'))
+  const larger = sizeBtn('larger', 'A+', t('Larger notes'))
+  const resetSize = sizeBtn('reset', '↺', t('Reset notes size'))
+  notes.querySelector('.sv-label')?.appendChild(sizer)
+  const paintSize = () => {
+    const px = notesSize()
+    notesText?.style.setProperty('--sv-notes-size', `${px}px`)
+    smaller.disabled = px <= NOTES_SIZES[0]
+    larger.disabled = px >= NOTES_SIZES[NOTES_SIZES.length - 1]
+    resetSize.disabled = px === NOTES_DEFAULT
+  }
+  const stepSize = (dir: number) => {
+    const i = NOTES_SIZES.indexOf(notesSize())
+    const next = NOTES_SIZES[Math.max(0, Math.min(NOTES_SIZES.length - 1, i + dir))]
+    lsSet(NOTES_KEY, String(next))
+    paintSize()
+  }
+  smaller.addEventListener('click', () => stepSize(-1))
+  larger.addEventListener('click', () => stepSize(1))
+  resetSize.addEventListener('click', () => { lsSet(NOTES_KEY, String(NOTES_DEFAULT)); paintSize() })
+  const sizeKeys = (ev: KeyboardEvent) => {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return // ⌘= / ⌘- stay the browser's zoom
+    if ((ev.target as HTMLElement | null)?.closest?.('input, textarea, [contenteditable="true"]')) return
+    const dir = ev.key === '-' || ev.key === '_' ? -1 : ev.key === '=' || ev.key === '+' ? 1 : 0
+    if (!dir) return
+    ev.preventDefault()
+    stepSize(dir)
+  }
+  d.addEventListener('keydown', sizeKeys)
+  paintSize()
   const observer = new ResizeObserver(() => { updateColumns(); updateRows() })
   observer.observe(main)
   observer.observe(next)
@@ -157,6 +213,7 @@ export function setupSpeakerLayout(w: Window): () => void {
   const cleanup = () => {
     observer.disconnect()
     d.removeEventListener('click', outside)
+    d.removeEventListener('keydown', sizeKeys)
     d.body.classList.remove('sv-resizing')
     w.removeEventListener('pagehide', cleanup)
   }

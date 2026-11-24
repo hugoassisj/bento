@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Next click": "下一次点击",
+  "Click {n} of {m}": "第 {n} 次点击，共 {m} 次",
+  "Smaller notes": "缩小备注",
+  "Larger notes": "放大备注",
+  "Reset notes size": "重置备注大小",
+  "Pause timer": "暂停计时器",
+  "Resume timer": "继续计时",
+  "Reset timer": "重置计时器",
+  "Target time": "目标时间",
+  "minutes": "分钟",
+  "Remaining": "剩余",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",
@@ -93,7 +104,6 @@ export const zhHans: Catalog = {
   "Checked automatically at launch — you're on the latest version (v{v}).": "已在启动时自动检查 — 您已是最新版本 (v{v})。",
   "Checking…": "检查中…",
   "Checks contact the release server and send nothing about you or this document — no ids, no telemetry.": "检查仅连接发布服务器，不发送任何关于您或此文档的信息 — 无 ID，无遥测。",
-  "Click to reset": "点击重置",
   "Color": "颜色",
   "Comment": "评论",
   "Comment · element": "评论 · 元素",

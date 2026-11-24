@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Next click": "次のクリック",
+  "Click {n} of {m}": "クリック {n} / {m}",
+  "Smaller notes": "ノートを小さく",
+  "Larger notes": "ノートを大きく",
+  "Reset notes size": "ノートのサイズをリセット",
+  "Pause timer": "タイマーを一時停止",
+  "Resume timer": "タイマーを再開",
+  "Reset timer": "タイマーをリセット",
+  "Target time": "目標時間",
+  "minutes": "分",
+  "Remaining": "残り",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",
@@ -93,7 +104,6 @@ export const ja: Catalog = {
   "Checked automatically at launch — you're on the latest version (v{v}).": "起動時に自動確認済み — 最新バージョンです (v{v})。",
   "Checking…": "確認中…",
   "Checks contact the release server and send nothing about you or this document — no ids, no telemetry.": "確認はリリースサーバーへの接続のみで、あなたやこのドキュメントの情報は一切送信しません — ID もテレメトリーもなし。",
-  "Click to reset": "クリックでリセット",
   "Color": "色",
   "Comment": "コメント",
   "Comment · element": "コメント · 要素",
