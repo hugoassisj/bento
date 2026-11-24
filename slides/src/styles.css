@@ -1086,6 +1086,18 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
 .ed-about-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ed-about-actions .ed-btn { max-width: 100%; }
 .ed-about-json { width: 100%; font: 11px/1.4 ui-monospace, Menlo, monospace; }
+/* Replace from JSON (editor.ts openReplaceJson): the review before applying */
+.ed-replace { width: min(516px, 100%); }
+.ed-replace .ed-hint { margin: 0 0 8px; }
+.ed-replace-status { margin-top: 8px; font-size: 12.5px; line-height: 1.5; }
+.ed-replace-err { color: var(--danger); }
+.ed-replace textarea[aria-invalid='true'] { border-color: var(--danger); }
+.bkd-card:has(.ed-replace) .ed-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.ed-replace-report { max-height: 140px; overflow: auto; margin: 6px 0 0; padding-inline-start: 18px; font: 11px/1.45 ui-monospace, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+.ed-replace-report:empty { display: none; }
+.ed-replace-confirm { display: flex; gap: 6px; align-items: center; margin-top: 8px; font-size: 12.5px; color: var(--danger); }
+.ed-replace-confirm[hidden] { display: none; }
+[dir="rtl"] .ed-replace-report { direction: ltr; } /* paths and ids, like the JSON */
 .ed-about-fine {
   font-size: 10.5px;
   line-height: 1.5;

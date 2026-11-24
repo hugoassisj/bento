@@ -21,7 +21,9 @@ try {
     await p.locator('.ed-logo').click(); // Replace from JSON is the document's: File ▸ Advanced
     await p.locator('.ed-file-menu [data-cmd="replace-json"]').click();
     await p.locator('.ed-about-json').fill(JSON.stringify(doc));
-    await p.locator('.ed-about-overlay').getByRole('button',{name:'Apply',exact:true}).click();
+    // the first press reviews (the summary of the change), the second applies
+    await p.locator('[role=dialog]').getByRole('button',{name:'Review changes',exact:true}).click();
+    await p.locator('[role=dialog]').getByRole('button',{name:'Apply changes',exact:true}).click();
   }
   await replace(custom);
   assert(await p.evaluate(async () => {

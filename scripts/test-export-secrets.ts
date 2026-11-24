@@ -321,7 +321,7 @@ for (const [name, src] of editor) {
 // path hands the gate the open document.
 const paste = body('openReplaceJson')
 const pasteCode = mask(paste)
-const gateAt = pasteCode.search(/parseDocInputReport\(\s*ta\.value\s*,\s*\{\s*live:\s*this\.store\.doc\s*\}\s*\)/)
+const gateAt = pasteCode.search(/parseDocInputReport\(\s*json\s*,\s*\{\s*live:\s*this\.store\.doc\s*\}\s*\)/)
 ok(gateAt >= 0,
   'openReplaceJson() parses through the gate with { live: this.store.doc } — THIS document\'s collab, never the pasted one')
 // …and settles it BEFORE the swap: replaceDoc's events reach the sync session

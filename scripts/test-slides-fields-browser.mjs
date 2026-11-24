@@ -114,7 +114,7 @@ const SURFACES = [
   // the document's fields have their own dialog (File ▸ Document properties); the app's in Preferences
   { name: 'Document properties', scope: '.ed-about', min: 5, open: (p) => fileMenu(p, 'doc-props') },
   { name: 'Preferences', scope: '.ed-about', min: 1, open: (p) => p.locator('.ed-topbar [data-cmd="preferences"]').click() },
-  { name: 'Replace from JSON', scope: '.ed-about', min: 1, open: (p) => fileMenu(p, 'replace-json') },
+  { name: 'Replace from JSON', scope: '.bkd-card', min: 1, open: (p) => fileMenu(p, 'replace-json') },
   { name: 'Export images', scope: '.bkd-card', min: 3, open: (p) => fileMenu(p, 'export-images') },
   { name: 'Save with password', scope: 'dialog.ed-pwdialog', min: 2, open: (p) => saveAs(p, 'Save with password') },
   { name: 'Share popover', scope: '.ed-share-pop', min: 1, open: (p) => p.locator('.ed-btn-share').click() },

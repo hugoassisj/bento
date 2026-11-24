@@ -59,6 +59,7 @@ import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripCollabSecrets } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
+import { cleanPastedJson, docRejection, summarizeReplace } from './pastejson'
 import { gateRestored, guardOpenedDoc } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
@@ -1460,23 +1461,126 @@ export class Editor {
     }
   }
 
-  /** Paste-and-apply document JSON (the counterpart of Copy document JSON). */
+  /** Paste-and-apply document JSON (the counterpart of Copy document JSON).
+   *  The text usually comes back from a chatbot: editor/pastejson.ts takes it
+   *  out of a code fence or the prose around it and drops trailing commas,
+   *  naming each repair, and says why when it cannot be read (cut off, a
+   *  syntax error at a line and column, not a document). Nothing is applied
+   *  until the summary of the change has been shown: the first press reviews,
+   *  the second applies, and removing slides needs its own tick. */
   private openReplaceJson() {
-    document.querySelector('.ed-about-overlay')?.remove()
-    const overlay = div('ed-about-overlay')
-    const box = div('ed-about')
-    const h = document.createElement('div')
-    h.className = 'ed-about-h'
-    h.textContent = t('Replace from JSON')
+    if (document.querySelector('.ed-replace')) return
+    const body = div('ed-replace')
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Paste the JSON a chatbot or tool gave back. A code fence or text around it is fine; nothing changes until you have reviewed the changes and applied them.')
     const ta = document.createElement('textarea')
     ta.className = 'ed-about-json'
     ta.rows = 8
     ta.placeholder = t('Paste document JSON here…')
-    const row = div('ed-about-row')
-    const applyB = document.createElement('button')
-    applyB.className = 'ed-btn ed-btn-primary'
-    applyB.textContent = t('Apply')
+    ta.setAttribute('aria-label', t('Replace from JSON'))
+    const status = div('ed-replace-status')
+    status.setAttribute('role', 'status')
+    const list = document.createElement('ul')
+    list.className = 'ed-replace-report'
+    const confirmRow = document.createElement('label')
+    confirmRow.className = 'ed-replace-confirm'
+    const tick = document.createElement('input')
+    tick.type = 'checkbox'
+    const tickText = document.createElement('span')
+    confirmRow.append(tick, tickText)
+    body.append(hint, ta, status, list, confirmRow)
+    const btn = (label: string, cls = 'ed-btn') => { const b = document.createElement('button'); b.className = cls; b.textContent = label; return b }
+    const copyB = btn(t('Copy report'))
+    const cancelB = btn(t('Cancel'))
+    const applyB = btn(t('Review changes'), 'ed-btn ed-btn-primary')
+    let reviewed: string | null = null // the textarea text the summary on show describes
+    let json = ''
+    let report: string[] = []
+    let timer = 0
+    const stale = () => {
+      reviewed = null
+      applyB.textContent = t('Review changes')
+      applyB.disabled = false
+    }
+    const review = () => {
+      clearTimeout(timer)
+      stale()
+      report = []
+      status.replaceChildren()
+      list.replaceChildren()
+      confirmRow.hidden = true
+      tick.checked = false
+      const say = (text: string, err = false) => {
+        const d = div(err ? 'ed-replace-err' : '')
+        d.textContent = text
+        status.append(d)
+        report.push(text)
+      }
+      const item = (text: string) => {
+        const li = document.createElement('li')
+        li.textContent = text
+        list.append(li)
+        report.push('- ' + text)
+      }
+      const ids = (xs: string[]) => xs.slice(0, 8).join(', ') + (xs.length > 8 ? ', …' : '')
+      const c = cleanPastedJson(ta.value)
+      for (const r of c.repaired) {
+        say(r === 'fence' ? t('Repaired: took the JSON out of a Markdown code fence')
+          : r === 'prose' ? t('Repaired: ignored the text around the JSON')
+            : t('Repaired: trailing commas removed ({n})', { n: String(c.commas) }))
+      }
+      // the gate (and the live identity) exactly as at apply time, below
+      const parsed = c.error ? null : parseDocInputReport(c.json, { live: this.store.doc })
+      if (!parsed) {
+        const e = c.error ?? docRejection(c.json)
+        say(e.code === 'syntax' ? t('JSON syntax error at line {line}, column {col}', { line: String(e.line), col: String(e.col) })
+          : e.code === 'cut-off' ? t('The reply was cut off: it ends before the document closes. Ask for the rest of it.')
+            : e.code === 'empty' ? t('Nothing to apply — paste the document JSON first')
+              : e.code === 'no-json' ? t('No JSON object found in the pasted text')
+                : e.code === 'not-document' ? t('Not a bento/slides document: it has no “format” and is not compact')
+                  : t('The document has no slides that can be used'), true)
+        ta.setAttribute('aria-invalid', 'true')
+        return
+      }
+      ta.removeAttribute('aria-invalid')
+      const r = parsed.report
+      const sum = summarizeReplace(this.store.doc, parsed.doc)
+      say(t('Slides: {before} → {after}', { before: String(sum.before), after: String(sum.after) }))
+      if (sum.added.length) say(t('Slides added ({n}): {ids}', { n: String(sum.added.length), ids: ids(sum.added) }))
+      if (sum.removed.length) say(t('Slides removed ({n}): {ids}', { n: String(sum.removed.length), ids: ids(sum.removed) }), true)
+      if (sum.changed.length) say(t('Slides changed ({n}): {ids}', { n: String(sum.changed.length), ids: ids(sum.changed) }))
+      if (sum.elements) say(t('Elements changed: {n}', { n: String(sum.elements) }))
+      if (!sum.added.length && !sum.removed.length && !sum.changed.length) say(t('No changes to the slides'))
+      say(t('Fields dropped: {n}', { n: String(r.dropped.length) }))
+      say(t('Warnings: {n}', { n: String(r.findings.counts.warning + r.findings.counts.error) }))
+      for (const d of r.dropped) item(d.path + ' — ' + d.reason)
+      for (const f of r.findings.findings) if (f.severity !== 'info') item(f.severity + ': ' + f.message + (f.slide ? ' (' + f.slide + (f.element ? '/' + f.element : '') + ')' : ''))
+      if (sum.removed.length) {
+        tickText.textContent = t('I understand: this removes {n} of {total} slides', { n: String(sum.removed.length), total: String(sum.before) })
+        confirmRow.hidden = false
+      }
+      reviewed = ta.value
+      json = c.json
+      applyB.textContent = t('Apply changes')
+      applyB.disabled = sum.removed.length > 0
+    }
+    ta.addEventListener('input', () => {
+      stale()
+      clearTimeout(timer)
+      timer = window.setTimeout(review, 400)
+    })
+    tick.addEventListener('change', () => { applyB.disabled = !tick.checked })
+    copyB.addEventListener('click', () => {
+      if (reviewed !== ta.value) review()
+      navigator.clipboard.writeText(report.join('\n')).then(
+        () => { copyB.textContent = t('Report copied') },
+        () => { copyB.textContent = t('Couldn’t access the clipboard') })
+      setTimeout(() => { copyB.textContent = t('Copy report') }, 1800)
+    })
     applyB.addEventListener('click', () => {
+      // nothing is applied that the summary on show does not describe
+      if (reviewed !== ta.value) { review(); return }
       // The pasted text is foreign input, full or compact (src/compact.ts):
       // the gate rebuilds it (restoregate.ts sanitizeDoc), and with `live` the
       // identity and capability stay THIS document's — its docId (recovery
@@ -1486,7 +1590,7 @@ export class Editor {
       // and its file mode. Decided BEFORE the swap: replaceDoc's events reach
       // the sync session synchronously and it re-attaches to whatever
       // `collab` the new document holds. Content is imported; identity is not.
-      const parsed = parseDocInputReport(ta.value, { live: this.store.doc })
+      const parsed = parseDocInputReport(json, { live: this.store.doc })
       if (parsed) {
         this.store.replaceDoc(parsed.doc)
         // the load report, summarised; the whole thing goes to the console
@@ -1497,23 +1601,16 @@ export class Editor {
           console.info('[bento] load report', r)
           this.toast(t('Loaded: {dropped} fields dropped, {warnings} warnings — see console', { dropped: String(r.dropped.length), warnings: String(warnings) }))
         } else this.toast(t('Document replaced — ⌘Z undoes'))
-        overlay.remove()
-      } else {
-        ta.style.borderColor = '#C0392B'
-        applyB.textContent = t('Invalid document JSON')
-        setTimeout(() => { applyB.textContent = t('Apply') }, 1800)
-      }
+        dlg.close()
+      } else review()
     })
-    const cancelB = document.createElement('button')
-    cancelB.className = 'ed-btn'
-    cancelB.textContent = t('Cancel')
-    cancelB.addEventListener('click', () => overlay.remove())
-    row.append(applyB, cancelB)
-    box.append(h, ta, row)
-    overlay.appendChild(box)
-    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove() })
-    document.body.appendChild(overlay)
-    ta.focus()
+    const dlg = createDialog({ title: t('Replace from JSON'), content: body, actions: [copyB, cancelB, applyB], dismissOnBackdrop: false, onClose: () => clearTimeout(timer) })
+    cancelB.addEventListener('click', () => dlg.close())
+    confirmRow.hidden = true
+    // opened from a menu row that is now hidden: Escape returns focus to the
+    // menu's button instead of dropping it on the page
+    ;((document.activeElement as HTMLElement | null)?.closest('.ed-menu')?.parentElement?.firstElementChild as HTMLElement | null)?.focus()
+    dlg.open()
   }
 
   /** Set or change the encryption password (double-entry dialog). */

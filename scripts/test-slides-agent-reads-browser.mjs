@@ -232,9 +232,15 @@ try {
     const clicked = await menuItem('Replace from JSON')
     await page.waitForSelector('textarea.ed-about-json', { timeout: 5000 })
     await page.fill('textarea.ed-about-json', text)
-    await page.evaluate(() => [...document.querySelectorAll('.ed-about button')].find((b) => b.classList.contains('ed-btn-primary')).click())
+    // the first press shows what will change, the second applies it
+    const press = () => page.evaluate(() => document.querySelector('[role=dialog] .ed-btn-primary')?.click())
+    await press()
+    await page.waitForTimeout(200)
+    // replacing the one-slide deck removes its slide: that takes the explicit tick
+    await page.evaluate(() => { const c = document.querySelector('[role=dialog] .ed-replace-confirm'); if (c && !c.hidden) c.querySelector('input').click() })
+    await press()
     await page.waitForTimeout(400)
-    await page.evaluate(() => document.querySelector('.ed-about-overlay')?.remove())
+    if (await page.$('[role=dialog] textarea.ed-about-json')) await page.keyboard.press('Escape')
     return clicked
   }
   ok(await replaceUI(withTitle(clips['Copy document JSON'], 'U1')), 'Replace from JSON opened')
