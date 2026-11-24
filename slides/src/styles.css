@@ -1532,8 +1532,10 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
   border-radius: 50%;
   background: #d92d20;
   color: #fff;
-  font: 700 12px/16px inherit;
   font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
   text-align: center;
   box-sizing: border-box;
   cursor: pointer;

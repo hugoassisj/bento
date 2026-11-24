@@ -22,7 +22,9 @@
 //      fit steps the font size down until measure() says it fits (never below
 //      the floor, one undo step) and the badge goes; Fit height to text does
 //      the same by growing the box.
-//   6. Resizing a hugging box by a side handle stops the width hugging.
+//   6. Resizing a hugging box by a side handle stops the width hugging; an
+//      undo or redo does not (the next edit hugs the text again, never a
+//      stale width), and a document loaded over the deck starts fixed.
 //   7. A text box put down inside an auto-layout frame is placed exactly as
 //      before (centred defaults, the frame's room), and is not given a badge.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -38,7 +40,10 @@ const MOD = process.platform === 'darwin' ? 'Meta' : 'Control'
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 try {
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
+  // never the network: no http(s), no sockets, and the app told it is offline
   await ctx.route(/^https?:/, (r) => r.abort())
+  await ctx.routeWebSocket(/.*/, (ws) => ws.close())
+  await ctx.addInitScript(() => { try { localStorage.setItem('bento-offline', 'on') } catch {} })
   const p = await ctx.newPage()
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
@@ -95,6 +100,12 @@ try {
     await p.mouse.click(...(await at(Math.max(e.x, 0) + 6, Math.max(e.y, 0) + 6)))
     await p.waitForTimeout(250)
   }
+  // open the selected text box for editing, as a person does: a double-click on it
+  const openBox = async () => {
+    const id = await p.evaluate(() => window.bento.selection[0])
+    const e = await byId(id)
+    await p.mouse.dblclick(...(await at(Math.max(e.x, 0) + 6, Math.max(e.y, 0) + 6)))
+  }
   const placeText = async (x, y, text) => {
     await deselect()
     await p.keyboard.press('t'); await p.waitForTimeout(150)
@@ -118,13 +129,13 @@ try {
     ok(m.lines === 1, `"Q3" is one line (${m.lines})`)
     // typing more widens it; taking text away narrows it again
     await select(e.id)
-    await p.keyboard.press('Enter'); await p.waitForTimeout(200)
+    await openBox(); await p.waitForTimeout(200)
     await p.keyboard.press(`${MOD}+a`); await p.keyboard.type('Quarterly revenue')
     await p.keyboard.press('Escape'); await p.waitForTimeout(300)
     const wide = await byId(e.id)
     const trw = await textRect(e.id)
     ok(wide.html === 'Quarterly revenue' && wide.w > e.w + 100 && Math.abs(wide.w - trw.width) <= 4, `more text widens it to the text (${e.w} → ${wide.w}, text ${trw.width.toFixed(1)})`)
-    await p.keyboard.press('Enter'); await p.waitForTimeout(200)
+    await openBox(); await p.waitForTimeout(200)
     await p.keyboard.press(`${MOD}+a`); await p.keyboard.type('Q4')
     await p.keyboard.press('Escape'); await p.waitForTimeout(300)
     const narrow = await byId(e.id)
@@ -153,12 +164,12 @@ try {
     let m = await measure(e.id)
     ok(Math.abs(e.h - m.height) <= 1 && m.lines === 1, `one line: the height is the text's (box ${e.h}, measured ${m.height})`)
     await select(e.id)
-    await p.keyboard.press('Enter'); await p.waitForTimeout(200)
+    await openBox(); await p.waitForTimeout(200)
     await p.keyboard.press(`${MOD}+a`); await p.keyboard.type('A much longer sentence that has to wrap onto several lines inside four hundred pixels')
     await p.keyboard.press('Escape'); await p.waitForTimeout(300)
     e = await last(); m = await measure(e.id)
     ok(e.w === dragW && m.lines >= 3 && Math.abs(e.h - m.height) <= 1, `more lines: width unchanged, height follows (${e.w}×${e.h}, ${m.lines} lines, measured ${m.height})`)
-    await p.keyboard.press('Enter'); await p.waitForTimeout(200)
+    await openBox(); await p.waitForTimeout(200)
     await p.keyboard.press(`${MOD}+a`); await p.keyboard.type('Short')
     await p.keyboard.press('Escape'); await p.waitForTimeout(300)
     const back = await last(); m = await measure(back.id)
@@ -281,12 +292,91 @@ try {
     await p.waitForTimeout(300)
     const resized = await byId(e.id)
     ok(resized.w > e.w + 150, `the handle widened the box (${e.w} → ${resized.w})`)
-    await p.keyboard.press('Enter'); await p.waitForTimeout(200)
+    await openBox(); await p.waitForTimeout(200)
     await p.keyboard.press(`${MOD}+a`); await p.keyboard.type('Hello there')
     await p.keyboard.press('Escape'); await p.waitForTimeout(300)
     const edited = await byId(e.id)
     ok(edited.w === resized.w, `after the resize, new text keeps the width the handle gave (${edited.w}, want ${resized.w})`)
     ok(Math.abs(edited.h - (await measure(e.id)).height) <= 1, `and the height still follows the text (h ${edited.h})`)
+    // the panel's W is a hand resize too
+    const f = await placeText(200, 500, 'Panel')
+    await select(f.id)
+    const wField = p.locator('.ed-props .ed-mini input[aria-label="W"]').first()
+    await wField.fill('500'); await wField.press('Enter'); await p.waitForTimeout(250)
+    ok((await byId(f.id)).w === 500, `a typed W sets the width (${(await byId(f.id)).w})`)
+    await select(f.id)
+    await openBox(); await p.waitForTimeout(200)
+    await p.keyboard.press(`${MOD}+a`); await p.keyboard.type('Hi')
+    await p.keyboard.press('Escape'); await p.waitForTimeout(300)
+    ok((await byId(f.id)).w === 500, `after a typed W, new text keeps that width (${(await byId(f.id)).w})`)
+  }
+
+  console.log('\nundo and redo keep the hugging\n')
+  {
+    const edit = async (id, text) => {
+      await select(id)
+      await openBox(); await p.waitForTimeout(200)
+      await p.keyboard.press(`${MOD}+a`); await p.keyboard.type(text)
+      await p.keyboard.press('Escape'); await p.waitForTimeout(300)
+      return byId(id)
+    }
+    const undoRedo = async (key) => { await p.keyboard.press(key); await p.waitForTimeout(300) }
+    await load([])
+    let e = await placeText(200, 200, 'Hi')
+    const narrow = e.w
+    e = await edit(e.id, 'Hello wider text')
+    ok(e.w > narrow + 100, `edited wider (${narrow} → ${e.w})`)
+    await deselect()
+    await undoRedo(`${MOD}+z`)
+    e = await byId(e.id)
+    ok(e.html === 'Hi' && e.w === narrow, `undo puts "Hi" back at its width (${JSON.stringify(e.html)}, ${e.w})`)
+    e = await edit(e.id, 'Quarterly revenue grew')
+    let m = await measure(e.id)
+    let tr = await textRect(e.id)
+    ok(m.lines === 1 && Math.abs(e.w - tr.width) <= 4 && Math.abs(e.h - m.height) <= 2, `an edit after undo hugs the new text (${e.w}×${e.h}, ${m.lines} line, text ${tr.width.toFixed(1)})`)
+
+    await load([])
+    e = await placeText(200, 200, 'Hi')
+    e = await edit(e.id, 'Hello wider text')
+    const wide = e.w
+    await deselect()
+    await undoRedo(`${MOD}+z`)
+    await undoRedo(`${MOD}+Shift+z`)
+    e = await byId(e.id)
+    ok(e.html === 'Hello wider text' && e.w === wide, `redo brings the wide text back (${e.w})`)
+    e = await edit(e.id, 'Q')
+    tr = await textRect(e.id)
+    ok(e.w < wide && Math.abs(e.w - tr.width) <= 4, `an edit after redo hugs again, narrower (${wide} → ${e.w}, text ${tr.width.toFixed(1)})`)
+
+    // a document loaded over the deck carries no hugging: its boxes are fixed
+    await load([])
+    e = await placeText(200, 200, 'Hi')
+    await p.evaluate(() => window.bento.loadDoc(JSON.stringify(window.bento.doc)))
+    await p.waitForTimeout(300)
+    const kept = (await byId(e.id)).w
+    e = await edit(e.id, 'Quite a lot longer than before')
+    ok(e.w === kept, `after loadDoc the box keeps its width (${e.w}, want ${kept})`)
+  }
+
+  console.log('\nthe badge itself\n')
+  {
+    await load([box('edge', { x: -100, y: -40, w: 500, h: 200, html: Array.from({ length: 4 }, (_, i) => `<p>Line ${i + 1}</p>`).join('') })])
+    await select('edge')
+    ok(await badgeShown(), 'a box past the left and top edges wears the badge')
+    const look = await p.evaluate(() => { const cs = getComputedStyle(document.querySelector('.ed-fit-badge')); return { size: cs.fontSize, weight: cs.fontWeight } })
+    ok(look.size === '12px' && look.weight === '700', `its "!" is 12px bold (${look.size}, ${look.weight})`)
+    await fixVia('Shrink text to fit')
+    const ed = await byId('edge')
+    const me = await measure('edge')
+    ok(ed.x >= 0 && ed.y >= 0 && ed.x + ed.w <= 1280 && ed.y + ed.h <= 720 && me.fits && ed.fontSize < 24, `Shrink fits it to the part on the slide (${ed.x},${ed.y} ${ed.w}×${ed.h}, ${ed.fontSize}px)`)
+    ok(!(await badgeShown()), 'and the badge goes')
+    await load([box('tall', { x: 600, y: 60, html: lines })])
+    await select('tall')
+    ok(await badgeShown(), 'the badge is up on the selected box')
+    await openBox(); await p.waitForTimeout(250)
+    ok(await p.evaluate(() => !!document.querySelector('.ed-stage-scale .bento-editing')), 'a double-click opens the box')
+    ok(!(await badgeShown()), 'and the badge steps aside while it is edited')
+    await p.keyboard.press('Escape'); await p.waitForTimeout(300)
   }
 
   console.log('\ninside an auto-layout frame, nothing changes\n')

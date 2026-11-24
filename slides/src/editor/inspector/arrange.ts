@@ -308,6 +308,9 @@ function measure(p: PropsPanel, els: SlideElement[], key: Measure, label: string
         el[other] = Math.max(1, el[other] * el[key] / before)
       }
     }), final)
+    if (final && (key === 'w' || key === 'h')) {
+      for (const e of els) p.onHandSized?.(e.id, key === 'w' || ratioLocked(e), key === 'h' || ratioLocked(e))
+    }
   }, o.icon, mixed ? { unit: o.unit } : { min: o.min, max: o.max, unit: o.unit })
   const input = wrap.querySelector('input')!
   return wrap

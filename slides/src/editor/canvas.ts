@@ -98,11 +98,14 @@ export class SlideCanvas {
   /** Text boxes that size themselves, keyed slide id + U+001F + element id.
    *  'width': put down by a click — width and height follow the text;
    *  'height': drawn by a drag — the width is the author's, the height follows.
-   *  `w`/`h` are what the hug last wrote: a box whose frame no longer matches
-   *  was resized by hand (a handle, the panel), which ends the hugging — a
-   *  changed width turns 'width' into 'height', a changed height ends both.
-   *  Session-only, never in the document: a reloaded box is a fixed box. */
-  private hugs = new Map<string, { mode: 'width' | 'height'; w: number; h: number }>()
+   *  Only a hand resize changes that (handSized: a resize handle or the
+   *  panel's W/H): a new width turns 'width' into 'height', a new height ends
+   *  both. Anything else that moves the frame — undo, redo, a collaborator —
+   *  leaves the mode alone, and the next commit measures the text afresh, so
+   *  a box never shrinks to a width it no longer has. Session-only, never in
+   *  the document, cleared when another document takes this one's place: a
+   *  reloaded box is a fixed box. */
+  private hugs = new Map<string, 'width' | 'height'>()
   /** the inline frame a hugging box had before editing let it grow */
   private hugRestore: { node: HTMLElement; width: string; maxWidth: string; height: string } | null = null
   /** when editing a table cell, which cell (else null → text element edit) */
@@ -536,6 +539,7 @@ export class SlideCanvas {
 
     store.on('current', () => this.render())
     store.on('doc', () => this.render())
+    store.on('replace', () => this.hugs.clear())
     store.on('selection', () => { this.trackEnteredGroup(); this.trackEnteredFrame(); this.syncTargets() })
 
     this.render()
@@ -1843,9 +1847,23 @@ export class SlideCanvas {
       const want = inputEvent?.shiftKey ? !locked : locked
       if (mv.keepRatio !== want) mv.keepRatio = want
     }
+    // the frames a resize started from, so its end can tell what the hand changed
+    const sizedFrom = new Map<string, { w: number; h: number }>()
+    const noteSizedFrom = (target: HTMLElement) => {
+      const el = target.dataset.elId ? this.store.element(target.dataset.elId) : undefined
+      if (el) sizedFrom.set(el.id, { w: el.w, h: el.h })
+    }
+    const endSized = () => {
+      for (const [id, was] of sizedFrom) {
+        const el = this.store.element(id)
+        if (el) this.handSized(id, el.w !== was.w, el.h !== was.h)
+      }
+      sizedFrom.clear()
+    }
     mv.on('resizeStart', (e) => {
       syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
       noteResizeStart(e.target as HTMLElement)
+      sizedFrom.clear(); noteSizedFrom(e.target as HTMLElement)
     })
     mv.on('resize', (e) => {
       syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
@@ -1853,7 +1871,10 @@ export class SlideCanvas {
       this.hud.show(`${hudNum(e.width)} × ${hudNum(e.height)}`, e.clientX, e.clientY)
       this.followFrames()
     })
-    mv.on('resizeGroupStart', (e) => e.events.forEach((ev) => noteResizeStart(ev.target as HTMLElement)))
+    mv.on('resizeGroupStart', (e) => {
+      sizedFrom.clear()
+      e.events.forEach((ev) => { noteResizeStart(ev.target as HTMLElement); noteSizedFrom(ev.target as HTMLElement) })
+    })
     mv.on('resizeGroup', (e) => {
       e.events.forEach((ev) => applyResize(ev.target as HTMLElement, ev.width, ev.height, ev.drag.left, ev.drag.top, e.inputEvent as MouseEvent))
       this.followFrames()
@@ -1967,8 +1988,8 @@ export class SlideCanvas {
       // stopDrag ends Moveable's gesture without its dragEnd: finish here
       if (this.dragCancelled) cancelDrag()
     }, true)
-    mv.on('resizeEnd', (e) => { mv.keepRatio = false; end(e) })
-    mv.on('resizeGroupEnd', end)
+    mv.on('resizeEnd', (e) => { mv.keepRatio = false; end(e); endSized() })
+    mv.on('resizeGroupEnd', (e) => { end(e); endSized() })
     mv.on('rotateEnd', (e) => { mv.throttleRotate = 1; end(e) })
     mv.on('rotateGroupEnd', end)
   }
@@ -2249,6 +2270,7 @@ export class SlideCanvas {
     document.getSelection()?.selectAllChildren(inner)
     this.editAutoSelected = true // cleared by the first key or click (see the ` toggle)
     this.syncTargets()
+    this.stepBadges?.refresh() // the overflow badge steps aside while the box is edited
     this.watchSelection(inner)
     this.onTextEditChange?.(node.dataset.elId)
     inner.addEventListener('mousedown', () => { this.editAutoSelected = false }, { signal })
@@ -2331,29 +2353,34 @@ export class SlideCanvas {
     return Math.max(this.store.doc.size.width - x, 160)
   }
 
-  /** The hug still in force for this box — after the rules in `hugs`. */
+  /** How this box hugs, if it does — a frame child never (its frame sizes it). */
   private liveHug(slideId: string, el: TextElement) {
     const key = `${slideId}\u001f${el.id}`
     const hug = this.hugs.get(key)
     if (!hug) return null
     const slide = this.store.doc.slides.find((s) => s.id === slideId)
     const parent = el.parentId ? slide?.elements.find((e) => e.id === el.parentId) : undefined
-    if (el.h !== hug.h || isFrame(parent)) { this.hugs.delete(key); return null }
-    if (hug.mode === 'width' && el.w !== hug.w) hug.mode = 'height'
+    if (isFrame(parent)) { this.hugs.delete(key); return null }
     return hug
   }
 
-  /** The frame a hugging box takes for `html`, recorded as the hug's own. */
+  /** The author set a box's size by hand (a resize handle, the panel's W or
+   *  H): a new width keeps only the height hugging, a new height ends it. */
+  handSized(id: string, w: boolean, h: boolean) {
+    const key = `${this.store.slide.id}\u001f${id}`
+    if (!this.hugs.has(key) || (!w && !h)) return
+    if (h) this.hugs.delete(key)
+    else this.hugs.set(key, 'height')
+  }
+
+  /** The frame a hugging box takes for `html`. */
   private hugSize(slideId: string, el: TextElement, html: string) {
     const hug = this.liveHug(slideId, el)
     if (!hug) return null
     const next = { ...el, html }
-    const size = hug.mode === 'width'
+    return hug === 'width'
       ? measureHug(next, this.store.doc, this.hugMax(el.x))
       : { w: el.w, h: measureElement(next, this.store.doc).height }
-    hug.w = size.w
-    hug.h = size.h
-    return size
   }
 
   /** While a hugging box is edited it grows with what is typed — sideways to
@@ -2364,7 +2391,7 @@ export class SlideCanvas {
     const hug = el?.type === 'text' ? this.liveHug(this.store.slide.id, el) : null
     if (!el || !hug) return
     this.hugRestore = { node, width: node.style.width, maxWidth: node.style.maxWidth, height: node.style.height }
-    if (hug.mode === 'width') {
+    if (hug === 'width') {
       node.style.width = 'max-content'
       node.style.maxWidth = `${this.hugMax(el.x)}px`
     }
@@ -3003,7 +3030,7 @@ export class SlideCanvas {
           el.x = Math.round(a.x - el.w / 2); el.y = Math.round(a.y - el.h / 2)
         }
         if (inF) el.parentId = f.id
-        if (hug) this.hugs.set(`${this.store.slide.id}\u001f${el.id}`, { mode: hug, w: el.w, h: el.h })
+        if (hug) this.hugs.set(`${this.store.slide.id}\u001f${el.id}`, hug)
         this.cancelDraw()
         this.insert(el, edit)
       }
