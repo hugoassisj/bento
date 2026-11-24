@@ -427,6 +427,14 @@ jobs:
         # and the next outside edit is caught again; a disk version that gained
         # a password loads only through that password and later saves keep it.
         run: node scripts/test-slides-disk-change-browser.mjs
+      - name: window.bento.render in Chromium
+        # A slide as an image for any harness (AI-06): the decoded PNG is
+        # doc.size at scale 1 and carries each slide's and each build step's
+        # colours where they belong; a missing slide or a bad option is a
+        # tagged result, never a throw; a state slide renders by id; the
+        # document, selection, undo stack and canvas are unchanged; a canvas
+        # that refuses to export resolves tainted.
+        run: node scripts/test-slides-render-api-browser.mjs
 
   slides-editor-browser:
     # The editor revamp's browser rigs (#897), in a job of their own. They
