@@ -20,6 +20,7 @@ import { openExportImagesDialog } from './exportimages'
 import { adoptComponents, components, detach, mainsLost, makeComponent, promoteCopy, resetOverrides } from '../components'
 import { goToMain, selectedComponent } from './inspector/component'
 import { activeMode, bindToken, modesOf } from '../tokens'
+import { resolveThemeRefs } from '../palette'
 import { derive, deriveMemory, type DeriveMemory } from '../derive'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
@@ -186,6 +187,10 @@ function menuLabel(label: string, desc: string, row: HTMLElement): HTMLSpanEleme
   row.setAttribute('aria-describedby', note.id)
   return span
 }
+
+
+/** Does a layout carry palette bindings (the theme-following built-ins do)? */
+const paletteBound = (ly: Slide): boolean => !!ly.themeRefs || ly.elements.some((e) => !!e.themeRefs)
 
 export class Editor {
   private canvas!: SlideCanvas
@@ -2290,6 +2295,8 @@ export class Editor {
     const slide = instantiateLayout(layout)
     this.store.commit(() => {
       this.store.doc.slides.splice(at, 0, slide)
+      // a layout bound to the palette takes this deck's colours now, not at the next open
+      if (paletteBound(layout)) resolveThemeRefs(this.store.doc)
     }, 'slides')
     this.store.goTo(at)
   }
@@ -2302,6 +2309,11 @@ export class Editor {
       const s = this.store.slide
       s.elements = applyLayout(s, layout, known)
       s.background = layout.background
+      if (paletteBound(layout)) {
+        const bg = layout.themeRefs?.background
+        if (bg) (s.themeRefs ??= {}).background = bg
+        resolveThemeRefs(this.store.doc)
+      }
     })
     this.store.select([])
   }

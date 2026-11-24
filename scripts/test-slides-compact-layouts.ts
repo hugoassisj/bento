@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { expandDocWithStats, layoutRoles, findLayout, LAYOUT_ALIASES, STACK_GAP } from '../slides/src/compact.ts'
 import { builtinLayouts, applyLayout, type Slide, type SlideElement, type TextElement, type ImageElement } from '../slides/src/model.ts'
+import { layoutSlide } from '../slides/src/layout.ts'
 
 let failures = 0
 let checks = 0
@@ -48,9 +49,13 @@ const expectRoles: Record<string, string[]> = {
   'layout-quote': ['quote', 'attribution'],
   'layout-image-left': ['image', 'title', 'body'],
   'layout-image-right': ['title', 'body', 'image'],
+  'layout-stats': ['title', 'stat1', 'label1', 'stat2', 'label2', 'stat3', 'label3'],
+  'layout-big-number': ['kicker', 'figure', 'caption', 'body'],
+  'layout-timeline': ['title', 'step1', 'stepbody1', 'step2', 'stepbody2', 'step3', 'stepbody3', 'step4', 'stepbody4'],
+  'layout-chart-figures': ['title', 'chart', 'stat1', 'label1', 'stat2', 'label2', 'stat3', 'label3'],
   'layout-blank': [],
 }
-ok(layouts.map((l) => l.id).sort().join() === Object.keys(expectRoles).sort().join(), `nine built-in layouts (${layouts.length})`)
+ok(layouts.map((l) => l.id).sort().join() === Object.keys(expectRoles).sort().join(), `thirteen built-in layouts (${layouts.length})`)
 for (const [id, roles] of Object.entries(expectRoles)) {
   ok(Object.keys(layoutRoles(byId[id])).sort().join() === [...roles].sort().join(), `${id}: roles ${roles.join(', ') || '(none)'}`)
 }
@@ -183,11 +188,72 @@ console.log('\nno content is ever lost (AI-09)\n')
   }
 }
 
+console.log('\nlayouts decks are made of: stats, big number, timeline, chart + figures (AI-09)\n')
+{
+  type X = Obj & { themeRefs?: Record<string, string> }
+  const S = { width: 1280, height: 720 }
+  ok(['stats', 'statistics', 'big-number', 'big-stat', 'timeline', 'roadmap', 'chart-figures', 'chart'].every((n) => !!findLayout(n, { size: S })), 'the four load by name and by alias (statistics, big-stat, roadmap, chart)')
+  for (const size of [undefined, S, { width: 1024, height: 768 }]) {
+    const moved = builtinLayouts(size).filter((l) => layoutSlide(JSON.parse(JSON.stringify(l))))
+    ok(!moved.length, `at ${size ? size.width + '×' + size.height : 'the base size'} every built-in is already laid out: the derive pass moves nothing${moved.length ? ' (' + moved.map((l) => l.id).join() + ')' : ''}`)
+  }
+  const deck = (slides: unknown[]) => expandDocWithStats({ compact: true, theme: { background: '#101820', color: '#F5F7FA', accent: '#FF9E8A' }, slides })
+  const at = (sl: Slide, id: string) => sl.elements.find((e) => e.id === id) as unknown as X | undefined
+  const right = (e?: X) => (e ? (e.x as number) + (e.w as number) : NaN)
+  const near = (a: number, b: number) => Math.abs(a - b) < 1
+
+  // stats: three, then two — the row reflows, no hole
+  const st = deck([
+    { layout: 'stats', elements: [{ role: 'title', html: 'Q3' }, { role: 'stat1', html: '40%' }, { role: 'label1', html: 'faster' }, { role: 'stat2', html: '3×' }, { role: 'label2', html: 'reach' }, { role: 'stat3', html: '99.9' }, { role: 'label3', html: 'uptime' }] },
+    { layout: 'stats', elements: [{ role: 'title', html: 'Two' }, { role: 'stat1', html: '1' }, { role: 'label1', html: 'a' }, { role: 'stat2', html: '2' }, { role: 'label2', html: 'b' }] },
+  ])
+  const [s3, s2] = st.doc.slides
+  ok(at(s3, 'lst-stat1')?.html === '40%' && at(s3, 'lst-label3')?.html === 'uptime' && at(s3, 'lst-title')?.html === 'Q3', 'stats: every stat and label lands in its slot')
+  const row2 = at(s2, 'lst-row')!
+  ok(!at(s2, 'lst-item3') && !at(s2, 'lst-stat3') && near(right(at(s2, 'lst-item2')), right(row2)) && near(at(s2, 'lst-item1')!.w as number, at(s2, 'lst-item2')!.w as number), `stats without stat3: the third item is gone and the two that remain fill the row (right edge ${right(at(s2, 'lst-item2'))} = ${right(row2)})`)
+  ok(near(at(s2, 'lst-stat2')!.x as number, at(s2, 'lst-item2')!.x as number), 'the stat inside the item moved with it')
+
+  // timeline: omit step4
+  const tl = deck([{ layout: 'roadmap', elements: [{ role: 'title', html: 'Plan' }, ...[1, 2, 3].flatMap((i) => [{ role: `step${i}`, html: `Q${i}` }, { role: `stepbody${i}`, md: `Ship **${i}**` }])] }]).doc.slides[0]
+  ok(!at(tl, 'ltl-item4') && !at(tl, 'ltl-tick4') && near(right(at(tl, 'ltl-item3')), right(at(tl, 'ltl-row'))), 'timeline without step4: no fourth column, the three steps span the row')
+  ok(at(tl, 'ltl-step3')?.html === 'Q3' && /<b>3<\/b>|<strong>3<\/strong>/.test(String(at(tl, 'ltl-stepbody3')?.html)), 'each step and its text in its column (markdown converted)')
+
+  // big number: only the figure and a caption — the column re-centres
+  const bn = deck([{ layout: 'big-number', elements: [{ role: 'figure', html: '87%' }, { role: 'caption', html: 'of teams' }] }]).doc.slides[0]
+  const col = at(bn, 'lbn-col')!, fig = at(bn, 'lbn-figure')!, cap = at(bn, 'lbn-caption')!
+  const top = (fig.y as number) - (col.y as number), bottom = (col.y as number) + (col.h as number) - ((cap.y as number) + (cap.h as number))
+  ok(!at(bn, 'lbn-kicker') && !at(bn, 'lbn-body') && near(top, bottom), `big number without kicker and body: the figure and caption sit centred in the column (${top} above, ${bottom} below)`)
+
+  // chart + figures: a chart (or a table) takes the chart slot
+  const chart = { type: 'chart', role: 'chart', option: { xAxis: { type: 'category', data: ['a', 'b'] }, yAxis: { type: 'value' }, series: [{ type: 'bar', data: [1, 2] }] } }
+  const cf = deck([
+    { layout: 'chart', elements: [{ role: 'title', html: 'Growth' }, chart, { role: 'stat1', html: '+12%' }, { role: 'label1', html: 'MoM' }] },
+    { layout: 'chart-figures', elements: [{ type: 'table', role: 'chart', columns: [{ w: 1 }], rows: [{ cells: [{ html: 'x' }] }] }] },
+  ])
+  const ref = findLayout('chart-figures', { size: S })!
+  const placedChart = at(cf.doc.slides[0], 'lcf-chart')!
+  ok(placedChart.type === 'chart' && frame(placedChart as unknown as SlideElement) === frame(ref.elements.find((e) => e.id === 'lcf-chart')) && (placedChart.option as Obj)?.series !== undefined, 'chart + figures: a chart with role "chart" REPLACES the chart slot, on its frame and id')
+  ok(at(cf.doc.slides[1], 'lcf-chart')?.type === 'table', 'a table fills the chart slot the same way')
+  ok(!at(cf.doc.slides[0], 'lcf-item2') && !at(cf.doc.slides[0], 'lcf-item3') && near(at(cf.doc.slides[0], 'lcf-item1')!.h as number, at(cf.doc.slides[0], 'lcf-col')!.h as number), 'one figure: the figure column gives it the whole height')
+  ok(cf.stats.notes.length === 0 && st.stats.notes.length === 0 && tl.elements.length > 0, 'none of these needed a note')
+
+  // bound to the deck's theme
+  const sl = s3 as unknown as X
+  ok(sl.background === '#101820' && sl.themeRefs?.background === 'bg1', 'the slide takes the deck background, bound to bg1 (not the layout\'s white)')
+  ok(at(s3, 'lst-title')!.color === '#F5F7FA' && at(s3, 'lst-title')!.themeRefs?.color === 'tx1' && at(s3, 'lst-stat1')!.color === '#FF9E8A' && at(s3, 'lst-stat1')!.themeRefs?.color === 'accent1' && at(s3, 'lst-rule')!.fill === '#FF9E8A', 'text and rules are the deck\'s colours, bound to tx1 / accent1')
+  ok(s3.elements.filter((e) => e.type === 'text').every((e) => !('fontFamily' in e)), 'the new layouts\' text carries no font: it renders in the theme font')
+}
+
 console.log('\nthe editor path is the same one\n')
 const donorSlide = { id: 'x', elements: [{ id: 'q', type: 'text', role: 'title', html: 'Hi', x: 0, y: 0, w: 1, h: 1 }] } as unknown as Slide
 const applied = applyLayout(donorSlide, byId['layout-title-content'], new Set(ids))
 ok((applied.find((x) => x.id === 'ltc-title') as TextElement).html === 'Hi', 'applyLayout (the editor\'s "Apply layout") fills a slot by role the same way')
 ok(/applyLayout\(slideForApply, layout, known\)/.test(read('slides/src/compact.ts')), 'compact.ts calls that function, not a copy of it')
+const chartDonor = { id: 'c', elements: [{ id: 'mine', type: 'chart', role: 'chart', x: 5, y: 5, w: 10, h: 10, option: {} }, { id: 't', type: 'text', role: 'stat2', html: '7', x: 0, y: 0, w: 1, h: 1 }] } as unknown as Slide
+const cfl = byId['layout-chart-figures']
+const appliedChart = applyLayout(chartDonor, cfl, new Set(ids))
+const ac = appliedChart.find((x) => x.id === 'lcf-chart')
+ok(ac?.type === 'chart' && frame(ac) === frame(cfl.elements.find((x) => x.id === 'lcf-chart')) && !appliedChart.some((x) => x.id === 'mine') && (appliedChart.find((x) => x.id === 'lcf-stat2') as TextElement).html === '7', 'the editor\'s Apply layout puts a chart with role "chart" in the chart slot too, and a stat in its slot')
 ok(!/layout\?:/.test(read('slides/src/model.ts').slice(read('slides/src/model.ts').indexOf('export interface Slide '))), 'the Slide model gains no `layout` field — input only')
 
 console.log('\nAGENTS.md cannot drift\n')

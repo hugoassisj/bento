@@ -3,6 +3,8 @@
 // The bento/slides document model. This JSON is what lives inside the
 // <script type="application/bento+json"> block of a .bento.html file.
 
+import { layoutSlide } from './layout.ts'
+
 export const FORMAT = 'bento/slides'
 export const FORMAT_VERSION = 1
 
@@ -1307,6 +1309,33 @@ const bar = (id: string, frame: { x: number; y: number; w: number; h: number }):
   rotation: 0, opacity: 1, fill: '#F7A600', stroke: 'transparent', strokeWidth: 0, radius: 2,
 })
 
+/** A placeholder that follows the deck: no font of its own (the theme font)
+ *  and its colour bound to a palette slot (the literal is the default
+ *  theme's; the derive pass and compact expansion resolve it). */
+const tph = (
+  id: string, placeholder: string, frame: { x: number; y: number; w: number; h: number },
+  type: Partial<TextElement> = {}, slot = 'tx1',
+): TextElement => {
+  const el: Partial<TextElement> = ph(id, placeholder, frame, { color: slot === 'accent1' ? '#F7A600' : '#1E2A3A', ...type, themeRefs: { color: slot } })
+  delete el.fontFamily
+  return el as TextElement
+}
+
+/** The accent rule, bound to accent 1. */
+const tbar = (id: string, frame: { x: number; y: number; w: number; h: number }, more: Partial<ShapeElement> = {}): ShapeElement =>
+  ({ ...bar(id, frame), themeRefs: { fill: 'accent1' }, ...more })
+
+/** An invisible auto-layout frame (layout.ts): its children reflow, so a
+ *  slot left out leaves no hole. */
+const flow = (id: string, frame: { x: number; y: number; w: number; h: number }, layout: FrameLayout, more: Partial<ShapeElement> = {}): ShapeElement => ({
+  id, type: 'shape', shape: 'rect', ...frame,
+  rotation: 0, opacity: 1, fill: 'transparent', stroke: 'transparent', strokeWidth: 0, radius: 0, layout, ...more,
+})
+
+/** `n` copies of an item (1-based), each a frame child of `parent`. */
+const items = (n: number, make: (i: number) => SlideElement[]): SlideElement[] =>
+  Array.from({ length: n }, (_, k) => make(k + 1)).flat()
+
 /** A card backdrop: a soft panel grouped with the text that sits on it. */
 const card = (id: string, frame: { x: number; y: number; w: number; h: number }, role: string): ShapeElement => ({
   id, type: 'shape', shape: 'rect', ...frame,
@@ -1344,10 +1373,19 @@ function scaleLayout(ly: Slide, sx: number, sy: number): Slide {
         if (txt.fontSize) txt.fontSize = Math.max(8, Math.round(txt.fontSize * st))
         if (txt.letterSpacing) txt.letterSpacing = Math.round(txt.letterSpacing * st * 10) / 10
       }
+      // a frame's spacing scales with its axis; layoutSlide then re-solves its children
+      const fl = (next as ShapeElement).layout
+      if (fl) {
+        const [t, r, b, l] = fl.pad
+        ;(next as ShapeElement).layout = { ...fl, gap: Math.round(fl.gap * (fl.dir === 'row' ? sx : sy)), pad: [Math.round(t * sy), Math.round(r * sx), Math.round(b * sy), Math.round(l * sx)] }
+      }
       return next
     }),
   }
 }
+
+/** A built-in whose children sit in frames: their boxes solved, as the derive pass would. */
+const settled = (ly: Slide): Slide => { if (ly.elements.some((e) => (e as ShapeElement).layout)) layoutSlide(ly); return ly }
 
 /**
  * The layouts every document offers out of the box (not persisted until edited).
@@ -1441,12 +1479,64 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
           { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'image' }),
       ],
     },
+    // Four layouts decks are made of (AI-09), built as auto-layout frames
+    // bound to the theme: text in the theme font, colours bound to tx1 and
+    // accent1, the background to bg1. A slot compact input leaves out is
+    // removed with its item and the frame reflows. Ids are lineage: never
+    // rename them.
+    {
+      id: 'layout-stats', name: 'Statistics', background: '#FFFFFF', themeRefs: { background: 'bg1' }, transition: 'fade', notes: '', elements: [
+        tph('lst-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 }, { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        tbar('lst-rule', { x: 120, y: 168, w: 1360, h: 3 }),
+        flow('lst-row', { x: 120, y: 260, w: 1360, h: 440 }, { dir: 'row', gap: 64, pad: [0, 0, 0, 0], align: 'stretch' }),
+        ...items(3, (i) => [
+          flow(`lst-item${i}`, { x: 120 + (i - 1) * 475, y: 260, w: 411, h: 440 }, { dir: 'col', gap: 12, pad: [0, 0, 0, 0], align: 'stretch' }, { parentId: 'lst-row', sizing: { w: 'fill' } }),
+          tph(`lst-stat${i}`, 'Number', { x: 120 + (i - 1) * 475, y: 260, w: 411, h: 170 }, { fontSize: 112, fontWeight: 700, lineHeight: 1, valign: 'bottom', role: `stat${i}`, parentId: `lst-item${i}` }, 'accent1'),
+          tph(`lst-label${i}`, 'What it counts', { x: 120 + (i - 1) * 475, y: 442, w: 411, h: 120 }, { fontSize: 26, lineHeight: 1.4, role: `label${i}`, parentId: `lst-item${i}` }),
+        ]),
+      ],
+    },
+    {
+      id: 'layout-big-number', name: 'Big number', background: '#FFFFFF', themeRefs: { background: 'bg1' }, transition: 'fade', notes: '', elements: [
+        flow('lbn-col', { x: 200, y: 120, w: 1200, h: 660 }, { dir: 'col', gap: 24, pad: [0, 0, 0, 0], justify: 'center', align: 'stretch' }),
+        tph('lbn-kicker', 'KICKER', { x: 200, y: 182, w: 1200, h: 40 }, { fontSize: 20, fontWeight: 600, letterSpacing: 3, align: 'center', valign: 'middle', role: 'kicker', parentId: 'lbn-col' }, 'accent1'),
+        tph('lbn-figure', 'Big number', { x: 200, y: 246, w: 1200, h: 240 }, { fontSize: 200, fontWeight: 700, lineHeight: 1, align: 'center', valign: 'middle', role: 'figure', parentId: 'lbn-col' }, 'accent1'),
+        tph('lbn-caption', 'What it means', { x: 200, y: 510, w: 1200, h: 64 }, { fontSize: 40, fontWeight: 600, align: 'center', valign: 'middle', role: 'caption', parentId: 'lbn-col' }),
+        tph('lbn-body', 'Supporting detail', { x: 200, y: 598, w: 1200, h: 120 }, { fontSize: 26, lineHeight: 1.5, align: 'center', role: 'body', parentId: 'lbn-col' }),
+      ],
+    },
+    {
+      id: 'layout-timeline', name: 'Timeline', background: '#FFFFFF', themeRefs: { background: 'bg1' }, transition: 'fade', notes: '', elements: [
+        tph('ltl-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 }, { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        flow('ltl-row', { x: 120, y: 240, w: 1360, h: 560 }, { dir: 'row', gap: 40, pad: [0, 0, 0, 0], align: 'stretch' }),
+        ...items(4, (i) => [
+          flow(`ltl-item${i}`, { x: 120 + (i - 1) * 350, y: 240, w: 310, h: 560 }, { dir: 'col', gap: 16, pad: [0, 0, 0, 0], align: 'stretch' }, { parentId: 'ltl-row', sizing: { w: 'fill' } }),
+          tbar(`ltl-tick${i}`, { x: 120 + (i - 1) * 350, y: 240, w: 310, h: 6 }, { parentId: `ltl-item${i}` }),
+          tph(`ltl-step${i}`, `Step ${i}`, { x: 120 + (i - 1) * 350, y: 262, w: 310, h: 56 }, { fontSize: 30, fontWeight: 700, valign: 'middle', role: `step${i}`, parentId: `ltl-item${i}` }, 'accent1'),
+          tph(`ltl-stepbody${i}`, 'What happens', { x: 120 + (i - 1) * 350, y: 334, w: 310, h: 360 }, { fontSize: 22, lineHeight: 1.45, role: `stepbody${i}`, parentId: `ltl-item${i}` }),
+        ]),
+      ],
+    },
+    {
+      id: 'layout-chart-figures', name: 'Chart + figures', background: '#FFFFFF', themeRefs: { background: 'bg1' }, transition: 'fade', notes: '', elements: [
+        tph('lcf-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 }, { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        tbar('lcf-rule', { x: 120, y: 168, w: 1360, h: 3 }),
+        ph('lcf-chart', 'Add a chart', { x: 120, y: 220, w: 880, h: 600 },
+          { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'chart' }),
+        flow('lcf-col', { x: 1064, y: 220, w: 416, h: 600 }, { dir: 'col', gap: 24, pad: [0, 0, 0, 0], align: 'stretch' }),
+        ...items(3, (i) => [
+          flow(`lcf-item${i}`, { x: 1064, y: 220 + (i - 1) * 208, w: 416, h: 184 }, { dir: 'col', gap: 4, pad: [0, 0, 0, 0], align: 'stretch' }, { parentId: 'lcf-col', sizing: { h: 'fill' } }),
+          tph(`lcf-stat${i}`, 'Number', { x: 1064, y: 220 + (i - 1) * 208, w: 416, h: 84 }, { fontSize: 64, fontWeight: 700, lineHeight: 1, valign: 'bottom', role: `stat${i}`, parentId: `lcf-item${i}` }, 'accent1'),
+          tph(`lcf-label${i}`, 'What it counts', { x: 1064, y: 308 + (i - 1) * 208, w: 416, h: 56 }, { fontSize: 22, lineHeight: 1.35, role: `label${i}`, parentId: `lcf-item${i}` }),
+        ]),
+      ],
+    },
     { id: 'layout-blank', name: 'Blank', background: '#FFFFFF', transition: 'fade', notes: '', elements: [] },
   ]
-  if (!size || (size.width === LAYOUT_BASE.width && size.height === LAYOUT_BASE.height)) return base
+  if (!size || (size.width === LAYOUT_BASE.width && size.height === LAYOUT_BASE.height)) return base.map(settled)
   const sx = size.width / LAYOUT_BASE.width
   const sy = size.height / LAYOUT_BASE.height
-  return base.map((ly) => scaleLayout(ly, sx, sy))
+  return base.map((ly) => settled(scaleLayout(ly, sx, sy)))
 }
 
 /** A fresh slide from a layout — new slide id, element ids KEPT (lineage). */
@@ -1460,11 +1550,14 @@ export const textHasContent = (e: SlideElement) =>
 
 /** An `image` slot is a text placeholder ("Add an image") that an IMAGE
  *  donor replaces outright — the picture takes the slot's frame and id, so
- *  slides from the same layout still morph their pictures. */
-const replacesSlot = (lel: SlideElement, d: SlideElement) => lel.type === 'text' && lel.role === 'image' && d.type === 'image'
+ *  slides from the same layout still morph their pictures. A `chart` slot
+ *  takes a chart or a table the same way. */
+const SLOT_TAKES: Record<string, readonly string[]> = { image: ['image'], chart: ['chart', 'table'] }
+const replacesSlot = (lel: SlideElement, d: SlideElement) =>
+  lel.type === 'text' && !!lel.role && Object.hasOwn(SLOT_TAKES, lel.role) && SLOT_TAKES[lel.role].includes(d.type)
 
 /** Can donor `d` fill layout slot `lel`? Its own type with content, or a
- *  replacing donor (an image for an image slot). */
+ *  replacing donor (an image for an image slot, a chart or table for a chart slot). */
 export const slotTakes = (lel: SlideElement, d: SlideElement): boolean =>
   replacesSlot(lel, d) || (d.type === lel.type && textHasContent(d))
 
@@ -1500,7 +1593,10 @@ export function applyLayout(
       consumed.add(d)
       if (replacesSlot(lel, d)) {
         const pic = JSON.parse(JSON.stringify(d)) as SlideElement
-        return { ...pic, id: lel.id, x: lel.x, y: lel.y, w: lel.w, h: lel.h, rotation: lel.rotation, role: 'image' }
+        // the slot's place in a frame (if any) is the slot's, never the donor's old one
+        delete pic.parentId; delete pic.sizing
+        return { ...pic, id: lel.id, x: lel.x, y: lel.y, w: lel.w, h: lel.h, rotation: lel.rotation, role: lel.role,
+          ...(lel.parentId ? { parentId: lel.parentId } : {}), ...(lel.sizing ? { sizing: lel.sizing } : {}) } as SlideElement
       }
       if (copy.type === 'text' && d.type === 'text' && textHasContent(d)) copy.html = d.html
       if (copy.type === 'image' && d.type === 'image') {

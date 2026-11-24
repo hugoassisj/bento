@@ -729,3 +729,12 @@ jobs:
         # view re-paints them; use/like survive the loader; an unknown name is
         # in the load report.
         run: node scripts/test-slides-compact-design-system-browser.mjs
+      - name: Layout and role never drop content in Chromium
+        if: ${{ !cancelled() }}
+        # An unknown role before the two-column layout's named columns keeps
+        # all four texts, each in its column on the canvas; `right` before
+        # `left` no longer swaps them; the stats layout closes up without its
+        # third stat. The New-slide picker lists Statistics, Big number,
+        # Timeline and Chart + figures (a Timeline inserted by clicks wears the
+        # deck's colours), and Apply layout puts a chart in the chart slot.
+        run: node scripts/test-slides-compact-layout-roles-browser.mjs
