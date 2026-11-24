@@ -72,6 +72,7 @@ import { align, distribute, flip } from './inspector/arrange'
 import type { NodeKind } from './beziereditor'
 import { withDescendants, flagged, frameChildren, isFrame, moveInFrame, colsOf } from '../layout'
 import { decoratePeer, vouchAgent as vouchPeopleAgent } from './vouch'
+import { CheckDeck, findingKey } from './checkdeck'
 
 const i18nT = t
 
@@ -200,6 +201,8 @@ export class Editor {
   private sideLayers!: HTMLElement
   private sideTokens!: HTMLElement
   private tokensPane!: TokensPane
+  /** validate()'s findings in the editor: the chip and the panel */
+  private checkDeck!: CheckDeck
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
   private fileChip?: HTMLElement
@@ -664,6 +667,8 @@ export class Editor {
     const centre = div('ed-centre')
     centre.appendChild(canvasWrap)
     mountNotesPane(this.store, centre, corner, this.buildScope.signal)
+    // after the notes toggle, so its chip leads the row: [chip] [notes] [Slideshow] [zoom]
+    this.checkDeck = new CheckDeck({ store: this.store, cluster: corner, into: canvasWrap, signal: this.buildScope.signal, revealFont: () => this.revealFont() })
     main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
@@ -759,6 +764,17 @@ export class Editor {
     this.panel.onPlayTransition = () => this.playTransition()
 
     if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
+  }
+
+  /** Check deck's "Show the font": the Format panel open on its Format tab,
+   *  the font control in view and focused, for the element just selected. */
+  private revealFont() {
+    if (this.props.classList.contains('ed-collapsed')) this.togglePanel('right')
+    const tab = this.props.querySelector<HTMLElement>('.ed-tabs [role="tab"]')
+    if (tab && tab.getAttribute('aria-selected') !== 'true') tab.click()
+    const font = this.props.querySelector<HTMLElement>(`[aria-label="${CSS.escape(t('Font'))}"]`)
+    font?.scrollIntoView({ block: 'nearest' })
+    font?.focus({ preventScroll: true })
   }
 
   /** Live viewer: block user edits (store.readOnly), hide editing chrome, and
@@ -1230,6 +1246,9 @@ export class Editor {
     item(ICONS.compress, t('Compress pictures in this deck…'),
       t('Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.'),
       () => void this.compressDeckPictures(), 'compress-images')
+    item(ICONS.alert, t('Check deck'),
+      t('Lists what could go wrong in this deck — text that does not fit, dead links, missing pictures — and jumps to each one.'),
+      () => this.checkDeck.open({ opener: this.root.querySelector<HTMLElement>('.ed-logo') }), 'check-deck')
     sep()
     cap(t('Advanced'))
     item(ICONS.code, t('Copy document JSON'),
@@ -1488,16 +1507,20 @@ export class Editor {
       // `collab` the new document holds. Content is imported; identity is not.
       const parsed = parseDocInputReport(ta.value, { live: this.store.doc })
       if (parsed) {
+        // what the deck already had, so the panel can show what the load brought in
+        const before = new Set(this.checkDeck.findings().map(findingKey))
         this.store.replaceDoc(parsed.doc)
-        // the load report, summarised; the whole thing goes to the console
-        // where an agent driving the page (or a person) can read the paths
+        // the dropped fields go to the console, where an agent driving the
+        // page (or a person) can read their paths; the findings the load
+        // introduced open in Check deck
         const r = parsed.report
-        const warnings = r.findings.counts.warning + r.findings.counts.error
-        if (r.dropped.length || warnings) {
-          console.info('[bento] load report', r)
-          this.toast(t('Loaded: {dropped} fields dropped, {warnings} warnings — see console', { dropped: String(r.dropped.length), warnings: String(warnings) }))
-        } else this.toast(t('Document replaced — ⌘Z undoes'))
+        if (r.dropped.length) console.info('[bento] load report', r)
         overlay.remove()
+        const added = this.checkDeck.findings().filter((f) => f.severity !== 'info' && !before.has(findingKey(f)))
+        if (added.length) this.checkDeck.open({ only: new Set(added.map(findingKey)) })
+        this.toast(r.dropped.length
+          ? t('Loaded: {dropped} fields dropped — see console', { dropped: String(r.dropped.length) })
+          : t('Document replaced — ⌘Z undoes'))
       } else {
         ta.style.borderColor = '#C0392B'
         applyB.textContent = t('Invalid document JSON')
@@ -3858,6 +3881,7 @@ export class Editor {
       { id: 'export-images', label: 'Export slides as images…', scope: 'always', run: () => this.exportImages() },
       { id: 'import-pptx', label: 'Import PowerPoint…', scope: 'always', run: () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') } },
       { id: 'export-pptx', label: 'Export for PowerPoint…', scope: 'always', run: () => { window.open(EXPORT_PPTX_URL, '_blank', 'noopener,noreferrer') } },
+      { id: 'check-deck', label: 'Check deck', scope: 'always', run: () => this.checkDeck.open() },
       { id: 'compress-images', label: 'Compress pictures in this deck…', scope: 'always', when: writable, run: () => void this.compressDeckPictures() },
       { id: 'copy-json', label: 'Copy document JSON', scope: 'always', run: () => void this.copyDocJson() },
       { id: 'copy-compact-json', label: 'Copy compact JSON (for agents)', scope: 'always', run: () => void this.copyDocJson(true) },

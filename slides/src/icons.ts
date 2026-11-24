@@ -167,6 +167,8 @@ export const ICONS = {
   compress: svg('<rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M3 3l3 3M21 3l-3 3M3 21l3-3M21 21l-3-3"/><path d="m9 15 2-2 1.5 1.5L15 12"/>'),
   /** Compact JSON: braces drawn close */
   codeCompact: svg('<path d="M9 5H8a2 2 0 0 0-2 2v3l-2 2 2 2v3a2 2 0 0 0 2 2h1"/><path d="M15 5h1a2 2 0 0 1 2 2v3l2 2-2 2v3a2 2 0 0 1-2 2h-1"/>'),
+  /** Check deck: a warning triangle */
+  alert: svg('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>'),
   /** About: an i in a circle */
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7.5h.01"/>'),
   /** Preferences: a gear */
