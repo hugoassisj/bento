@@ -13,8 +13,9 @@
 // a load-report note, explicit geometry always wins, more bodies than slots
 // stack into the slot without overlapping (equal shares here; compactload.ts
 // restacks by measured height — source-asserted), the four added built-in
-// layouts carry the roles AGENTS.md says they do, and AGENTS.md's table of
-// layouts and roles is generated from the code so it cannot drift.
+// layouts carry the roles the guide says they do, and the table of layouts
+// and roles in the agent reference (references/compact.md, docs/agents.md)
+// matches the code so it cannot drift.
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -136,15 +137,26 @@ ok((applied.find((x) => x.id === 'ltc-title') as TextElement).html === 'Hi', 'ap
 ok(/applyLayout\(slideForApply, layout, known\)/.test(read('slides/src/compact.ts')), 'compact.ts calls that function, not a copy of it')
 ok(!/layout\?:/.test(read('slides/src/model.ts').slice(read('slides/src/model.ts').indexOf('export interface Slide '))), 'the Slide model gains no `layout` field — input only')
 
-console.log('\nAGENTS.md cannot drift\n')
-const agents = read('AGENTS.md')
-for (const l of layouts) {
-  if (l.id === 'layout-blank') continue
-  const roles = Object.keys(layoutRoles(l))
-  const line = `\`${l.id.replace(/^layout-/, '')}\` — ${roles.join(', ')}`
-  ok(agents.includes(line), `AGENTS.md lists ${line}`)
+console.log('\nthe published guide and the skill reference cannot drift\n')
+// The table moved out of AGENTS.md into the generated agent reference
+// (scripts/build-agent-docs.mjs): the skill's references/compact.md and the
+// published guide's compact section carry it, AGENTS.md points at the guide.
+const docsWithTable = ['plugins/bento-slides/skills/bento-slides/references/compact.md', 'docs/agents.md']
+for (const f of docsWithTable) {
+  const text = read(f)
+  for (const l of layouts) {
+    if (l.id === 'layout-blank') continue
+    const roles = Object.keys(layoutRoles(l))
+    const line = `\`${l.id.replace(/^layout-/, '')}\` — ${roles.join(', ')}`
+    ok(text.includes(line), `${f} lists ${line}`)
+  }
+  for (const [alias, id] of Object.entries(LAYOUT_ALIASES)) {
+    ok(new RegExp(`\`${id.replace(/^layout-/, '')}\` — [^\n]*\\(also [^)]*\`${alias}\``).test(text), `${f} names ${alias} as an alias of ${id}`)
+  }
 }
-ok(/"layout": "title-body"/.test(agents) && /"role": "title"/.test(agents), 'AGENTS.md shows the layout + role example')
+const guide = read('docs/agents.md')
+ok(/"layout": "title-body"/.test(guide) && /"role": "title"/.test(guide), 'docs/agents.md shows the layout + role example')
+ok(/docs\/agents\.md/.test(read('AGENTS.md')), 'AGENTS.md points at the published guide')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

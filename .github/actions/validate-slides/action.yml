@@ -426,7 +426,8 @@ runs:
       # layout's frames through model.ts applyLayout (the editor's own
       # path), ids kept so same-layout slides morph, unknown roles fall
       # back and are reported, explicit geometry wins, bodies stack, and
-      # AGENTS.md's layout table is checked against the code.
+      # the layout table in references/compact.md and docs/agents.md is
+      # checked against the code.
       shell: bento-step {0}
       run: node scripts/test-slides-compact-layouts.ts
 
@@ -760,3 +761,24 @@ runs:
       # File-menu path for the JSON commands.
       shell: bento-step {0}
       run: node scripts/test-agent-docs-facts.ts
+    - name: Agent reference is generated from the code
+      # The bento-slides skill's references/ (format.md, compact.md,
+      # verify.md) and the generated blocks of docs/agents.md and
+      # docs/format.md come from scripts/build-agent-docs.mjs: MODEL_KEYS and
+      # the schema, compact.ts's layouts and defaults, validate.ts FINDINGS,
+      # with a meaning per key from scripts/agent-docs/meanings.json (a key
+      # without one fails the build). The committed copies are pinned here.
+      shell: bento-step {0}
+      run: node scripts/build-agent-docs.mjs --check
+    - name: Agent reference rig
+      # --check fails on a stale file, a missing meaning, a meaning for no key
+      # and a lost marker (scratch copies); every model key and every finding
+      # code is documented; every json example that is a document loads with
+      # nothing dropped and no error; the guide covers compact, md, h auto,
+      # layout and role, builds, code morph, maths, frames, tokens, components
+      # and paint stacks with an example each; llms.txt claims only what the
+      # guide has; headings are unique and in-page links resolve.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-agent-docs.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-agent-docs.mjs"
+        node "$RUNNER_TEMP/test-agent-docs.mjs"

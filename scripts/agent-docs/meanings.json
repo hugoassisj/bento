@@ -1,0 +1,368 @@
+{
+  "$comment": "One-line meanings for every key of the bento/slides format, read by scripts/build-agent-docs.mjs. Every key in slides/src/modelkeys.generated.ts (and every sub-object the schema describes inline) needs a line here, or the build fails; a line for a key the format no longer has fails it too. Element keys: a type's own entry wins over the shared `element` entry. Types, enums, ranges and required flags come from the schema, so write only what the key MEANS.",
+  "doc": {
+    "format": "Format discriminant, always \"bento/slides\". Check it before editing a file.",
+    "version": "Format version. The current shells write 1.",
+    "docId": "The document's identity (uuid), minted on first open. Omit it in a new deck; never change it in an existing one.",
+    "title": "Deck title; also the HTML title and {{title}}.",
+    "meta": "Document properties for {{author}}, {{company}}, {{subject}}, {{event}}.",
+    "size": "The slide coordinate space in px. Default 1280×720.",
+    "theme": "Deck-wide defaults: colours, fonts, palette slots, tokens.",
+    "present": "How the show draws its own chrome and paces morphs and typewriters.",
+    "slides": "The slides in show order; a state slide sits right after its parent. Must be non-empty.",
+    "layouts": "The deck's own slide templates (Slide-shaped), offered beside the built-ins under Apply layout.",
+    "assets": "Shared data: key → data: URI or raw SVG markup, referenced as `asset:<key>`. Written last in a saved file.",
+    "blobs": "Written by live collaboration for large assets. Never author it.",
+    "fonts": "Faces the deck carries, each an @font-face at boot.",
+    "modified": "Last-saved timestamp, written by the app.",
+    "readonly": "true makes a player file: it boots into the show with no editor.",
+    "template": "true makes a template: every open mints a fresh document.",
+    "collab": "Live-session credentials. Any key in it is access to the room: read the deck without it and write it back unchanged."
+  },
+  "theme": {
+    "background": "Default slide background (palette slot bg1).",
+    "color": "Default text colour (palette slot tx1).",
+    "accent": "The accent colour (palette slot accent1); seeds derived chart colours.",
+    "fontFamily": "Font stack for body text; a full-document text box without fontFamily draws in it.",
+    "codeFontFamily": "Font stack for code elements without their own fontFamily. Absent = fontFamily.",
+    "headingFamily": "Display face for headings. Absent = fontFamily.",
+    "palette": "Further named brand slots that themeRefs can point at.",
+    "chartPalette": "Ordered series colours for new charts. Absent = derived from accent.",
+    "table": "Defaults for newly inserted tables; existing tables keep their own style.",
+    "codePalette": "Token colours for code elements.",
+    "tokens": "Design tokens: named values element properties bind to with themeRefs \"$name\"."
+  },
+  "themePalette": {
+    "bg2": "Second background slot.",
+    "tx2": "Second text slot.",
+    "accent2": "Accent slot 2.",
+    "accent3": "Accent slot 3.",
+    "accent4": "Accent slot 4.",
+    "accent5": "Accent slot 5.",
+    "accent6": "Accent slot 6.",
+    "hlink": "Hyperlink colour slot.",
+    "folHlink": "Followed-hyperlink colour slot."
+  },
+  "themeCodePalette": {
+    "c": "Comments.",
+    "s": "Strings.",
+    "n": "Numbers.",
+    "k": "Keywords.",
+    "f": "Function calls.",
+    "p": "Punctuation.",
+    "a": "Diff additions.",
+    "d": "Diff deletions."
+  },
+  "themeTokens": {
+    "modes": "Mode names in order (e.g. light, dark). Absent = the single mode \"default\".",
+    "mode": "The active mode. Absent = the first. Switching it rewrites every bound literal.",
+    "set": "Token name → { type, values: { mode → value } }. Names match `[A-Za-z][\\w.-]*`, up to 64 characters."
+  },
+  "present": {
+    "slideNumber": "The show's \"3 / 12\" counter. Default true; switch it off when the slides number themselves.",
+    "progress": "The show's progress bar along the bottom. Default true.",
+    "controls": "Arrow buttons in the corner while presenting. Default false.",
+    "numberHidden": "true: hidden slides keep their page number. Default false (skipped slides are uncounted).",
+    "morphSeconds": "Morph duration in seconds. Absent = 0.65; clamped to 0.1–6 on read.",
+    "typeWriterSeconds": "Typewriter pace, seconds per character. Absent = 0.08; a whole run never takes longer than 6 s."
+  },
+  "size": {
+    "width": "Slide width in px.",
+    "height": "Slide height in px."
+  },
+  "meta": {
+    "author": "Fills {{author}}.",
+    "company": "Fills {{company}}.",
+    "subject": "Fills {{subject}}.",
+    "event": "Fills {{event}}.",
+    "keywords": "Keywords; provenance only, no field token."
+  },
+  "font": {
+    "family": "The family name text uses in its font stack.",
+    "asset": "`asset:<key>` (a woff2 data URI in assets), or a face the app carries by builtin: key, with no bytes in the file.",
+    "weight": "CSS font-weight the face covers (\"900\", \"400 700\").",
+    "style": "CSS font-style (\"normal\", \"italic\")."
+  },
+  "slide": {
+    "id": "Stable slide id; links, stateOf and morphs reference it.",
+    "background": "Slide background colour. A full document's slide without it is white, not theme.background.",
+    "transition": "How the slide arrives; morph tweens elements that share a morph key with the previous slide.",
+    "elements": "The slide's elements. Array order is paint order: the first is at the back.",
+    "notes": "Speaker notes; they travel in the file.",
+    "themeRefs": "Palette slot or $token for the slide's own colours (background).",
+    "name": "Friendly name for link pickers and state badges.",
+    "stateOf": "This slide is a hidden variant of the named slide, reached only by links; ← returns to the parent.",
+    "hidden": "Out of the show (arrow keys skip it, PDF leaves it out) but reachable by a link: backup and appendix slides.",
+    "unnumbered": "In the walk but takes no page number: {{page}} shows the previous slide's, so a build over several morph slides reads as one page.",
+    "hover": "Present-mode hover: focus-group dims elements outside the hovered group; reveal swaps showOnHover sets.",
+    "comments": "Review threads. Saved in the file, never drawn in the show or print."
+  },
+  "slideHover": {
+    "type": "focus-group or reveal.",
+    "dim": "focus-group: opacity of the elements outside the hovered group. Absent = 0.13.",
+    "default": "reveal: the showOnHover set visible while nothing is hovered."
+  },
+  "comment": {
+    "id": "Thread id.",
+    "elementId": "The element the thread is pinned to. Absent (or dangling) = the slide.",
+    "x": "Point anchor in slide px, when no elementId.",
+    "y": "Point anchor in slide px, when no elementId.",
+    "author": "Who wrote it.",
+    "text": "The comment.",
+    "at": "ISO timestamp.",
+    "resolved": "The thread is resolved.",
+    "replies": "Replies: { id, author, text, at }."
+  },
+  "element": {
+    "id": "Identity on the slide, and the default morph key: elements sharing it across adjacent slides morph.",
+    "type": "The element type.",
+    "x": "Left edge in slide px.",
+    "y": "Top edge in slide px.",
+    "w": "Width in slide px.",
+    "h": "Height in slide px.",
+    "rotation": "Degrees, clockwise.",
+    "opacity": "0 transparent to 1 opaque.",
+    "name": "The author's name for it in the layer list. Display only.",
+    "morphId": "Morph key override: pairs with an element whose morphId or id matches, without touching id. Unique within a slide.",
+    "shadow": "Drop shadow(s) following the element's alpha shape; an array stacks.",
+    "blur": "Gaussian blur on the element, px.",
+    "blend": "CSS mix-blend-mode (screen, multiply, overlay …). Absent = normal.",
+    "backdropFilter": "Frosted-glass blur of what lies behind, px. Screen only: print drops it.",
+    "fx": "Presentation effects: entrance, click step, count-up, ambient motion, loops. Run while presenting only.",
+    "link": "Click target while presenting: a slide id, or an http(s) URL (opens in a new tab).",
+    "group": "Semantic group tag that hover focus and reveal target.",
+    "groupId": "Editor grouping: elements sharing it select and move as one.",
+    "groupName": "The group's name in the layer list, carried by every member.",
+    "locked": "Editor lock: canvas clicks and marquees skip it. Ignored by present and print.",
+    "showOnHover": "Visible only while an element whose group equals this value is hovered (slide hover type reveal).",
+    "role": "What it is on the slide; a layout (and compact input) places content by role.",
+    "themeRefs": "Property path → palette slot (\"accent1\", \"accent1 -20%\") or design token (\"$name\"). The literal stays on the element and must equal what the ref resolves to.",
+    "parentId": "The auto-layout frame (a rect with layout) this element sits in; the frame derives its x/y/w/h.",
+    "sizing": "Inside a frame: fill takes the frame's free space on that axis; absent = fixed.",
+    "component": "Component membership: elements sharing component.id form a component; main marks the main, every other set is a copy.",
+    "keepAspectRatio": "Resizing keeps the proportions. Images read absent as true, everything else as false.",
+    "alt": "What a screen reader says for a non-text element. Absent = decorative.",
+    "hidden": "Not drawn anywhere (canvas, show, print, preview); still listed in Layers.",
+    "fillHidden": "The fill is switched off but kept.",
+    "strokeHidden": "The stroke is switched off but kept.",
+    "shadowHidden": "The shadow is switched off but kept.",
+    "blurHidden": "The blur is switched off but kept.",
+    "flipX": "Drawn mirrored across the vertical centre line; the box is unchanged.",
+    "flipY": "Drawn mirrored across the horizontal centre line; the box is unchanged."
+  },
+  "text": {
+    "html": "The text as sanitized HTML. Inline b strong i em u s code br span a, blocks p div h1 h2 ul ol li; attributes stripped except an http(s) href. $…$ and $$…$$ are maths; {{page}} and friends resolve at render.",
+    "fontSize": "Font size in px.",
+    "fontFamily": "CSS font stack. Omit it in a full document and the box follows theme.fontFamily.",
+    "fontWeight": "CSS font weight (400 regular, 700 bold).",
+    "color": "Text colour.",
+    "colorGradient": "A gradient painted into the glyphs; wins over color.",
+    "align": "Horizontal alignment.",
+    "valign": "Vertical alignment inside the box.",
+    "lineHeight": "Line height as a multiple of the font size.",
+    "letterSpacing": "Tracking in px.",
+    "textStroke": "Outline glyphs; fill \"none\" makes them hollow.",
+    "placeholder": "Dimmed prompt shown in the editor while html is empty; the element is hidden in the show and print while empty."
+  },
+  "textStroke": {
+    "width": "Outline width, px.",
+    "color": "Outline colour.",
+    "fill": "Glyph interior; \"none\" for hollow letters. Absent = the text colour."
+  },
+  "code": {
+    "content": "The source text, plain (not HTML).",
+    "grammarName": "The language that colours it. Absent = js.",
+    "fontSize": "Font size in px.",
+    "fontFamily": "CSS font stack. Absent = theme.codeFontFamily, then theme.fontFamily.",
+    "color": "Base text colour before token colours apply.",
+    "align": "Horizontal alignment.",
+    "valign": "Vertical alignment inside the box.",
+    "lineHeight": "Line height as a multiple of the font size.",
+    "grammarAssetId": "Reserved: a grammar carried as a deck asset. Not used by the current shell.",
+    "themeAssetId": "Reserved: a colour theme carried as a deck asset. Not used by the current shell.",
+    "themeName": "Reserved: a named colour theme. Token colours come from theme.codePalette."
+  },
+  "shape": {
+    "shape": "Which shape.",
+    "fill": "Fill colour; on a line, the line's colour. Mirrors the top layer when fills is set.",
+    "fillGradient": "Gradient fill; wins over fill, which stays as the solid fallback.",
+    "fills": "Fill stack, bottom first (two or more layers). When set, fill/fillGradient mirror the top visible layer.",
+    "stroke": "Outline colour (\"transparent\" or \"none\" for none).",
+    "strokeWidth": "Outline width, px.",
+    "strokeStyle": "Stroke pattern; dash-march loops need dashed or dotted.",
+    "strokeDash": "Legacy dash length, px; strokeStyle wins.",
+    "strokeDashes": "[dash, gap] in px; wins over strokeStyle.",
+    "strokeAlign": "Where the stroke sits on the outline. Absent = inside on rect, ellipse, triangle; centred on arrow and path.",
+    "strokeGradient": "Gradient along the stroke; wins over stroke (a line's fill).",
+    "strokes": "Stroke stack, bottom first (two or more layers). When set, stroke/strokeWidth/strokeAlign/strokeDashes mirror the top visible layer.",
+    "radius": "Corner radius, rect only.",
+    "radii": "Per-corner radius [top-left, top-right, bottom-right, bottom-left], rect only; wins over radius.",
+    "heads": "Arrow only: 2 puts a head at both ends.",
+    "lineStart": "Tip at a line's or open path's start.",
+    "lineEnd": "Tip at a line's or open path's end.",
+    "d": "Path only: SVG path data in pathBox coordinates.",
+    "pathBox": "Path only: [x, y, w, h] viewBox the path was drawn in, stretched into the element box.",
+    "from": "Connector start: follows an element's border (line or path only).",
+    "to": "Connector end: follows an element's border (line or path only).",
+    "layout": "Makes a rect a frame that lays out the elements whose parentId names it.",
+    "bool": "A vector boolean: d/pathBox hold the computed outline; the operands ride along for re-editing."
+  },
+  "shapeBool": {
+    "op": "The operation.",
+    "shapes": "The operand shapes, bottom first, in slide coordinates as they were when combined."
+  },
+  "image": {
+    "src": "data: URI or `asset:<key>`.",
+    "fit": "How the picture fills the box.",
+    "radius": "Corner radius, px.",
+    "crop": "Pan and zoom inside the frame. Absent = fit alone."
+  },
+  "svg": {
+    "asset": "Key into assets holding raw SVG markup (preferred: dedupes).",
+    "markup": "Raw inline SVG markup, used when asset is unset.",
+    "css": "CSS injected inside the svg, scoped to it (hover states, animations)."
+  },
+  "chart": {
+    "option": "ECharts-shaped option as plain JSON, drawn by charts-lite. Bar and line data are plain numbers; template formatters only.",
+    "preset": "The panel's re-seed key: bar, line, pie or scatter.",
+    "source": "Live binding: labels and series values track a table element."
+  },
+  "chartSource": {
+    "tableId": "The table element's id on the same slide."
+  },
+  "table": {
+    "columns": "Column weights, normalised at render; one entry per column.",
+    "rows": "The rows, each { cells: [...] }.",
+    "header": "Row 0 is a styled header row.",
+    "style": "The table-wide look; cells carry only overrides."
+  },
+  "media": {
+    "kind": "video or audio.",
+    "src": "data: URI (embedded), URL or relative path (referenced), or `asset:<key>`.",
+    "poster": "Video only: still shown before playback.",
+    "fit": "Video only: how the frame fills the box.",
+    "radius": "Corner radius, px.",
+    "autoplay": "Starts on arrival, in the show only; video needs muted.",
+    "loop": "Restarts at the end.",
+    "muted": "No sound; required for video autoplay.",
+    "controls": "Shows the player controls."
+  },
+  "embed": {
+    "app": "The app that made it (bento/dash, bento/type …), or web for a page.",
+    "view": "The static render that always paints: raw `<svg>` markup or `asset:<key>`. Required in practice.",
+    "doc": "The source: plain JSON or `asset:<key>`.",
+    "url": "app web only: the http(s) page a live frame loads.",
+    "live": "Opt in to a sandboxed live frame over the view while online."
+  },
+  "component": {
+    "id": "The component; every element of the main and of each copy carries it.",
+    "key": "Pairs a copy's element with its counterpart in the main.",
+    "main": "Marks the main's elements.",
+    "over": "A copy's own overrides: the keys it does not take from the main.",
+    "off": "A copy's [dx, dy] offset from its main, written by the app.",
+    "sig": "Hash of the main state a copy last followed, written by the app. Omit it: without it a copy's differences count as overrides."
+  },
+  "fx": {
+    "enter": "Entrance animation when the slide shows. Skipped for an element that morphs in from the previous slide.",
+    "enterDur": "Entrance duration in seconds. Absent = 0.75 for slide-*, 0.55 for fade-*.",
+    "order": "Stagger order in the entrance sequence; equal values enter together.",
+    "step": "Click build: 1 or more hides the element until the n-th → reveals it (with its enter, or a fade). Absent/0 = shown with the slide.",
+    "countUp": "Animate the numbers in the text from 0.",
+    "ambient": "Continuous ambient motion: kenburns, for full-bleed photos.",
+    "ken": "Ken-burns tuning.",
+    "typeWriter": "Code only: the text types in a character at a time when it appears.",
+    "loop": "A continuous loop: dash-march or motion-path."
+  },
+  "fxKen": {
+    "dir": "drift (default) loops a slow zoom; out and in play once per arrival.",
+    "scale": "The far end of the zoom, e.g. 1.08.",
+    "duration": "Seconds."
+  },
+  "fxLoop": {
+    "type": "dash-march marches a dashed stroke; motion-path moves the element along path.",
+    "distance": "dash-march: px the dashes travel per lap.",
+    "duration": "Seconds per lap (required for motion-path).",
+    "path": "motion-path: SVG path data relative to the element's resting position (the first anchor is where it sits).",
+    "delay": "motion-path: seconds before the first lap.",
+    "ease": "motion-path: easing over each lap. Default none (constant tempo).",
+    "speeds": "motion-path: one speed multiplier per anchor (1 normal, below 1 dwells, above 1 rushes)."
+  },
+  "shadow": {
+    "x": "Horizontal offset, px.",
+    "y": "Vertical offset, px.",
+    "blur": "Blur radius, px.",
+    "color": "Shadow colour (rgba for softness)."
+  },
+  "gradient": {
+    "angle": "Degrees, CSS convention: 0 = bottom→top, 90 = left→right.",
+    "stops": "Ordered stops { at: 0..1, color }.",
+    "kind": "radial: stops run from (cx, cy) out to r. Absent = linear.",
+    "cx": "Radial centre x as a fraction of the box. Default 0.5.",
+    "cy": "Radial centre y as a fraction of the box. Default 0.5.",
+    "r": "Radial radius as a fraction of the box. Default 0.5."
+  },
+  "paintLayer": {
+    "color": "The layer's colour; with a gradient, its solid fallback.",
+    "gradient": "A gradient for this layer.",
+    "hidden": "Kept but not drawn.",
+    "blend": "How the layer mixes with what lies beneath it. Absent = normal."
+  },
+  "strokeLayer": {
+    "color": "The layer's colour; with a gradient, its solid fallback.",
+    "width": "Stroke width, px.",
+    "align": "Where the stroke sits on the outline.",
+    "dashes": "[dash, gap] in px.",
+    "hidden": "Kept but not drawn.",
+    "gradient": "A gradient along the stroke.",
+    "blend": "How the layer mixes with what lies beneath it. Absent = normal."
+  },
+  "connectorEnd": {
+    "el": "Id of the element this end follows, on the same slide.",
+    "side": "Which border to attach to; auto picks the nearest."
+  },
+  "frameLayout": {
+    "dir": "Main axis: row, col, or a grid of equal cells.",
+    "gap": "Space between children, px.",
+    "pad": "Padding inside the frame [top, right, bottom, left], px.",
+    "justify": "Main-axis distribution. Default start.",
+    "align": "Cross-axis alignment; stretch fills it. Default start.",
+    "cols": "Grid only: number of columns. Default 2.",
+    "clip": "Children are clipped to the frame.",
+    "hug": "The frame sizes itself to its children.",
+    "wrap": "Row/col only: a child that would pass the edge starts a new line."
+  },
+  "sizing": {
+    "w": "fill takes the frame's free width; fixed (or absent) keeps w.",
+    "h": "fill takes the frame's free height; fixed (or absent) keeps h.",
+    "minW": "In a wrapping frame, the least width a fill child counts as when lines break.",
+    "minH": "In a wrapping frame, the least height a fill child counts as when lines break."
+  },
+  "imageCrop": {
+    "x": "Which edge of the enlarged picture the frame aligns to horizontally: 0 left, 0.5 centre, 1 right.",
+    "y": "Vertical alignment the same way: 0 top, 1 bottom.",
+    "scale": "Zoom beyond cover-fit, 1 or more."
+  },
+  "tableStyle": {
+    "headerBg": "Header row background.",
+    "headerColor": "Header row text colour.",
+    "zebra": "Stripe colour for alternate body rows. Absent = no stripes.",
+    "borderColor": "Cell border colour.",
+    "borderWidth": "Cell border width, px.",
+    "cellPadX": "Horizontal cell padding, px.",
+    "cellPadY": "Vertical cell padding, px.",
+    "fontSize": "Cell font size, px.",
+    "fontFamily": "Cell font stack. Absent = theme.fontFamily.",
+    "color": "Body cell text colour.",
+    "radius": "Outer corner radius, px."
+  },
+  "tableRow": {
+    "cells": "The row's cells, one per column."
+  },
+  "tableCell": {
+    "html": "Cell content: the same sanitized subset as text html.",
+    "align": "Horizontal alignment in the cell.",
+    "color": "Text colour override.",
+    "bg": "Background override.",
+    "bold": "Bold override."
+  }
+}
