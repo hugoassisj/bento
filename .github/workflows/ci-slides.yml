@@ -729,3 +729,11 @@ jobs:
         # the thumbnail, present and print show none, real content is
         # unaffected, and read() and the saved file carry no prompt in html.
         run: node scripts/test-slides-placeholder-browser.mjs
+      - name: A fresh deck takes typing in Chromium
+        if: ${{ !cancelled() }}
+        # Start from scratch opens on the Title layout with the title selected,
+        # so typed keys become the title and arm no tool, in one undo step; an
+        # empty slide shows a hint in the editor only (not the render, a
+        # thumbnail, read(), the file, print or the show), and a double-click
+        # there puts a text box at the pointer; letter tools still work.
+        run: node scripts/test-slides-empty-state-browser.mjs
