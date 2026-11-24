@@ -4,7 +4,10 @@
 
 ## Docs
 
-- [Agent authoring guide](https://bento.page/agents.md): how to write and edit a deck, with copy-paste snippets
+- [Agent authoring guide](https://bento.page/agents.md): how to write and edit a deck, with copy-paste snippets; the compact input form (omit defaults, place content by layout and role); a worked example per feature (click builds, code morph, maths, frames, tokens and modes, components, paint stacks); every finding validate() reports; a field reference of every key, generated from the code
+- [Field reference](https://raw.githubusercontent.com/nyblnet/bento/main/plugins/bento-slides/skills/bento-slides/references/format.md): every key of the format with its type, allowed values and meaning, generated from the app's tables (the same text as the guide's last section)
+- [Compact input reference](https://raw.githubusercontent.com/nyblnet/bento/main/plugins/bento-slides/skills/bento-slides/references/compact.md): the built-in layouts, their roles and slots, and every default a compact document may leave out
+- [Finding codes](https://raw.githubusercontent.com/nyblnet/bento/main/plugins/bento-slides/skills/bento-slides/references/verify.md): every code validate() and bento check report, with severity and meaning
 - [Document schema](https://bento.page/schema/slides.json): JSON Schema 2020-12 for the `#bento-doc` JSON, generated from the app's own validation tables; version-pinned copies live beside it (`slides-<version>.json`)
 - [Platform invariants](https://raw.githubusercontent.com/nyblnet/bento/main/docs/PLATFORM.md): what every Bento file promises (splice contract, additivity, identity)
 - [The app](https://bento.page/slides): opens with the starter deck; `window.bento` exposes `read()` (the document, sharing keys left out: the read call for agents), `loadDoc(json)`, `compact()`, `validate()`, `measure()`, `schema()`, `comments()`, and the raw `doc` / `serialize()`, which carry the deck's sharing keys
