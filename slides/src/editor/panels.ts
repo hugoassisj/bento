@@ -30,6 +30,7 @@ import { buildTableProps } from './inspector/table'
 import { buildAutoLayout, wrapInFrame } from './inspector/layout'
 import { reflowByArray, moveIntoFrame, moveOutBeside } from '../layout'
 import { buildShadow, buildBlur } from './inspector/effects'
+import { announce } from './announce'
 
 export class PropsPanel {
   private burst = false
@@ -435,6 +436,7 @@ export class PropsPanel {
 
   toast(message: string) {
     document.querySelector('.ed-toast')?.remove()
+    announce(message) // heard as well as seen (announce.ts)
     const t = document.createElement('div')
     t.className = 'ed-toast'
     t.textContent = message

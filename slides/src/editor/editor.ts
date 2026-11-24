@@ -34,7 +34,7 @@ import { walkSource, wouldPair } from './morph'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
-import { adoptFileHandle, canWriteInPlace, currentFileName, decryptEnvelope, embeddedDocBlock, fileBase, fileChangedOnDisk, hasFileHandle, hostCan, isBodySealed, isEncryptionActive, keepMineOverDisk, onFileChangedOnDisk, openedFileName, parseEnvelope, readDiskVersion, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs, type EncEnvelope } from '../save'
+import { adoptFileHandle, canWriteInPlace, currentFileName, decryptEnvelope, downloadFile, embeddedDocBlock, fileBase, fileChangedOnDisk, hasFileHandle, hostCan, isBodySealed, isEncryptionActive, keepMineOverDisk, onFileChangedOnDisk, openedFileName, parseEnvelope, readDiskVersion, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs, type EncEnvelope } from '../save'
 import { createSaveQueue, saveRevision } from '../saving'
 import type { SaveQueue } from '../../../kernel/src/savequeue.ts'
 import { noteSavedFromWeb } from './returngate'
@@ -67,6 +67,7 @@ import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
+import { announce, ensureLiveRegions } from './announce'
 import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
 import { align, distribute, flip } from './inspector/arrange'
 import type { NodeKind } from './beziereditor'
@@ -225,6 +226,8 @@ export class Editor {
     private root: HTMLElement,
     private store: Store,
   ) {
+    // before any message: a live region only speaks when text changes in it
+    ensureLiveRegions()
     this.build()
     this.wireKeyboard()
     // a slide-list change makes the sidebar selection's indices stale: drop it
@@ -1324,8 +1327,8 @@ export class Editor {
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'presentonly' })
       if (ok) this.toast(t('Presentation package saved — it opens straight into the show'))
-    } catch {
-      this.toast(t('Saving failed'))
+    } catch (err) {
+      this.saveFailed(err, { doc: clone, suffix: 'presentonly' })
     }
   }
 
@@ -1370,8 +1373,8 @@ export class Editor {
       // password, which is what encrypting the deck meant.
       const ok = await writeUpdatedFileAs(await serializeAuto(copy), copy, { suffix: 'audience', keepHandle: false })
       if (ok) this.toast(t('Audience copy saved — it opens into the show and follows you while you are live'))
-    } catch {
-      this.toast(t('Saving failed'))
+    } catch (err) {
+      this.saveFailed(err, { doc: copy, suffix: 'audience' })
     }
   }
 
@@ -1409,8 +1412,8 @@ export class Editor {
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'viewonly' })
       if (ok) this.toast(t('Read-only copy saved — it follows the live session, view only'))
-    } catch {
-      this.toast(t('Saving failed'))
+    } catch (err) {
+      this.saveFailed(err, { doc: clone, suffix: 'viewonly' })
     }
   }
 
@@ -1436,8 +1439,8 @@ export class Editor {
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'invite' })
       if (ok) this.toast(t('Editor copy saved — recipients join live with edit access'))
-    } catch {
-      this.toast(t('Saving failed'))
+    } catch (err) {
+      this.saveFailed(err, { doc: clone, suffix: 'invite' })
     }
   }
 
@@ -1495,7 +1498,7 @@ export class Editor {
         const warnings = r.findings.counts.warning + r.findings.counts.error
         if (r.dropped.length || warnings) {
           console.info('[bento] load report', r)
-          this.toast(t('Loaded: {dropped} fields dropped, {warnings} warnings — see console', { dropped: String(r.dropped.length), warnings: String(warnings) }))
+          this.toast(t('Loaded: {dropped} fields dropped, {warnings} warnings — ⌘Z undoes', { dropped: String(r.dropped.length), warnings: String(warnings) }))
         } else this.toast(t('Document replaced — ⌘Z undoes'))
         overlay.remove()
       } else {
@@ -1594,8 +1597,7 @@ export class Editor {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'template' })
       if (ok) this.toast(t('Template saved — every open of it starts a fresh deck'))
     } catch (err) {
-      console.error(err)
-      this.toast(t('Save failed — see console'))
+      this.saveFailed(err, { doc: clone, suffix: 'template' })
     }
   }
 
@@ -2632,6 +2634,9 @@ export class Editor {
           const h = Math.round(img.height * scale)
           this.canvas.insert(defaultImage(src, { w, h, x: (dw - w) / 2, y: (dh - h) / 2 }))
         }
+        // passed the image/* filter but the browser cannot draw it (HEIC in
+        // Chrome, a misnamed file): say so, insert nothing
+        img.onerror = () => this.toast(t('{name} could not be read as a picture', { name: file.name }), undefined, 'error')
         img.src = src
       })
     })
@@ -2931,7 +2936,7 @@ export class Editor {
         let w = img.naturalWidth || 400, h = img.naturalHeight || 300
         const sc = Math.min(1, 640 / w, 480 / h); place(Math.round(w * sc), Math.round(h * sc))
       }
-      img.onerror = () => place(400, 300)
+      img.onerror = () => this.toast(t('{name} could not be read as a picture', { name: file.name }), undefined, 'error')
       img.src = src
     })
   }
@@ -3672,8 +3677,7 @@ export class Editor {
         this.toast(t('Not saved — {name} was changed by another program', { name: out.error.fileName }))
         return
       }
-      console.error(out.error)
-      this.toast(t('Save failed — see console'))
+      this.saveFailed(out.error)
       return
     }
     const result = out.result
@@ -3727,8 +3731,7 @@ export class Editor {
         })
       }, 200)
     } catch (err) {
-      console.error(err)
-      this.toast(t('Save failed — see console'))
+      this.saveFailed(err)
     }
   }
 
@@ -4900,34 +4903,77 @@ export class Editor {
     dlg.open()
   }
 
+  /** The one transient message. Its words also go to a live region (announce.ts),
+   *  so a screen reader hears what the eye sees. Kind `error` speaks in the alert
+   *  region and STAYS — with a Dismiss button — until it is dismissed, acted on or
+   *  replaced by the next message: a failure that fades after two seconds is
+   *  missed by anyone who looked away. */
   toast(message: string, action?: { label: string; run: () => void }, kind?: string) {
     document.querySelector('.ed-toast')?.remove()
-    const t = div('ed-toast')
-    if (kind) t.dataset.kind = kind
-    t.textContent = message
+    const error = kind === 'error'
+    announce(message, error)
+    const box = div('ed-toast')
+    if (kind) box.dataset.kind = kind
+    box.textContent = message
     if (action) {
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'ed-toast-act'
       b.textContent = action.label
-      b.addEventListener('click', () => { action.run(); t.remove() })
-      t.append(' ', b)
-      t.classList.add('has-act')
+      b.addEventListener('click', () => { action.run(); box.remove() })
+      box.append(' ', b)
+      box.classList.add('has-act')
+    }
+    if (error) {
+      const x = document.createElement('button')
+      x.type = 'button'
+      x.className = 'ed-toast-x'
+      x.textContent = '×'
+      x.setAttribute('aria-label', t('Dismiss'))
+      x.addEventListener('click', () => box.remove())
+      box.append(x)
+      box.classList.add('has-act')
     }
     // dock at the top of the canvas, centred on it: the window's foot covered
     // the speaker notes, and the canvas's foot the zoom and Slideshow controls
     const canvas = document.querySelector('.ed-scroll')?.getBoundingClientRect()
     if (canvas?.height) {
-      t.style.top = `${canvas.top + 12}px`
-      t.style.bottom = 'auto'
-      t.style.left = `${canvas.left + canvas.width / 2}px`
+      box.style.top = `${canvas.top + 12}px`
+      box.style.bottom = 'auto'
+      box.style.left = `${canvas.left + canvas.width / 2}px`
     }
-    document.body.appendChild(t)
-    setTimeout(() => t.classList.add('show'))
+    document.body.appendChild(box)
+    setTimeout(() => box.classList.add('show'))
+    if (error) return
     setTimeout(() => {
-      t.classList.remove('show')
-      setTimeout(() => t.remove(), 300)
+      box.classList.remove('show')
+      setTimeout(() => box.remove(), 300)
     }, action ? 8000 : 2200)
+  }
+
+  /**
+   * A save that did not happen — ⌘S or any of the copies. A cancelled picker
+   * never gets here (the kernel answers `cancelled` / false and the caller says
+   * nothing). The error goes to the console for whoever debugs it; the author
+   * gets the reason when the browser gave one, and a way out: the same bytes
+   * (`doc`, or the open deck at the moment of the click) as a download, which
+   * needs no permission and no picker.
+   */
+  private saveFailed(err: unknown, copy?: { doc: import('../model').BentoDoc; suffix: string }) {
+    console.error(err)
+    const name = (err as { name?: unknown } | null)?.name
+    const message = name === 'NotAllowedError' ? t('Not saved — permission to write the file was lost')
+      : name === 'QuotaExceededError' ? t('Not saved — the disk is full')
+      : name === 'NotFoundError' ? t('Not saved — the file was moved or deleted')
+      : t('Something went wrong while saving')
+    this.toast(message, {
+      label: t('Download a copy'),
+      run: () => {
+        if (!copy) this.session?.stampInto(this.store.doc) // as a save would: the copy can rejoin
+        const doc = copy?.doc ?? this.store.doc
+        void serializeAuto(doc).then((html) => downloadFile(html, suggestedFileName(doc, copy?.suffix)))
+      },
+    }, 'error')
   }
 }
 

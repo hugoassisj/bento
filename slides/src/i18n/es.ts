@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
+  "{name} could not be read as a picture": "{name} no se pudo leer como imagen",
+  "Not saved — permission to write the file was lost": "No guardado: se ha perdido el permiso para escribir el archivo",
+  "Not saved — the disk is full": "No guardado: el disco está lleno",
+  "Not saved — the file was moved or deleted": "No guardado: el archivo se ha movido o eliminado",
+  "Something went wrong while saving": "Algo salió mal al guardar",
+  "Download a copy": "Descargar una copia",
+  "Dismiss": "Cerrar",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — ⌘Z undoes": "Cargado: {dropped} campos descartados, {warnings} avisos; ⌘Z deshace",
   "View": "Vista",
   "Current slide": "Diapositiva actual",
   "Slide thumbnails": "Miniaturas de diapositivas",
@@ -172,7 +180,6 @@ export const es: Catalog = {
   "Resolve": "Resolver",
   "SVG path the element travels along, relative to its position": "Trazado SVG que recorre el elemento, relativo a su posición",
   "Save": "Guardar",
-  "Save failed — see console": "Error al guardar — mira la consola",
   "Save — rewrite this file in place (⌘S)": "Guardar — reescribe este archivo en el sitio (⌘S)",
   "Saved": "Guardado",
   "Semibold": "Seminegrita",
@@ -287,7 +294,6 @@ export const es: Catalog = {
   "Enter password to open this deck": "Introduce la contraseña para abrir esta presentación",
   "Unlock": "Desbloquear",
   "Wrong password — try again": "Contraseña incorrecta: inténtalo de nuevo",
-  "Saving failed": "Error al guardar",
   "Encrypt with password…": "Cifrar con contraseña…",
   "Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.": "Protege este archivo con una contraseña: el documento (claves de colaboración incluidas) se cifra en reposo con AES-256. La contraseña no se puede recuperar.",
   "Change password…": "Cambiar contraseña…",
@@ -756,7 +762,6 @@ export const es: Catalog = {
   "Copy compact JSON (for agents)": "Copiar JSON compacto (para agentes)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "La misma presentación sin ningún valor predeterminado: la forma que debería escribir un agente de IA. «Reemplazar desde JSON» lo acepta; el archivo guardado siempre es completo.",
   "Compact JSON copied": "JSON compacto copiado",
-  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Cargado: {dropped} campos descartados, {warnings} avisos; consulta la consola",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Dentro de una vista incrustada no se comprueban las actualizaciones: abre el archivo en una pestaña del navegador para comprobar.",
   "Compress pictures in this deck…": "Comprimir las imágenes de esta presentación…",
   "Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.": "Vuelve a codificar cada foto de la presentación a un máximo de 2560 px; las capturas y los logotipos siguen nítidos. Deshacer las restaura hasta que guardes.",

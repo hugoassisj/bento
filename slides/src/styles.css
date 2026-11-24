@@ -3877,6 +3877,12 @@ body.ed-morph-previewing .moveable-control-box,
 body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 .ed-toast.has-act { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
 .ed-toast-act { font: inherit; font-weight: 600; color: inherit; background: none; border: 1px solid currentColor; border-radius: 999px; padding: 2px 10px; cursor: pointer; }
+/* a failure stays until dismissed, so it carries its own close button */
+.ed-toast[data-kind="error"] { padding-right: 8px; }
+.ed-toast-x { font: inherit; font-size: 16px; line-height: 1; color: inherit; background: none; border: 0; border-radius: 999px; padding: 2px 6px; cursor: pointer; opacity: 0.75; }
+.ed-toast-x:hover, .ed-toast-x:focus-visible { opacity: 1; }
+.ed-toast-act:focus-visible, .ed-toast-x:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ed-toast { transition: none; transform: translate(-50%, 0); } }
 /* Tokens UX pass: the colour menu's adopt actions, the component header, the Theme → Tokens link */
 .ed-comp-head { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
 .ed-seg[data-axis='h'] svg { transform: rotate(90deg); }

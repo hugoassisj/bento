@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "{name} could not be read as a picture": "无法将 {name} 读取为图片",
+  "Not saved — permission to write the file was lost": "未保存 — 已失去写入该文件的权限",
+  "Not saved — the disk is full": "未保存 — 磁盘已满",
+  "Not saved — the file was moved or deleted": "未保存 — 文件已被移动或删除",
+  "Something went wrong while saving": "保存时出错",
+  "Download a copy": "下载副本",
+  "Dismiss": "关闭",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — ⌘Z undoes": "已加载：丢弃 {dropped} 个字段，{warnings} 条警告 — ⌘Z 可撤销",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",
@@ -172,7 +180,6 @@ export const zhHans: Catalog = {
   "Resolve": "解决",
   "SVG path the element travels along, relative to its position": "元素沿其移动的 SVG 路径（相对其位置）",
   "Save": "保存",
-  "Save failed — see console": "保存失败 — 请查看控制台",
   "Save — rewrite this file in place (⌘S)": "保存 — 就地改写此文件 (⌘S)",
   "Saved": "已保存",
   "Semibold": "半粗",
@@ -287,7 +294,6 @@ export const zhHans: Catalog = {
   "Enter password to open this deck": "输入密码以打开此演示文稿",
   "Unlock": "解锁",
   "Wrong password — try again": "密码错误 — 请重试",
-  "Saving failed": "保存失败",
   "Encrypt with password…": "使用密码加密…",
   "Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.": "使用密码保护此文件：文档（包括协作密钥）以 AES-256 加密存储。密码无法找回。",
   "Change password…": "更改密码…",
@@ -756,7 +762,6 @@ export const zhHans: Catalog = {
   "Copy compact JSON (for agents)": "复制精简 JSON（供智能体使用）",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "同一份文稿，省去所有默认值——AI 智能体应当书写的形式。“从 JSON 替换”可读回它；保存的文件始终是完整的。",
   "Compact JSON copied": "已复制精简 JSON",
-  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "已加载：丢弃 {dropped} 个字段，{warnings} 条警告 — 见控制台",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "在嵌入视图中不检查更新 — 请在浏览器标签页中打开文件以检查。",
   "Compress pictures in this deck…": "压缩此文稿中的图片…",
   "Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.": "以最高 2560 px 重新编码文稿中的每张照片；截图和徽标保持清晰。保存前可撤销恢复。",

@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "{name} could not be read as a picture": "{name} konnte nicht als Bild gelesen werden",
+  "Not saved — permission to write the file was lost": "Nicht gespeichert — die Schreibberechtigung für die Datei ist verloren gegangen",
+  "Not saved — the disk is full": "Nicht gespeichert — der Datenträger ist voll",
+  "Not saved — the file was moved or deleted": "Nicht gespeichert — die Datei wurde verschoben oder gelöscht",
+  "Something went wrong while saving": "Beim Speichern ist etwas schiefgegangen",
+  "Download a copy": "Kopie herunterladen",
+  "Dismiss": "Schließen",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — ⌘Z undoes": "Geladen: {dropped} Felder verworfen, {warnings} Warnungen — ⌘Z macht rückgängig",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",
@@ -172,7 +180,6 @@ export const de: Catalog = {
   "Resolve": "Erledigen",
   "SVG path the element travels along, relative to its position": "SVG-Pfad, dem das Element folgt, relativ zu seiner Position",
   "Save": "Speichern",
-  "Save failed — see console": "Speichern fehlgeschlagen — siehe Konsole",
   "Save — rewrite this file in place (⌘S)": "Speichern — Datei direkt überschreiben (⌘S)",
   "Saved": "Gespeichert",
   "Semibold": "Halbfett",
@@ -287,7 +294,6 @@ export const de: Catalog = {
   "Enter password to open this deck": "Passwort eingeben, um diese Präsentation zu öffnen",
   "Unlock": "Entsperren",
   "Wrong password — try again": "Falsches Passwort — bitte erneut versuchen",
-  "Saving failed": "Speichern fehlgeschlagen",
   "Encrypt with password…": "Mit Passwort verschlüsseln…",
   "Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.": "Diese Datei mit einem Passwort schützen: das Dokument (inklusive Kollaborations-Schlüssel) wird mit AES-256 verschlüsselt gespeichert. Das Passwort kann nicht wiederhergestellt werden.",
   "Change password…": "Passwort ändern…",
@@ -756,7 +762,6 @@ export const de: Catalog = {
   "Copy compact JSON (for agents)": "Kompaktes JSON kopieren (für Agenten)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Dasselbe Deck ohne alle Standardwerte — die Form, die ein KI-Agent schreiben sollte. „Aus JSON ersetzen“ nimmt es zurück; die gespeicherte Datei ist immer vollständig.",
   "Compact JSON copied": "Kompaktes JSON kopiert",
-  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Geladen: {dropped} Felder verworfen, {warnings} Warnungen — siehe Konsole",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "In einer eingebetteten Ansicht werden keine Updates geprüft — öffnen Sie die Datei in einem Browser-Tab, um zu prüfen.",
   "Compress pictures in this deck…": "Bilder in diesem Deck komprimieren…",
   "Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.": "Kodiert jedes Foto im Deck mit höchstens 2560 px neu; Screenshots und Logos bleiben scharf. Rückgängig stellt sie wieder her, bis Sie speichern.",

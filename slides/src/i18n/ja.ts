@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "{name} could not be read as a picture": "{name} を画像として読み込めませんでした",
+  "Not saved — permission to write the file was lost": "保存されていません — ファイルへの書き込み権限が失われました",
+  "Not saved — the disk is full": "保存されていません — ディスクがいっぱいです",
+  "Not saved — the file was moved or deleted": "保存されていません — ファイルが移動または削除されました",
+  "Something went wrong while saving": "保存中に問題が発生しました",
+  "Download a copy": "コピーをダウンロード",
+  "Dismiss": "閉じる",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — ⌘Z undoes": "読み込み完了: {dropped} 個のフィールドを破棄、警告 {warnings} 件 — ⌘Z で元に戻せます",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",
@@ -172,7 +180,6 @@ export const ja: Catalog = {
   "Resolve": "解決",
   "SVG path the element travels along, relative to its position": "要素が辿る SVG パス（要素位置からの相対）",
   "Save": "保存",
-  "Save failed — see console": "保存に失敗 — コンソールを確認",
   "Save — rewrite this file in place (⌘S)": "保存 — このファイルを直接書き換え (⌘S)",
   "Saved": "保存しました",
   "Semibold": "セミボールド",
@@ -287,7 +294,6 @@ export const ja: Catalog = {
   "Enter password to open this deck": "パスワードを入力してこのデッキを開く",
   "Unlock": "ロック解除",
   "Wrong password — try again": "パスワードが違います — もう一度お試しください",
-  "Saving failed": "保存に失敗しました",
   "Encrypt with password…": "パスワードで暗号化…",
   "Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.": "このファイルをパスワードで保護します：ドキュメント（コラボレーション鍵を含む）は AES-256 で暗号化されて保存されます。パスワードは復元できません。",
   "Change password…": "パスワードを変更…",
@@ -756,7 +762,6 @@ export const ja: Catalog = {
   "Copy compact JSON (for agents)": "コンパクトな JSON をコピー（エージェント向け）",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "既定値をすべて省いた同じデッキ。AI エージェントが書くべき形です。「JSON から置き換え」で戻せます。保存されるファイルは常に完全な形です。",
   "Compact JSON copied": "コンパクトな JSON をコピーしました",
-  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "読み込み完了: {dropped} 個のフィールドを破棄、警告 {warnings} 件 — コンソールを確認",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "埋め込み表示ではアップデートを確認しません — 確認するにはファイルをブラウザーのタブで開いてください。",
   "Compress pictures in this deck…": "このデッキの画像を圧縮…",
   "Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.": "デッキ内のすべての写真を最大 2560 px で再エンコードします。スクリーンショットやロゴはシャープなままです。保存するまで元に戻せます。",

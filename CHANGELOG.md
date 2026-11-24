@@ -11,6 +11,18 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Messages are read aloud, and a failed save tells you what to do.** Every
+  message the editor shows (Saved, Text pasted, a collaborator joining) is
+  also spoken by screen readers, and failures are announced at once. A save
+  that fails now says why when the browser knows (permission lost, disk full,
+  file moved or deleted), never sends you to the developer console, and stays
+  on screen until you dismiss it, with a Download a copy button that saves
+  the deck as a download instead. Cancelling a save dialog still says
+  nothing. A picture the browser cannot read, chosen with the Image button
+  or pasted, is named in a message and nothing is inserted, where before the
+  Image button did nothing and pasting left a broken box. Messages no longer
+  slide in when your system asks for reduced motion.
+
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the

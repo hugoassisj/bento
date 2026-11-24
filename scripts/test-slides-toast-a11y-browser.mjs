@@ -39,7 +39,11 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-US', acceptDownloads: true })
+  // never the network: no http(s), no WebSocket (route() does not see those),
+  // and the app's own offline switch on before the page loads
   await ctx.route(/^https?:/, (r) => r.abort())
+  if (ctx.routeWebSocket) await ctx.routeWebSocket(/.*/, (ws) => ws.close())
+  await ctx.addInitScript(() => { try { localStorage.setItem('bento-offline', 'on') } catch {} })
   const p = await ctx.newPage()
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
