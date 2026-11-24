@@ -622,7 +622,9 @@ const scatterOption = () => ({
   textStyle: { fontFamily: 'Instrument Sans' },
   tooltip: { trigger: 'item' },
   legend: { bottom: 0, textStyle: { color: '#6B7280' } },
-  grid: { left: 52, right: 24, top: 24, bottom: 56 },
+  // left: room for the y-axis name, which ends 8px left of the plot
+  // ("Engagement" at 11px is ~66px wide); at 52 it was cut to "agement"
+  grid: { left: 76, right: 24, top: 24, bottom: 56 },
   xAxis: {
     type: 'value', name: 'Reach',
     axisLine: { lineStyle: { color: '#D8D2C4' } },
@@ -1204,7 +1206,9 @@ export function starterDoc(): BentoDoc {
           defaultChart(
             {
               color: [PEACH, STEEL],
-              grid: { left: 48, right: 42, top: 16, bottom: 26 },
+              // top: room for the second axis's name, "Growth", whose baseline
+              // sits 9px above the plot; at 16 its top was cut off at the chart's edge
+              grid: { left: 48, right: 42, top: 20, bottom: 26 },
               xAxis: { type: 'category', data: ['Q1', 'Q2', 'Q3', 'Q4'], axisLabel: { color: MIST } },
               // MIST, not a half-transparent MIST. The engine used to ignore a
               // y-axis's own label colour and reuse the x-axis one, so these read
