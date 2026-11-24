@@ -16,9 +16,10 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
-- **Bring a brand's design tokens in from Penpot, Figma or Tokens Studio, and
-  take a deck's tokens out.** In the Tokens view, ⋯ ▸ Import tokens… takes a
-  design-tokens JSON file, or JSON you paste, and shows what it would do
+- **Import and export design tokens as design-tokens JSON.** In the Tokens
+  view, ⋯ ▸ Import tokens… takes a design-tokens JSON file (the Design Tokens
+  Community Group format; tested with files shaped like what Penpot and
+  Figma's variables sample write), or JSON you paste, and shows what it would do
   before anything changes: which tokens are new, which would change (old →
   new), which are the same, and which are skipped and why — typography, a
   shadow with several layers, a unit like rem. Tick the ones you want; tokens

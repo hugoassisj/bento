@@ -1,4 +1,5 @@
 {
+  "$description": "Hand-written test fixture, NOT a capture from Figma: authored to the shape Figma's published variables-import-export plugin sample writes (one file per collection and mode, '/' groups, color and number only; figma/plugin-samples @03131bef). Replace with a real export when one is available. Importers ignore a root $description.",
   "primitives": {
     "blue": {
       "500": {

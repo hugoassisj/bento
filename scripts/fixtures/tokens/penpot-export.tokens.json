@@ -1,4 +1,5 @@
 {
+  "$description": "Hand-written test fixture, NOT a capture from a running Penpot: authored to the shape Penpot's exporter writes (common/src/app/common/types/tokens_lib.cljc export-dtcg-json, default profile, and its tests; penpot/penpot develop @5aac5ab9). Replace with a real export when one is available. Importers ignore a root $description.",
   "$themes": [
     {
       "description": "",
