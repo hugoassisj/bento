@@ -28,12 +28,12 @@ import { TOKEN_TYPES, activeMode, modesOf, protoName, tokenName } from './tokens
 import { PALETTE_SLOTS, paletteOf, type PaletteSlot } from './palette'
 import { SLIDE_CHECKS, type Dropped } from './untrusted'
 import { tokens as gateTokens } from './restoregate'
-import { BENTO_EXT, FILE_TYPE, THEME_GROUP, THEME_NAMES, TOKEN_FILE_LIMITS, fromDtcg, isRefusal, tokenLeaf, type Refusal } from './tokenio'
+import { BENTO_EXT, FILE_TYPE, THEME_GROUP, THEME_NAMES, TOKEN_FILE_LIMITS, fromDtcg, isRefusal, refuse, tokenLeaf, type Refusal } from './tokenio'
 
 /** Why a row is skipped: a code the review turns into words, and its detail. */
 export type Reason =
   | 'type' | 'value' | 'unit' | 'expression' | 'colorSpace' | 'layers' | 'inset' | 'spread'
-  | 'name' | 'proto' | 'kind' | 'alias' | 'loop' | 'modes' | 'depth' | 'notToken' | 'unsafe'
+  | 'name' | 'proto' | 'kind' | 'alias' | 'loop' | 'aliases' | 'modes' | 'depth' | 'notToken' | 'unsafe'
 
 export interface ImportRow {
   /** the name it lands as in the deck ('' when there is none) */
@@ -101,12 +101,16 @@ function skipped(set: string, path: string[], reason: Reason, detail?: string, n
 
 /** A group path as a token name: `[\w.-]`, a letter first, 64 at most. */
 function nameOf(path: string[]): string | Refusal {
-  if (path.some((s) => s === '__proto__') || protoName(path.join('.'))) return { error: 'proto' }
+  if (path.some((s) => s === '__proto__') || protoName(path.join('.'))) return refuse('proto')
   let n = path.map((s) => s.replace(/[^\w-]/g, '-')).join('.')
   if (!/^[A-Za-z]/.test(n)) n = `t${n}`
   n = n.slice(0, 64)
-  return tokenName(`$${n}`) ? n : { error: protoName(n) ? 'proto' : 'name' }
+  return tokenName(`$${n}`) ? n : refuse(protoName(n) ? 'proto' : 'name')
 }
+
+/** Nodes one value may resolve to, and alias uses in one file (see resolve). */
+const VALUE_NODES = 1000
+const ALIAS_BUDGET = 10_000
 
 const modeNameOk = (m: string) => m.length > 0 && m.length <= 64 && m !== '+' && !protoName(m)
 
@@ -181,29 +185,55 @@ export function planImport(doc: BentoDoc, text: string, opts: { eachSetIsMode?: 
     for (let i = setOrder.length - 1; i >= 0; i--) { const l = index.get(setOrder[i])!.get(ref); if (l) return l }
     return undefined
   }
-  /** `v` with every alias in it replaced by what it names; the first alias's type rides along. */
-  const resolve = (v: unknown, set: string, seen: string[], n: { aliases: number; type?: string }): unknown => {
+  /**
+   * `v` with every alias in it replaced by what it names; the first alias's
+   * type rides along. Each alias is resolved ONCE (memo), a value grows to
+   * VALUE_NODES nodes at most and the whole file spends ALIAS_BUDGET alias
+   * uses at most: a file whose aliases fan out (each naming ten copies of the
+   * next) would otherwise expand to ten to the depth and freeze the page. A
+   * value nests as deep as groups may, no deeper.
+   */
+  type Count = { aliases: number; nodes: number; type?: string }
+  const memo = new Map<string, { v: unknown; aliases: number; nodes: number; type?: string }>()
+  let budget = ALIAS_BUDGET
+  const resolve = (v: unknown, set: string, seen: string[], n: Count, depth: number): unknown => {
+    if (depth > TOKEN_FILE_LIMITS.depth) return refuse('depth')
+    if (++n.nodes > VALUE_NODES) return refuse('aliases')
     if (typeof v === 'string') {
       const m = /^\s*\{([^{}]+)\}\s*$/.exec(v)
-      if (!m) return v.includes('{') ? { error: 'expression' } : v
+      if (!m) return v.includes('{') ? refuse('expression') : v
       const ref = m[1].trim()
       const key = `${set}\u0000${ref}`
-      if (seen.includes(key) || seen.length >= 16) return { error: 'loop', detail: ref }
-      const target = lookup(ref, set)
-      if (!target) return { error: 'alias', detail: ref }
-      n.aliases++
-      n.type ??= leafType(target.node) ?? target.inherited
-      return resolve(leafValue(target.node), target.set, [...seen, key], n)
+      if (--budget < 0) return refuse('aliases')
+      if (seen.includes(key)) return refuse('loop', ref.slice(0, 64))
+      let hit = memo.get(key)
+      if (!hit) {
+        // too long a chain is not remembered: it depends on where it began
+        if (seen.length >= 16) return refuse('loop', ref.slice(0, 64))
+        const target = lookup(ref, set)
+        if (!target) return refuse('alias', ref.slice(0, 64))
+        const c: Count = { aliases: 0, nodes: 0 }
+        const r = resolve(leafValue(target.node), target.set, [...seen, key], c, 0)
+        hit = { v: r, aliases: c.aliases, nodes: c.nodes, type: leafType(target.node) ?? target.inherited ?? c.type }
+        memo.set(key, hit)
+      }
+      if (isRefusal(hit.v)) return hit.v
+      n.aliases += hit.aliases + 1
+      n.nodes += hit.nodes
+      if (n.nodes > VALUE_NODES) return refuse('aliases')
+      n.type ??= hit.type
+      return hit.v
     }
     if (Array.isArray(v)) {
-      const out = v.map((x) => resolve(x, set, seen, n))
-      return out.find(isRefusal) ?? out
+      const out: unknown[] = []
+      for (const x of v) { const r = resolve(x, set, seen, n, depth + 1); if (isRefusal(r)) return r; out.push(r) }
+      return out
     }
-    if (isObj(v) && !isRefusal(v)) {
+    if (isObj(v)) {
       const out: Obj = {}
       for (const [k, x] of Object.entries(v)) {
         if (k === '__proto__') continue
-        const r = resolve(x, set, seen, n)
+        const r = resolve(x, set, seen, n, depth + 1)
         if (isRefusal(r)) return r
         out[k] = r
       }
@@ -214,14 +244,14 @@ export function planImport(doc: BentoDoc, text: string, opts: { eachSetIsMode?: 
 
   /** One leaf as a gated Bento token value of a known type, or why not. */
   const valueOf = (l: Leaf): { type: TokenType; value: TokenValue; aliases: number } | Refusal => {
-    const n: { aliases: number; type?: string } = { aliases: 0 }
+    const n: Count = { aliases: 0, nodes: 0 }
     const raw = leafValue(l.node)
-    const resolved = resolve(raw, l.set, [], n)
+    const resolved = resolve(raw, l.set, [], n, 0)
     if (isRefusal(resolved)) return resolved
     const bext = bentoExt(l.node)
     const fileType = leafType(l.node) ?? l.inherited ?? n.type ?? shapeType(resolved)
     const type = TOKEN_TYPES.includes(bext.type as TokenType) ? bext.type as TokenType : fileType ? FILE_TYPE[fileType] : undefined
-    if (!type) return { error: 'type', detail: fileType ?? '?' }
+    if (!type) return refuse('type', (fileType ?? '?').slice(0, 32))
     // the extension's exact value, while it still agrees with `$value`
     let value: TokenValue | Refusal | undefined
     if (bext.value !== undefined && !n.aliases) {

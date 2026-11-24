@@ -76,19 +76,24 @@ export function dtcgValue(type: TokenType, v: TokenValue): unknown {
   return v
 }
 
-/** Why a value is not one, as a short reason the review lists. */
-export type Refusal = { error: string; detail?: string }
-const refuse = (error: string, detail?: string): Refusal => ({ error, detail })
-export const isRefusal = (v: unknown): v is Refusal => isObj(v) && typeof v.error === 'string' && Object.keys(v).every((k) => k === 'error' || k === 'detail')
+/** Why a value is not one. A class, never a shape: a file's own
+ *  `{ "error": … }` is a value, and must not pass for a refusal. */
+export class Refusal {
+  readonly error: string
+  readonly detail?: string
+  constructor(error: string, detail?: string) { this.error = error; this.detail = detail }
+}
+export const refuse = (error: string, detail?: string): Refusal => new Refusal(error, detail)
+export const isRefusal = (v: unknown): v is Refusal => v instanceof Refusal
 
 /** A length in px: a number, `"16"`, `"16px"`, or DTCG 2025's `{ value, unit }`. */
 function px(v: unknown): number | Refusal {
   if (typeof v === 'number') return v
-  if (isObj(v) && typeof v.value === 'number') return v.unit === undefined || v.unit === 'px' ? v.value : refuse('unit', String(v.unit))
+  if (isObj(v) && typeof v.value === 'number') return v.unit === undefined || v.unit === 'px' ? v.value : refuse('unit', String(v.unit).slice(0, 16))
   if (typeof v !== 'string') return refuse('value')
   const m = /^\s*(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*([a-z%]*)\s*$/i.exec(v)
   if (!m) return refuse(/[{}*+/]/.test(v) ? 'expression' : 'value')
-  if (m[2] && m[2] !== 'px') return refuse('unit', m[2])
+  if (m[2] && m[2] !== 'px') return refuse('unit', m[2].slice(0, 16))
   return Number(m[1])
 }
 
@@ -103,7 +108,7 @@ function colour(v: unknown): string | Refusal {
     const [r, g, b] = (c as number[]).map((n) => Math.round(Math.min(Math.max(n, 0), 1) * 255))
     return a < 1 ? `rgba(${r}, ${g}, ${b}, ${a})` : `rgb(${r}, ${g}, ${b})`
   }
-  return refuse('colorSpace', String(v.colorSpace))
+  return typeof v.colorSpace === 'string' ? refuse('colorSpace', v.colorSpace.slice(0, 32)) : refuse('value')
 }
 
 /** A font stack: a string, or a DTCG list of family names. */
@@ -128,6 +133,7 @@ export function fromDtcg(type: TokenType, v: unknown): TokenValue | Refusal {
   let s = v
   if (Array.isArray(s)) { if (s.length !== 1) return refuse('layers'); s = s[0] }
   if (!isObj(s)) return refuse('value')
+  if (!['offsetX', 'offsetY', 'x', 'y', 'blur', 'color'].some((k) => Object.hasOwn(s as object, k))) return refuse('value')
   if (s.inset === true || s.type === 'innerShadow') return refuse('inset')
   const x = px(s.offsetX ?? s.x ?? 0), y = px(s.offsetY ?? s.y ?? 0), blur = px(s.blur ?? 0), spread = px(s.spread ?? 0)
   const color = colour(s.color ?? '#000000')

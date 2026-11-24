@@ -29,12 +29,16 @@
 //      in the shape Figma's published variables-import-export sample writes
 //      (one file per collection and mode, `/` groups, color/number, aliases).
 //      Both were authored from those exporters' source, not captured from a
-//      running app.
+//      running app — each says so in its root $description, which importers
+//      ignore. Replace them with real captures when there are some.
 //   4. Aliases import as resolved literals and the plan counts them.
 //   5. A hostile file — url() colours, `__proto__` and `constructor` names,
 //      10,000 tokens, a non-finite number, a CSS break-out, 100 levels of
 //      nesting, 40 modes, an alias loop, more than 1 MB — writes nothing
 //      harmful, says why for each, and leaves Object.prototype alone.
+//      Aliases that fan out (ten copies of the next, eight deep), a value nested
+//      200,000 levels and values shaped like the importer's own refusals end in
+//      a refusal, in milliseconds, never a freeze or a stack overflow.
 //   6. Nothing unticked changes, no type changes, no binding is touched.
 //   7. The export carries no document content, no collab, no asset data.
 
@@ -246,6 +250,56 @@ console.log('\n4. a hostile file\n')
   ok(planImport(emptyDeck(), ' '.repeat(1_000_001)).error === 'size', 'more than 1 MB is refused before it is parsed')
   ok(planImport(emptyDeck(), '{"a": ').error === 'json' && planImport(emptyDeck(), '[1,2]').error === 'json', 'not JSON, or not an object, is refused')
   ok(planImport(emptyDeck(), '{"$description": "nothing"}').error === 'empty', 'a file with no tokens says so')
+}
+
+console.log('\n4b. a file built to exhaust the importer\n')
+{
+  // aliases that fan out: each level a list (or an object) of ten copies of the next.
+  // Unmemoised this expands to 10^L values — 3.8 s at L=7, 56 s at L=8 (review round 1)
+  const fan = (L: number, k: number, asObject: boolean) => {
+    const f: Record<string, unknown> = {}
+    for (let i = 0; i < L; i++) {
+      const ref = `{l${i + 1}}`
+      f[`l${i}`] = { $type: 'shadow', $value: asObject ? Object.fromEntries(Array.from({ length: k }, (_, j) => [`k${j}`, ref])) : Array.from({ length: k }, () => ref) }
+    }
+    f[`l${L}`] = { $type: 'color', $value: '#000000' }
+    return JSON.stringify(f)
+  }
+  for (const [L, asObject] of [[7, false], [8, false], [12, false], [7, true], [8, true]] as Array<[number, boolean]>) {
+    const text = fan(L, 10, asObject)
+    const t0 = performance.now()
+    const p = planImport(emptyDeck(), text)
+    const ms = performance.now() - t0
+    const l0 = p.rows.find((r) => r.source === 'l0')
+    ok(ms < 200 && l0?.status === 'skipped' && l0.reason === 'aliases',
+      `alias fan-out, ${asObject ? 'object' : 'array'} values, 10 wide × ${L} deep (${text.length} bytes): ${Math.round(ms)} ms, l0 refused as "${l0?.reason}"`)
+  }
+  // many honest aliases to one token stay cheap and counted
+  const wide: Record<string, unknown> = { base: { $type: 'color', $value: '#123456' } }
+  for (let i = 0; i < 400; i++) wide[`a${i}`] = { $type: 'color', $value: '{base}' }
+  const wp = planImport(emptyDeck(), JSON.stringify(wide))
+  ok(wp.aliases === 400 && wp.rows.filter((r) => r.status === 'new').length === 401, `400 tokens naming one alias each: all imported, 400 aliases counted (${wp.aliases})`)
+
+  // a value nested 5,000 and 200,000 levels deep: refused at the groups' depth, never a stack overflow
+  for (const N of [5000, 200_000]) {
+    const text = `{"deep":{"$type":"color","$value":${'['.repeat(N)}"#000"${']'.repeat(N)}}}`
+    let threw = ''
+    let p: ImportPlan | undefined
+    try { p = planImport(emptyDeck(), text) } catch (e) { threw = String(e) }
+    ok(!threw && p?.rows[0]?.reason === 'depth', `a $value nested ${N.toLocaleString('en')} deep is refused as too deep (${threw || p?.rows[0]?.reason})`)
+  }
+
+  // a file's own { "error": … } is a value, not a refusal
+  const forged = JSON.stringify({
+    a: { $type: 'color', $value: { error: 'foo' } },
+    b: { $type: 'color', $value: { error: 'constructor', detail: 'x' } },
+    c: { $type: 'shadow', $value: [{ error: 'toString' }] },
+    d: { $value: { error: '__proto__' } },
+  })
+  const fp = planImport(emptyDeck(), forged)
+  const KNOWN = new Set(['type', 'value', 'unit', 'expression', 'colorSpace', 'layers', 'inset', 'spread', 'name', 'proto', 'kind', 'alias', 'loop', 'aliases', 'modes', 'depth', 'notToken', 'unsafe'])
+  ok(fp.rows.length === 4 && fp.rows.every((r) => r.status === 'skipped' && KNOWN.has(r.reason!)),
+    `a value shaped like a refusal ({"error": "foo"}, "constructor", "__proto__") is refused with one of the importer's own reasons (${fp.rows.map((r) => `${r.source}=${r.reason}`).join(', ')})`)
 }
 
 console.log('\n5. nothing unticked changes; no binding is touched\n')
