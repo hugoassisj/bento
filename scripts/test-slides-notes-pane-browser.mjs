@@ -13,7 +13,9 @@
 //   4. a slide switch while the field holds the caret does not carry the text
 //      onto the next slide, and the pane catches up once the caret leaves;
 //   5. folding the pane holds across a reload;
-//   0. with no saved choice the pane starts FOLDED, at every window size, and
+//   0. with no saved choice the pane starts FOLDED, at every window size, on
+//      any document but the untouched starter (whose notes are its tour, so it
+//      opens there: test-slides-starter-tour-browser.mjs), and
 //      folded it takes no height at all: the canvas gets it. ONE control shows
 //      and hides it and never moves: a round toggle (a real button,
 //      aria-expanded, aria-controls) at the head of the bottom-end cluster,
@@ -29,6 +31,10 @@
 //      FIELD's look and has no resize corner of its own; the PANE resizes from
 //      its top edge (the height holds across a reload, a double-click resets
 //      it), and the side panels' chevron, laid on its side, folds it.
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -40,6 +46,7 @@ function ok(cond, msg) {
 const MOD = process.platform === 'darwin' ? 'Meta' : 'Control'
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
+const dir = mkdtempSync(join(tmpdir(), 'bento-notes-'))
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
   await ctx.route(/^https?:/, (r) => r.abort())
@@ -47,6 +54,12 @@ try {
   const errors = []
   p.on('pageerror', (e) => errors.push(e.message))
   await p.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+  await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale [data-el-id]'))
+  // somebody's document: the starter, saved — the pane is checked on this,
+  // since the untouched starter opens its notes
+  const saved = join(dir, 'saved.bento.html')
+  writeFileSync(saved, await p.evaluate(() => window.bento.serialize()))
+  await p.goto(pathToFileURL(saved).href)
   await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale [data-el-id]'))
   await p.evaluate(() => {
     const d = JSON.parse(JSON.stringify(window.bento.doc))
@@ -78,7 +91,7 @@ try {
     await c.routeWebSocket(/.*/, (ws) => ws.close())
     const q = await c.newPage()
     q.on('pageerror', (e) => errors.push(e.message))
-    await q.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+    await q.goto(pathToFileURL(saved).href)
     await q.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-notespane')); await q.waitForTimeout(500)
     return [c, q]
   }
@@ -270,6 +283,7 @@ try {
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()
+  rmSync(dir, { recursive: true, force: true })
 }
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

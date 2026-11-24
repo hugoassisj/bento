@@ -269,7 +269,7 @@ document.title = deckWindowTitle(doc.title)
 if (doc.fonts?.length) injectFonts(doc)
 
 const store = new Store(doc)
-const editor = new Editor(document.getElementById('app')!, store)
+const editor = new Editor(document.getElementById('app')!, store, docIsFresh)
 
 // A returning visitor who saved from this origin before is told so, rather
 // than handed a silent blank starter that reads as lost work. No-ops off the

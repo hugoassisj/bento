@@ -7,7 +7,9 @@
 //
 // The pane follows the current slide, and folds away entirely (remembered):
 // folded, it takes no height at all. It starts folded until the viewer opens
-// it — the canvas comes first.
+// it — the canvas comes first. The one exception is the untouched starter
+// deck, whose notes are its tour: there it starts open, until the viewer
+// chooses either way.
 //
 // One control shows and hides it, and it never moves: a round toggle at the
 // head of the canvas's bottom-end cluster, beside Slideshow and zoom — where
@@ -23,7 +25,7 @@ import { t } from '../i18n'
 import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
 import { isMacOS } from '../screens'
 
-export function mountNotesPane(store: Store, into: HTMLElement, cluster: HTMLElement, signal: AbortSignal) {
+export function mountNotesPane(store: Store, into: HTMLElement, cluster: HTMLElement, signal: AbortSignal, openByDefault = false) {
   const pane = document.createElement('section')
   pane.className = 'ed-notespane'
   pane.id = 'ed-notespane'
@@ -111,9 +113,11 @@ export function mountNotesPane(store: Store, into: HTMLElement, cluster: HTMLEle
     const open = !pane.classList.contains('closed')
     btn.title = (open ? t('Hide speaker notes') : t('Show speaker notes')) + (has.textContent ? ' · ' + has.textContent : '')
   }
-  // Folded until the viewer opens it, at every window size; their choice is
-  // then remembered per viewer (never in the document).
-  setOpen(lsGet('bento-notes-open') === '1')
+  // Folded until the viewer opens it, at every window size (open on the
+  // starter, whose notes are its tour); their choice is then remembered per
+  // viewer (never in the document) and always wins.
+  const chosen = lsGet('bento-notes-open')
+  setOpen(chosen === '1' || (chosen !== '0' && openByDefault))
   const flip = () => {
     const open = pane.classList.contains('closed')
     setOpen(open)

@@ -16,6 +16,16 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **The Showcase says what to try, right on the slide.** Each slide of the
+  deck a new editor opens with carries one short "try this" note from bento,
+  pinned to the thing it is about — double-click this title, open Layers,
+  change a number in the chart. They are ordinary comments: hover or click the
+  marker to read one, Resolve or Delete to dismiss it, and they never appear
+  while presenting, in print or PDF, or in exported images. On the untouched
+  Showcase the speaker notes, which tell the rest of the tour, start open
+  until you fold them; every other deck starts with them folded, as before.
+  The chart notes no longer mention a chart library the app stopped using
+  long ago.
 
 ## [1.3.0] — 2026-11-22
 

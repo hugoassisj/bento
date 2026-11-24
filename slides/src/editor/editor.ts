@@ -224,7 +224,11 @@ export class Editor {
   constructor(
     private root: HTMLElement,
     private store: Store,
+    /** the untouched starter deck is open (main.ts knows; nothing downstream
+     *  can tell): its notes are the tour, so their pane starts open */
+    private starter = false,
   ) {
+    if (starter) store.on('replace', () => { this.starter = false })
     this.build()
     this.wireKeyboard()
     // a slide-list change makes the sidebar selection's indices stale: drop it
@@ -663,7 +667,7 @@ export class Editor {
     // the canvas over its speaker notes, as in every slide editor
     const centre = div('ed-centre')
     centre.appendChild(canvasWrap)
-    mountNotesPane(this.store, centre, corner, this.buildScope.signal)
+    mountNotesPane(this.store, centre, corner, this.buildScope.signal, this.starter)
     main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
