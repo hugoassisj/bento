@@ -16,6 +16,11 @@
 //   5. About holds no settings and no document properties.
 //   6. ⌘K finds every moved command; ⌘, opens Preferences.
 //   7. At 1280, 768 and 390 no bar control overlaps another.
+//   9. Starting the show (MP-15): the Slideshow menu's "From the beginning"
+//      opens on 1 / N from any slide, the pill still starts on this one, F5
+//      and ⇧F5 are unchanged, ⌘K lists both starts with their keys, and a
+//      thumbnail's "Present from here" (right-click or long press) opens on
+//      that slide (a state: its parent; a hidden slide: not offered).
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -123,6 +128,122 @@ try {
   })
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
   await ctx.close()
+
+  console.log('\n9. Starting the show: from the beginning, from this slide, from a thumbnail\n')
+  await run(async () => {
+    // no bento-slideshow-started here: the first-run pulse must be on, and
+    // retired by whichever entry starts the show
+    const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, hasTouch: true })
+    await c.addInitScript(() => { try { localStorage.setItem('bento-offline', 'on') } catch {} })
+    if (c.routeWebSocket) await c.routeWebSocket(/.*/, (ws) => ws.close())
+    await c.route(/^https?:/, (r) => r.abort())
+    const q = await c.newPage()
+    const errs = []
+    q.on('pageerror', (e) => errs.push(e.message))
+    q.on('dialog', (d) => d.dismiss())
+    await q.goto('file://' + SHELL)
+    await q.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-present-pill'))
+    await q.waitForTimeout(400)
+    const total = await q.evaluate(() => window.bento.doc.slides.filter((s) => !s.stateOf && !s.hidden).length)
+    const counter = async () => {
+      await q.waitForSelector('.bento-present-overlay .slide-number', { timeout: 4000 })
+      await q.waitForTimeout(500)
+      return q.$eval('.bento-present-overlay .slide-number', (e) => e.textContent.replace(/\s+/g, ' ').trim())
+    }
+    const end = async () => {
+      await q.keyboard.press('Escape')
+      await q.waitForFunction(() => !document.querySelector('.bento-present-overlay'), null, { timeout: 4000 })
+      await q.waitForTimeout(200)
+    }
+    const current = () => q.evaluate(() => Number(document.querySelector('.ed-thumbs .ed-thumb.active')?.dataset.index))
+    const pick = async (i) => { await q.click(`.ed-thumbs .ed-thumb[data-index="${i}"]`); await q.waitForTimeout(150) }
+    const thumbMenu = async (i) => {
+      // centred first: a thumbnail at the list's edge scrolls when it is
+      // pressed, and a scroll closes the menu (as it does for a person)
+      await q.$eval(`.ed-thumbs .ed-thumb[data-index="${i}"]`, (e) => e.scrollIntoView({ block: 'center' }))
+      await q.click(`.ed-thumbs .ed-thumb[data-index="${i}"]`, { button: 'right' })
+      await q.waitForTimeout(150)
+      return q.$$eval('.ed-ctxmenu > .ed-ctxmenu-item', (r) => r.map((b) => b.textContent.trim()))
+    }
+
+    ok(await q.$eval('.ed-present-pill', (e) => e.classList.contains('ed-hint-pulse')), 'a newcomer sees the first-run pulse on the Slideshow pill')
+    // the pill's tooltip names both starts, with the keys from the command list
+    const tip = await q.$eval('.ed-present-pill .ed-pill-main', (b) => b.title)
+    ok(/F5/.test(tip.replace(/\(⇧F5\)\s*$/, '')) && /\(⇧F5\)\s*$/.test(tip), `the Slideshow tooltip mentions F5 for the beginning and carries ⇧F5 for this slide (${tip})`)
+
+    await pick(4)
+    await q.click('.ed-present-pill .ed-pill-caret'); await q.waitForTimeout(150)
+    const menu = await q.$$eval('.ed-present-pill .ed-menu > .ed-btn', (r) => r.map((b) => ({ name: b.querySelector('span')?.textContent.trim(), cmd: b.dataset.cmd ?? '', keys: b.querySelector('.ed-menu-keys')?.textContent ?? '' })))
+    ok(menu.map((m) => m.name).join(' · ') === 'From the beginning · Present in this tab · Open speaker view', `the Slideshow menu's rows (${menu.map((m) => m.name).join(' · ')})`)
+    ok(menu[0]?.cmd === 'present' && menu[0]?.keys === 'F5', `"From the beginning" shows the present command's key (${menu[0]?.cmd} ${menu[0]?.keys})`)
+    await q.click('.ed-present-pill .ed-menu > .ed-btn:first-child')
+    ok(await counter() === `1 / ${total}`, `with slide 5 current, "From the beginning" opens on 1 / ${total} (${await counter()})`)
+    ok(await q.evaluate(() => localStorage.getItem('bento-slideshow-started') === '1' && !document.querySelector('.ed-hint-pulse')), 'and it retires the first-run pulse')
+    await q.keyboard.press('ArrowRight'); await q.keyboard.press('ArrowRight'); await q.waitForTimeout(400)
+    await end()
+    ok(await current() === 2, `Esc returns the editor to the slide where the show stopped (${await current()})`)
+
+    await pick(4)
+    await q.click('.ed-present-pill .ed-pill-main')
+    ok(await counter() === `5 / ${total}`, `the pill's main half still starts on the current slide (${await counter()})`)
+    await end()
+
+    await pick(4)
+    await q.keyboard.press('F5')
+    ok(await counter() === `1 / ${total}`, `F5 starts from the beginning (${await counter()})`)
+    await end()
+    await pick(4)
+    await q.keyboard.press('Shift+F5')
+    ok(await counter() === `5 / ${total}`, `⇧F5 starts on the current slide (${await counter()})`)
+    await end()
+
+    await q.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k'); await q.waitForTimeout(150)
+    await q.keyboard.type('present'); await q.waitForTimeout(150)
+    const pal = await q.$$eval('.ed-cmdk-list li', (r) => r.map((li) => ({ id: li.dataset.cmd, name: li.querySelector('span')?.textContent, keys: [...li.querySelectorAll('kbd')].map((k) => k.textContent).join(' ') })))
+    const from = pal.find((x) => x.id === 'present'), here = pal.find((x) => x.id === 'slideshow')
+    ok(from?.name === 'Present from the beginning' && from.keys === 'F5', `⌘K "present": "Present from the beginning" with F5 (${JSON.stringify(from)})`)
+    ok(here?.name === 'Present from this slide' && here.keys === '⇧F5', `⌘K "present": "Present from this slide" with ⇧F5 (${JSON.stringify(here)})`)
+    ok(pal.filter((x) => /^(Present|Slideshow)$/.test(x.name ?? '')).length === 0, `no bare "Present" or "Slideshow" entry beside them (${pal.map((x) => x.name).join(' | ')})`)
+    await q.keyboard.press('Escape')
+
+    // a thumbnail: Present from here, while another slide is current
+    await pick(4)
+    const rows = await thumbMenu(2)
+    ok(rows.join(' · ') === 'New slide · Duplicate slide · Present from here · Delete slide', `the thumbnail menu's rows (${rows.join(' · ')})`)
+    await q.click('.ed-ctxmenu > .ed-ctxmenu-item:has-text("Present from here")', { timeout: 2000 })
+    ok(await counter() === `3 / ${total}`, `"Present from here" on slide 3 opens on 3 / ${total} while slide 5 is current (${await counter()})`)
+    await end()
+    ok(await current() === 2, `and returns to where the show stopped (${await current()})`)
+
+    // a state opens on its parent; a hidden slide does not offer it
+    const st = await q.evaluate(() => { const s = window.bento.doc.slides; const i = s.findIndex((x) => x.stateOf); return { i, parent: s.findIndex((x) => x.id === s[i].stateOf) } })
+    await thumbMenu(st.i)
+    await q.click('.ed-ctxmenu > .ed-ctxmenu-item:has-text("Present from here")', { timeout: 2000 })
+    const parentNo = await q.evaluate((p) => window.bento.doc.slides.slice(0, p + 1).filter((s) => !s.stateOf && !s.hidden).length, st.parent)
+    ok(await counter() === `${parentNo} / ${total}`, `on a state (slide ${st.i + 1}) it opens on the state's parent (${await counter()}, want ${parentNo} / ${total})`)
+    await end()
+    await pick(6)
+    await q.click('label.ed-row:has(> span:text-is("Hide slide"))')
+    await q.waitForTimeout(200)
+    ok(await q.evaluate(() => window.bento.doc.slides[6].hidden === true), 'slide 7 is hidden for the next check')
+    const hid = await thumbMenu(6)
+    ok(!hid.includes('Present from here') && hid.includes('Duplicate slide'), `a hidden slide does not offer it (${hid.join(' · ')})`)
+    await q.keyboard.press('Escape')
+
+    // touch: a long press on a thumbnail opens the same menu
+    await q.$eval('.ed-thumbs .ed-thumb[data-index="1"]', (e) => e.scrollIntoView({ block: 'center' }))
+    const box = await (await q.$('.ed-thumbs .ed-thumb[data-index="1"]')).boundingBox()
+    const cdp = await c.newCDPSession(q)
+    const pt = [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }]
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt })
+    await q.waitForTimeout(700)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await q.waitForTimeout(150)
+    const touch = await q.$$eval('.ed-ctxmenu > .ed-ctxmenu-item', (r) => r.map((b) => b.textContent.trim()))
+    ok(touch.includes('Present from here'), `a long press on a thumbnail offers it too (${touch.join(' · ')})`)
+    ok(errs.length === 0, `no page errors${errs.length ? ': ' + errs.join(' | ') : ''}`)
+    await c.close()
+  })
 
   console.log('\n8. Menus fit their rows, in every language\n')
   for (const [w, h] of [[1440, 900], [1280, 800]]) for (const lang of ['en', 'pt', 'de']) {
