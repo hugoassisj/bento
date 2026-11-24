@@ -725,8 +725,11 @@ jobs:
         if: ${{ !cancelled() }}
         # A bound radius reads "14 · radius.md" (value and whole name, clear of
         # the corners button); slide 1's Background reads "Theme: Text · 0d1b2e"
-        # with a dot in the colour itself; no chip shows under six characters of
-        # its name; the narrowest panel keeps the name and moves the value to
-        # the title; re-pick and detach work from both chips; RTL puts the value
-        # first; the Tokens tab's counts read "39×" and name what they do.
+        # with a dot in the colour itself, and paint-row chips (a Fill, a text
+        # colour) keep role, name and hex at the default and narrowest width
+        # and in Japanese; no chip shows under six characters of its name; the
+        # narrowest panel keeps the number pill's name, the value in the title;
+        # re-pick and detach work from both chips; RTL puts the value first and
+        # the field's own number paints nothing under the corners button; the
+        # Tokens tab's counts read "39×", fit, and name what they do.
         run: node scripts/test-slides-token-chips-browser.mjs

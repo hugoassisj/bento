@@ -12,14 +12,17 @@
 //   2. slide 1's Background, which follows the theme's Text colour, reads
 //      "Theme: Text · 0d1b2e": the role is prefixed so it cannot be read as
 //      "the background is text", the hex shows, and the chip's dot IS the
-//      colour (it was a fixed accent);
+//      colour (it was a fixed accent); element chips in paint rows (a Fill, a
+//      text colour) keep the role, the whole name and the hex too, at the
+//      default width, at the narrowest, and in Japanese;
 //   3. a name is never cut below six visible characters at the default
 //      width; at the narrowest panel the splitter allows, the number pill
 //      falls back to the name alone, the value in its title;
 //   4. clicking the name reopens the picker and the detach icon lets go and
 //      keeps the value, from both kinds of chip;
-//   5. right to left, the value comes first (on the right) and a Latin name
-//      still reads left to right;
+//   5. right to left, the value comes first (on the right), a Latin name
+//      still reads left to right, and the field's own number paints nothing
+//      under the moved corners button;
 //   6. the Tokens tab's usage counts read as counts ("39×"), fit their
 //      column (100× too) without taking width from the name, and their
 //      accessible name says what they count and what a click does.
@@ -54,6 +57,23 @@ const VISIBLE = () => {
       }
     }
     return n
+  }
+  // what a colour chip shows, measured: its role (the word "Theme:" whole, or
+  // the palette glyph), the slot's name uncut, the hex whole, each inside the
+  // chip's button and the chip inside the panel
+  window.__chip = (chip) => {
+    if (!chip) return null
+    const btn = chip.querySelector('.ed-color-token-name'), b = btn.getBoundingClientRect()
+    const panel = document.querySelector('.ed-props').getBoundingClientRect(), c = chip.getBoundingClientRect()
+    const inside = (e) => { if (!e || !e.offsetWidth) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.left >= b.left - 0.5 && r.right <= b.right + 0.5 && r.top >= b.top - 0.5 && r.bottom <= b.bottom + 0.5 }
+    const whole = (e) => inside(e) && e.scrollWidth <= e.clientWidth + 0.5
+    return {
+      role: whole(chip.querySelector('.ed-color-token-pre')) || inside(chip.querySelector('.ed-color-token-glyph')),
+      name: whole(chip.querySelector('.ed-color-token-slot')),
+      hex: whole(chip.querySelector('.ed-color-token-hex')),
+      inPanel: c.left >= panel.left - 0.5 && c.right <= panel.right + 0.5,
+      label: btn.getAttribute('aria-label'),
+    }
   }
 }
 
@@ -143,6 +163,32 @@ try {
   const rgb = `rgb(${parseInt(hex6.slice(0, 2), 16)}, ${parseInt(hex6.slice(2, 4), 16)}, ${parseInt(hex6.slice(4, 6), 16)})`
   ok(bc?.dot === rgb, `the chip's dot is the colour itself (${bc?.dot}, want ${rgb})`)
 
+  // element chips too, in their paint rows (swatch · chip · %): slide 2's
+  // Background-filled tile and its title, whose text follows Text. Every one
+  // keeps its role, its whole name and its hex (the row gives a chip that
+  // does not fit a line of its own, and at the narrowest the hex goes under
+  // the name) — "FILL ○ Backgro…" was the bug the role is there to prevent.
+  const colourChips = (page) => page.evaluate(async () => {
+    const pick = async (s, id) => {
+      document.querySelectorAll('.ed-sidebar .ed-thumb')[s].click(); await new Promise((r) => setTimeout(r, 150))
+      if (id) document.querySelector(`.ed-layer[data-id="${id}"]`)?.click()
+      else { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) }
+      await new Promise((r) => setTimeout(r, 250))
+    }
+    const out = {}
+    await pick(0, null)
+    out.background = window.__chip(document.querySelector('.ed-props .ed-color-token'))
+    for (const id of ['sd-tile-c', 'sd-title']) {
+      await pick(1, id)
+      out[id] = window.__chip(document.querySelector('.ed-props .ed-paintrow .ed-color-token')) // the first paint row: Fill
+    }
+    return out
+  })
+  const allShow = (cs) => Object.entries(cs).filter(([, c]) => !(c && c.role && c.name && c.hex && c.inPanel)).map(([k, c]) => `${k}: ${JSON.stringify(c)}`)
+  let cs = await colourChips(p)
+  let bad = allShow(cs)
+  ok(bad.length === 0 && cs['sd-tile-c']?.label === 'Theme: Background · eeece4', `at the default width every colour chip shows its role, whole name and hex, in a paint row too (${cs['sd-tile-c']?.label})${bad.length ? ': ' + bad.join(' | ') : ''}`)
+
   // every chip on every showcase slide: never fewer than six characters of the name
   const short = await p.evaluate(async () => {
     const bad = []
@@ -153,6 +199,8 @@ try {
       for (const id of [null, ...window.bento.doc.slides[s].elements.map((e) => e.id)]) {
         if (id) document.querySelector(`.ed-layer[data-id="${id}"]`)?.click()
         await new Promise((r) => setTimeout(r, 40))
+        // what is painted: the chips settle their form before a frame is drawn (a ResizeObserver)
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
         for (const chip of document.querySelectorAll('.ed-props .ed-token-pill, .ed-props .ed-color-token')) {
           if (!chip.offsetParent) continue
           // a theme colour's name is the slot's ("Theme: " may give way before it)
@@ -201,6 +249,22 @@ try {
   await p.evaluate(() => { document.documentElement.dir = 'rtl' }); await p.waitForTimeout(150)
   rp = await radiusPill()
   ok(rp && rp.valueFirst === false && rp.headLeftOfTail, `RTL: the value comes first, on the right, and the name still reads left to right (${JSON.stringify(rp && { valueFirst: rp.valueFirst, ltr: rp.headLeftOfTail })})`)
+  // the field's own number, under the pill, must paint nothing: right to left
+  // it sits at the left, where the corners button now is, and printed under it
+  // ("1⛶4"). Measured in pixels: the field drawn with its number and without
+  // it (the corners button hidden both times) must be the same picture.
+  {
+    const field = p.locator('.ed-props .ed-mini[title="Corner radius"]')
+    const shot = async (v) => {
+      await field.evaluate((f, v) => { f.querySelector('.ed-corners-btn').style.visibility = 'hidden'; f.querySelector('input').value = v }, v)
+      return field.screenshot()
+    }
+    const withNum = await shot(String(tile.radius)), without = await shot('')
+    await field.evaluate((f, v) => { f.querySelector('.ed-corners-btn').style.visibility = ''; f.querySelector('input').value = v }, String(tile.radius))
+    ok(withNum.equals(without), 'RTL: the bound field\'s own number paints nothing beside the pill or under the corners button')
+    const lap = await field.evaluate((f) => { const a = f.querySelector('.ed-token-pill').getBoundingClientRect(), b = f.querySelector('.ed-corners-btn').getBoundingClientRect(); return !(a.right <= b.left + 0.5 || b.right <= a.left + 0.5) })
+    ok(!lap, 'RTL: the pill and the corners button do not overlap')
+  }
   await p.evaluate(() => { document.documentElement.dir = 'ltr' }); await p.waitForTimeout(150)
 
   // ---- 3. the narrowest panel ---------------------------------------------------
@@ -218,6 +282,9 @@ try {
   // first and the name keeps its leaf whole (r…md at worst)
   ok(narrow < 240 && rp && !rp.valueShown && rp.visible >= 3 && rp.inField && rp.clearOfCorners, `at the narrowest panel (${narrow}px) the pill falls back to the name alone (${rp?.visible} characters, the leaf whole), inside its field`)
   ok(rp && rp.title.includes(String(tile.radius)), 'and the value is still in its title')
+  cs = await colourChips(p)
+  bad = allShow(cs)
+  ok(bad.length === 0, `at the narrowest panel too, every colour chip keeps its role, whole name and hex (the slide's Background, a Fill, a text colour)${bad.length ? ': ' + bad.join(' | ') : ''}`)
   await p.mouse.dblclick(grip.x + 264 - narrow, grip.y); await p.waitForTimeout(150) // reset the panel
 
   // ---- 6. the usage counts ------------------------------------------------------
@@ -247,6 +314,25 @@ try {
     return bad
   })
   ok(fit.length === 0, `every count fits its column, 100× included${fit.length ? ': ' + fit.join(' ') : ''}`)
+
+  // Japanese: the longer slot names and the wide characters still fit, role and hex
+  {
+    const jctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'ja-JP' })
+    await jctx.addInitScript(() => { try { localStorage.setItem('bento-offline', 'on'); localStorage.setItem('bento-lang', 'ja') } catch { /* private mode */ } })
+    if (jctx.routeWebSocket) await jctx.routeWebSocket(/.*/, (ws) => ws.close())
+    await jctx.route(/^https?:/, (r) => r.abort())
+    await refusePointerLock(jctx)
+    await jctx.addInitScript(VISIBLE)
+    const jp = await jctx.newPage()
+    jp.on('pageerror', (e) => errors.push(`[ja] ${e.message}`))
+    await jp.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+    await jp.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-props .ed-tabs'))
+    await jp.waitForTimeout(300)
+    const jcs = await colourChips(jp)
+    const jbad = allShow(jcs)
+    ok(jbad.length === 0 && /^テーマ/.test(jcs.background?.label ?? ''), `[ja] at the default width every colour chip shows its role, whole name and hex (${jcs.background?.label})${jbad.length ? ': ' + jbad.join(' | ') : ''}`)
+    await jctx.close()
+  }
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
   await ctx.close()
