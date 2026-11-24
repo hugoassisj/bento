@@ -310,5 +310,47 @@ ok(refCodes(refDoc({ 'shadow.color': 'accent1' })).has('theme-ref-dangling'),
 ok(refCodes(refDoc({ fill: 'accent1' }, '#123456')).has('theme-ref-stale'),
   'a literal that disagrees with its reference is reported before the palette overwrites it')
 
+// ------------------------------------------------- what opening the file changes
+// Three things a deck written straight to disk loses silently when it opens
+// (the derive pass, derive.ts), where no load report exists to say so: a token
+// binding whose literal disagrees is dropped as a hand edit, a component copy
+// with no sig keeps every difference as a permanent override, and a parentId
+// naming no frame is removed.
+{
+  const tokDoc = (el: Record<string, unknown>): BentoDoc => ({
+    ...clean,
+    theme: { ...clean.theme, tokens: { set: { 'color.card': { type: 'color', values: { default: '#F2F0EA' } }, gap: { type: 'number', values: { default: 16 } } } } },
+    slides: [{ id: 's1', name: 'one', background: '#FFF', transition: 'fade', notes: '', elements: [
+      { id: 'sh', type: 'shape', shape: 'rect', x: 96, y: 96, w: 100, h: 100, rotation: 0, opacity: 1, fill: '#F2F0EA', stroke: 'none', strokeWidth: 0, radius: 0, ...el } as any,
+    ] }],
+  } as any)
+  const found = (d: BentoDoc, code: string) => validateDoc(d, { measure: false }).findings.filter((f) => f.code === code)
+  const stale = found(tokDoc({ fill: '#123456', themeRefs: { fill: '$color.card' } }), 'token-stale')
+  ok(stale.length === 1 && stale[0].severity === 'info' && stale[0].path === 'fill' && stale[0].message.includes('#F2F0EA') && stale[0].message.includes('#123456'),
+    `a bound literal that differs from its token is token-stale, with both values (${stale.map((f) => f.message).join(' | ')})`)
+  ok(found(tokDoc({ fill: '#f2f0ea', themeRefs: { fill: '$color.card' } }), 'token-stale').length === 0, 'a bound literal that agrees with its token (any case) is silent')
+  ok(found(tokDoc({ fill: '#F2F0EA80', themeRefs: { fill: '$color.card' } }), 'token-stale').length === 0, 'a colour keeping its own opacity agrees with its token, as palette references do')
+  ok(found(tokDoc({ radius: 8, themeRefs: { radius: '$gap' } }), 'token-stale').length === 1, 'a number token is compared too')
+  ok(found(tokDoc({ themeRefs: { fill: '$nope' } }), 'token-stale').length === 0, 'an unknown token is token-unknown, not token-stale')
+
+  const rect = (o: Record<string, unknown>) => ({ type: 'shape', shape: 'rect', x: 96, y: 96, w: 100, h: 100, rotation: 0, opacity: 1, fill: '#cccccc', stroke: 'none', strokeWidth: 0, radius: 0, ...o })
+  const slideDoc = (elements: unknown[]): BentoDoc => ({ ...clean, slides: [{ id: 's1', name: 'one', background: '#FFF', transition: 'fade', notes: '', elements }] } as any)
+  const main = rect({ id: 'm1', fill: '#ff0000', groupId: 'gm', component: { id: 'c1', key: 'k0', main: true } })
+  const copy = (fill: string, c: Record<string, unknown> = {}) => rect({ id: 'c1a', x: 400, fill, groupId: 'gc', component: { id: 'c1', key: 'k0', ...c } })
+  const unsynced = found(slideDoc([main, copy('#00ff00')]), 'component-copy-unsynced')
+  ok(unsynced.length === 1 && unsynced[0].severity === 'warning' && unsynced[0].element === 'c1a' && unsynced[0].message.includes('fill') && unsynced[0].message.includes('"reset"'),
+    `a copy with no sig that differs from its main is component-copy-unsynced, naming the keys and the fix (${unsynced.map((f) => f.message).join(' | ')})`)
+  ok(found(slideDoc([main, copy('#00ff00', { sig: 'reset' })]), 'component-copy-unsynced').length === 0, 'a copy with sig "reset" is silent — it follows its main')
+  ok(found(slideDoc([main, copy('#ff0000')]), 'component-copy-unsynced').length === 0, 'a copy with no sig that equals its main is silent — nothing becomes an override')
+
+  const frame = rect({ id: 'f', x: 96, y: 300, w: 600, h: 200, layout: { dir: 'row', gap: 10, pad: [10, 10, 10, 10] } })
+  const parents = found(slideDoc([frame, rect({ id: 'a', parentId: 'nope' }), rect({ id: 'b', parentId: 'c' }), rect({ id: 'c', x: 600 }), rect({ id: 'd', parentId: 'f' })]), 'parent-not-frame')
+  ok(parents.length === 2 && parents.every((f) => f.severity === 'warning' && f.path === 'parentId') && parents.map((f) => f.element).join() === 'a,b',
+    `a parentId naming nothing or a non-frame is parent-not-frame; one naming a frame is silent (${parents.map((f) => f.element).join()})`)
+
+  const starterNew = starter.findings.filter((f) => ['token-stale', 'component-copy-unsynced', 'parent-not-frame'].includes(f.code))
+  ok(starterNew.length === 0, `the starter deck produces none of token-stale, component-copy-unsynced, parent-not-frame (${starterNew.map((f) => f.code).join(', ') || 'none'})`)
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)
