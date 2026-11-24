@@ -751,3 +751,11 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Built-in layouts and new elements follow the deck theme
+      # Every built-in layout binds its colours to the palette (themeRefs) and
+      # its text to the theme font, written as the literal resolved for the
+      # deck it lands in; placeholder text reads at 4.5:1 in a light and a dark
+      # theme; the Text and Rectangle tools bind to Text and Accent 1; a slide
+      # from the old layouts and the shipped decks open byte-identically.
+      shell: bento-step {0}
+      run: node scripts/test-slides-layout-theme.ts
