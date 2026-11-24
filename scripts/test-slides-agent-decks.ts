@@ -58,6 +58,56 @@ for (const f of files) {
   if (auto) ok(els.some((e) => e.type === 'text' && e.h === provisionalHeight(Number((e as { fontSize?: number }).fontSize) || 24, Number((e as { lineHeight?: number }).lineHeight) || 1.2)), `${auto} text element(s) carry a provisional one-line height`)
 }
 
+console.log('\nthe deck\'s design system (AI-08)\n')
+{
+  type R = Record<string, unknown> & { themeRefs?: Record<string, string>; component?: Record<string, unknown> }
+  const load = (f: string) => parseDocInputReport(readFileSync(join(dir, f), 'utf8'), false)!.doc
+  const flat = (d: ReturnType<typeof load>) => d.slides.flatMap((s) => s.elements) as unknown as R[]
+  const tv = load('token-values.json')
+  const tvEls = flat(tv)
+  const texts = tvEls.filter((e) => e.type === 'text')
+  ok(texts.length > 0 && texts.every((e) => !('fontFamily' in e)), 'token-values: no text element carries a fontFamily literal (all follow the theme font)')
+  const rule = tvEls.find((e) => e.id === 'rule')!
+  ok(rule.fill === '#E8B923' && rule.themeRefs?.fill === 'accent1', 'token-values: a shape with no fill is the deck accent, bound to accent1')
+  const cards = tvEls.filter((e) => e.themeRefs?.fill === '$color.card')
+  ok(cards.length === 2 && cards.every((e) => e.fill === '#16273E' && e.radius === 16 && e.themeRefs?.radius === '$radius.md'), 'token-values: "$color.card" / "$radius.md" load as the token values, bound')
+  const kicker = tvEls.find((e) => e.id === 'kicker')!
+  ok(kicker.fontSize === 18 && kicker.themeRefs?.fontSize === '$size.kicker' && kicker.color === '#E8B923' && kicker.themeRefs?.color === 'accent1', 'token-values: a font-size token and a slot colour on one text element')
+  ok((tv.slides[0] as unknown as R).themeRefs?.background === 'bg1' && (tv.slides[1] as unknown as R).themeRefs?.background === 'bg2' && tv.slides[1].background === '#F4F1E8', 'token-values: slide backgrounds bound to bg1 (default) and bg2 (named)')
+
+  const cu = load('component-use.json')
+  const cuEls = flat(cu)
+  const copies = cuEls.filter((e) => e.component && !e.component.main)
+  const mainEls = cuEls.filter((e) => e.component?.main)
+  ok(mainEls.length === 3 && copies.length === 6, `component-use: one main of 3 members, two copies of 3 (${mainEls.length} + ${copies.length})`)
+  ok(copies.every((e) => typeof e.component!.sig === 'string' && e.component!.sig.length > 0 && Array.isArray(e.component!.off)), 'component-use: every copy member carries a sig and an offset')
+  const overs = copies.map((e) => `${e.component!.key}:${((e.component!.over as string[]) ?? []).join('+')}`).join(' ')
+  ok(overs === 'bg: title:html body:html bg:fill+themeRefs title:html body:', `component-use: only the listed keys are overrides (${overs})`)
+
+  const sl = load('slide-like.json')
+  const ids = (i: number) => sl.slides[i].elements.map((e) => e.id).join()
+  ok(ids(2).startsWith('logo,footer,') && sl.slides[2].elements.length === 3, `slide-like: the third slide gets the recurring logo and footer, then its own title (${ids(2)})`)
+  ok(sl.slides.every((s) => s.background === '#F5F7FA' && (s as unknown as R).themeRefs?.background === 'bg2' && s.transition === 'morph'), 'slide-like: every slide shares the source\'s bg2 binding and morph transition')
+}
+
+console.log('\nnames that do not resolve, through the real loader\n')
+{
+  const bad = JSON.stringify({ compact: true, theme: { tokens: { set: { 'color.card': { type: 'color', values: { default: '#16273E' } } } } }, slides: [{ elements: [
+    { type: 'shape', shape: 'rect', x: 0, y: 0, w: 10, h: 10, fill: '$color.crad' },
+    { type: 'shape', shape: 'rect', x: 0, y: 0, w: 10, h: 10, fill: 'accent7' },
+    { type: 'shape', shape: 'rect', x: 0, y: 0, w: 10, h: 10, fill: '#123456', themeRefs: { fill: '$color.card' } },
+    { use: 'missing' },
+  ] }] })
+  const parsed = parseDocInputReport(bad, false)
+  ok(!!parsed, 'a deck with unresolvable names still loads (nothing throws)')
+  const why = (path: string) => parsed?.report.dropped.find((d) => d.path === path)?.reason ?? ''
+  ok(/unknown token `\$color\.crad`; tokens in this deck: `\$color\.card`/.test(why('/slides/0/elements/0/fill')), `an unknown token is in dropped with the valid names (${why('/slides/0/elements/0/fill')})`)
+  ok(/unknown palette slot `accent7`; slots: `bg1`/.test(why('/slides/0/elements/1/fill')), 'an unknown slot is in dropped with the valid slots')
+  ok(/dropped on load/.test(why('/slides/0/elements/2/themeRefs/fill')), 'a binding whose literal disagrees with its token is in dropped')
+  ok(/unknown component `missing`/.test(why('/slides/0/elements/3/use')), 'an unknown component is in dropped')
+  ok(parsed?.doc.slides[0].elements.length === 3 && parsed.doc.slides[0].elements.slice(0, 2).every((e) => (e as unknown as { fill: string }).fill === parsed.doc.theme.accent), 'the shapes fall back to the bound accent default; the unknown use adds nothing')
+}
+
 console.log('\nthe report on a deliberately wrong deck\n')
 {
   const bad = JSON.stringify({ compact: true, slides: [{ elements: [

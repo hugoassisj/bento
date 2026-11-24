@@ -1,0 +1,33 @@
+{
+  "compact": true,
+  "title": "Slides like the first",
+  "theme": { "background": "#101820", "color": "#F5F7FA", "accent": "#FF9E8A" },
+  "slides": [
+    {
+      "id": "intro",
+      "background": "bg2",
+      "transition": "morph",
+      "elements": [
+        { "id": "logo", "type": "shape", "shape": "ellipse", "x": 1160, "y": 40, "w": 40, "h": 40 },
+        { "id": "footer", "type": "text", "x": 96, "y": 660, "w": 600, "h": 28, "html": "Acme · Q3", "fontSize": 16, "align": "left" },
+        { "type": "text", "x": 96, "y": 280, "w": 1088, "h": 120, "html": "Q3 review", "fontSize": 64, "fontWeight": 700 }
+      ]
+    },
+    {
+      "id": "wins",
+      "like": "intro",
+      "elements": [
+        { "id": "logo", "type": "shape", "shape": "ellipse", "x": 1160, "y": 40, "w": 40, "h": 40 },
+        { "id": "footer", "type": "text", "x": 96, "y": 660, "w": 600, "h": 28, "html": "Acme · Q3", "fontSize": 16, "align": "left" },
+        { "type": "text", "x": 96, "y": 280, "w": 1088, "h": 120, "html": "What went right", "fontSize": 48, "fontWeight": 700 }
+      ]
+    },
+    {
+      "id": "next",
+      "like": "wins",
+      "elements": [
+        { "type": "text", "x": 96, "y": 280, "w": 1088, "h": 120, "html": "What comes next", "fontSize": 48, "fontWeight": 700 }
+      ]
+    }
+  ]
+}

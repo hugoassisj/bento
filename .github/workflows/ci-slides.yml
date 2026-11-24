@@ -721,3 +721,11 @@ jobs:
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
 
+      - name: Compact input speaks the design system in Chromium
+        if: ${{ !cancelled() }}
+        # A compact shape with no fill is painted in the deck's accent, a text
+        # box with no fontFamily renders in the theme font, "$color.card" and
+        # "accent2" arrive bound; editing Accent 1 and the token in the Tokens
+        # view re-paints them; use/like survive the loader; an unknown name is
+        # in the load report.
+        run: node scripts/test-slides-compact-design-system-browser.mjs

@@ -26,6 +26,9 @@ import { compactDoc, expandDoc, expandDocWithStats, provisionalHeight, isCompact
 import { markdownToHtml } from '../slides/src/editor/markdown.ts'
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { defaultText, defaultShape, defaultTable, defaultCode, readableInk, FONT_STACK, newDoc, isLightBg, type BentoDoc, type TextElement, type ShapeElement, type TableElement } from '../slides/src/model.ts'
+import { resolveThemeRefs, shiftLightness } from '../slides/src/palette.ts'
+import { syncTokenRefs } from '../slides/src/tokens.ts'
+import { syncComponents, mainSig, components } from '../slides/src/components.ts'
 
 let failures = 0
 let checks = 0
@@ -105,11 +108,13 @@ const compact = {
 const ex = expandDoc(JSON.parse(JSON.stringify(compact)))
 const el = (si: number, id: string) => ex.slides[si].elements.find((e) => e.id === id) as unknown as Obj
 const t1 = el(0, 't1') as unknown as TextElement
-const want = defaultText({ id: 't1', x: 96, y: 80, w: 1000, h: 80, html: 'Hello', fontSize: 48, color: readableInk(ex.slides[0].background) })
-ok(canon(t1) === canon(want), 'a light-slide text box equals defaultText(...) with readableInk of the slide background — the editor\'s own insert')
-ok(t1.fontFamily === FONT_STACK && t1.fontWeight === 400 && t1.align === 'center' && t1.valign === 'middle' && t1.lineHeight === 1.25 && t1.rotation === 0 && t1.opacity === 1, 'rotation, opacity, font stack, weight, align, valign, line height filled')
+// AI-08: an omitted fontFamily stays absent (the theme font), so the insert is defaultText minus its stack
+const want = defaultText({ id: 't1', x: 96, y: 80, w: 1000, h: 80, html: 'Hello', fontSize: 48, color: readableInk(ex.slides[0].background) }) as Partial<TextElement>
+delete want.fontFamily
+ok(canon(t1) === canon(want), 'a light-slide text box equals defaultText(...) with readableInk of the slide background, minus the font stack (it follows the theme)')
+ok(!('fontFamily' in t1) && t1.fontWeight === 400 && t1.align === 'center' && t1.valign === 'middle' && t1.lineHeight === 1.25 && t1.rotation === 0 && t1.opacity === 1, 'rotation, opacity, weight, align, valign, line height filled; no fontFamily literal')
 const s1 = el(0, 's1') as unknown as ShapeElement
-ok(canon(s1) === canon(defaultShape('ellipse', { id: 's1', x: 100, y: 200, w: 200, h: 200 })), 'an ellipse equals defaultShape(\'ellipse\', …) — radius 0, not the rect\'s 12')
+ok(canon(s1) === canon({ ...defaultShape('ellipse', { id: 's1', x: 100, y: 200, w: 200, h: 200 }), fill: ex.theme.accent, themeRefs: { fill: 'accent1' } }), 'an ellipse equals defaultShape(\'ellipse\', …) — radius 0, not the rect\'s 12 — with its fill bound to accent1 instead of the editor\'s orange')
 const t2 = el(1, 't2') as unknown as TextElement
 ok(t2.color === readableInk('#101820') && t2.color === '#F5F7FA', 'text on a dark slide gets light ink, as the editor gives it')
 const c2 = el(1, 'c2')
@@ -118,7 +123,7 @@ const tb = el(0, 'tb') as unknown as TableElement
 ok(canon(tb.style) === canon(defaultTable({}, ex.theme).style), 'a table on a light slide carries tableStyleFor(theme)')
 const tb2 = el(1, 'tb2') as unknown as TableElement
 ok(tb2.style.color === '#F5F7FA' && tb2.style.zebra === 'rgba(255,255,255,0.06)' && tb2.style.borderColor === 'rgba(255,255,255,0.16)', 'a table on a dark slide gets editor.newTable()\'s dark adaptation')
-ok(ex.slides[0].background === newDoc().theme.background && ex.slides[0].transition === 'fade' && ex.slides[0].notes === '', 'slide background follows the theme; transition fade; notes empty')
+ok(ex.slides[0].background === newDoc().theme.background && (ex.slides[0] as unknown as Obj & { themeRefs?: Obj }).themeRefs?.background === 'bg1' && ex.slides[0].transition === 'fade' && ex.slides[0].notes === '', 'slide background follows the theme and is bound to bg1; transition fade; notes empty')
 ok(ex.format === 'bento/slides' && ex.version === 1 && ex.size.width === 1280 && canon(ex.theme) === canon(newDoc().theme), 'format, version, size and theme filled from newDoc()')
 ok(ex.title === 'Agent deck', 'an authored field is kept as written')
 
@@ -225,10 +230,138 @@ console.log('\nwhat the editor dereferences on first render\n')
   ok(customCodeFont.theme.codeFontFamily === "'JetBrains Mono', monospace", 'a custom theme.codeFontFamily survives compactDoc → expandDoc')
 }
 
+console.log('\nround four: the deck\'s design system (AI-08)\n')
+{
+  type R = Obj & { themeRefs?: Record<string, string>; component?: Obj }
+  const box = { x: 0, y: 0, w: 100, h: 100 }
+  const shape = (id: string, more: Obj = {}) => ({ id, type: 'shape', shape: 'rect', ...box, ...more })
+  const deck = { compact: true,
+    theme: { background: '#0B3D2E', color: '#F4F1E8', accent: '#E8B923', palette: { accent2: '#3A7BD5' },
+      tokens: { set: {
+        'color.card': { type: 'color', values: { default: '#16273E' } },
+        'radius.md': { type: 'number', values: { default: 20 } },
+        'font.body': { type: 'fontFamily', values: { default: "'Inter', sans-serif" } },
+        'size.big': { type: 'fontSize', values: { default: 40 } } } } },
+    slides: [
+      { id: 'a', elements: [
+        shape('plain'),
+        shape('slot', { fill: 'accent2', stroke: 'tx1 -20%' }),
+        shape('tok', { fill: '$color.card', radius: '$radius.md' }),
+        { id: 'txt', type: 'text', ...box, html: 'Hi', fontFamily: '$font.body', fontSize: '$size.big', color: 'accent1' },
+        shape('refonly', { themeRefs: { fill: '$color.card' } }),
+        shape('stale', { fill: '#123456', themeRefs: { fill: '$color.card' } }),
+        shape('badtok', { fill: '$color.crad' }),
+        shape('badslot', { fill: 'accent9' }),
+        { id: 'wrongtype', type: 'text', ...box, html: 'x', fontSize: '$color.card' },
+        shape('css', { fill: 'tomato' }),
+      ] },
+      { id: 'b', background: 'bg2' },
+      { id: 'c', background: '$color.card' },
+      { id: 'd', background: '#ABCDEF' },
+    ] }
+  const { doc: d4, stats } = expandDocWithStats(JSON.parse(JSON.stringify(deck)))
+  const at = (id: string) => d4.slides[0].elements.find((e) => e.id === id) as unknown as R
+  const note = (path: string) => stats.notes.find((n) => n.path === path)
+  ok(at('plain').fill === '#E8B923' && at('plain').themeRefs?.fill === 'accent1', 'a shape with no fill is the deck\'s accent, bound to accent1 (not #F7A600)')
+  ok(at('slot').fill === '#3A7BD5' && at('slot').themeRefs?.fill === 'accent2', '"fill": "accent2" → the slot\'s literal and themeRefs.fill = accent2')
+  ok(at('slot').stroke === shiftLightness('#F4F1E8', -20) && at('slot').themeRefs?.stroke === 'tx1 -20%', '"stroke": "tx1 -20%" → the shifted literal and its ref')
+  ok(at('tok').fill === '#16273E' && at('tok').themeRefs?.fill === '$color.card' && at('tok').radius === 20 && at('tok').themeRefs?.radius === '$radius.md', '"fill": "$color.card", "radius": "$radius.md" → token values and their refs')
+  const txt = at('txt')
+  ok(txt.fontFamily === "'Inter', sans-serif" && txt.fontSize === 40 && txt.color === '#E8B923' && txt.themeRefs?.fontFamily === '$font.body' && txt.themeRefs?.fontSize === '$size.big' && txt.themeRefs?.color === 'accent1', 'a font family, a font size and a colour named on a text element all bind')
+  ok(at('refonly').fill === '#16273E' && at('refonly').themeRefs?.fill === '$color.card', 'a themeRefs entry whose property is left out is read as that name: literal and ref agree')
+  ok(at('stale').fill === '#123456' && at('stale').themeRefs?.fill === '$color.card' && /differs from token `\$color\.card`, so this binding is dropped on load; write `"fill": "\$color\.card"`/.test(note('/slides/0/elements/5/themeRefs/fill')?.reason ?? ''), 'a $token ref beside a literal it disagrees with is REPORTED (the open-time rule drops it), with the fix')
+  ok(at('badtok').fill === '#E8B923' && at('badtok').themeRefs?.fill === 'accent1' && /unknown token `\$color\.crad`; tokens in this deck: `\$color\.card`, `\$radius\.md`/.test(note('/slides/0/elements/6/fill')?.reason ?? ''), 'an unknown token is reported with the deck\'s token names, and the property takes its default')
+  ok(at('badslot').fill === '#E8B923' && /unknown palette slot `accent9`; slots: `bg1`, `tx1`/.test(note('/slides/0/elements/7/fill')?.reason ?? ''), 'an unknown slot is reported with the slot names, and the property takes its default')
+  ok(at('wrongtype').fontSize === 32 && !at('wrongtype').themeRefs && /token `\$color\.card` \(color\) cannot set `fontSize`/.test(note('/slides/0/elements/8/fontSize')?.reason ?? ''), 'a token of the wrong type for the property is reported; the property keeps its default')
+  ok(at('css').fill === 'tomato' && !at('css').themeRefs && !stats.notes.some((n) => n.path.startsWith('/slides/0/elements/9')), 'a CSS colour word is a literal, not a name: kept, unbound, unreported')
+  ok(stats.notes.length === 4, `exactly the four problems are reported (${stats.notes.length})`)
+  const sl = (i: number) => d4.slides[i] as unknown as R
+  ok(sl(0).background === '#0B3D2E' && sl(0).themeRefs?.background === 'bg1', 'a slide with no background is the theme\'s, bound to bg1')
+  ok(sl(1).background === '#F4F1E8' && sl(1).themeRefs?.background === 'bg2', '"background": "bg2" on a slide binds the slot')
+  ok(sl(2).background === '#16273E' && sl(2).themeRefs?.background === '$color.card', '"background": "$color.card" on a slide binds the token')
+  ok(sl(3).background === '#ABCDEF' && !sl(3).themeRefs, 'a literal slide background stays an unbound literal')
+  ok(!('fontFamily' in (d4.slides[0].elements.find((e) => e.id === 'wrongtype') as unknown as Obj)), 'a text element with no fontFamily has none after expansion (it follows the theme font)')
+  // the bindings hold on open and follow the design system afterwards
+  const live = JSON.parse(JSON.stringify(d4)) as BentoDoc
+  syncTokenRefs(live, false) // what opening does: a disagreeing literal loses its binding
+  const lv = (id: string) => live.slides[0].elements.find((e) => e.id === id) as unknown as R
+  ok(lv('tok').themeRefs?.fill === '$color.card' && lv('txt').themeRefs?.fontSize === '$size.big' && lv('refonly').themeRefs?.fill === '$color.card' && !lv('stale').themeRefs, 'on open every named binding survives; only the reported stale one is dropped')
+  live.theme.accent = '#FF0000'
+  resolveThemeRefs(live)
+  ok(lv('plain').fill === '#FF0000' && lv('txt').color === '#FF0000' && lv('css').fill === 'tomato', 'changing the accent re-tints the default-filled shape and the accent-named text')
+  live.theme.tokens!.set['color.card'].values.default = '#000000'
+  syncTokenRefs(live, true)
+  ok(lv('tok').fill === '#000000' && (live.slides[2] as unknown as R).background === '#000000', 'switching the token\'s value moves every element and slide bound to it')
+
+  // use: a component copy that follows its main
+  const comp = expandDocWithStats({ compact: true, slides: [
+    { id: 'm', elements: [
+      { id: 'card-bg', type: 'shape', shape: 'rect', x: 100, y: 100, w: 300, h: 200, groupId: 'card', groupName: 'Card', component: { id: 'card', key: 'bg', main: true } },
+      { id: 'card-t', name: 'title', type: 'text', x: 120, y: 120, w: 260, h: 40, html: 'Main', groupId: 'card', component: { id: 'card', key: 'title', main: true } },
+    ] },
+    { id: 'u', elements: [
+      { use: 'Card', x: 500, y: 300, over: { title: { md: '**Copy**' }, bg: { fill: 'tx1' } } },
+      { use: 'nope' },
+      { id: 'second', use: 'card' },
+    ] },
+  ] })
+  const cd = comp.doc
+  const u = cd.slides[1].elements as unknown as R[]
+  const main = components(cd)[0]
+  ok(u.map((e) => e.id).join() === 'u-use-0-bg,u-use-0-title,second-bg,second-title', `a use expands to the main's members, ids minted from the use (${u.map((e) => e.id).join()}); an unknown one adds nothing`)
+  ok(u[0].x === 500 && u[0].y === 300 && u[1].x === 520 && u[1].y === 320 && u[2].x === 100 && u[2].y === 100, 'x/y place the copy\'s top-left; a use without them sits where the main does')
+  const c0 = u[1].component!
+  ok(c0.id === 'card' && c0.key === 'title' && JSON.stringify(c0.off) === '[400,200]' && c0.sig === mainSig(main.main) && u[0].groupId === 'u-use-0', 'each member carries component.key, off and the main\'s current sig, in one group per copy')
+  ok(u[1].html === markdownToHtml('**Copy**') && JSON.stringify(c0.over) === '["html"]' && u[0].fill === '#1E2A3A' && JSON.stringify(u[0].component!.over) === '["fill","themeRefs"]' && !u[2].component!.over && !u[3].component!.over, 'only the keys `over` lists are overrides (md converts; a name binds); an untouched copy overrides nothing')
+  ok(/unknown component `nope`; components in this deck: `card \(Card\)`/.test(comp.stats.notes.find((n) => n.path === '/slides/1/elements/1/use')?.reason ?? ''), 'an unknown component is reported with the components that exist')
+  const cl = JSON.parse(JSON.stringify(cd)) as BentoDoc
+  ok(!syncComponents(cl), 'the copies are already in step with their main: the first sync writes nothing')
+  const m = (id: string) => cl.slides[0].elements.find((e) => e.id === id) as unknown as R
+  m('card-bg').radius = 40; m('card-t').fontSize = 50; m('card-t').html = 'Edited main'
+  syncComponents(cl)
+  const cu = cl.slides[1].elements as unknown as R[]
+  ok(cu[0].radius === 40 && cu[1].fontSize === 50 && cu[1].html === markdownToHtml('**Copy**') && cu[3].html === 'Edited main' && cu[0].fill === '#1E2A3A', 'a later edit to the main reaches the copies on every key they do not override')
+  ok(cu[0].x === 500 && cu[1].x === 520, 'the copy keeps its own position when the main is edited')
+
+  // like: a slide started from an earlier one
+  const lk = expandDocWithStats({ compact: true, theme: { tokens: { set: { 'color.bg': { type: 'color', values: { default: '#202830' } } } } }, slides: [
+    { id: 's1', background: '$color.bg', transition: 'morph', elements: [
+      shape('logo'), { id: 'foot', type: 'text', ...box, html: 'ACME' }, { id: 't1', type: 'text', ...box, html: 'One' } ] },
+    { id: 's2', like: 's1', elements: [shape('logo'), { id: 'foot', type: 'text', ...box, html: 'ACME' }, { id: 't2', type: 'text', ...box, html: 'Two' }] },
+    { id: 's3', like: 's2', elements: [{ id: 't3', type: 'text', ...box, html: 'Three' }] },
+    { id: 's4', like: 's2', background: '#000000' },
+    { id: 's5', like: 's9' },
+  ] })
+  const ls = lk.doc.slides as unknown as R[]
+  ok(ls[1].background === '#202830' && ls[1].themeRefs?.background === '$color.bg' && ls[1].transition === 'morph', 'like copies the background, its binding and the transition')
+  ok((ls[2].elements as R[]).map((e) => e.id).join() === 'logo,foot,t3', `like brings the furniture that recurs across slides (not the source's own content): ${(ls[2].elements as R[]).map((e) => e.id).join()}`)
+  ok((ls[2].elements as R[])[0].themeRefs?.fill === 'accent1', 'furniture keeps its bindings')
+  ok(ls[3].background === '#000000' && !ls[3].themeRefs, 'an explicit background beats like, and the copied binding is not kept against it')
+  ok(/no slide `s9` before this one; slides before it: `s1`, `s2`, `s3`, `s4`/.test(lk.stats.notes.find((n) => n.path === '/slides/4/like')?.reason ?? '') && ls[4].themeRefs?.background === 'bg1', 'an unknown like is reported with the slides before it; the slide gets the defaults')
+
+  // the round-trip still holds around the bound defaults
+  const rt = newDoc()
+  rt.theme.accent = '#E8B923'
+  rt.slides = [{ id: 'r', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+    defaultShape('rect', { id: 'bound', fill: '#E8B923', themeRefs: { fill: 'accent1', stroke: 'tx1' }, stroke: '#1E2A3A' } as Partial<ShapeElement>),
+    defaultShape('rect', { id: 'literal', fill: '#E8B923' }),
+    defaultShape('rect', { id: 'orange' }),
+    defaultText({ id: 'stack' }),
+    { ...defaultText({ id: 'themefont' }), fontFamily: undefined } as unknown as TextElement,
+  ] }, { id: 'r2', background: '#FFFFFF', themeRefs: { background: 'bg1' }, transition: 'fade', notes: '', elements: [] } as unknown as BentoDoc['slides'][0]]
+  delete (rt.slides[0].elements[4] as unknown as Obj).fontFamily
+  const rc = compactDoc(rt)
+  const rcEl = ((rc.slides as Obj[])[0].elements as R[])
+  ok(!('fill' in rcEl[0]) && JSON.stringify(rcEl[0].themeRefs) === '{"stroke":"tx1"}' && rcEl[1].fill === '#E8B923' && !rcEl[1].themeRefs && rcEl[2].fill === '#F7A600', 'compactDoc strips fill only with its accent1 ref; a fill that merely equals the accent, or the old orange, is kept')
+  ok(rcEl[3].fontFamily === FONT_STACK && !('fontFamily' in rcEl[4]), 'compactDoc keeps a written font stack and leaves an absent fontFamily absent')
+  ok((rc.slides as R[])[0].background === '#FFFFFF' && !('background' in (rc.slides as R[])[1]) && !(rc.slides as R[])[1].themeRefs, 'a slide background strips only with its bg1 ref')
+  ok(canon(expandDoc(rc)) === canon(rt), 'expandDoc(compactDoc(d)) deep-equals d around every bound default')
+}
+
 console.log('\nthe numbers\n')
 // one deck, both ways: two starterDoc() calls differ in their random ids, and that noise alone moved the ratio ±0.7%
 const sd = starterDoc(), sj = JSON.stringify(sd), sc = compactJson(sd)
-ok(sc.length / sj.length < 0.92, `the starter deck compacts to ${(sc.length / sj.length * 100).toFixed(1)}% of full (a designed deck overrides most defaults; measured 90.0% since it names its layers and binds its tokens, 86.1% before)`)
+ok(sc.length / sj.length < 0.92, `the starter deck compacts to ${(sc.length / sj.length * 100).toFixed(1)}% of full (a designed deck overrides most defaults; measured 89.2% since a background or fill bound to the theme strips as a pair, 90.0% before that, 86.1% before it named its layers and bound its tokens)`)
 const agentCompact = JSON.stringify(compact), agentFull = JSON.stringify(ex)
 ok(agentFull.length / agentCompact.length > 2.5, `an agent deck written compact is ${(agentFull.length / agentCompact.length).toFixed(1)}× smaller than its expansion`)
 

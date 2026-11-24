@@ -1,0 +1,39 @@
+{
+  "compact": true,
+  "title": "Names as values",
+  "theme": {
+    "background": "#0B3D2E",
+    "color": "#F4F1E8",
+    "accent": "#E8B923",
+    "fontFamily": "Georgia, 'Times New Roman', serif",
+    "palette": { "accent2": "#7FB7A4" },
+    "tokens": {
+      "set": {
+        "color.card": { "type": "color", "values": { "default": "#16273E" } },
+        "radius.md": { "type": "number", "values": { "default": 16 } },
+        "size.kicker": { "type": "fontSize", "values": { "default": 18 } }
+      }
+    }
+  },
+  "slides": [
+    {
+      "id": "plan",
+      "elements": [
+        { "id": "kicker", "type": "text", "x": 96, "y": 64, "w": 600, "h": 32, "html": "PLAN", "fontSize": "$size.kicker", "color": "accent1", "align": "left" },
+        { "id": "title", "type": "text", "x": 96, "y": 104, "w": 1088, "h": 80, "html": "Two tracks", "fontSize": 48, "fontWeight": 700, "align": "left" },
+        { "id": "rule", "type": "shape", "shape": "rect", "x": 96, "y": 196, "w": 120, "h": 6 },
+        [
+          { "type": "shape", "shape": "rect", "x": 96, "y": 240, "w": 520, "h": 360, "fill": "$color.card", "radius": "$radius.md" },
+          { "type": "text", "x": 128, "y": 272, "w": 456, "h": 48, "html": "Build", "fontSize": 32, "fontWeight": 700, "color": "accent2", "align": "left" }
+        ],
+        [
+          { "type": "shape", "shape": "rect", "x": 664, "y": 240, "w": 520, "h": 360, "fill": "$color.card", "radius": "$radius.md", "stroke": "accent1 -20%", "strokeWidth": 2 },
+          { "type": "text", "x": 696, "y": 272, "w": 456, "h": 48, "html": "Buy", "fontSize": 32, "fontWeight": 700, "color": "accent2", "align": "left" }
+        ]
+      ]
+    },
+    { "id": "close", "background": "bg2", "elements": [
+      { "type": "text", "x": 96, "y": 300, "w": 1088, "h": 120, "html": "Questions?", "fontSize": 64, "color": "tx2" }
+    ] }
+  ]
+}

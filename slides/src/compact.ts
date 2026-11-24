@@ -62,7 +62,32 @@
  *     each here (pure); compactload.ts then measures each and restacks with a
  *     gap so a title and three paragraphs lay out as a reader expects.
  *
- * Defaults come from the SAME functions model.ts's editor paths use
+ * Round four — the deck's design system is the shortest thing to write
+ * (00-READ-FIRST §6: what the deck defines wins over the editor's defaults):
+ *
+ *   - Names as values. `"fill": "accent1"`, `"color": "tx1 -20%"`,
+ *     `"background": "bg2"` name a palette slot; `"radius": "$radius.md"`,
+ *     `"fontFamily": "$font.body"` name a token. Expansion writes the resolved
+ *     literal AND the `themeRefs` entry, the pair palette.ts / tokens.ts keep,
+ *     so the two cannot disagree. A `themeRefs` entry whose property is left
+ *     out is read the same way. A name that does not resolve is reported (with
+ *     the names that do exist) and the property takes its default.
+ *   - `{ "use": "<component id or name>", x, y, over }` is a copy of a
+ *     component's main: its members with `component.key`, `off` and the
+ *     main's current `sig`, so it follows later edits to the main, and only
+ *     the keys `over` lists overridden.
+ *   - `"like": "<slide id>"` starts a slide from an EARLIER one: its
+ *     background, slide-level `themeRefs`, transition and recurring furniture
+ *     (elements whose ids recur on other slides, role'd slots excepted).
+ *   - Theme-first defaults: a text element's omitted `fontFamily` stays
+ *     ABSENT (it renders in the theme font, as in a full document), a shape's
+ *     omitted `fill` is bound to `accent1`, and a slide's omitted background
+ *     is bound to `bg1`. compactDoc strips such a pair only when both halves
+ *     match, so the round-trip still holds.
+ *   - A `$token` binding written beside a literal that disagrees with the
+ *     token is reported: the open-time rule (tokens.ts syncTokenRefs) drops it.
+ *
+ * Every other default comes from the SAME functions model.ts's editor paths use
  * (defaultText, defaultShape, …), never a second table — a second table is
  * what drifts. Where the editor derives a value from the deck (text colour
  * from the slide background via readableInk, a table's style from the theme,
@@ -82,6 +107,10 @@ import {
   readableInk, isLightBg, newDoc, builtinLayouts, applyLayout,
   type BentoDoc, type Slide, type SlideElement, type ShapeKind,
 } from './model.ts'
+import { PALETTE_SLOTS, paletteOf, parseThemeRef, resolveRef, formatThemeRef } from './palette.ts'
+import { tokenName, tokenValue, bindToken, tokenAgrees } from './tokens.ts'
+import { TOKEN_KEYS, SLIDE_TOKEN_KEYS } from './untrusted.ts'
+import { components, mainSig, type ComponentInfo } from './components.ts'
 
 /** Marker on a compact document. Consumed by expandDoc; never stored. */
 export const COMPACT_FLAG = 'compact'
@@ -109,8 +138,18 @@ function elementDefaults(el: Obj, slide: Obj, doc: Obj): Obj | null {
   const bg = typeof slide.background === 'string' ? slide.background : (theme?.background ?? '#FFFFFF')
   const ink = readableInk(bg)
   switch (el.type) {
-    case 'text': return defaultText({ id: '', html: '', color: ink }) as unknown as Obj
-    case 'shape': return defaultShape((el.shape as ShapeKind) ?? 'rect', { id: '' }) as unknown as Obj
+    case 'text': {
+      // no fontFamily: absent follows the theme font, as in a full document
+      const d = defaultText({ id: '', html: '', color: ink }) as unknown as Obj
+      delete d.fontFamily
+      return d
+    }
+    case 'shape': {
+      // fill is a binding (boundDefaults), never the editor's own orange
+      const d = defaultShape((el.shape as ShapeKind) ?? 'rect', { id: '' }) as unknown as Obj
+      delete d.fill
+      return d
+    }
     case 'image': return defaultImage('', { id: '' }) as unknown as Obj
     case 'chart': return defaultChart({}, { id: '' }) as unknown as Obj
     case 'code': return defaultCode({ id: '', content: '', color: ink }) as unknown as Obj
@@ -135,9 +174,31 @@ function elementDefaults(el: Obj, slide: Obj, doc: Obj): Obj | null {
  *  geometry and the type's own content. Absent = the element is unplaced. */
 const KEEP = new Set(['id', 'type', 'x', 'y', 'w', 'h', 'html', 'shape', 'kind', 'src', 'option', 'content', 'columns', 'rows'])
 
-function slideDefaults(doc: Obj): Obj {
-  const theme = (doc.theme ?? {}) as { background?: string }
-  return { background: theme.background ?? '#FFFFFF', transition: 'fade', notes: '', elements: [] }
+/** A slide's plain defaults. Its background is a binding (slideBound). */
+function slideDefaults(): Obj {
+  return { transition: 'fade', notes: '', elements: [] }
+}
+
+type Bound = Record<string, [unknown, string]>
+const themeOf = (doc: Obj) => (isObj(doc.theme) ? doc.theme : {}) as { background?: string; accent?: string }
+
+/** Defaults that are a BINDING: the literal and the palette ref expansion
+ *  writes together when the author leaves the key out. */
+const elementBound = (el: Obj, doc: Obj): Bound =>
+  el.type === 'shape' ? { fill: [themeOf(doc).accent ?? '#F7A600', 'accent1'] } : {}
+const slideBound = (doc: Obj): Bound => ({ background: [themeOf(doc).background ?? '#FFFFFF', 'bg1'] })
+
+/** compactDoc's half: drop a bound pair only when the literal AND the ref
+ *  match, so expansion puts back exactly what was there. */
+function stripBound(src: Obj, out: Obj, bound: Bound): void {
+  for (const [k, [v, ref]] of Object.entries(bound)) {
+    const refs = isObj(src.themeRefs) ? src.themeRefs : {}
+    if (!deepEqual(src[k], v) || refs[k] !== ref) continue
+    delete out[k]
+    const rest = { ...refs }
+    delete rest[k]
+    if (Object.keys(rest).length) out.themeRefs = rest; else delete out.themeRefs
+  }
 }
 
 function docDefaults(): Obj {
@@ -167,13 +228,14 @@ export function compactDoc(full: BentoDoc): Obj {
     if (Object.keys(th).length) out.theme = th; else delete out.theme
   }
   out.slides = ((doc.slides ?? []) as Obj[]).map((slide) => {
-    const sd = slideDefaults(doc)
+    const sd = slideDefaults()
     const s: Obj = {}
     for (const [k, v] of Object.entries(slide)) {
       if (k === 'elements') continue
       if (k in sd && deepEqual(v, sd[k])) continue
       s[k] = v
     }
+    stripBound(slide, s, slideBound(doc))
     const els = ((slide.elements ?? []) as Obj[]).map((el, i) => {
       const defaults = elementDefaults(el, slide, doc)
       const e: Obj = {}
@@ -184,6 +246,7 @@ export function compactDoc(full: BentoDoc): Obj {
         if (deepEqual(v, defaults[k])) continue
         e[k] = v
       }
+      stripBound(el, e, elementBound(el, doc))
       return e
     })
     if (els.length) s.elements = els
@@ -325,6 +388,137 @@ function layOut(layout: Slide, els: Obj[], raw: Obj[], slideId: string, si: numb
   return [...out, ...extras]
 }
 
+// --- round four: the deck's own names ------------------------------------------
+
+/** Element properties a palette slot may name: it writes a colour. */
+const SLOT_KEYS = new Set(['fill', 'stroke', 'color'])
+/** A value that is TRYING to name a slot (`accent9`, `Accent 1`, `primary -20%`):
+ *  any bare word is a CSS colour to the gate, so only these read as names. */
+const SLOT_LIKE = /^\s*(?:accent|bg|tx|hlink|folhlink)[A-Za-z0-9 ]*(?:[+-]\s*\d{1,3}\s*%)?\s*$/i
+const SHIFTED = /^\s*[A-Za-z][A-Za-z0-9]*\s*[+-]\s*\d{1,3}\s*%\s*$/
+const nameList = (names: readonly string[]): string =>
+  names.length ? names.slice(0, 12).map((n) => `\`${n}\``).join(', ') + (names.length > 12 ? ` … (${names.length} in all)` : '') : 'none'
+
+/**
+ * A name written as `holder[key]`, resolved in place: the literal goes in,
+ * the ref goes into `themeRefs` (which the caller has made the holder's own).
+ * true = bound; false = a name that does not resolve (reported, the caller
+ * restores the default); null = a plain literal, left to the gate.
+ */
+function bindName(holder: Obj, key: string, doc: BentoDoc, path: string, stats: ExpandStats): boolean | null {
+  const v = holder[key]
+  if (typeof v !== 'string') return null
+  const slide = Array.isArray(holder.elements)
+  const note = (reason: string) => { stats.notes.push({ path, reason }); return false }
+  if (v.trim().startsWith('$')) {
+    if (!(slide ? SLIDE_TOKEN_KEYS : TOKEN_KEYS).has(key)) return null
+    const name = tokenName(v.trim())
+    const set = doc.theme.tokens?.set ?? {}
+    if (!name || tokenValue(doc, name) === undefined) return note(`unknown token \`${v.trim()}\`; tokens in this deck: ${nameList(Object.keys(set).map((k) => `$${k}`))}`)
+    if (!bindToken(doc, holder as never, key, name)) return note(`token \`$${name}\` (${set[name].type ?? 'color'}) cannot set \`${key}\``)
+    return true
+  }
+  if (!(slide ? key === 'background' : SLOT_KEYS.has(key))) return null
+  const ref = parseThemeRef(v)
+  if (!ref) return SLOT_LIKE.test(v) || SHIFTED.test(v) ? note(`unknown palette slot \`${v.trim()}\`; slots: ${nameList(PALETTE_SLOTS)}, optionally with a shift like \`accent1 -20%\``) : null
+  const token = formatThemeRef({ slot: ref.slot, shift: ref.shift })
+  const literal = resolveRef(token, paletteOf(doc))
+  if (literal === null) return note(`palette slot \`${ref.slot}\` is not set in this deck`)
+  holder[key] = literal
+  ;(holder.themeRefs as Obj)[key] = token
+  return true
+}
+
+/**
+ * Resolve every name on one expanded holder (an element or a slide) and fill
+ * its bound defaults. `given` is what the author wrote; `out` the expanded
+ * holder; `plain` its unbound defaults. Mutates `out`.
+ */
+function bindNames(given: Obj, out: Obj, plain: Obj, bound: Bound, doc: BentoDoc, base: string, stats: ExpandStats): void {
+  out.themeRefs = { ...(isObj(given.themeRefs) ? given.themeRefs : {}) }
+  const refs = out.themeRefs as Obj
+  // a ref on a property the author left out names that property's value
+  const named = Object.keys(given).filter((k) => k !== 'themeRefs')
+  for (const [k, r] of Object.entries(refs)) if (!k.includes('.') && !(k in given) && typeof r === 'string') { out[k] = r; named.push(k) }
+  const bindings = new Set<string>()
+  for (const k of named) {
+    const r = bindName(out, k, doc, `${base}/${k}`, stats)
+    if (r === true) { bindings.add(k); continue }
+    if (r === null) continue
+    delete out[k]
+    delete refs[k]
+    if (k in plain) out[k] = plain[k]
+  }
+  for (const [k, [v, ref]] of Object.entries(bound)) {
+    if (k in out) continue
+    out[k] = v
+    refs[k] = ref
+    stats.expanded++
+  }
+  // a $token ref beside a literal it disagrees with is dropped on open
+  // (tokens.ts syncTokenRefs): say so now, while the author can fix it
+  for (const [k, r] of Object.entries(refs)) {
+    const name = typeof r === 'string' ? tokenName(r) : null
+    if (name && !bindings.has(k) && !tokenAgrees(doc, out as never, k, name)) {
+      stats.notes.push({ path: `${base}/themeRefs/${k}`, reason: `\`${k}\` differs from token \`${r}\`, so this binding is dropped on load; write \`"${k}": "${r}"\` to bind it` })
+    }
+  }
+  if (!Object.keys(refs).length) delete out.themeRefs
+}
+
+/** Keys a `use` override cannot set: they are the copy's identity. */
+const USE_OWN = new Set(['id', 'type', 'groupId', 'component', 'parentId'])
+
+/** A component copy for `{ use }`, the way components.ts instanceOf makes
+ *  one — ids minted deterministically from the use's id (or its position). */
+function useCopies(comp: ComponentInfo, raw: Obj, slideId: string, i: number, path: string, doc: BentoDoc, stats: ExpandStats): Obj[] {
+  const main = comp.main as unknown as Obj[]
+  const left = Math.min(...main.map((m) => m.x as number)), top = Math.min(...main.map((m) => m.y as number))
+  const dx = typeof raw.x === 'number' ? raw.x - left : 0
+  const dy = typeof raw.y === 'number' ? raw.y - top : 0
+  const gid = typeof raw.id === 'string' && raw.id ? raw.id : `${slideId}-use-${i}`
+  const sig = mainSig(comp.main)
+  const key = (m: Obj) => String((m.component as Obj).key)
+  const ids = new Map(main.map((m) => [m.id, `${gid}-${key(m)}`]))
+  const copies = main.map((m) => {
+    const el = JSON.parse(JSON.stringify(m)) as Obj
+    el.id = ids.get(m.id)
+    if (typeof el.parentId === 'string' && ids.has(el.parentId)) el.parentId = ids.get(el.parentId)
+    else { delete el.parentId; delete el.sizing }
+    el.groupId = gid
+    el.x = (m.x as number) + dx
+    el.y = (m.y as number) + dy
+    delete el.morphId
+    el.component = { id: comp.id, key: key(m), off: [dx, dy], sig }
+    return el
+  })
+  for (const [k, props] of Object.entries(isObj(raw.over) ? raw.over : {})) {
+    const j = main.findIndex((m) => key(m) === k || m.id === k || m.name === k)
+    if (j < 0 || !isObj(props)) {
+      stats.notes.push({ path: `${path}/over/${k}`, reason: `no member \`${k}\` in component \`${comp.id}\`; members: ${nameList(main.map((m) => String(m.name ?? key(m))))}` })
+      continue
+    }
+    const el = copies[j]
+    const over = new Set<string>()
+    el.themeRefs = { ...(isObj(el.themeRefs) ? el.themeRefs : {}) }
+    for (const [p, v] of Object.entries(props)) {
+      if (p === 'md' && el.type === 'text' && typeof v === 'string') {
+        if (typeof props.html !== 'string') { el.html = markdownToHtml(v); over.add('html') }
+        continue
+      }
+      if (USE_OWN.has(p)) { stats.notes.push({ path: `${path}/over/${k}/${p}`, reason: `\`${p}\` belongs to the copy itself and cannot be overridden` }); continue }
+      el[p] = v
+      const r = bindName(el, p, doc, `${path}/over/${k}/${p}`, stats)
+      if (r === false) { el[p] = JSON.parse(JSON.stringify(main[j][p] ?? null)); if (main[j][p] === undefined) delete el[p]; continue }
+      over.add(p)
+      if (r === true) over.add('themeRefs')
+    }
+    if (!Object.keys(el.themeRefs as Obj).length) delete el.themeRefs
+    if (over.size) (el.component as Obj).over = [...over].sort()
+  }
+  return copies
+}
+
 /**
  * Fill every omitted field, flatten nested element arrays, mint missing ids.
  * Pure; returns a new object. A document without the flag is returned as is
@@ -361,25 +555,51 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
   doc.theme = { ...(dd.theme as Obj), ...(isObj(src.theme) ? src.theme : {}) }
   for (const k of Object.keys(dd.theme as Obj)) if (typeof (doc.theme as Obj)[k] !== 'string') { (doc.theme as Obj)[k] = (dd.theme as Obj)[k]; stats.expanded++ }
   const slidesIn = Array.isArray(src.slides) ? (src.slides as unknown[]) : []
+  const built: Obj[] = [] // slides expanded so far: what `like` may name
+  const uses: Array<{ marker: Obj; raw: Obj; slide: Obj; si: number; i: number }> = []
+  const bdoc = doc as unknown as BentoDoc
   doc.slides = slidesIn.map((raw, si) => {
     const s0 = isObj(raw) ? raw : {}
-    const sd = slideDefaults(doc)
+    const sd = slideDefaults()
     // a layout supplies the slide's background/transition unless the author set them
     const layout = typeof s0.layout === 'string' ? findLayout(s0.layout, doc) : undefined
     if (typeof s0.layout === 'string' && !layout) stats.notes.push({ path: `/slides/${si}/layout`, reason: `unknown layout \`${s0.layout}\`; elements placed as given` })
-    const slide: Obj = { ...sd, ...(layout ? { background: layout.background, transition: layout.transition } : {}), ...s0 }
+    // …and `like` the named earlier slide's, over the layout's
+    const like = typeof s0.like === 'string' ? built.find((b) => b.id === s0.like) : undefined
+    if (typeof s0.like === 'string' && !like) stats.notes.push({ path: `/slides/${si}/like`, reason: `no slide \`${s0.like}\` before this one; slides before it: ${nameList(built.map((b) => String(b.id)))}` })
+    const likeRefs: Obj = { ...(like && isObj(like.themeRefs) ? like.themeRefs : {}) }
+    if ('background' in s0) delete likeRefs.background
+    const given: Obj = { ...s0 }
+    if (Object.keys(likeRefs).length) given.themeRefs = { ...likeRefs, ...(isObj(s0.themeRefs) ? s0.themeRefs : {}) }
+    const slide: Obj = {
+      ...sd,
+      ...(layout ? { background: layout.background, transition: layout.transition } : {}),
+      ...(like ? { background: like.background, transition: like.transition } : {}),
+      ...given,
+    }
     delete slide.layout
+    delete slide.like
     stats.expanded += Object.keys(sd).filter((k) => !(k in s0)).length
+    // names on the slide (a background slot or token), else bg1 when nothing set it
+    const inherited: Obj = like ? { background: like.background } : layout ? { background: layout.background } : {}
+    bindNames(given, slide, inherited, layout || like ? {} : slideBound(doc), bdoc, `/slides/${si}`, stats)
     if (typeof slide.id !== 'string' || !slide.id) slide.id = `s${si + 1}`
     const flat: Obj[] = []
     const walk = (v: unknown) => { if (Array.isArray(v)) v.forEach(walk); else if (isObj(v)) flat.push(v) }
     walk(s0.elements)
     slide.elements = flat.map((el0, i) => {
+      // a component copy: resolved once every slide is expanded (its main may come later)
+      if (typeof el0.use === 'string' && el0.type === undefined) {
+        const marker: Obj = {}
+        uses.push({ marker, raw: el0, slide, si, i })
+        return marker as unknown as SlideElement
+      }
       // a role'd or text-bearing element with no `type` is a text box
       const el: Obj = (!el0.type && (typeof el0.role === 'string' || typeof el0.md === 'string' || typeof el0.html === 'string')) ? { type: 'text', ...el0 } : el0
       const defaults = elementDefaults(el, slide, doc) ?? {}
       const out: Obj = { ...defaults, ...el }
       stats.expanded += Object.keys(defaults).filter((k) => !(k in el)).length + (el === el0 ? 0 : 1)
+      bindNames(el, out, defaults, elementBound(el, doc), bdoc, `/slides/${si}/elements/${i}`, stats)
       if (typeof out.id !== 'string' || !out.id) { out.id = mintId(slide, el, i); stats.minted++ }
       if (el.type === 'text') {
         // md → html by the editor's own paste conversion; html wins when both
@@ -404,8 +624,34 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
       stats.autoHeight = stats.autoHeight.filter((a) => a.slide !== slide.id || !before.has(a.id) || ids.has(a.id))
       slide.elements = laid as unknown as SlideElement[]
     }
+    if (like) {
+      // recurring furniture: the source's elements whose ids recur on another
+      // slide (a logo, a footer), under this slide's own; never a role'd slot,
+      // which holds that slide's content
+      const elsewhere = new Set(built.filter((b) => b !== like).flatMap((b) => (b.elements as Obj[]).map((e) => e.id)).filter((id) => typeof id === 'string'))
+      const have = new Set((slide.elements as unknown as Obj[]).map((e) => e.id))
+      const furniture = (like.elements as Obj[]).filter((e) => typeof e.id === 'string' && elsewhere.has(e.id) && !e.role && !have.has(e.id))
+      slide.elements = [...JSON.parse(JSON.stringify(furniture)), ...(slide.elements as unknown as Obj[])] as unknown as SlideElement[]
+    }
+    built.push(slide)
     return slide as unknown as Slide
   })
+  if (uses.length) {
+    const comps = components(bdoc)
+    for (const u of uses) {
+      const els = u.slide.elements as Obj[]
+      const at = els.indexOf(u.marker)
+      const name = u.raw.use as string
+      const path = `/slides/${u.si}/elements/${u.i}`
+      const comp = comps.find((c) => c.id === name) ?? comps.find((c) => !!c.name && c.name.toLowerCase() === name.toLowerCase())
+      if (!comp) {
+        stats.notes.push({ path: `${path}/use`, reason: `unknown component \`${name}\`; components in this deck: ${nameList(comps.map((c) => (c.name ? `${c.id} (${c.name})` : c.id)))}` })
+        els.splice(at, 1)
+        continue
+      }
+      els.splice(at, 1, ...useCopies(comp, u.raw, u.slide.id as string, u.i, path, bdoc, stats))
+    }
+  }
   return { doc: doc as unknown as BentoDoc, stats }
 }
 

@@ -155,6 +155,14 @@ export function bindToken(doc: BentoDoc, holder: Holder, path: string, name: str
   return true
 }
 
+/** Does the literal at `path` equal what token `name` gives it? The rule
+ *  syncTokenRefs applies on open: a binding whose literal disagrees is dropped
+ *  there. True when the token does not exist (that ref is left alone). */
+export function tokenAgrees(doc: BentoDoc, holder: Holder, path: string, name: string): boolean {
+  const w = want(doc, holder, path, name)
+  return w === undefined || same(_readPath(holder, path), w)
+}
+
 /** Drop a binding; the literal stays. */
 export function unbindToken(holder: Holder, path: string): void {
   if (tokenName(holder.themeRefs?.[path])) dropRef(holder, path)

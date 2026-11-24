@@ -1,0 +1,18 @@
+{
+  "compact": true,
+  "title": "Component copies",
+  "theme": { "background": "#FFFFFF", "color": "#1E2A3A", "accent": "#2F6FEB" },
+  "slides": [
+    {
+      "id": "kit",
+      "elements": [
+        { "id": "heading", "type": "text", "x": 96, "y": 64, "w": 1088, "h": 80, "html": "Our offers", "fontSize": 48, "fontWeight": 700 },
+        { "id": "card-bg", "type": "shape", "shape": "rect", "x": 96, "y": 200, "w": 320, "h": 400, "fill": "#F3F0EA", "radius": 16, "groupId": "offer", "groupName": "Offer card", "component": { "id": "offer", "key": "bg", "main": true } },
+        { "id": "card-title", "name": "title", "type": "text", "x": 120, "y": 224, "w": 272, "h": 48, "html": "Starter", "fontSize": 28, "fontWeight": 700, "color": "accent1", "groupId": "offer", "component": { "id": "offer", "key": "title", "main": true } },
+        { "id": "card-body", "name": "body", "type": "text", "x": 120, "y": 288, "w": 272, "h": 120, "md": "For one team", "fontSize": 20, "valign": "top", "groupId": "offer", "component": { "id": "offer", "key": "body", "main": true } },
+        { "use": "Offer card", "x": 480, "y": 200, "over": { "title": { "html": "Growth" }, "body": { "md": "For a **department**" } } },
+        { "use": "offer", "x": 864, "y": 200, "over": { "title": { "html": "Scale" }, "bg": { "fill": "accent1 +80%" } } }
+      ]
+    }
+  ]
+}
