@@ -147,10 +147,9 @@ console.log('\nthe usage counter sees the layout\n')
     `after applying Title, Background/Text/Accent 1 each have uses (${n.get('bg1') ?? 0}/${n.get('tx1') ?? 0}/${n.get('accent1') ?? 0})`)
 }
 
-console.log('\nplaceholder text reads on its backdrop\n')
-for (const [name, theme] of [['default', {}], ['dark', DARK]] as const) {
-  const d = deckWith(theme)
-  for (const ly of builtinLayouts(d.size, paletteOf(d))) {
+// Every placeholder against what it sits on: the card under it, else the slide.
+function legibility(name: string, slides: Slide[]) {
+  for (const ly of slides) {
     const cards = ly.elements.filter((e) => e.type === 'shape' && e.id.includes('-bg')) as ShapeElement[]
     for (const el of ly.elements) {
       if (el.type !== 'text') continue
@@ -160,6 +159,37 @@ for (const [name, theme] of [['default', {}], ['dark', DARK]] as const) {
       const r = contrast(t.color, back)
       ok(r >= 4.5, `${name}: ${ly.id}/${el.id} ${t.color} on ${back} = ${r.toFixed(2)}:1`)
     }
+  }
+}
+
+console.log('\nplaceholder text reads on its backdrop\n')
+for (const [name, theme] of [['default', {}], ['dark', DARK]] as const) {
+  const d = deckWith(theme)
+  legibility(name, builtinLayouts(d.size, paletteOf(d)))
+}
+
+// The issue's own journey: the layouts go in under one theme, THEN the theme
+// changes. Whatever was decided when the layout was built must still read
+// after the switch, so the slides are re-derived through the real path.
+console.log('\nplaceholder text still reads after the theme is switched\n')
+const SWITCH_TO: Array<[string, Partial<BentoDoc['theme']>]> = [
+  ['dark', DARK],
+  ['dark, peach accent', { background: '#101418', color: '#F5F7FA', accent: '#FF9E8A' }],
+  ['brand', BRAND],
+  ['slate on white', { background: '#FFFFFF', color: '#4A5560', accent: '#E4572E' }],
+  ['brown on cream', { background: '#FFF4E0', color: '#3D2B1F', accent: '#D9822B' }],
+  ['ink on paper, coral', { background: '#F4F1EA', color: '#1F3B4D', accent: '#FF6B5B' }],
+  ['night, cream text', { background: '#0B1020', color: '#EDE6D6', accent: '#3FA7D6' }],
+]
+for (const [from, fromTheme] of [['default', {}], ['starter', starterDoc().theme]] as const) {
+  for (const [to, theme] of SWITCH_TO) {
+    const d = deckWith(fromTheme)
+    d.slides = builtinLayouts(d.size, paletteOf(d)).map((l) => instantiateLayout(l))
+    const mem = deriveMemory(d)
+    derive(d, mem) // as opened
+    Object.assign(d.theme, { palette: undefined }, theme)
+    derive(d, mem) // the palette moved: every bound literal follows
+    legibility(`${from} → ${to}`, d.slides.map((s, i) => ({ ...s, id: builtinLayouts()[i].id })))
   }
 }
 
