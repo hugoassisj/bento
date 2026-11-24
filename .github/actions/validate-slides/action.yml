@@ -751,3 +751,11 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Chart from a table reads real-world numbers and stays on the page
+      # readCellNumber: `$1,204`, `(300)`, `€9.4M`, `12 %`, `USD 3,000` are
+      # numbers; `1.2.3`, `192.168.1.1`, `Q1`, `n/a` are not (separators per
+      # countnumber.ts, the #584 ruling). tableChartColumns names the columns it
+      # left out; the live link shares the reader and follows series by name;
+      # chartBoxFor keeps the new chart inside 16:9, 4:3 and 9:16 pages.
+      shell: bento-step {0}
+      run: node scripts/test-slides-table-chart.ts
