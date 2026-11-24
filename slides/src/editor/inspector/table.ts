@@ -2,7 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 // Tables, and turning one into a chart.
 import type { PropsPanel } from '../panels'
-import { type TableElement, tableStyleFor, applyChartPalette, defaultChart } from '../../model'
+import { type TableElement, tableStyleFor, applyChartPalette, defaultChart, tableChartColumns, chartBoxFor } from '../../model'
 import { row, toggle, section, labeledSelect, mini, number } from './fields'
 import { t } from '../../i18n'
 import { colorAlpha } from './color'
@@ -90,29 +90,12 @@ export function buildTableProps(p: PropsPanel, el: TableElement) {
 
 /** Bridge: build a bar chart from a table's numeric columns and insert it. */
 export function tableToChart(p: PropsPanel, el: TableElement) {
-  const bodyRows = el.header ? el.rows.slice(1) : el.rows
-  // strip markup + entities + thousands separators so "1,204" / "+222%" parse
-  const strip = (html: string) => html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, '').replace(/,/g, '').trim()
-  const num = (html: string) => parseFloat(strip(html))
-  const labels = bodyRows.map((r) => strip(r.cells[0]?.html ?? ''))
-  const headerRow = el.header ? el.rows[0] : null
-  // every column after the labels that is mostly numeric becomes its own series
-  const cols: Array<{ name: string; data: number[]; isPct: boolean; maxAbs: number }> = []
-  for (let c = 1; c < el.columns.length; c++) {
-    const raw = bodyRows.map((r) => r.cells[c]?.html ?? '')
-    const parsed = raw.map(num)
-    const good = parsed.filter((n) => !Number.isNaN(n))
-    if (good.length < Math.ceil(bodyRows.length / 2)) continue
-    const isPct = /%/.test(headerRow ? strip(headerRow.cells[c]?.html ?? '') : '') ||
-      raw.filter((h) => /%/.test(h)).length >= Math.ceil(bodyRows.length / 2)
-    cols.push({
-      name: headerRow ? strip(headerRow.cells[c]?.html ?? '') : '',
-      data: parsed.map((n) => (Number.isNaN(n) ? 0 : n)),
-      isPct,
-      maxAbs: Math.max(1, ...good.map((n) => Math.abs(n))),
-    })
-  }
+  // the same reader the live link uses: `$1,204`, `(300)`, `27%`, `€9.4M`
+  const { labels, cols, skipped } = tableChartColumns(el)
   if (!cols.length) { p.toast(t('No numeric column found to chart')); return }
+  // a currency the column wrote goes on its axis: a symbol before the value,
+  // a code after it (`$1.2k` / `1.2k USD`)
+  const unitFormat = (unit?: string) => unit ? (/^[A-Z]{3}$/.test(unit) ? `{value} ${unit}` : `${unit}{value}`) : undefined
 
   // two columns on very different scales (or one is a %) → dual axis: bars
   // on the left, the odd one as a line on a right-hand axis
@@ -132,9 +115,10 @@ export function tableToChart(p: PropsPanel, el: TableElement) {
   }
   if (secondary >= 0) {
     const prim = cols[1 - secondary], sec = cols[secondary]
+    const primFmt = unitFormat(prim.unit), secFmt = sec.isPct ? '{value}%' : unitFormat(sec.unit)
     option.yAxis = [
-      { type: 'value', name: prim.name || undefined },
-      { type: 'value', name: sec.name || undefined, axisLabel: sec.isPct ? { formatter: '{value}%' } : undefined },
+      { type: 'value', name: prim.name || undefined, axisLabel: primFmt ? { formatter: primFmt } : undefined },
+      { type: 'value', name: sec.name || undefined, axisLabel: secFmt ? { formatter: secFmt } : undefined },
     ]
     option.series = [
       { type: 'bar', name: prim.name, data: prim.data, yAxisIndex: 0 },
@@ -142,17 +126,22 @@ export function tableToChart(p: PropsPanel, el: TableElement) {
     ]
     option.legend = { bottom: 0 }
   } else {
-    option.yAxis = { type: 'value' }
+    // one shared axis takes a unit only when every column charted on it has it
+    const fmt = cols.every((c) => c.unit === cols[0].unit) ? unitFormat(cols[0].unit) : undefined
+    option.yAxis = fmt ? { type: 'value', axisLabel: { formatter: fmt } } : { type: 'value' }
     option.series = cols.map((c) => ({ type: 'bar', name: c.name, data: c.data }))
     if (cols.length > 1) option.legend = { bottom: 0 }
   }
   applyChartPalette(option, p.store.doc.theme)
   const chart = defaultChart(option, {
-    x: el.x, y: Math.min(el.y + el.h + 24, 480), w: Math.max(el.w, 640), h: 300, preset: 'bar',
+    ...chartBoxFor(el, p.store.doc.size), preset: 'bar',
     // live binding: edits to the table flow into this chart
     source: { tableId: el.id },
   })
   p.store.commit(() => p.store.slide.elements.push(chart))
   p.store.select([chart.id])
-  p.toast(t('Chart created — it updates live with the table'))
+  // a partial chart says what it left out; a silent one looks authoritative
+  p.toast(skipped.length
+    ? t('Charted {n} of {total} columns — not numeric: {names}', { n: cols.length, total: cols.length + skipped.length, names: skipped.join(', ') })
+    : t('Chart created — it updates live with the table'))
 }

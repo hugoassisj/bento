@@ -2,6 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 // The bento/slides document model. This JSON is what lives inside the
 // <script type="application/bento+json"> block of a .bento.html file.
+import { isCountable, readNumber } from './countnumber'
 
 export const FORMAT = 'bento/slides'
 export const FORMAT_VERSION = 1
@@ -1046,31 +1047,86 @@ export function deriveChartPalette(accent: string): string[] {
 const stripCell = (html: string) =>
   html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, '').replace(/,/g, '').trim()
 
-/** First column = x labels; each mostly-numeric column after = a data series. */
-export function tableChartColumns(table: TableElement): { labels: string[]; cols: Array<{ name: string; data: number[]; isPct: boolean }> } {
+// Currencies a cell may write before or after its number. Longest first, so
+// `US$` is not read as `$` with a stray `US`.
+const CURRENCY = 'US\\$|R\\$|USD|EUR|GBP|JPY|CNY|CHF|CAD|AUD|BRL|INR|MXN|KRW|SEK|NOK|DKK|PLN|HKD|SGD|[$€£¥₹]'
+const CURRENCY_BEFORE = new RegExp(`^(${CURRENCY})\\s*`)
+const CURRENCY_AFTER = new RegExp(`\\s*(${CURRENCY})$`)
+const MAGNITUDE: Record<string, number> = { k: 1e3, K: 1e3, m: 1e6, M: 1e6, B: 1e9, bn: 1e9, Bn: 1e9, BN: 1e9 }
+
+/**
+ * The number a table cell holds, read the way finance writes it: `$1,204`,
+ * `USD 3,000`, `9,4 €` (the currency comes back as `unit`), `(300)` and `−15`
+ * negative, `27%` / `12 %` (`pct`), `€9.4M` / `1.2k` scaled by their suffix.
+ * Separators are countnumber.ts readNumber's (the #584 ruling), so `1.2.3`
+ * and `192.168.1.1` are not numbers; nor is anything else (`Q1`, `n/a`,
+ * `12 apples`): null. The ONE cell-to-number reader — chart creation and the
+ * live link both use it, so they cannot disagree.
+ */
+export function readCellNumber(text: string): { value: number; unit?: string; pct?: boolean } | null {
+  let s = text.replace(/<[^>]*>/g, '').replace(/&(nbsp|#160);/gi, ' ').replace(/&(minus|#8722);/gi, '−')
+    .replace(/&[a-z]+;|&#\d+;/gi, '').replace(/[\s\u2009\u202f]+/g, ' ').trim()
+  let unit: string | undefined, pct = false, paren = false, sign = 0
+  // peel what may wrap the number, in any order: -$300, $-300, ($300), 9,4 €
+  for (let again = true; again;) {
+    again = false
+    let m: RegExpExecArray | null
+    if (!paren && !sign && /^\(.*\)$/.test(s)) { paren = true; s = s.slice(1, -1).trim(); again = true }
+    if (!paren && !sign && (m = /^[-+−]\s?/.exec(s))) { sign = m[0][0] === '+' ? 1 : -1; s = s.slice(m[0].length); again = true }
+    if (!unit && (m = CURRENCY_BEFORE.exec(s) ?? CURRENCY_AFTER.exec(s))) { unit = m[1]; s = m.index ? s.slice(0, m.index) : s.slice(m[0].length); again = true }
+    if (!pct && (m = /\s?%$/.exec(s))) { pct = true; s = s.slice(0, m.index); again = true }
+  }
+  let scale = 1
+  const mag = /\d(bn|Bn|BN|[kKmMB])$/.exec(s)
+  if (mag) { scale = MAGNITUDE[mag[1]]; s = s.slice(0, s.length - mag[1].length) }
+  // `1 204`: a space groups only in a well-formed pattern
+  if (/^\d{1,3}( \d{3})+([.,]\d+)?$/.test(s)) s = s.replace(/ /g, '')
+  if (!/^\d+([.,]\d+)*$/.test(s) || !isCountable(s)) return null
+  const n = readNumber(s).value * (paren || sign < 0 ? -1 : 1)
+  const value = scale === 1 ? n : Number((n * scale).toPrecision(15))
+  return { value, ...(unit ? { unit } : {}), ...(pct ? { pct: true } : {}) }
+}
+
+export interface TableChartColumn { name: string; data: number[]; isPct: boolean; maxAbs: number; unit?: string }
+
+/**
+ * First column = x labels; each mostly-numeric column after = a data series.
+ * `skipped` names the columns left out (by header, else by letter) so the
+ * caller can say so; a column whose numbers all name one currency carries it
+ * as `unit`.
+ */
+export function tableChartColumns(table: TableElement): { labels: string[]; cols: TableChartColumn[]; skipped: string[] } {
   const bodyRows = table.header ? table.rows.slice(1) : table.rows
   const headerRow = table.header ? table.rows[0] : null
   const labels = bodyRows.map((r) => stripCell(r.cells[0]?.html ?? ''))
-  const cols: Array<{ name: string; data: number[]; isPct: boolean }> = []
+  const cols: TableChartColumn[] = []
+  const skipped: string[] = []
+  const half = Math.ceil(bodyRows.length / 2)
   for (let c = 1; c < table.columns.length; c++) {
-    const raw = bodyRows.map((r) => r.cells[c]?.html ?? '')
-    const parsed = raw.map((h) => parseFloat(stripCell(h)))
-    if (parsed.filter((n) => !Number.isNaN(n)).length < Math.ceil(bodyRows.length / 2)) continue
+    const name = headerRow ? stripCell(headerRow.cells[c]?.html ?? '') : ''
+    const parsed = bodyRows.map((r) => readCellNumber(r.cells[c]?.html ?? ''))
+    const good = parsed.filter((n) => n !== null)
+    if (good.length < half) { skipped.push(name || String.fromCharCode(65 + (c % 26))); continue }
+    const units = new Set(good.map((n) => n.unit).filter(Boolean))
     cols.push({
-      name: headerRow ? stripCell(headerRow.cells[c]?.html ?? '') : '',
-      data: parsed.map((n) => (Number.isNaN(n) ? 0 : n)),
-      isPct: /%/.test(headerRow ? stripCell(headerRow.cells[c]?.html ?? '') : '') ||
-        raw.filter((h) => /%/.test(h)).length >= Math.ceil(bodyRows.length / 2),
+      name,
+      data: parsed.map((n) => n?.value ?? 0),
+      isPct: /%/.test(name) || good.filter((n) => n.pct).length >= half,
+      maxAbs: Math.max(1, ...good.map((n) => Math.abs(n.value))),
+      ...(units.size === 1 ? { unit: [...units][0] } : {}),
     })
   }
-  return { labels, cols }
+  return { labels, cols, skipped }
 }
 
 /**
  * Push a linked table's current values into a chart's option IN PLACE,
  * preserving the chart's styling/axis config (only xAxis labels + each series'
- * data change). Returns true if anything changed. Series map to numeric columns
- * by position; extra series/columns are left untouched.
+ * data change). Returns true if anything changed. A series follows the column
+ * whose header matches its name; one that matches none maps by position, as
+ * every series did before — so a column that starts charting (say `$1,204`,
+ * once unreadable) cannot shift an existing chart's data into another slot.
+ * Extra series/columns are left untouched.
  */
 export function syncLinkedChart(chart: ChartElement, table: TableElement): boolean {
   const before = JSON.stringify(chart.option)
@@ -1079,11 +1135,40 @@ export function syncLinkedChart(chart: ChartElement, table: TableElement): boole
   if (opt.xAxis && !Array.isArray(opt.xAxis) && typeof opt.xAxis === 'object') opt.xAxis.data = labels
   const series: any[] = Array.isArray(opt.series) ? opt.series : opt.series ? [opt.series] : []
   series.forEach((s, i) => {
-    if (!s || !cols[i]) return
-    if (s.type === 'pie') s.data = labels.map((name, j) => ({ name, value: cols[i].data[j] ?? 0 }))
-    else s.data = cols[i].data
+    const col = (s?.name && cols.find((c) => c.name === s.name)) || cols[i]
+    if (!s || !col) return
+    if (s.type === 'pie') s.data = labels.map((name, j) => ({ name, value: col.data[j] ?? 0 }))
+    else s.data = col.data
   })
   return JSON.stringify(chart.option) !== before
+}
+
+/**
+ * Where a chart made from `table` goes, always inside the page: just below
+ * the table when a full-height chart fits there; else beside it; else above
+ * it; else in the taller free band above or below, shortened to fit; else
+ * centred, shortened to the page. The page size is the deck's, not 1280×720.
+ */
+export function chartBoxFor(
+  table: { x: number; y: number; w: number; h: number },
+  size: { width: number; height: number },
+): { x: number; y: number; w: number; h: number } {
+  const M = 24, GAP = 24, MIN_W = 360, MIN_H = 160
+  const W = size.width, H = size.height
+  const clamp = (v: number, lo: number, hi: number) => Math.round(Math.max(lo, Math.min(v, hi)))
+  const w = Math.round(Math.min(Math.max(table.w, 640), W - 2 * M))
+  const h = Math.round(Math.min(300, H - 2 * M))
+  const x = clamp(table.x, M, W - M - w)
+  const below = Math.round(table.y + table.h + GAP), aboveEnd = Math.round(table.y - GAP)
+  if (below + h <= H - M) return { x, y: below, w, h }
+  const by = clamp(table.y, M, H - M - h)
+  const right = Math.round(table.x + table.w + GAP), rightW = W - M - right, leftW = Math.round(table.x - GAP - M)
+  if (rightW >= MIN_W) return { x: right, y: by, w: Math.min(w, rightW), h }
+  if (leftW >= MIN_W) { const bw = Math.min(w, leftW); return { x: Math.round(table.x - GAP - bw), y: by, w: bw, h } }
+  if (aboveEnd - h >= M) return { x, y: aboveEnd - h, w, h }
+  const downH = H - M - below, upH = aboveEnd - M
+  if (Math.max(downH, upH) >= MIN_H) return downH >= upH ? { x, y: below, w, h: downH } : { x, y: M, w, h: upH }
+  return { x: Math.round((W - w) / 2), y: Math.round((H - h) / 2), w, h }
 }
 
 export function chartColorsFor(theme: BentoDoc['theme']): string[] {

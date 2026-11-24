@@ -16,6 +16,17 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **A chart made from a table reads numbers the way finance writes them, says
+  what it left out, and stays on the slide.** `$1,204`, `(300)`, `€9.4M`,
+  `12 %` and `USD 3,000` now chart as numbers (brackets are negative, `k`, `M`
+  and `bn` scale), where before those columns were dropped without a word. A
+  column that holds no numbers is named in the message ("Charted 2 of 3
+  columns — not numeric: Notes"), and a column's currency shows on its axis.
+  The new chart goes below, beside or above the table, wherever it fits inside
+  the slide on any page size, instead of hanging off the bottom. Editing a
+  cell updates a linked chart with the same rules, and a linked chart follows
+  its columns by name, so an existing chart keeps showing the column it
+  showed.
 
 ## [1.3.0] — 2026-11-22
 

@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Charted {n} of {total} columns — not numeric: {names}": "已繪製 {total} 欄中的 {n} 欄 — 非數值欄：{names}",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",

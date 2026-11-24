@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Charted {n} of {total} columns — not numeric: {names}": "{total} 列中 {n} 列をグラフにしました — 数値ではない列: {names}",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",

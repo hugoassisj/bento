@@ -263,8 +263,10 @@ anim, charts, i18n, sync), shared by every app.
   `applyChartPalette` (model.ts) bakes `option.color` from `doc.theme.chartPalette`
   (optional format field; the starter deck declares peach/steel) or, absent that,
   `deriveChartPalette(accent)` (accent + a cool HSL counterpart, each tinted).
-  tableToChart makes ONE series per numeric column (commas/`%` stripped, blanks→0,
-  first column = x labels) — and when two columns sit on very different scales
+  tableToChart makes ONE series per numeric column (model.ts `readCellNumber`, the
+  one cell reader, shared with the live link: `$1,204`, `(300)`, `€9.4M`, `12 %`;
+  separators per countnumber.ts; blanks→0; skipped columns are named in the toast;
+  `chartBoxFor` keeps the new chart on the page; first column = x labels) — and when two columns sit on very different scales
   (or one reads as `%`) it auto-splits them onto a DUAL axis: bars on the left,
   the odd column as a line on a right-hand axis. **Dual y-axis (v0.9.6)**:
   `option.yAxis` may be an ARRAY of two value axes; a series picks one via

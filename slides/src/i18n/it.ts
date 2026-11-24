@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Charted {n} of {total} columns — not numeric: {names}": "Rappresentate {n} colonne su {total} — non numeriche: {names}",
   "View": "Vista",
   "Current slide": "Diapositiva attuale",
   "Slide thumbnails": "Miniature delle diapositive",
