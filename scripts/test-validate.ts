@@ -311,11 +311,10 @@ ok(refCodes(refDoc({ fill: 'accent1' }, '#123456')).has('theme-ref-stale'),
   'a literal that disagrees with its reference is reported before the palette overwrites it')
 
 // ------------------------------------------------- what opening the file changes
-// Three things a deck written straight to disk loses silently when it opens
+// Two things a deck written straight to disk loses silently when it opens
 // (the derive pass, derive.ts), where no load report exists to say so: a token
-// binding whose literal disagrees is dropped as a hand edit, a component copy
-// with no sig keeps every difference as a permanent override, and a parentId
-// naming no frame is removed.
+// binding whose literal disagrees is dropped as a hand edit, and a component
+// copy with no sig keeps every difference as a permanent override.
 {
   const tokDoc = (el: Record<string, unknown>): BentoDoc => ({
     ...clean,
@@ -343,13 +342,8 @@ ok(refCodes(refDoc({ fill: 'accent1' }, '#123456')).has('theme-ref-stale'),
   ok(found(slideDoc([main, copy('#00ff00', { sig: 'reset' })]), 'component-copy-unsynced').length === 0, 'a copy with sig "reset" is silent — it follows its main')
   ok(found(slideDoc([main, copy('#ff0000')]), 'component-copy-unsynced').length === 0, 'a copy with no sig that equals its main is silent — nothing becomes an override')
 
-  const frame = rect({ id: 'f', x: 96, y: 300, w: 600, h: 200, layout: { dir: 'row', gap: 10, pad: [10, 10, 10, 10] } })
-  const parents = found(slideDoc([frame, rect({ id: 'a', parentId: 'nope' }), rect({ id: 'b', parentId: 'c' }), rect({ id: 'c', x: 600 }), rect({ id: 'd', parentId: 'f' })]), 'parent-not-frame')
-  ok(parents.length === 2 && parents.every((f) => f.severity === 'warning' && f.path === 'parentId') && parents.map((f) => f.element).join() === 'a,b',
-    `a parentId naming nothing or a non-frame is parent-not-frame; one naming a frame is silent (${parents.map((f) => f.element).join()})`)
-
-  const starterNew = starter.findings.filter((f) => ['token-stale', 'component-copy-unsynced', 'parent-not-frame'].includes(f.code))
-  ok(starterNew.length === 0, `the starter deck produces none of token-stale, component-copy-unsynced, parent-not-frame (${starterNew.map((f) => f.code).join(', ') || 'none'})`)
+  const starterNew = starter.findings.filter((f) => ['token-stale', 'component-copy-unsynced'].includes(f.code))
+  ok(starterNew.length === 0, `the starter deck produces neither token-stale nor component-copy-unsynced (${starterNew.map((f) => f.code).join(', ') || 'none'})`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

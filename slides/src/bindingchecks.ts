@@ -3,7 +3,7 @@
 //
 // Validator findings for what opening a deck changes silently (validate.ts
 // calls bindingChecks). The derive pass (derive.ts) runs on every open and
-// settles three things an author may have written differently:
+// settles two things an author may have written differently:
 //
 //   token-stale              a token-bound literal that differs from its token
 //                            loses the binding (tokens.ts: with the tokens
@@ -11,10 +11,10 @@
 //                            beside the palette's theme-ref-stale;
 //   component-copy-unsynced  a component copy with no `sig` keeps every
 //                            difference from its main as a permanent override
-//                            (components.ts) — warning;
-//   parent-not-frame         a `parentId` naming nothing, a non-frame or the
-//                            element itself is removed with `sizing`
-//                            (layout.ts layoutSlide) — warning.
+//                            (components.ts) — warning.
+//
+// A `parentId` naming no frame (removed by layout.ts layoutSlide) is the
+// validator's `dangling-parent`, which belongs with the value checks.
 //
 // loadDoc's report lists these as they happen (derivelosses.ts); these
 // findings are for a file written straight to disk, where no report exists.
@@ -28,7 +28,6 @@ import type { Finding } from './validate.ts'
 import { eachRef } from './palette.ts'
 import { tokenDrift, tokenName } from './tokens.ts'
 import { syncComponents } from './components.ts'
-import { isFrame } from './layout.ts'
 
 type El = SlideElement & { groupId?: string; component?: { id: string; main?: boolean; sig?: string; over?: string[] } }
 type Holder = Record<string, unknown> & { themeRefs?: Record<string, string> }
@@ -45,7 +44,7 @@ export function bindingChecks(doc: BentoDoc, add: (f: Finding) => void): void {
     const at = { slide: slide.id, ...(element ? { element: element.id } : {}) }
     add({ ...at, code: 'token-stale', severity: 'info', path,
       message: d.have === undefined
-        ? `There is no value at "${path}" for token "${name}" (${show(d.want)}), so opening the deck drops the binding. Write ${show(d.want)}; loadDoc() fills it from the token.`
+        ? `There is no value at "${path}" for token "${name}" (${show(d.want)}), so opening the deck drops the binding. Write ${show(d.want)} there.`
         : `This value is ${show(d.have)} but its token "${name}" holds ${show(d.want)}, so opening the deck drops the binding and keeps ${show(d.have)}. Write ${show(d.want)} to keep it bound, or clear the reference if ${show(d.have)} was deliberate.` })
   })
 
@@ -70,22 +69,6 @@ export function bindingChecks(doc: BentoDoc, add: (f: Finding) => void): void {
       if (!added.length) continue
       add({ slide: s.id, element: e.id, code: 'component-copy-unsynced', severity: 'warning', path: 'component.sig',
         message: `This copy of component "${e.component!.id}" has no sig, so opening the deck keeps its ${added.map((k) => `"${k}"`).join(', ')} as overrides: it stops following the main there. Write component.sig "reset" to follow the main, or leave it if the difference is meant.` })
-    }
-  }
-
-  // ---- parent-not-frame ---------------------------------------------------
-  for (const s of doc.slides) {
-    const byId = new Map(s.elements.map((e) => [e.id, e]))
-    for (const el of s.elements) {
-      if (el.parentId === undefined) continue
-      const p = byId.get(el.parentId)
-      const why = el.parentId === el.id ? 'names the element itself'
-        : !p ? `names "${el.parentId}", and no element on this slide has that id`
-        : !isFrame(p) ? `names "${el.parentId}", which is not a frame (a rect with layout)`
-        : ''
-      if (!why) continue
-      add({ slide: s.id, element: el.id, code: 'parent-not-frame', severity: 'warning', path: 'parentId',
-        message: `parentId ${why}, so opening the deck drops it (and sizing) and the element stays where it is written. Name a frame on this slide, or remove parentId.` })
     }
   }
 }

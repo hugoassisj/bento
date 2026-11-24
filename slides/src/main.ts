@@ -375,7 +375,10 @@ dismissSplash()
    * On success returns the LOAD REPORT (truthy, so `if (loadDoc(j))` still
    * reads as before): `{ ok: true, compact, dropped: [{path, reason}],
    * expanded, fitted, findings, refit }` — what the gate discarded and why,
-   * how many fields the compact expansion filled, how many text boxes were
+   * and what the derive pass changed in what was written (a token binding
+   * dropped, a copy's override added, frame children reordered, a dangling
+   * parentId removed; derivelosses.ts), each with a path into the input and
+   * the fix; how many fields the compact expansion filled, how many text boxes were
    * fitted to their text, and validate()'s findings on the loaded document
    * — taken after the derive pass (frame layout, tokens, components), so they
    * match a validate() call made right after (`derived: true`).

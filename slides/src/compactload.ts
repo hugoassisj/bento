@@ -32,8 +32,10 @@
 // store already derived, so the editor's own pass on `replace` is a no-op.
 // What that pass changes in what the author wrote (a token binding dropped,
 // a copy's override added, frame children reordered, a dangling parentId
-// removed) is listed in `dropped` with the fix (derivelosses.ts); a token
-// reference with no literal takes the token's value first, so it holds.
+// removed) is listed in `dropped` with the fix and a path into the input
+// (derivelosses.ts); a token reference with no literal takes the token's
+// value first, so it holds (compact input, and an element's optional
+// top-level key in a full one).
 
 import { parseDoc, type BentoDoc, type Slide, type TextElement } from './model'
 import { sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
@@ -98,7 +100,7 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
     if (!gated) return null
     const doc = gated.doc
     fillUnwrittenTokens(doc)
-    const derived = deriveReported(doc)
+    const derived = deriveReported(doc, raw)
     return { doc, report: { ok: true, compact: false, dropped: [...gated.dropped, ...derived], expanded: 0, fitted: 0, findings: validateDoc(doc), derived: true, refit: [], laidOut: 0, stacks: [] } }
   }
   const { doc: expanded, stats } = expandDocWithStats(raw)
@@ -130,7 +132,7 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
   // after the fit, so a hugging frame lays out the measured heights; what it
   // changes in what the author wrote is reported beside the gate's drops
   fillUnwrittenTokens(doc) // layouts are not expanded; elements were (compact.ts)
-  all.push(...deriveReported(doc))
+  all.push(...deriveReported(doc, raw))
   return { doc, report: { ok: true, compact: true, dropped: all, expanded: stats.expanded, fitted, findings: validateDoc(doc), derived: true, refit, laidOut: stats.laidOut, stacks: stats.stacks } }
 }
 
