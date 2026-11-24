@@ -4064,7 +4064,7 @@ body.ed-row-resizing .ed-notespane-text, body.ed-row-resizing .ed-notespane { tr
 }
 /* Tokens ▸ ⋯ ▸ Import / Export tokens (tokeniodialog.ts) */
 .ed-tokens-file { flex: none; width: 24px; height: 24px; padding: 0; }
-.ed-tokio { width: min(516px, calc(100vw - 76px)); display: flex; flex-direction: column; gap: 8px; }
+.ed-tokio { width: min(512px, calc(100vw - 76px)); display: flex; flex-direction: column; gap: 8px; }
 .ed-tokio > .ed-btn { align-self: flex-start; }
 .ed-tokio > p { margin: 0; }
 .ed-tokio-why { margin: 0; min-height: 1em; font-size: 12px; color: var(--danger); }

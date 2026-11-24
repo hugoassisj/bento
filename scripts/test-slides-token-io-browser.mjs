@@ -15,9 +15,12 @@
 //   3. ⌘Z once restores the previous token set byte for byte.
 //   4. Export: the dialog's JSON and its Download (<deck>.tokens.json) carry the
 //      tokens and theme colours and no collab or slide content.
-//   5. A hostile paste (url() colour, __proto__) lists each refusal and writes
+//   5. A file of two same-shaped sets lands one set per mode ("Each set is a
+//      mode", ticked for it), or merged into the active mode when unticked;
+//      applied, the deck gains the modes, and ⌘Z takes them away.
+//   6. A hostile paste (url() colour, __proto__) lists each refusal and writes
 //      nothing; Escape closes the dialog.
-//   6. Not one request leaves the page: http(s) is aborted, sockets closed,
+//   7. Not one request leaves the page: http(s) is aborted, sockets closed,
 //      Offline mode on — and the count of attempts stays zero.
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
@@ -65,8 +68,10 @@ try {
   await p.waitForTimeout(200)
   const before = await p.evaluate(() => JSON.stringify(window.bento.doc.theme.tokens))
   const tokens = () => p.evaluate(() => JSON.parse(JSON.stringify(window.bento.doc.theme.tokens ?? null)))
-  const elA = () => p.evaluate(() => JSON.parse(JSON.stringify(window.bento.doc.slides[0].elements.find((e) => e.id === 'a'))))
+  const elA = () => p.evaluate(() => JSON.parse(JSON.stringify(window.bento.doc.slides[0]?.elements.find((e) => e.id === 'a') ?? null)))
+  // a missing control is a failed check, not a crash: an older build has none of them
   const tap = (sel) => p.click(sel, { timeout: 2000 }).then(() => true, () => false)
+  const fill = (sel, v) => p.fill(sel, v, { timeout: 2000 }).then(() => true, () => false)
   const menu = async (label) => {
     if (!(await tap('.ed-tokens-file'))) return false
     await p.waitForTimeout(150)
@@ -84,7 +89,7 @@ try {
   ok(await menu('Import tokens…'), 'Import tokens… opens')
   await p.waitForSelector('.bkd-card textarea', { timeout: 2000 }).catch(() => {})
   ok(await p.evaluate(() => document.activeElement?.matches('.bkd-card textarea')), 'the paste field has focus')
-  await p.fill('.bkd-card textarea', FILE)
+  await fill('.bkd-card textarea', FILE)
   await tap('.bkd-card button:has-text("Review")')
   await p.waitForTimeout(250)
   const sum = await p.evaluate(() => document.querySelector('.ed-tokio-sum')?.textContent ?? '')
@@ -95,6 +100,11 @@ try {
   ok(/type\.body/.test(skipped) && /no typography tokens/.test(skipped), `an unsupported token is listed with its reason ("${skipped}")`)
   const changed = await p.evaluate(() => { const r = document.querySelector('.ed-tokio-changed'); return { text: r?.textContent ?? '', on: r?.querySelector('input')?.checked } })
   ok(changed.on === false && /16 → 24/.test(changed.text), `the changed row shows old → new and starts unticked ("${changed.text}")`)
+  const replaceBox = '.ed-tokio-opt:has-text("Replace existing") input'
+  await tap(replaceBox); await p.waitForTimeout(150)
+  const replaced = await p.evaluate(() => document.querySelector('.ed-tokio-changed input')?.checked)
+  await tap(replaceBox); await p.waitForTimeout(150)
+  ok(replaced === true && (await p.evaluate(() => document.querySelector('.ed-tokio-changed input')?.checked)) === false, '"Replace existing" ticks the changed rows, and unticks them again')
   await tap('.ed-tokio-changed input')
   await tap('.ed-tokio-new input[aria-label="color.skip"]')
   await tap('.bkd-card button:has-text("Apply")')
@@ -105,7 +115,7 @@ try {
   ok(!after?.set['color.skip'] && !after?.set['type.body'], 'the unticked row and the skipped one did not')
   ok(after?.set['color.brand']?.values.default === '#ff9900', 'a token the file did not name is untouched')
   const a = await elA()
-  ok(a.radius === 24 && a.themeRefs?.radius === '$radius.md', `the bound element follows its token and keeps its binding (radius ${a.radius}, ${a.themeRefs?.radius})`)
+  ok(a?.radius === 24 && a?.themeRefs?.radius === '$radius.md', `the bound element follows its token and keeps its binding (radius ${a?.radius}, ${a?.themeRefs?.radius})`)
   ok(!(await p.$('.bkd-overlay')), 'Apply closes the dialog')
 
   console.log('\n3. one undo step\n')
@@ -113,7 +123,7 @@ try {
   await p.keyboard.press('Meta+z'); await p.waitForTimeout(300)
   const undone = await p.evaluate(() => JSON.stringify(window.bento.doc.theme.tokens))
   ok(undone === before, '⌘Z once restores the token set byte for byte')
-  ok((await elA()).radius === 16, '…and the bound element with it')
+  ok((await elA())?.radius === 16, '…and the bound element with it')
 
   console.log('\n4. export\n')
   ok(await menu('Export tokens…'), 'Export tokens… opens')
@@ -129,11 +139,32 @@ try {
   ok(/\.tokens\.json$/.test(name) && body === shown, `Download saves the same JSON as ${name}`)
   ok(!/STAYS-HOME|"collab"|"slides"|"elements"/.test(body), 'the export carries no collab, no notes, no slide content')
 
-  console.log('\n5. a hostile paste\n')
+  console.log('\n5. a file of sets\n')
+  await menu('Import tokens…')
+  await p.waitForSelector('.bkd-card textarea', { timeout: 2000 }).catch(() => {})
+  await fill('.bkd-card textarea', JSON.stringify({ $metadata: { tokenSetOrder: ['light', 'dark'] }, light: { bg: { $type: 'color', $value: '#ffffff' } }, dark: { bg: { $type: 'color', $value: '#000000' } } }))
+  await tap('.bkd-card button:has-text("Review")')
+  await p.waitForTimeout(250)
+  const valText = () => p.evaluate(() => document.querySelector('.ed-tokio-new .ed-tokio-val')?.textContent)
+  const modeBox = '.ed-tokio-opt:has-text("Each set is a mode") input'
+  const perMode = await valText()
+  await tap(modeBox); await p.waitForTimeout(200)
+  const merged = await valText()
+  await tap(modeBox); await p.waitForTimeout(200)
+  ok(perMode === 'light: ffffff · dark: 000000' && merged === '000000' && (await valText()) === perMode,
+    `two sets of the same shape start as one mode each; unticked they merge into the active mode, the later set winning ("${perMode}" ⇄ "${merged}")`)
+  await tap('.bkd-card button:has-text("Apply")'); await p.waitForTimeout(300)
+  const sets = await tokens()
+  ok(JSON.stringify(sets?.modes) === '["default","light","dark"]' && JSON.stringify(sets?.set.bg?.values) === '{"light":"#ffffff","dark":"#000000"}', `applied, the deck gains the two modes (${JSON.stringify(sets?.modes)})`)
+  await p.evaluate(() => document.activeElement?.blur())
+  await p.keyboard.press('Meta+z'); await p.waitForTimeout(300)
+  ok(await p.evaluate(() => JSON.stringify(window.bento.doc.theme.tokens)) === before, '…and ⌘Z takes them away again')
+
+  console.log('\n6. a hostile paste\n')
   const pre = await p.evaluate(() => JSON.stringify(window.bento.doc.theme))
   await menu('Import tokens…')
   await p.waitForSelector('.bkd-card textarea', { timeout: 2000 }).catch(() => {})
-  await p.fill('.bkd-card textarea', '{"a":{"evil":{"$type":"color","$value":"url(https://evil.example/x.svg#f)"}},"__proto__":{"x":{"$type":"color","$value":"#f00"}}}')
+  await fill('.bkd-card textarea', '{"a":{"evil":{"$type":"color","$value":"url(https://evil.example/x.svg#f)"}},"__proto__":{"x":{"$type":"color","$value":"#f00"}}}')
   await tap('.bkd-card button:has-text("Review")')
   await p.waitForTimeout(250)
   const refusals = await p.$$eval('.ed-tokio-skipped', (r) => r.map((x) => x.textContent))
@@ -143,7 +174,7 @@ try {
   ok(!(await p.$('.bkd-overlay')), 'Escape closes the dialog')
   ok(await p.evaluate(() => JSON.stringify(window.bento.doc.theme)) === pre && !('x' in {}), 'nothing was written, Object.prototype untouched')
 
-  console.log('\n6. offline\n')
+  console.log('\n7. offline\n')
   ok(requests === 0, `no request or socket was attempted (${requests})`)
   ok(!errors.length, `no page errors${errors.length ? `: ${errors.join(' | ')}` : ''}`)
 } finally {
