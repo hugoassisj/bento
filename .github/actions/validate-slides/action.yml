@@ -751,3 +751,15 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: The load report's findings come after layout
+      # loadDoc / Replace from JSON validated the gated deck BEFORE the derive
+      # pass, so frame children written at placeholder coordinates were
+      # reported where written, not where layout puts them (0 warnings while
+      # a row ran off the canvas; 3 for boxes about to move into place). For
+      # every agent fixture and two frame decks, full and compact, the report
+      # equals validateDoc on a separately derived copy, the editor's pass on
+      # `replace` has nothing left to do, and token bindings load as before.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-load-report.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-load-report.mjs"
+        node "$RUNNER_TEMP/test-slides-load-report.mjs"
