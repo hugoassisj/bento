@@ -376,7 +376,9 @@ dismissSplash()
    * reads as before): `{ ok: true, compact, dropped: [{path, reason}],
    * expanded, fitted, findings, refit }` — what the gate discarded and why,
    * how many fields the compact expansion filled, how many text boxes were
-   * fitted to their text, and validate()'s findings on the loaded document.
+   * fitted to their text, and validate()'s findings on the loaded document
+   * — taken after the derive pass (frame layout, tokens, components), so they
+   * match a validate() call made right after (`derived: true`).
    * An agent's loop: load → read dropped/findings → fix → load again.
    */
   loadDoc(json: string): LoadReport | false {

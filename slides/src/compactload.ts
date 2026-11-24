@@ -23,6 +23,13 @@
 // way the panel's "Fit height to text" measures (measureElement, the deck's
 // real fonts) and given its true height BEFORE the document reaches the store,
 // so undo never sees the provisional frame.
+//
+// The findings describe the document as it will be DRAWN: the derive pass
+// (derive.ts: frame layout, tokens, components, connectors) runs here, before
+// validateDoc, with the same fresh memory the editor uses on `replace`. Frame
+// children written at placeholder coordinates were otherwise reported where
+// they were written, not where layout puts them. The document reaches the
+// store already derived, so the editor's own pass on `replace` is a no-op.
 
 import { parseDoc, type BentoDoc, type Slide, type TextElement } from './model'
 import { sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
@@ -30,6 +37,7 @@ import { expandDocWithStats, isCompact, STACK_GAP, type ExpandStats } from './co
 import { measureElement } from './measure'
 import { validateDoc, type ValidateResult } from './validate'
 import { sanitizeDoc } from './restoregate'
+import { derive, deriveMemory } from './derive'
 
 export interface LoadReport {
   ok: true
@@ -41,8 +49,11 @@ export interface LoadReport {
   expanded: number
   /** text elements whose h was fitted to their text */
   fitted: number
-  /** validate() on the loaded document */
+  /** validate() on the loaded document, after the derive pass */
   findings: ValidateResult
+  /** the derive pass (layout, tokens, components) ran before `findings` were
+   *  taken, so they match a validate() call made right after loading */
+  derived: true
   /** the elements still to re-fit once document.fonts settles (heights were
    *  measured against fallback fonts); empty when fonts were ready */
   refit: ExpandStats['autoHeight']
@@ -80,7 +91,8 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
     const gated = sanitizeDoc(base as unknown as Record<string, unknown>, o.live)
     if (!gated) return null
     const doc = gated.doc
-    return { doc, report: { ok: true, compact: false, dropped: gated.dropped, expanded: 0, fitted: 0, findings: validateDoc(doc), refit: [], laidOut: 0, stacks: [] } }
+    derive(doc, deriveMemory(doc))
+    return { doc, report: { ok: true, compact: false, dropped: gated.dropped, expanded: 0, fitted: 0, findings: validateDoc(doc), derived: true, refit: [], laidOut: 0, stacks: [] } }
   }
   const { doc: expanded, stats } = expandDocWithStats(raw)
   const ex = expanded as unknown as Record<string, unknown>
@@ -108,7 +120,9 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
   // a role the layout had no slot for is reported beside the gate's drops:
   // same shape, same loop for the agent (path → reason)
   const all = [...dropped, ...stats.notes.map((n) => ({ path: n.path, reason: n.reason } as Dropped))]
-  return { doc, report: { ok: true, compact: true, dropped: all, expanded: stats.expanded, fitted, findings: validateDoc(doc), refit, laidOut: stats.laidOut, stacks: stats.stacks } }
+  // after the fit, so a hugging frame lays out the measured heights
+  derive(doc, deriveMemory(doc))
+  return { doc, report: { ok: true, compact: true, dropped: all, expanded: stats.expanded, fitted, findings: validateDoc(doc), derived: true, refit, laidOut: stats.laidOut, stacks: stats.stacks } }
 }
 
 /**

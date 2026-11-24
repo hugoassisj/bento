@@ -170,7 +170,8 @@ const r = window.bento.loadDoc(json)
 // r.expanded       → fields filled from the editor's defaults
 // r.fitted         → text boxes sized to their text
 // r.laidOut        → slides placed by layout + role
-// r.findings       → window.bento.validate() on the loaded deck (overflow, off-canvas, dead links …)
+// r.findings       → window.bento.validate() on the loaded deck (overflow, off-canvas, dead links …),
+//                    taken after frame layout, tokens and components (r.derived === true)
 ```
 
 The loop is: load → read `dropped` and `findings` → fix the JSON → load
