@@ -53,29 +53,52 @@ export function gridShape(els: readonly SlideElement[]): { cols: number; gap?: n
  *  - columns: a row, every child filling an equal share of the width;
  *  - rows: a column, every child filling an equal share of the height;
  *  - grid: `cols` equal columns (else the arrangement's own, gridShape).
- * The frame stops hugging and keeps the size it has, growing (right and
- * down) only where the children would not fit at the sizes they have — so
- * "equal rows" on a short, wide row does not crush them to nothing. The
- * cross axis stretches. Each child is put where the solver will read its slot from,
- * so the order is the one given whatever the old layout was.
+ * The frame stops hugging; the cross axis stretches. A frame that did not
+ * hug keeps its size and place: its children share the room it has, so
+ * switching from one preset to another never moves it. A hugging frame (a
+ * fresh ⇧A wrap among them) was only ever as big as its children, so it
+ * grows right and down where they would not fit at their OWN sizes — a size
+ * a fill or a stretch gave them does not count — and stays inside `bounds`
+ * (the slide): shifted back up or left, at most the slide's size. Each child
+ * is put where the solver will read its slot from, so the order is the one
+ * given whatever the old layout was.
  */
-export function applyPreset(f: Frame, kids: readonly SlideElement[], preset: LayoutPreset, cols?: number): void {
+export function applyPreset(f: Frame, kids: readonly SlideElement[], preset: LayoutPreset, cols?: number, bounds?: { w: number; h: number }): void {
   const L = f.layout
+  // which sizes are the children's own, read under the layout they had
+  const { dir: was, align: wasAlign } = L // read before the preset rewrites them
+  const stretched = (k: 'w' | 'h') => wasAlign === 'stretch' && (was === 'grid' || (was === 'row' ? k === 'h' : k === 'w'))
+  const own = (e: SlideElement, k: 'w' | 'h') => e.sizing?.[k] === 'fill' || stretched(k) ? 0 : e[k]
+  const hugged = !!L.hug
   L.dir = presetDir(preset)
   delete L.hug
   delete L.wrap
   L.align = 'stretch'
-  const [x0, y0] = [f.x + L.pad[3], f.y + L.pad[0]]
   const padW = L.pad[1] + L.pad[3], padH = L.pad[0] + L.pad[2]
-  const sum = (k: 'w' | 'h') => kids.reduce((a, e) => a + e[k], 0)
-  const max = (k: 'w' | 'h') => Math.max(0, ...kids.map((e) => e[k]))
-  const grow = (w: number, h: number) => { if (Number.isFinite(w)) f.w = Math.max(f.w, w); if (Number.isFinite(h)) f.h = Math.max(f.h, h) }
+  const sum = (k: 'w' | 'h') => kids.reduce((a, e) => a + own(e, k), 0)
+  const max = (k: 'w' | 'h') => Math.max(0, ...kids.map((e) => own(e, k)))
+  const c = preset === 'grid' ? Math.min(64, Math.max(1, Math.round(cols ?? gridShape(kids).cols))) : 1
+  const rows = Math.max(1, Math.ceil(kids.length / c))
+  const gaps = L.gap * Math.max(0, kids.length - 1)
+  if (hugged) {
+    const [w, h] = preset === 'grid' ? [padW + c * max('w') + L.gap * (c - 1), padH + rows * max('h') + L.gap * (rows - 1)]
+      : preset === 'columns' ? [padW + sum('w') + gaps, padH + max('h')]
+      : [padW + max('w'), padH + sum('h') + gaps]
+    const grow = (k: 'w' | 'h', v: number) => {
+      if (!(Number.isFinite(v) && v > f[k])) return
+      const room = bounds?.[k] ?? Infinity
+      f[k] = Math.min(v, Math.max(f[k], room))
+      // grown past the slide's edge: back inside it, as far as the slide allows
+      const P = k === 'w' ? 'x' : 'y'
+      if (f[P] + f[k] > room) f[P] = Math.max(0, room - f[k])
+    }
+    grow('w', w); grow('h', h)
+  }
+  const [x0, y0] = [f.x + L.pad[3], f.y + L.pad[0]]
   if (preset === 'grid') {
-    const c = L.cols = Math.min(64, Math.max(1, Math.round(cols ?? gridShape(kids).cols)))
-    const rows = Math.max(1, Math.ceil(kids.length / c))
-    grow(padW + c * max('w') + L.gap * (c - 1), padH + rows * max('h') + L.gap * (rows - 1))
-    const cw = Math.max(1, (f.w - L.pad[1] - L.pad[3] - L.gap * (c - 1)) / c)
-    const ch = Math.max(1, (f.h - L.pad[0] - L.pad[2] - L.gap * (rows - 1)) / rows)
+    L.cols = c
+    const cw = Math.max(1, (f.w - padW - L.gap * (c - 1)) / c)
+    const ch = Math.max(1, (f.h - padH - L.gap * (rows - 1)) / rows)
     kids.forEach((k, i) => {
       // stretch sizes every child to its cell: a fill left from a row or column is not needed
       setFill(k, 'w', false); setFill(k, 'h', false)
@@ -85,9 +108,6 @@ export function applyPreset(f: Frame, kids: readonly SlideElement[], preset: Lay
     return
   }
   const M = preset === 'columns' ? 'w' : 'h'
-  const gaps = L.gap * Math.max(0, kids.length - 1)
-  if (M === 'w') grow(padW + sum('w') + gaps, padH + max('h'))
-  else grow(padW + max('w'), padH + sum('h') + gaps)
   kids.forEach((k, i) => {
     setFill(k, M, true)
     setFill(k, M === 'w' ? 'h' : 'w', false) // the cross axis is stretched

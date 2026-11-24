@@ -376,6 +376,43 @@ console.log('\nauto layout presets: equal columns, equal rows, grid\n')
   layoutSlide(s)
   ok(equal(sorted(s, 'y').map((k: any) => k.h)), 'deleting one: the other two share the height')
 
+  // switching presets never moves or grows a frame that no longer hugs: the
+  // sizes a fill or a stretch gave the children are not theirs to grow from
+  s = three(); layoutSlide(s)
+  applyPreset(at(s, 'f'), sorted(s, 'x'), 'rows', undefined, { w: 1280, h: 720 })
+  layoutSlide(s)
+  const first = xywh(at(s, 'f'))
+  const trail: string[] = []
+  for (const pr of ['grid', 'columns', 'grid', 'rows', 'columns', 'rows'] as const) {
+    applyPreset(at(s, 'f'), frameChildren(s, at(s, 'f')), pr, undefined, { w: 1280, h: 720 })
+    layoutSlide(s)
+    trail.push(xywh(at(s, 'f')))
+  }
+  ok(trail.every((t) => t === first), `switching presets six times leaves the frame where the first put it (${first}; ${[...new Set(trail)].join(' | ')})`)
+  const inSlide = (e: any) => e.x >= 0 && e.y >= 0 && e.x + e.w <= 1280 && e.y + e.h <= 720
+  ok(inSlide(at(s, 'f')) && kidsOf(s).every(inSlide), 'frame and children stay on the slide')
+  // a hugging row low on the slide: equal rows grows it, but back up inside the slide
+  s = slide(box('f', 84, 404, 736, 152, { layout: { dir: 'row', gap: 92, pad: [16, 16, 16, 16], hug: true } }),
+    box('a', 100, 420, 160, 120, { parentId: 'f' }), box('b', 352, 420, 240, 100, { parentId: 'f' }), box('c', 684, 420, 120, 110, { parentId: 'f' }))
+  layoutSlide(s)
+  applyPreset(at(s, 'f'), sorted(s, 'x'), 'rows', undefined, { w: 1280, h: 720 })
+  layoutSlide(s)
+  ok(inSlide(at(s, 'f')) && kidsOf(s).every(inSlide) && at(s, 'f').h > 152, `equal rows low on the slide grows the frame upward, inside the slide (${xywh(at(s, 'f'))})`)
+  ok(equal(sorted(s, 'y').map((k: any) => k.h)), '…three equal rows')
+  // grid on the same low row (a fresh ⇧A wrap is a hugging grid frame): two rows at their own heights
+  s = slide(box('f', 84, 404, 736, 152, { layout: { dir: 'grid', gap: 92, pad: [16, 16, 16, 16], hug: true } }),
+    box('a', 100, 420, 160, 120, { parentId: 'f' }), box('b', 352, 420, 240, 100, { parentId: 'f' }), box('c', 684, 420, 120, 110, { parentId: 'f' }))
+  applyPreset(at(s, 'f'), readingOrder(kidsOf(s)), 'grid', 2, { w: 1280, h: 720 })
+  layoutSlide(s)
+  ok(at(s, 'f').h === 32 + 2 * 120 + 92 && inSlide(at(s, 'f')) && kidsOf(s).every((k: any) => k.h === 120), `grid on a low row grows to two rows of the tallest child, inside the slide (${xywh(at(s, 'f'))})`)
+  // more than the slide can hold: at most the slide's height, from its top
+  s = slide(box('f', 84, 300, 300, 152, { layout: { dir: 'row', gap: 92, pad: [16, 16, 16, 16], hug: true } }),
+    ...['a', 'b', 'c', 'd'].map((id, i) => box(id, 100 + i * 10, 316, 50, 200, { parentId: 'f' })))
+  layoutSlide(s)
+  applyPreset(at(s, 'f'), sorted(s, 'x'), 'rows', undefined, { w: 1280, h: 720 })
+  layoutSlide(s)
+  ok(at(s, 'f').y === 0 && at(s, 'f').h === 720, `four tall rows: the frame takes the slide's height and no more (${xywh(at(s, 'f'))})`)
+
   // a rough 2×2 arrangement: the columns it forms, read in reading order
   const rough = [box('p', 100, 100, 150, 90), box('q', 420, 110, 200, 80), box('r', 110, 330, 120, 100), box('t', 400, 340, 180, 90)]
   ok(readingOrder(rough).map((e: any) => e.id).join() === 'p,q,r,t', 'reading order: row by row, left to right')

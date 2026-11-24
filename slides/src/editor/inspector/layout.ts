@@ -137,7 +137,13 @@ function resizing(p: PropsPanel, els: SlideElement[], parent: Frame) {
     off.className = 'ed-btn ed-link-btn'
     off.textContent = t('Turn off Hug')
     // the frame keeps the size it has: hug off writes nothing else
-    off.addEventListener('click', () => p.mutate(parent.id, (e) => { delete (e as ShapeElement).layout?.hug }, true))
+    off.addEventListener('click', () => {
+      p.mutate(parent.id, (e) => { delete (e as ShapeElement).layout?.hug }, true)
+      // the panel rebuilt without this button: focus goes to what it unlocked
+      const fill = () => p.host.querySelector<HTMLElement>('.ed-seg[data-axis="w"] [data-value="fill"]:not(:disabled)')
+      const to = fill()
+      if (to) to.focus(); else setTimeout(() => fill()?.focus(), 0)
+    })
     hint.append(' ', off)
     p.host.appendChild(hint)
   }
@@ -145,7 +151,9 @@ function resizing(p: PropsPanel, els: SlideElement[], parent: Frame) {
 
 /** Words on a glyph segmented control: each button carries its short word
  *  beside the glyph, and fitWords shows the words while they fit. The long
- *  name stays the button's accessible name and tooltip. */
+ *  name is the tooltip; it is the accessible name only while the glyph
+ *  stands alone, so what a button shows is always what it is called
+ *  (WCAG 2.5.3, label in name). */
 function worded(seg: HTMLElement, words: Record<string, string>) {
   seg.classList.add('ed-seg-fit')
   for (const b of seg.querySelectorAll<HTMLElement>('button')) {
@@ -153,6 +161,17 @@ function worded(seg: HTMLElement, words: Record<string, string>) {
     w.className = 'ed-seg-word'
     w.textContent = words[b.dataset.value!] ?? ''
     b.appendChild(w)
+    b.removeAttribute('aria-label') // named by its word; fitRow names it again when only the glyph shows
+  }
+}
+
+/** Glyphs alone (or not): the long name becomes (or stops being) the accessible name. */
+function showGlyphs(seg: HTMLElement, on: boolean) {
+  seg.classList.toggle('ed-seg-icons', on)
+  for (const b of seg.querySelectorAll<HTMLElement>('button')) {
+    // the title may be lent to the hint under the pointer (editor/hints.ts)
+    if (on) b.setAttribute('aria-label', b.title || b.dataset.hint || '')
+    else b.removeAttribute('aria-label')
   }
 }
 
@@ -182,13 +201,13 @@ function fitRow(rowEl: HTMLElement) {
   ctx.font = getComputedStyle(btns[0]).font
   // each word and its button's padding, the gaps, the control's own padding and border
   const need = btns.reduce((a, b) => a + ctx.measureText(b.querySelector('.ed-seg-word')?.textContent ?? '').width + 8, 0) + 2 * (btns.length - 1) + 6 + 2
-  seg.classList.remove('ed-seg-icons')
+  showGlyphs(seg, false)
   rowEl.classList.remove('ed-row-wide')
   if (need <= seg.offsetWidth) return
   rowEl.classList.add('ed-row-wide')
   if (need <= seg.offsetWidth) return
   rowEl.classList.remove('ed-row-wide')
-  seg.classList.add('ed-seg-icons')
+  showGlyphs(seg, true)
 }
 
 /** The three presets: command id, English label, and what each makes. */
@@ -198,14 +217,19 @@ export const LAYOUT_PRESETS: ReadonlyArray<readonly [LayoutPreset, string, strin
   ['grid', 'layout-grid', 'Grid'],
 ]
 
+/** The slide's size: a preset that grows a frame keeps it on the slide. */
+const slideBounds = (p: PropsPanel) => ({ w: p.store.doc.size.width, h: p.store.doc.size.height })
+
 /** What a preset acts on: a frame (one picked with children in it, or every
- *  child of one frame picked), or two or more loose elements to wrap first. */
+ *  child of one frame picked), or two or more elements with ONE parent (the
+ *  slide or the same frame) to wrap first. Elements from different places
+ *  are refused: wrapping them would pull a child out of its frame. */
 function presetTarget(slide: Slide, els: readonly SlideElement[]): { frame: Frame } | { wrap: SlideElement[] } | null {
   if (els.length === 1 && isFrame(els[0])) return slide.elements.some((e) => e.parentId === els[0].id) ? { frame: els[0] } : null
   const pid = els[0]?.parentId
   const f = pid ? slide.elements.find((e) => e.id === pid) : undefined
   if (isFrame(f) && els.every((e) => e.parentId === pid) && frameChildren(slide, f).length === els.length) return { frame: f }
-  return els.length >= 2 ? { wrap: [...els] } : null
+  return els.length >= 2 && els.every((e) => e.parentId === pid) ? { wrap: [...els] } : null
 }
 
 /** Whether a preset has something to act on (the palette hides it otherwise). */
@@ -222,7 +246,7 @@ export function applyLayoutPreset(p: PropsPanel, els: readonly SlideElement[], p
     const slide = p.store.slide
     const f = slide.elements.find((e) => e.id === id)
     if (!isFrame(f)) return
-    applyPreset(f, frameChildren(slide, f), preset, preset === 'grid' && f.layout.dir === 'grid' ? colsOf(f) : undefined)
+    applyPreset(f, frameChildren(slide, f), preset, preset === 'grid' && f.layout.dir === 'grid' ? colsOf(f) : undefined, slideBounds(p))
   })
 }
 
@@ -304,7 +328,7 @@ export function wrapInFrame(p: PropsPanel, picked: SlideElement[], preset?: Layo
     p.store.commit(() => {
       makeCards()
       const f = els[0]
-      if (preset && isFrame(f)) applyPreset(f, frameChildren(p.store.slide, f), preset)
+      if (preset && isFrame(f)) applyPreset(f, frameChildren(p.store.slide, f), preset, undefined, slideBounds(p))
     })
     p.store.select([els[0].id])
     return
@@ -336,7 +360,7 @@ export function wrapInFrame(p: PropsPanel, picked: SlideElement[], preset?: Layo
     if (preset) {
       const kids = all.filter((e) => ids.has(e.id))
       const f = frame as Frame
-      applyPreset(f, preset === 'grid' ? readingOrder(kids) : frameChildren(p.store.slide, f), preset, shape?.cols)
+      applyPreset(f, preset === 'grid' ? readingOrder(kids) : frameChildren(p.store.slide, f), preset, shape?.cols, slideBounds(p))
     }
   })
   p.store.select([frame.id])

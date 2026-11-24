@@ -240,8 +240,10 @@ try {
     ok(same(ks.map((k) => k.w)), `on screen the three have one width (${fmt(ks.map((k) => k.w))})`)
     ok(same(gaps(ks, 'x', 'w')) && gaps(ks, 'x', 'w')[0] > 0, `and equal gaps (${fmt(gaps(ks, 'x', 'w'))})`)
     ok(ks.every((k) => k.sizing?.w === 'fill'), 'every child is set to fill its share')
-    const findings = await p.evaluate(() => window.bento.validate().findings.filter((x) => x.severity !== 'info').map((x) => x.code))
-    ok(!findings.length, `validate() reports nothing on the result (${findings.join(', ')})`)
+    // every finding above info, and out-of-canvas at ANY severity (a shape off the slide is only info)
+    const badFindings = () => p.evaluate(() => window.bento.validate().findings.filter((x) => x.severity !== 'info' || x.code === 'out-of-canvas').map((x) => `${x.code}@${x.path}`))
+    const findings = await badFindings()
+    ok(!findings.length, `validate() reports nothing on the result, not even out-of-canvas (${findings.join(', ')})`)
     await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
     ok(JSON.stringify(await els()) === drawn, 'one ⌘Z gives the three loose rectangles back exactly')
     await p.evaluate(() => window.bento.redo()); await p.waitForTimeout(250)
@@ -286,11 +288,14 @@ try {
     console.log('\nwords, glyphs when narrow\n')
     const words = () => p.$$eval('.ed-props .ed-seg[data-axis="w"] button', (bs) => bs.map((b) => {
       const w = b.querySelector('.ed-seg-word'), g = b.querySelector('svg')
-      return { v: b.dataset.value, name: b.getAttribute('aria-label'), word: w?.getBoundingClientRect().width > 0 ? w.textContent : '', glyph: g?.getBoundingClientRect().width > 0 }
+      return { v: b.dataset.value, label: b.getAttribute('aria-label'), tip: b.title || b.dataset.hint /* the hint borrows the title under the pointer */, word: w?.getBoundingClientRect().width > 0 ? w.textContent : '', glyph: g?.getBoundingClientRect().width > 0 }
     }))
+    // the accessible name as the browser computes it (role + name), not an attribute read back
+    const named = (name) => p.locator('.ed-props .ed-seg[data-axis="w"]').getByRole('radio', { name, exact: true }).count()
     let w = await words()
     ok(w.map((b) => b.word).join(' / ') === 'Fixed / Fill space' && w.every((b) => !b.glyph), `at the default panel width the control reads in words (${w.map((b) => b.word).join(' / ')})`)
-    ok(w.map((b) => b.name).join(' / ') === 'Fixed / Fill container', 'the long forms stay the accessible names')
+    ok(await named('Fixed') === 1 && await named('Fill space') === 1 && w.every((b) => b.label === null), 'each button is named by the word it shows (label in name)')
+    ok(w.map((b) => b.tip).join(' / ') === 'Fixed / Fill container', `the long forms are the tooltips (${w.map((b) => b.tip).join(' / ')})`)
     const fitsRow = await p.$eval('.ed-props .ed-seg[data-axis="w"] button:last-child', (b) => b.scrollWidth <= b.clientWidth)
     ok(fitsRow, 'no word is cut off')
     await p.evaluate(() => document.querySelector('.ed-props').style.setProperty('--panew', '190px')); await p.waitForTimeout(300)
@@ -299,10 +304,10 @@ try {
     // narrower than any English word list fits (a long translation does this at real widths)
     await p.evaluate(() => document.querySelector('.ed-props').style.setProperty('--panew', '110px')); await p.waitForTimeout(300)
     w = await words()
-    ok(w.every((b) => b.glyph && !b.word) && w.map((b) => b.name).join(' / ') === 'Fixed / Fill container', `too narrow: glyphs only, still named in words (${JSON.stringify(w.map((b) => [b.word, b.glyph]))})`)
+    ok(w.every((b) => b.glyph && !b.word) && await named('Fixed') === 1 && await named('Fill container') === 1, `too narrow: glyphs only, named by the long words (${JSON.stringify(w.map((b) => [b.word, b.glyph, b.label]))})`)
     await p.evaluate(() => document.querySelector('.ed-props').style.removeProperty('--panew')); await p.waitForTimeout(300)
     w = await words()
-    ok(w.every((b) => b.word && !b.glyph), 'wide again: words again')
+    ok(w.every((b) => b.word && !b.glyph) && await named('Fill space') === 1, 'wide again: words again, named by them')
 
     console.log('\nequal rows, grid, and where they are offered\n')
     const box2 = (id, x, y, w, h) => ({ id, type: 'shape', shape: 'rect', x, y, w, h, rotation: 0, opacity: 1, fill: '#5E7699', stroke: 'none', strokeWidth: 0, radius: 0 })
@@ -314,6 +319,19 @@ try {
       await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { button: 'right' }); await p.waitForTimeout(200)
       ok((await p.locator('[data-cmd^="layout-"]').count()) === 0, 'nor does its element menu')
       await p.keyboard.press('Escape'); await p.waitForTimeout(100)
+    }
+    {
+      // a frame's child with a loose element: different places, nothing to make equal
+      await load([{ ...box2('f', 100, 100, 400, 200), layout: { dir: 'row', gap: 10, pad: [10, 10, 10, 10] } }, { ...box2('k', 110, 110, 100, 100), parentId: 'f' }, box2('z', 700, 400, 150, 90)])
+      await pickId('k'); await pickId('z', true)
+      ok((await p.evaluate(() => window.bento.selection.slice().sort().join())) === 'k,z', 'a frame child and a loose element selected')
+      ok(!(await palette('Equal columns')).some((c) => c?.startsWith('layout-')), 'different parents: the palette does not offer the presets')
+      const b = await p.locator('.ed-stage-scale [data-el-id="z"]').boundingBox()
+      await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { button: 'right' }); await p.waitForTimeout(200)
+      ok((await p.locator('[data-cmd^="layout-"]').count()) === 0, 'nor does the element menu')
+      await p.keyboard.press('Escape'); await p.waitForTimeout(100)
+      ok((await els()).find((e) => e.id === 'k').parentId === 'f', 'the child stays in its frame')
+      await load([box2('a', 100, 100, 150, 90), box2('b', 420, 110, 200, 80), box2('c', 740, 120, 120, 100)])
     }
     await pickId('a'); await pickId('b', true); await pickId('c', true)
     {
@@ -340,6 +358,37 @@ try {
     ks = await onScreen()
     ok(ks.length === 2 && same(ks.map((k) => k.w)) && Math.abs(ks[0].y - ks[1].y) < 1, 'deleting one: the rest close up into equal cells')
 
+    console.log('\nswitching presets keeps the frame put, on the slide\n')
+    {
+      const xywh = (e) => `${e.x},${e.y} ${e.w}×${e.h}`
+      const onSlide = (e) => e.x >= 0 && e.y >= 0 && e.x + e.w <= 1280 && e.y + e.h <= 720
+      // a fresh Grid on three loose rectangles low on the slide: two rows at their own heights, on the slide
+      await load([box2('a', 100, 420, 160, 120), box2('b', 352, 430, 240, 100), box2('c', 684, 420, 120, 110)])
+      await pickId('a'); await pickId('b', true); await pickId('c', true)
+      const ran = await palette('layout grid')
+      const gridF = await frameNow()
+      const cells = (await els()).filter((e) => e.parentId === gridF?.id)
+      ok(ran[0] === 'layout-grid' && gridF?.layout.dir === 'grid' && onSlide(gridF) && cells.every((k) => k.h >= 100 && onSlide(k)), `Grid on a low row: cells keep their height, the frame stays on the slide (${gridF && xywh(gridF)}; cells ${cells.map((k) => k.h).join(', ')})`)
+      // three loose rectangles low on the slide (y ≈ 420): Equal rows grows the frame, upward, inside the slide
+      await load([box2('a', 100, 420, 160, 120), box2('b', 352, 430, 240, 100), box2('c', 684, 420, 120, 110)])
+      await pickId('a'); await pickId('b', true); await pickId('c', true)
+      await palette('Equal rows')
+      const first = await frameNow()
+      ok(first && onSlide(first) && first.layout.dir === 'col', `Equal rows on a low row: the frame grows but stays on the slide (${first && xywh(first)})`)
+      let bad = await badFindings()
+      ok(!bad.length, `no out-of-canvas (${bad.join(', ')})`)
+      await pickId(first.id)
+      const trail = []
+      for (const cmd of ['layout-grid', 'layout-equal-columns', 'layout-grid', 'layout-equal-rows', 'layout-equal-columns']) {
+        await p.locator('.ed-props .ed-section[data-key="Auto layout"] .ed-sec-menu').click(); await p.waitForTimeout(200)
+        await p.locator(`[data-cmd="${cmd}"]`).click(); await p.waitForTimeout(300)
+        trail.push(xywh(await frameNow()))
+      }
+      ok(trail.every((t) => t === xywh(first)), `five switches from the header menu leave the frame where it was (${xywh(first)}; ${[...new Set(trail)].join(' | ')})`)
+      bad = await badFindings()
+      ok(!bad.length && (await els()).every(onSlide), `everything still on the slide, no out-of-canvas (${bad.join(', ')})`)
+    }
+
     console.log('\nwhy Fill is off, and Turn off Hug\n')
     await load([box2('a', 100, 100, 150, 90), box2('b', 420, 110, 200, 80), box2('c', 740, 120, 120, 100)])
     await pickId('a'); await pickId('b', true); await pickId('c', true)
@@ -354,6 +403,7 @@ try {
     const freed = await frameNow()
     ok(!freed.layout.hug && ['x', 'y', 'w', 'h'].every((k) => freed[k] === hugged[k]), `Turn off Hug: the frame stops hugging and does not move (${hugged.x},${hugged.y} ${hugged.w}×${hugged.h})`)
     ok(!(await p.locator('.ed-props .ed-seg[data-axis="w"] [data-value="fill"]').isDisabled()) && (await why.count()) === 0, 'Fill is on, the hint is gone')
+    ok(await p.evaluate(() => document.activeElement?.matches('.ed-props .ed-seg[data-axis="w"] [data-value="fill"]')), 'focus moves to the Fill it unlocked, not to the page')
     await p.locator('.ed-props .ed-seg[data-axis="w"] [data-value="fill"]').click(); await p.waitForTimeout(300)
     ok((await els()).find((e) => e.id === 'a').sizing?.w === 'fill', 'and pressing Fill now takes')
   }
