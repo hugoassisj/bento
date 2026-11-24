@@ -15396,3 +15396,40 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-24 — The bento-slides skill: the deck's design system wins, and the skill steers to layouts and frames
+
+The Claude skill (`plugins/bento-slides/skills/bento-slides/`) was one file
+that sent agents to bento.page for their real instructions and gave design
+rules unconditionally, so an agent restyled decks that already had a system
+(an audit trial: 0 token-bound values out of 444 written, literal colours in a
+deck whose every colour is bound). It is now a main file plus five references,
+and three things are settled for anyone who edits it:
+
+- **Precedence is a protocol, not a tone.** The user's words, then what the
+  deck defines (theme, palette slots, tokens, components, layouts, fonts),
+  then what the deck already does, then the skill's defaults. When a system
+  exists the agent writes literal and `themeRefs` together (literal equal to
+  the token), adds a new token rather than editing one, and reports contrast
+  or density instead of fixing them. Design advice lives in
+  `references/design-defaults.md`, each item conditional and with a reason;
+  `scripts/test-skill-package.ts` fails on "always", "never" or shouted words
+  outside the file contract. Prescriptive palettes are out on purpose.
+- **Layout-plus-role and frames, not coordinates.** The 2026-08-02 entry
+  ("tools to measure and check, not a layout engine") predates auto-layout
+  frames and compact `h: "auto"`. Both exist now and are derived, so the skill
+  sends agents to a layout's roles and to frames first, and to `x y w h` only
+  where neither fits. Frames work even when an agent writes the file without a
+  browser, because the derive pass lays them out at boot.
+- **Every statement is pinned to the code.** The rig reads the sets the skill
+  lists from source, runs each gotcha through `derive()` as boot and loadDoc
+  do, runs the two scripts in `references/editing.md`, loads every JSON
+  example through the real loader, and replays the release zip step. Two
+  findings it pinned that are easy to get wrong: a token value or `mode`
+  changed in the JSON alone unbinds every use (palette slots, by contrast,
+  recolour their uses on open), and opening a saved deck in a driven browser
+  joins its live room unless `bento-offline` is on.
+
+The `plugin.json` version is not bumped here (a version file is the
+maintainer's at release time); without a bump Claude Code does not offer the
+update to installed copies.
