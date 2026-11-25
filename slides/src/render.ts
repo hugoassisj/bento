@@ -494,6 +494,19 @@ export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
   return out
 }
 
+/**
+ * Svg markup a patch wrote (ops.ts), cleaned ONCE on its way into the
+ * document — the same walk as sanitizeSvg, without the scoping: the renderer
+ * scopes at draw time and scopeCss is not idempotent, so stored markup stays
+ * unscoped. No DOM (a node rig): nothing is kept. Ported from upstream PR #532.
+ */
+export function sanitizeSvgMarkup(markup: string): string {
+  if (typeof DOMParser === 'undefined' || !markup) return ''
+  const parsed = new DOMParser().parseFromString(markup, 'text/html')
+  cleanSvgChildren(parsed.body, { scopeStyle: (css) => css })
+  return parsed.body.innerHTML
+}
+
 const VALIGN: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }
 
 /** The three alignments the format defines. Anything else is data, not a value. */

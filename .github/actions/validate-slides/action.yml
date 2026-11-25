@@ -751,3 +751,14 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: outline() and patch() rig
+      # The agent's cheap read and surgical write: the starter's outline is
+      # under 15 KB with every element's words and no key or asset bytes; one
+      # edit changes one element; one refused op and nothing changes (every op
+      # answered, by index, with the reason); docId/collab/readonly never
+      # move; hostile markup never reaches the document; slide numbers mean
+      # the deck as read; slot and token names bind; the stale-edit hash.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-ops.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-ops.mjs"
+        node "$RUNNER_TEMP/test-slides-ops.mjs"
