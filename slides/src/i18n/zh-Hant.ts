@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Hidden slides and states stay out. To print again with these choices and skip this sheet, Shift-click “Print or save as PDF…” in the File menu, or press {keys} where your browser allows it.": "隱藏的投影片和狀態不會包含在內。若要依這些選項直接再次列印而不顯示此視窗，請在「檔案」選單中按住 Shift 點擊「列印或存成 PDF…」，或在瀏覽器允許時按 {keys}。",
   "Print or save as PDF": "列印或儲存為 PDF",
   "Pages": "頁面",
   "Slides with notes": "投影片及備忘稿",
@@ -12,7 +13,6 @@ export const zhHant: Catalog = {
   "Full quality": "完整畫質",
   "Lighter file": "較小檔案",
   "Print": "列印",
-  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "隱藏的投影片和狀態不會包含在內。按 {keys} 可依這些選項直接再次列印，不顯示此視窗。",
   "Print with the last choice": "依上次的選擇列印",
   "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "投影片、備忘稿頁或每個點擊步驟一頁 — 瀏覽器的列印對話框可儲存 PDF。按住 Shift 點擊則依上次的選擇列印。",
   "View": "檢視",

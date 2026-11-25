@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Hidden slides and states stay out. To print again with these choices and skip this sheet, Shift-click “Print or save as PDF…” in the File menu, or press {keys} where your browser allows it.": "非表示のスライドと状態は含まれません。この画面を出さずに同じ設定で再印刷するには、ファイルメニューの「印刷または PDF として保存…」を Shift クリックするか、ブラウザが許す場合は {keys} を押します。",
   "Print or save as PDF": "印刷または PDF として保存",
   "Pages": "ページ",
   "Slides with notes": "スライドとノート",
@@ -12,7 +13,6 @@ export const ja: Catalog = {
   "Full quality": "最高品質",
   "Lighter file": "軽いファイル",
   "Print": "印刷",
-  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "非表示のスライドと状態は含まれません。{keys} でこの画面を出さずに同じ設定で再印刷できます。",
   "Print with the last choice": "前回の設定で印刷",
   "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "スライド、ノートページ、またはクリックのステップごとに 1 ページ — ブラウザの印刷ダイアログで PDF を保存します。Shift クリックで前回の設定のまま印刷します。",
   "View": "表示",

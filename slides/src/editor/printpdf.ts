@@ -231,6 +231,9 @@ export function printDeck(doc: BentoDoc, opts: PrintOptions) {
 
 let sheet: Dialog | null = null
 
+/** Is the print sheet up? ⇧⌘P waits for it rather than printing behind it. */
+export const printSheetOpen = (): boolean => !!sheet?.isOpen
+
 /** The print sheet: which pages, which backgrounds, then the browser's
  *  dialog. The choice is remembered in this browser, never in the deck. */
 export function openPrintSheet(doc: BentoDoc, shortcut: string) {
@@ -258,7 +261,9 @@ export function openPrintSheet(doc: BentoDoc, shortcut: string) {
   const bgs = select(t('Backgrounds'), PRINT_BACKGROUNDS.map((b) => [b, bgNames[b]]), saved.backgrounds)
   const hint = document.createElement('p')
   hint.className = 'ed-hint'
-  hint.textContent = t('Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.', { keys: shortcut })
+  // Shift-click works in every browser; the shortcut only where the browser
+  // lets it through (Firefox keeps Ctrl+Shift+P for a private window)
+  hint.textContent = t('Hidden slides and states stay out. To print again with these choices and skip this sheet, Shift-click “Print or save as PDF…” in the File menu, or press {keys} where your browser allows it.', { keys: shortcut })
   body.appendChild(hint)
 
   const cancel = document.createElement('button')

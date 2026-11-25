@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Hidden slides and states stay out. To print again with these choices and skip this sheet, Shift-click “Print or save as PDF…” in the File menu, or press {keys} where your browser allows it.": "Ausgeblendete Folien und Zustände bleiben draußen. Um mit dieser Auswahl erneut ohne dieses Fenster zu drucken, klicke mit gedrückter Umschalttaste im Menü Datei auf „Drucken oder als PDF sichern…“ oder drücke {keys}, wo der Browser es zulässt.",
   "Print or save as PDF": "Drucken oder als PDF sichern",
   "Pages": "Seiten",
   "Slides with notes": "Folien mit Notizen",
@@ -12,7 +13,6 @@ export const de: Catalog = {
   "Full quality": "Volle Qualität",
   "Lighter file": "Kleinere Datei",
   "Print": "Drucken",
-  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "Ausgeblendete Folien und Zustände bleiben draußen. {keys} druckt erneut mit dieser Auswahl, ohne dieses Fenster.",
   "Print with the last choice": "Mit der letzten Auswahl drucken",
   "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "Folien, Notizseiten oder eine Seite pro Klickschritt — der Druckdialog des Browsers sichert das PDF. Umschalt-Klick druckt mit der letzten Auswahl.",
   "View": "Ansicht",

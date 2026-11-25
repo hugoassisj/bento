@@ -1767,6 +1767,10 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
      longer ships it (reveal-lite.ts), so it is said here. */
   html, body { height: auto; overflow: visible; }
   #app, #bento-splash, .bento-present-overlay, .ed-toast { display: none !important; }
+  /* only the pages print: a dialog still open (the print sheet itself, if
+     ⇧⌘P lands while it is up) or any other overlay mounted on <body> must
+     never reach the paper */
+  body > :not(#bento-print) { display: none !important; }
   #bento-print { display: block; }
   @page { size: 1600px 900px; margin: 0; }
   #bento-print .bp-page {

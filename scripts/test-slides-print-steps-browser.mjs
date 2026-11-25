@@ -161,6 +161,18 @@ try {
   await p.waitForSelector('.bkd-card', { timeout: 3000 })
   ok(await p.evaluate(() => [...document.querySelectorAll('.bkd-card select')].map((s) => s.value).join(',')) === 'slides,light',
     'it opens on the last choice (Slides, Lighter file)')
+  // ⇧⌘P over the open sheet must not print behind it
+  const n1 = await p.evaluate(() => window.__printed)
+  await p.keyboard.press('Control+Shift+p')
+  await p.waitForTimeout(600)
+  ok(await p.evaluate(() => window.__printed) === n1 && await sheetOpen(), '⇧⌘P while the sheet is up prints nothing; the sheet stays')
+  // and if pages and a dialog ever are up together, print media shows only the pages
+  await p.evaluate(() => { const b = document.createElement('div'); b.id = 'bento-print'; b.innerHTML = '<div class="bp-page"></div>'; document.body.appendChild(b) })
+  await p.emulateMedia({ media: 'print' })
+  const shown = await p.evaluate(() => [...document.body.children].filter((c) => getComputedStyle(c).display !== 'none').map((c) => c.id || c.className))
+  await p.emulateMedia({ media: null })
+  await p.evaluate(() => document.getElementById('bento-print')?.remove())
+  ok(shown.length === 1 && shown[0] === 'bento-print', `print media shows #bento-print alone, never the sheet (${shown.join(', ')})`)
   await p.keyboard.press('Escape')
 
   console.log('\n3. The default: one page per linear slide\n')
@@ -233,6 +245,8 @@ try {
   await p.click('.ed-file-menu [data-cmd="export-pdf"]')
   ok(await p.waitForSelector('.bkd-card', { timeout: 3000 }).then(() => true, () => false), 'a plain click on the row opens the sheet')
   await p.keyboard.press('Escape')
+  await p.waitForTimeout(100)
+  ok(await p.evaluate(() => document.activeElement === document.querySelector('.ed-logo')), `closing it hands focus to the File menu button (${await p.evaluate(() => document.activeElement?.className || document.activeElement?.tagName)})`)
   ok(docBefore && await docBlock() === docBefore, 'the document serialize() writes is unchanged by every export')
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } catch (e) {

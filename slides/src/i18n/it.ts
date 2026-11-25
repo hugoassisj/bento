@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Hidden slides and states stay out. To print again with these choices and skip this sheet, Shift-click “Print or save as PDF…” in the File menu, or press {keys} where your browser allows it.": "Le diapositive nascoste e gli stati restano fuori. Per ristampare con queste scelte senza questa finestra, fai Maiusc-clic su «Stampa o salva come PDF…» nel menu File, oppure premi {keys} se il browser lo consente.",
   "Print or save as PDF": "Stampa o salva come PDF",
   "Pages": "Pagine",
   "Slides with notes": "Diapositive con note",
@@ -12,7 +13,6 @@ export const it: Catalog = {
   "Full quality": "Qualità piena",
   "Lighter file": "File più leggero",
   "Print": "Stampa",
-  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "Le diapositive nascoste e gli stati restano fuori. {keys} ristampa con queste scelte, senza questa finestra.",
   "Print with the last choice": "Stampa con l’ultima scelta",
   "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "Diapositive, pagine di note o una pagina per passo di clic — la finestra di stampa del browser salva il PDF. Maiusc-clic stampa con l’ultima scelta.",
   "View": "Vista",

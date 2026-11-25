@@ -17,7 +17,7 @@ import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpda
 import { CHART_PRESETS } from '../charts'
 import { cssColor, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
-import { lastPrintOptions, openPrintSheet, printDeck } from './printpdf'
+import { lastPrintOptions, openPrintSheet, printDeck, printSheetOpen } from './printpdf'
 import { adoptComponents, components, detach, mainsLost, makeComponent, promoteCopy, resetOverrides } from '../components'
 import { goToMain, selectedComponent } from './inspector/component'
 import { activeMode, bindToken, modesOf } from '../tokens'
@@ -1214,7 +1214,12 @@ export class Editor {
       () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') }, 'import-pptx')
     sep()
     cap(t('Export'))
-    item(ICONS.pdf, t('Print or save as PDF…'), t('Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.'), (ev) => this.exportPdf(!!ev?.shiftKey), 'export-pdf')
+    item(ICONS.pdf, t('Print or save as PDF…'), t('Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.'), (ev) => {
+      // the row is gone once the menu closes: focus the menu's own button, so
+      // the sheet hands focus back there when it closes, not to <body>
+      into.closest('.ed-dropdown')?.querySelector<HTMLElement>(':scope > button')?.focus()
+      this.exportPdf(!!ev?.shiftKey)
+    }, 'export-pdf')
     // the dialog explains itself; a tooltip here would say the same twice
     item(ICONS.image, t('Export slides as images…'), '', () => this.exportImages(), 'export-images')
     item(ICONS.exportDoc, t('Export for PowerPoint…'),
@@ -2582,7 +2587,8 @@ export class Editor {
    */
   exportPdf(again = false) {
     this.canvas.commitTextEdit()
-    if (again) printDeck(this.store.doc, lastPrintOptions())
+    // pressed over the open sheet, ⇧⌘P would print behind it: the sheet decides
+    if (again) { if (!printSheetOpen()) printDeck(this.store.doc, lastPrintOptions()) }
     else openPrintSheet(this.store.doc, this.commands.find((c) => c.id === 'export-pdf-again')?.keys ?? '')
   }
 
