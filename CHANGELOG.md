@@ -38,6 +38,10 @@ pre-1.0.
   short main file plus references on design systems, defaults, motion, data,
   editing a file safely and driving the app (one script loads, checks,
   photographs and saves a deck); installed as a plugin it carries all of them.
+  Its motion advice is restrained (builds and morphs that explain a step, and
+  every slide readable with motion turned off), and it shows agents how to
+  keep your theme's colours and fonts on slides placed by layout, on code and
+  on charts.
 
 ## [1.3.0] — 2026-11-22
 

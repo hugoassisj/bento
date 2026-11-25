@@ -15,10 +15,8 @@ description: >-
 
 # bento/slides decks
 
-A deck is one self-contained `.bento.html` file: the app (viewer and editor)
-plus the document, which is plain JSON in one block. You change the JSON;
-the app renders it. Sections 1 to 3 are the part to keep in mind throughout:
-the file contract, whose choices win, and the order of work.
+A deck is one self-contained `.bento.html` file: the app plus the document,
+plain JSON in one block. You change the JSON; the app renders it.
 
 ## 1. The file contract
 
@@ -37,21 +35,19 @@ These rules protect the user's file. They are absolute.
   layouts and roles, omitted defaults) goes in only through the app:
   `window.bento.loadDoc(json)` or *Replace from JSON…*. Written straight into
   the block, a compact document is read as a full one: without `format` it is
-  refused and the app opens its own starter deck instead; with `format`,
-  role-placed elements and elements missing a key their type needs are
-  dropped.
+  refused and the app opens its own starter deck instead; with `format`, an
+  element missing a key its type needs is dropped, and one with `type` and
+  `html` is kept but nothing places it (its `role` is ignored).
 - **Only `"format": "bento/slides"` and a non-empty `slides` array are
   required.** Everything else above the element level is filled from the
   editor's defaults (a 1280×720 canvas, a white slide, the system font stack),
   so write `size` and `theme` because you are choosing them.
-- **Handle `collab` by name only.** A deck's `collab` object holds its
-  live-session credentials, and any key in it is access to that live room (a
-  read-only copy still holds the room key). The app mints them when a deck is
-  created, so a deck can carry them before it is ever shared. List the field
-  names without printing their values, read the document without it, and write
-  it back exactly as it was; a file written without it drops out of its room.
-  If it has keys, tell the user the deck carries live-session keys. The remedy
-  for keys that already leaked is *Share → Reset access…* in the app.
+- **Handle `collab` by name only.** It holds the deck's live-session
+  credentials (minted when a deck is created, so present before any sharing),
+  and any key in it is access to the live room. List its field names without
+  their values, read the document without it, and write it back exactly as it
+  was; a file without it drops out of its room. Tell the user the deck carries
+  live-session keys; if they leaked, *Share → Reset access…* revokes them.
 - **Pictures are the last line.** A deck saved by a current shell writes its
   `assets` map (embedded pictures, fonts, files as data URIs) last, starting on
   its own line. Stop reading at the line that starts `"assets":`, or drop the
@@ -65,10 +61,9 @@ These rules protect the user's file. They are absolute.
   keys this skill does not describe; they are the user's data.
 
 **Getting a file to write into.** Work in the user's `.bento.html`. With none,
-ask for one (any deck saved from bento/slides works), or, where you have
-network access and the user agrees, download the empty app as
-`references/editing.md` shows. Fetching the app is the only step that touches
-the network; authoring, editing and checking do not.
+ask for one, or, with network access and the user's agreement, download the
+empty app (`references/editing.md`). That is the only step that touches
+the network.
 
 **In a chat, with no file access**, the user moves the JSON by hand: the File
 menu (the bento/slides wordmark, top left) has *Copy document JSON*, *Copy
@@ -124,14 +119,15 @@ palette refs and shifts, components, frames and fonts.
 
 ## 3. Workflow
 
-**Inspect → plan → author → check → look → apply.** With a headless browser,
-`references/app.md`'s `drive.cjs` loads, checks, photographs and saves the
-deck in one call per round.
+**Inspect → plan → author → check → look → apply.** Tools: when this skill's
+folder has `scripts/bento.mjs`, it is the default (`node scripts/bento.mjs
+--help` lists its verbs). Otherwise the fallbacks are `editing.md`'s
+`inspect.mjs` and `splice.mjs` and, with a headless browser, `app.md`'s
+`drive.cjs`, which loads, checks, photographs and saves in one call.
 
 1. **Inspect.** Find the block, check `format`, list `collab` field names, set
    `assets` aside, and record `size`, the system (section 2), the slide ids and
-   what each slide holds. `references/editing.md`'s `inspect.mjs` prints all
-   of it without a key or a picture.
+   what each slide holds, without printing a key or a picture.
 2. **Plan** every slide before writing any: the material, the feature that
    carries it (section 4), its layout (the deck's own first), and the tokens,
    slots and components it reuses. Then write the whole document in one go.
@@ -139,8 +135,8 @@ deck in one call per round.
    - with a browser, write the **compact form** and load it with
      `window.bento.loadDoc(json)`. It replaces the whole document, so start an
      edit from `window.bento.read({ compact: true })`. A slide's `layout` and
-     its elements' `role` place them; a text box without `h` is sized to its
-     text; `md` replaces `html`;
+     its elements' `role` place their content (section 5); a text box without
+     `h` is sized to its text; `md` replaces `html`;
    - for rows, columns, grids and cards, use an **auto-layout frame**: the
      app computes the children's boxes, in the file as well as in a browser;
    - write `x y w h` yourself only where no layout or frame fits.
@@ -150,21 +146,21 @@ deck in one call per round.
    or role the loader discarded or re-placed, and `findings` is
    `window.bento.validate()` (overflow, off-canvas, broken links and refs,
    unknown keys). Fix and load again until nothing you caused remains.
-   `past-margin` assumes 96 px sides on a 1280-wide canvas: for a deck with
-   other margins pass its own, `window.bento.validate(undefined, { margin: 64 })`,
-   or `0` to turn the check off. Before a browser you drive opens a deck that
+   `past-margin`'s `margin` is in 1280-wide units, scaled to the deck (the
+   default 96 is 120 px on a 1600-wide deck): for 80 px sides there pass
+   `window.bento.validate(undefined, { margin: 64 })`, or `0` to turn it off. Before a browser you drive opens a deck that
    carries `collab` keys, set `localStorage['bento-offline'] = 'on'` (before
    the page loads), or it can join the deck's live room and your edits reach
    everyone in it.
 5. **Look** at every slide: overflow, crowding, a heading wrapped to three
    lines and a chart that ignored a key are invisible in the JSON. `drive.cjs`
-   writes one PNG per slide; by hand, the arrow keys walk the slides in the
+   writes one picture per slide; by hand, the arrow keys walk the slides in the
    editor (nothing selected), and the File menu's *Export slides as images…*
    writes one picture per slide in the show, leaving out hidden and state
    slides.
 6. **Apply.** From the browser, `window.bento.serialize()` returns the whole
    file; write it to the deck's path. Without one, splice the full JSON into
-   the block (`editing.md`'s `splice.mjs`). Hand off what changed, the tokens
+   the block. Hand off what changed, the tokens
    you added, and the findings you left and why.
 
 **With no browser at all** you cannot check or look. Say so plainly in the
@@ -192,8 +188,10 @@ classify the material and pick the feature built for it.
 | a clip, recording or soundbite | a `media` element | `data.md` |
 | cards, rows of stats, a grid of logos | an auto-layout frame, or a component the deck already has | `design-system.md` |
 
-Speaker notes (`notes` on each slide) travel in the file; they are a good
-place for the talk track and for what you could not fit.
+Motion is restrained by default: a build or a morph that explains a step,
+rarely an ambient loop. A viewer who asks for reduced motion (their system
+setting, or M in the show) gets no motion at all, so every slide has to read
+in its final state. Speaker notes (`notes`) travel in the file: the talk track.
 
 ## 5. Gotchas
 
@@ -228,32 +226,29 @@ Each of these fails silently: nothing errors, the deck just comes out wrong.
 
 And a few more that cost a guess each time:
 
-- **A built-in layout brings its own look** in the compact form: a white
-  background, its own text colours and the editor's system font stack, not
-  the deck's theme. On a deck with its own theme, use the deck's `layouts`, or
-  set and bind `background`, `color` and `fontFamily` on what the built-in
-  placed.
+- **A role-placed element keeps only its content.** Placing by `role` copies
+  the layout's element and takes only `html` (an image's `src`, `fit`, `crop`)
+  and `link` from yours; your colour, font and `themeRefs` are dropped, and a
+  built-in layout brings a white slide, dark text and the system stack. On a
+  themed deck, place by role only into the deck's own `layouts` (full slides,
+  `transition` included) whose elements carry the bound styles, or give the
+  element `x y w h`, no `role`, and its bound `color` and `fontFamily`.
 - **An omitted field means different things in the two forms.** In the full
-  form a text box without `fontFamily` renders in `theme.fontFamily`, so the
-  deck's face changes in one place. In the compact form every omitted field
-  is the editor's default: the system font stack, and a text `color` that is
-  a plain readable ink for the slide background, not `theme.color`. On a deck
-  with a theme, write `color` and `fontFamily` on compact text, bound to the
-  deck's slots or tokens.
+  form a text box without `fontFamily` renders in `theme.fontFamily`. In the
+  compact form an omitted field is the editor's default: the system font
+  stack, and a text `color` that is a plain readable ink for the slide
+  background, not `theme.color`. Write both on compact text, bound.
 - **Unknown keys are ignored.** A typo (`fontSze`) simply does not apply; the
   load report's `dropped` and validate's `unknown-key` name it.
-- **Morph pairs by id.** Elements tween between consecutive slides only when
-  they share an `id` (or `morphId`) and the later slide has
-  `"transition": "morph"`. Different ids cut.
 - **The show draws its own page counter and progress bar.** If the slides
   number themselves (a `{{page}}` footer), set
   `"present": { "slideNumber": false }`, and `"progress": false` if the design
   has its own progress mark.
 - **Faces the app carries.** A `doc.fonts` entry may name
   `builtin:fraunces-900` (Fraunces at 900) or `builtin:instrument-sans`
-  (Instrument Sans, 400 to 700) as its `asset`, and no font bytes go into the
-  file. Any other face named in a `fontFamily` must be embedded, or viewers
-  without it installed get the fallback (`font-not-embedded`).
+  (Instrument Sans, 400 to 700) as its `asset`, with `weight` a string
+  (`"900"`; a number is dropped). Any other face must be embedded, or viewers
+  without it get the fallback (`font-not-embedded`).
 
 ## 6. Element essentials
 
@@ -264,11 +259,11 @@ each type's own content and styling keys:
 | `type` | Keys you write |
 |---|---|
 | `text` | `html`, `fontSize`, `fontWeight`, `color`, `align`, `valign`, `lineHeight`; optional `fontFamily`, `letterSpacing`, `role` |
-| `shape` | `shape` (`rect`, `ellipse`, `triangle`, `arrow`, `line`, `path`), `fill`, `stroke`, `strokeWidth`, `radius`; `d` and `pathBox` for a path; `layout` makes a rect a frame |
+| `shape` | `shape` (`rect`, `ellipse`, `triangle`, `arrow`, `line`, `path`), `fill`, `stroke`, `strokeWidth`, `radius`; `d` and `pathBox` for a path; `layout` with `dir`, `gap` and `pad` makes a rect a frame |
 | `image` | `src` (`asset:<key>` or a data URI), `fit`, `radius` |
 | `chart` | `preset`, `option` |
 | `table` | `columns`, `rows`, `header`, `style` |
-| `code` | `content`, `grammarName`, `fontSize`, `fontFamily`, `color`, `align`, `valign`, `lineHeight` |
+| `code` | `content`, `grammarName`, `fontSize`, `color`, `align`, `valign`, `lineHeight`; no `fontFamily`, so `theme.codeFontFamily` applies |
 | `media` | `kind`, `src`, `poster`, `controls`, `autoplay`, `loop`, `muted` |
 | `svg` | `markup` or `asset` |
 

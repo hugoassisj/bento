@@ -69,11 +69,12 @@ something, do that.
 
 ## Motion and structure
 
-- **Motion with a purpose.** A deck reads well when motion follows meaning:
-  morph between slides about the same thing, a click build for a list you
-  talk through, a count-up for a headline number. A cover or section divider
-  is a natural place for one quiet ambient motion (a ken-burns drift, a slow
-  loop), and an easy one to overdo.
+- **Motion with a purpose.** If the deck has no motion style, restraint is a
+  good default, because motion that does not explain distracts and some
+  viewers are made unwell by it: a morph between slides about the same thing,
+  a click build for a list you talk through, at most one quiet ambient motion
+  in a deck. The show drops all motion for a viewer who asks for reduced
+  motion, so each slide has to read in its final state.
 - **Speaker notes.** On a deck you are creating, notes on every slide are a
   good default, because they travel in the file and double as the talk
   track.

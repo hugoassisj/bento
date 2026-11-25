@@ -109,7 +109,9 @@ copy `{ "groupId": "g-cta", "component": { "id": "button", "key": "k1",
 ## Auto-layout frames
 
 A frame is a `rect` shape with a `layout`; the elements whose `parentId` names
-it are laid out inside it. The app writes the children's boxes (and the
+it are laid out inside it. Write `dir`, `gap` and `pad` on every `layout`: one
+missing any of them is dropped (the load report says so) and the rect stops
+being a frame. The app writes the children's boxes (and the
 frame's own size when it hugs) every time the file opens and after every edit,
 so the file stays ordinary positioned elements for any reader.
 
@@ -153,7 +155,11 @@ editor's *Save slide as layout* writes. Their text elements carry a
 - In the compact form, a slide's `"layout"` names a built-in or one of the
   deck's layouts (by `id`, or by `name`), and each element's `role` picks the
   slot it fills. Slides made from one layout share its element ids, so their
-  furniture holds still across a morph.
+  furniture holds still across a morph. Only your content goes into the slot
+  (`html`, an image's `src`, `fit`, `crop`, and `link`); its style is the
+  layout element's. A deck's own layout entry is a full slide: give it a
+  `transition`, which slides placed into it take (without one the report
+  notes a dropped `transition` and the slide gets `fade`).
 - Built-in layouts: `layout-title` (roles title, subtitle),
   `layout-title-content` (title, body; also `title-body`), `layout-two-col`
   (title, body, with `left` and `right` naming the two body slots; also
@@ -176,7 +182,8 @@ editor's *Save slide as layout* writes. Their text elements carry a
   `fontFamily` uses it); `theme.codeFontFamily` is the code face.
 - `doc.fonts` entries are `{ "family", "asset", "weight", "style" }`, where
   `asset` is a `doc.assets` key holding a woff2 data URI or one of the two
-  built-in keys named in `SKILL.md`.
+  built-in keys named in `SKILL.md`, and `weight` is a string (`"400 700"`);
+  a number is dropped.
 - A face the deck does not carry falls back silently for every viewer who
   lacks it, while looking right to whoever has it installed
   (`font-not-embedded`). Write a full stack, `"'Fraunces', Georgia, serif"`,

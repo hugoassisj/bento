@@ -6,22 +6,32 @@ slide, all in one call per round.
 
 ## `drive.cjs`: load, check, look, save in one call
 
-Save this as `drive.cjs` and run
-`node drive.cjs deck.bento.html doc.json shots/`. It needs the `playwright`
-package and works with no network: the app's offline switch is on, so a deck
-with `collab` keys does not join its live room.
+Save this as `drive.cjs` and run `node drive.cjs deck.bento.html doc.json
+shots/` (the document and the folder are each optional). It needs the
+`playwright` package and works with no network: the app's offline switch is
+on, so a deck with `collab` keys does not join its live room.
 
 ```js
-// node drive.cjs deck.bento.html [doc.json] [shots-dir]
+// node drive.cjs deck.bento.html [doc.json] [shots-dir]   (any order; --help)
 // Opens the deck in headless Chromium with the app's network switched off,
 // loads doc.json (full or compact) when given, prints the load report and
 // validate() findings as JSON, writes one PNG per slide in the show to
 // shots-dir when given, and saves the deck back to its path after a load.
-// Needs the playwright package. MARGIN=64 sets validate()'s side margin.
-const { chromium } = require('playwright')
+// Arguments go by kind: a .json file is the document, a .html file the deck,
+// anything else the folder for pictures. Needs the playwright package.
+// MARGIN=64 sets validate()'s side margin (1280-wide units).
 const { readFileSync, writeFileSync, mkdirSync } = require('node:fs')
 const { resolve, join } = require('node:path')
-const [deck, json, shots] = process.argv.slice(2)
+const args = process.argv.slice(2)
+if (!args.length || args.includes('--help')) {
+  console.log(readFileSync(__filename, 'utf8').split('\n').filter((l) => l.startsWith('//')).join('\n'))
+  process.exit(args.length ? 0 : 2)
+}
+const deck = args.find((a) => /\.html?$/i.test(a))
+const json = args.find((a) => /\.json$/i.test(a))
+const shots = args.find((a) => a !== deck && a !== json)
+if (!deck) { console.error('no .bento.html given'); process.exit(2) }
+const { chromium } = require('playwright')
 ;(async () => {
   const browser = await chromium.launch()
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
@@ -48,14 +58,22 @@ const [deck, json, shots] = process.argv.slice(2)
     .map((f) => [f.severity, f.code, f.slide, f.element, f.message].filter(Boolean).join(' | '))
   if (shots) {
     mkdirSync(shots, { recursive: true })
-    const n = await page.evaluate(() => window.bento.doc.slides.filter((s) => !s.stateOf && !s.hidden).length)
-    await page.keyboard.press('Escape')
-    for (let i = 0; i < n; i++) {
-      if (i) await page.keyboard.press('ArrowDown')
-      await page.waitForTimeout(250)
-      await page.locator('.ed-stage').screenshot({ path: join(shots, `slide-${String(i + 1).padStart(2, '0')}.png`) })
+    const file = (i) => join(shots, `slide-${String(i + 1).padStart(2, '0')}.png`)
+    // a shell with window.bento.renderAll draws the slides themselves; older
+    // ones are photographed in the editor view, one arrow key at a time
+    const drawn = await page.evaluate(async () => typeof window.bento.renderAll === 'function'
+      ? (await Promise.all(await window.bento.renderAll())).map((r) => (r && r.ok ? r.dataUrl : null)) : null)
+    if (drawn) drawn.forEach((url, i) => url && writeFileSync(file(i), Buffer.from(url.split(',')[1], 'base64')))
+    else {
+      const n = await page.evaluate(() => window.bento.doc.slides.filter((s) => !s.stateOf && !s.hidden).length)
+      await page.keyboard.press('Escape')
+      for (let i = 0; i < n; i++) {
+        if (i) await page.keyboard.press('ArrowDown')
+        await page.waitForTimeout(250)
+        await page.locator('.ed-stage').screenshot({ path: file(i) })
+      }
     }
-    out.shots = n
+    out.shots = drawn ? 'slides' : 'editor view'
   }
   if (json) writeFileSync(deck, await page.evaluate(() => window.bento.serialize()))
   await browser.close()
@@ -67,12 +85,11 @@ const [deck, json, shots] = process.argv.slice(2)
   replaces the deck's content and keeps its `docId` and `collab`, so start an
   edit from the deck's own document (`window.bento.read({ compact: true })` in
   the page, or the block itself).
-- `load.dropped` lists every key, element or role the loader discarded or
-  re-placed, with its path. `findings` is `validate()` minus the sharing-key
-  notice. Fix, run again, and stop when nothing you caused remains.
-- The PNGs are the slides in the show, in order; hidden and state slides are
-  not walked, so check those by eye in the editor or move them into the walk
-  while you check.
+- `load` and `findings` are the report `SKILL.md` section 3 describes, minus
+  the sharing-key notice.
+- The pictures are the slides in the show, in order, without hidden and state
+  slides. A shell with `window.bento.renderAll` draws the slides themselves;
+  an older one is photographed in the editor view (`shots: "editor view"`).
 - Leave out `doc.json` to check and photograph a deck without changing it.
 
 ## The page's API (`window.bento`)

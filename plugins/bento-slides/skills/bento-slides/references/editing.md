@@ -57,15 +57,17 @@ for (const s of doc.slides) {
 const W = doc.size?.width ?? 1280
 const boxes = doc.slides.flatMap((s) => s.elements).filter((e) => e.type === 'text' && e.w < W * 0.9)
 const tk = doc.theme?.tokens
-const mode = tk?.mode ?? tk?.modes?.[0] ?? 'default'
+const modes = (Array.isArray(tk?.modes) ? tk.modes : []).filter((m) => typeof m === 'string')
+if (!modes.length) modes.push('default')
+const mode = modes.includes(tk?.mode) ? tk.mode : modes[0] // as the app picks it
 const textOf = (e) => (e.html ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)
 console.log(JSON.stringify({
   format: doc.format, title: doc.title, size: doc.size,
   collab: collab ? Object.keys(collab) : null,
   assets: assets ? Object.keys(assets).length : 0,
   theme: { ...doc.theme, tokens: undefined },
-  tokens: tk && { modes: tk.modes ?? ['default'], mode, // name: [type, value in the active mode]
-    set: Object.fromEntries(Object.entries(tk.set ?? {}).map(([n, t]) => [n, [t.type, t.values?.[mode] ?? Object.values(t.values ?? {})[0]]])) },
+  tokens: tk && { modes, mode, // name: [type, value in the active mode, else the first mode that has one]
+    set: Object.fromEntries(Object.entries(tk.set ?? {}).map(([n, t]) => [n, [t.type, [mode, ...modes].map((m) => t.values?.[m]).find((v) => v !== undefined)]])) },
   textExtent: boxes.length ? [Math.min(...boxes.map((e) => e.x)), Math.max(...boxes.map((e) => e.x + e.w))] : null,
   bound: `${bound} of ${values} style values carry a themeRefs binding`,
   refs: Object.fromEntries([...refs].sort((a, b) => b[1] - a[1])),

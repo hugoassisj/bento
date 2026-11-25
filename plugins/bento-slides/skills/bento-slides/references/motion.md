@@ -4,7 +4,9 @@ Read this when the material changes across slides, is revealed step by step,
 drills into detail, or needs an entrance, a loop or hover behaviour. All of it
 runs while presenting; the editor and print show the slide at rest. If the
 deck already has a motion style (its transitions, its entrance kinds and
-timing), match it.
+timing), match it; otherwise keep motion to what explains a step. With reduced
+motion asked for (the viewer's system setting, or M in the show) every effect
+is skipped and each element shows its final state.
 
 ## Transitions and morph
 

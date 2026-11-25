@@ -48,6 +48,8 @@ What charts-lite reads:
   substitutes `{b}` (name), `{c}` (value) and `{d}` (percent); a y-axis
   `axisLabel.formatter` substitutes `{value}`. A tooltip shows the name and
   value itself; its `formatter` is not read.
+- **Font.** A chart draws its text in `option.textStyle.fontFamily`, else a
+  plain sans-serif, not the deck's face: write the deck's stack there.
 - **Two scales**: an array of two `yAxis` entries and `"yAxisIndex": 1` on the
   series that uses the second, as in the example.
 - Value labels on bars and lines are not drawn; numbers that must be read go
@@ -96,8 +98,10 @@ ids, plus `diff` and `md`; an unknown id is read as `js`.
 
 - The colours come from `theme.codePalette` (`c` comment, `s` string, `n`
   number, `k` keyword, `f` call, `p` punctuation, `a` diff added, `d` diff
-  removed); plain text takes the element's `color`. The face is
-  `theme.codeFontFamily` when the deck sets it.
+  removed); plain text takes the element's `color`. Leave `fontFamily` off a
+  full-form code element and it uses `theme.codeFontFamily` (else the body
+  face); an element's own `fontFamily` wins, and the compact form fills one
+  in, the editor's monospace stack.
 - Consecutive slides with a code element of the same id and
   `"transition": "morph"` move each token to its new place, which shows a
   refactor as it happens; a slower `present.morphSeconds` suits these short
