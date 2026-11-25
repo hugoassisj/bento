@@ -55,7 +55,7 @@ import { readFileSync, readdirSync, statSync, mkdtempSync, writeFileSync, rmSync
 import { join, dirname, basename } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
-import { parseDoc, builtinLayouts, FONT_STACK } from '../slides/src/model.ts'
+import { parseDoc, builtinLayouts, newDoc, readableInk, FONT_STACK } from '../slides/src/model.ts'
 import { MODEL_KEYS } from '../slides/src/modelkeys.generated.ts'
 import { expandDocWithStats, layoutRoles, LAYOUT_ALIASES } from '../slides/src/compact.ts'
 import { parseDocInputReport } from '../slides/src/compactload.ts'
@@ -201,7 +201,7 @@ const ds = ref('design-system.md')
 const bindable = ticks(section(ds, /^## Bindings/m).split('An element property can be bound when its name is one of')[1]?.split('On a slide')[0] ?? '')
 ok(same(bindable, TOKEN_KEYS), `design-system.md lists exactly the bindable element keys (${bindable.length}; code ${TOKEN_KEYS.size})`)
 ok(same(['background'], SLIDE_TOKEN_KEYS), 'on a slide only `background` binds')
-const tokenTypes = ticks(/The types are ([^\n]+(?:\n[^\n]+){0,2})/.exec(ds)?.[1] ?? '').filter((t) => /^[a-zA-Z]+$/.test(t))
+const tokenTypes = ticks(/The types are ([\s\S]*?`shadow`)/.exec(ds)?.[1] ?? '').filter((t) => /^[a-zA-Z]+$/.test(t))
 ok(same(tokenTypes, TOKEN_TYPES), `design-system.md lists exactly the token types (${show(tokenTypes)})`)
 const slotRows = tableRows(section(ds, /^## Palette slots/m))
 const slotNames = slotRows.flatMap((r) => ticks(r[0]))
@@ -213,7 +213,12 @@ for (const r of slotRows) {
   for (const slot of ticks(r[0])) {
     const said = r[2]
     if (said.startsWith('empty')) ok(pal[slot] === undefined, `${slot} unset resolves to nothing`)
-    else if (said === 'a required theme field') ok(['bg1', 'tx1', 'accent1'].includes(slot), `${slot} is always set (a theme field)`)
+    else if (said.startsWith("the editor's default")) {
+      const field = ({ bg1: 'background', tx1: 'color', accent1: 'accent' } as Record<string, 'background' | 'color' | 'accent'>)[slot]
+      ok(!!field && said === `the editor's default, \`${(newDoc().theme as Record<string, string>)[field]}\``, `${slot} unset is the editor's ${field} (${said})`)
+      const filled = parseDoc(JSON.stringify({ format: 'bento/slides', theme: {}, slides: [{ elements: [] }] }))
+      ok(!!field && filled?.theme[field] === newDoc().theme[field], `   …which parseDoc fills when theme.${field} is absent`)
+    }
     else ok(pal[slot] === fallbackOf[said], `${slot} unset falls back to ${said}`)
   }
 }
@@ -254,18 +259,41 @@ const da = ref('data.md')
 const presets = ticks(/a `preset` \(([^)]+)\)/.exec(da)?.[1] ?? '')
 ok(same(presets, Object.keys(CHART_PRESETS)), `data.md lists exactly the chart presets (${show(presets)})`)
 const chartsSrc = read('kernel/src/charts.ts')
-const honoured = ticks(section(da, /^## Charts/m).split('**What it honours**')[1]?.split(/A\s+`legend` key/)[0] ?? '')
-  .flatMap((k) => k.split(/[.: ]+/)).filter((k) => /^[a-zA-Z]+$/.test(k) && k !== 'false')
-for (const k of new Set(honoured)) ok(new RegExp(`\\b${k}\\b`).test(chartsSrc), `charts-lite reads \`${k}\``)
+const chartRows = Object.fromEntries(tableRows(section(da, /^## Charts/m)).map((r) => [r[0].replace(/`/g, ''), r[1]]))
+const keysIn = (row: string | undefined) => ticks((row ?? '').replace(/\(`\w+` is not read\)/g, '')).filter((k) => /^[a-zA-Z.]+$/.test(k))
+const digestSrc = /function digest\([\s\S]*?\n\}\n/.exec(chartsSrc)?.[0] ?? ''
+const pieSrc = /function renderPie\([\s\S]*?\n\}\n/.exec(chartsSrc)?.[0] ?? ''
+ok(digestSrc.length > 500 && pieSrc.length > 200, 'charts.ts digest() and renderPie() read')
+for (const [where, row] of Object.entries(chartRows)) {
+  for (const k of keysIn(row)) ok(new RegExp(`\\b${k.split('.').pop()}\\b`).test(chartsSrc), `charts-lite reads ${where}: \`${k}\``)
+}
+const xRow = keysIn(chartRows['xAxis']), yRow = keysIn(chartRows['yAxis (one, or an array of two)'])
+ok(same(xRow, ['data', 'axisLabel', 'color', 'fontSize', 'fontWeight', 'axisLine.lineStyle', 'width']), `the xAxis row lists what digest() reads from xAxis (${xRow.join(' ')})`)
+ok(/xRaw\?\.data/.test(digestSrc) && /xLabelRaw\?\.fontSize/.test(digestSrc) && /xRaw\?\.axisLine\?\.lineStyle\?\.width/.test(digestSrc) && !/xRaw\?\.(min|max|name|splitLine|type)\b/.test(digestSrc) && !/xLabelRaw\?\.formatter/.test(digestSrc), 'digest() reads xAxis data, axisLabel colour/size/weight and axisLine only')
+ok(same(yRow, ['name', 'min', 'max', 'axisLabel', 'color', 'fontSize', 'fontWeight', 'formatter', 'splitLine.lineStyle', 'width']), `the yAxis row lists what digest() reads from yAxis (${yRow.join(' ')})`)
+ok(/name: typeof a\?\.name === 'string'/.test(digestSrc) && /min: typeof a\?\.min === 'number'/.test(digestSrc) && /max: typeof a\?\.max === 'number'/.test(digestSrc) && /yRaw\[0\]\?\.splitLine\?\.lineStyle\?\.color/.test(digestSrc) && /yRaw\.slice\(0, 2\)/.test(digestSrc), 'digest() reads yAxis name/min/max/axisLabel on up to two axes, splitLine on the first only')
+ok(!/\?\.type\b/.test(digestSrc.replace(/s\?\.type === 'pie'/g, '')) && !xRow.includes('type') && !yRow.includes('type'), 'no axis reads `type`, and the table lists none')
+ok(/const color = d\.colors\[i % d\.colors\.length\]/.test(pieSrc) && !/itemStyle\?\.color/.test(pieSrc) && !keysIn(chartRows.pie).includes('itemStyle.color') && /Pie slices take `option\.color` in order/.test(flat(da)), 'pie slices take option.color in order and ignore itemStyle.color, as data.md says')
+ok(/const stroke = typeof s\?\.lineStyle\?\.color === 'string' \? s\.lineStyle\.color : d\.colors/.test(chartsSrc) && !keysIn(chartRows.line).includes('itemStyle.color'), 'a line takes its colour from lineStyle.color, not itemStyle.color')
+ok(keysIn(chartRows['every series']).join() === 'type,name,data', 'every series: type, name, data (yAxisIndex and colours are per type)')
+const vSrc = read('slides/src/validate.ts')
+const vChart = /function validateChart[\s\S]*?\n\}\n/.exec(vSrc)?.[0] ?? ''
+const levels = [...vChart.matchAll(/CHART_KEYS\.(\w+)/g)].map((m) => m[1])
+ok(same(levels, ['top', 'series', 'seriesByType', 'axis', 'legend']), `validateChart checks key names at the top level, series, axes and the legend only (${show(new Set(levels))})`)
+ok(/axis: \['type'/.test(vSrc) && /bar: \['barWidth'\]/.test(vSrc) && /legend: \['show'/.test(vSrc) && !/barWidth/.test(chartsSrc) && !/legendRaw\?\.show/.test(chartsSrc), 'it passes axis type, barWidth and legend.show, which charts-lite never reads')
+ok(/names an unknown key at the top level, on a series, an axis or the legend only/.test(flat(da)), 'data.md says what chart-key-ignored covers')
 ok(/colors: Array\.isArray\(option\?\.color\) && option\.color\.length \? option\.color : PALETTE/.test(chartsSrc), 'charts-lite falls back to its own palette when option.color is absent')
 ok((chartsSrc.match(/\.map\(\(v: unknown\) => num\(v, 0\)\)/g) ?? []).length >= 3 && /const num = \(v: unknown, d: number\): number => \(typeof v === 'number' && Number\.isFinite\(v\) \? v : d\)/.test(chartsSrc), 'charts-lite reads bar/line data with num(v, 0): anything but a number draws as 0')
 const charts = section(da, /^## Charts/m)
 ok(!/tooltip\??\.formatter/.test(chartsSrc) && /tooltipTrigger: option\?\.tooltip \? \(option\.tooltip\.trigger === 'item' \? 'item' : 'axis'\) : null/.test(chartsSrc), 'charts-lite reads a tooltip\'s trigger and never its formatter')
-ok(/A tooltip's `formatter` is not read/.test(flat(charts)) && !/"tooltip":\s*\{[^}]*"formatter"/.test(everythingJson()), 'data.md says so, and no example gives a tooltip a formatter')
+ok(/A tooltip shows the name and value itself; its `formatter` is not read/.test(flat(charts)) && !/"tooltip":\s*\{[^}]*"formatter"/.test(everythingJson()), 'data.md says so, and no example gives a tooltip a formatter')
 ok(/cfg\.formatter \? cfg\.formatter\.replace\('\{value\}', fmt\(v\)\)/.test(chartsSrc) && /axisLabel\.formatter`\s+substitutes `\{value\}`/.test(flat(charts)), 'a value axis formatter substitutes {value} only, as data.md says')
-ok(/\.replaceAll\('\{b\}', p\.name\)\s*\.replaceAll\('\{c\}', fmt\(p\.value\)\)\s*\.replaceAll\('\{d\}'/.test(chartsSrc) && /pie series' `label\.formatter` substitutes `\{b\}`/.test(flat(charts)), 'a pie label formatter substitutes {b} {c} {d}, as data.md says')
-const langs = ticks(/the language:\s*([\s\S]*?)\. An unknown name/.exec(da)?.[1] ?? '')
-ok(same(langs, [...Object.keys(LANGS), 'diff', 'md']), `data.md lists exactly the code languages (${langs.length}; code ${Object.keys(LANGS).length + 2})`)
+ok(/\.replaceAll\('\{b\}', p\.name\)\s*\.replaceAll\('\{c\}', fmt\(p\.value\)\)\s*\.replaceAll\('\{d\}'/.test(chartsSrc) && /a pie `label\.formatter` substitutes `\{b\}`/.test(flat(charts)), 'a pie label formatter substitutes {b} {c} {d}, as data.md says')
+const langM = /language id: ([\s\S]*?) and (\d+) more of the usual short\s+ids, plus `diff` and `md`/.exec(da)
+const langs = ticks(langM?.[1] ?? '')
+ok(langs.length > 5 && langs.every((l) => l in LANGS), `the code languages data.md names are built in (${langs.join(' ')})`)
+ok(Number(langM?.[2]) === Object.keys(LANGS).length - langs.length, `"${langM?.[2]} more" is the rest of the ${Object.keys(LANGS).length} built in`)
+ok(/langId === 'diff'/.test(read('kernel/src/tokenize.ts')) && /langId === 'md'/.test(read('kernel/src/tokenize.ts')), 'diff and md are built in too')
 ok(/const L = LANGS\[langId\] \?\? LANGS\.js/.test(read('kernel/src/tokenize.ts')), 'an unknown language reads as js')
 const scopes = [...flat(da).matchAll(/`([a-z])` [a-z]/g)].map((m) => m[1])
 ok(same(scopes, MODEL_KEYS.themeCodePalette), `data.md lists exactly the codePalette scopes (${show(scopes)})`)
@@ -330,6 +358,11 @@ const bodies = ['layout-title-content', 'layout-two-col', 'layout-image-left'].m
 ok(bodies.every((b) => b >= 19 && b <= 21) && /19 to 21 px for body text/.test(flat(defaults)), `body text ${bodies.join('/')} px is 19 to 21`)
 ok(Math.round(fs('layout-section', 'kicker')) === 14 && /14 px for a kicker/.test(flat(defaults)), 'kicker is 14 px')
 ok(L['layout-title-content'].elements.every((e) => e.x === 96 && e.x + e.w === 1184), 'the title-and-content layout sits between x 96 and x 1184 at 1280×720')
+const base = Object.fromEntries(builtinLayouts().map((l) => [l.id, l]))
+const tc = base['layout-title-content'].elements[0]
+ok(/const LAYOUT_BASE = \{ width: 1600, height: 900 \}/.test(modelSrc) && tc.x + tc.w + tc.x === 1600, 'the built-in layouts are drawn on a 1600×900 base and scaled to the deck')
+ok(/the built-in layouts scale to it/.test(flat(defaults)) && !/drawn for/.test(defaults), 'design-defaults.md says the built-ins scale to 1280×720, not that they are drawn for it')
+ok(!/same margin on every side/.test(flat(defaults)), 'design-defaults.md claims no equal margin on every side (the title sits at y 72)')
 
 // ---- behaviour ------------------------------------------------------------------
 console.log('\nthe gotchas, through the derive pass the app runs\n')
@@ -404,11 +437,35 @@ ok(/lsGet\('bento-offline'\) === 'on'/.test(read('kernel/src/net.ts')) && body.i
 ok(/export const exportableSlides = \(doc: BentoDoc\): Slide\[\] => doc\.slides\.filter\(inLinearFlow\)/.test(read('slides/src/exportimages.ts')) && /export const inLinearFlow = \(s: Slide\): boolean => !s\.stateOf && !s\.hidden/.test(modelSrc) && /leaving out hidden and state slides/.test(flat(body)), 'Export slides as images leaves out hidden and state slides, and SKILL.md says so')
 ok(/with NOTHING selected[^]*arrow keys walk slides/.test(read('slides/CLAUDE.md')), 'arrow keys walk the slides when nothing is selected (slides/CLAUDE.md, canvas slide nav)')
 
+console.log('\nreferences/app.md: drive.cjs\n')
+const app = ref('app.md')
+const driveJs = [...app.matchAll(/```js\n([\s\S]*?)```/g)].map((m) => m[1]).find((c) => c.startsWith('// node drive.cjs')) ?? ''
+ok(!!driveJs, 'app.md carries drive.cjs')
+{
+  const dir = mkdtempSync(join(tmpdir(), 'skill-drive-'))
+  try {
+    writeFileSync(join(dir, 'drive.cjs'), driveJs)
+    ok(spawnSync(process.execPath, ['--check', join(dir, 'drive.cjs')], { encoding: 'utf8' }).status === 0, 'drive.cjs is valid JavaScript')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+ok(driveJs.includes("localStorage.setItem('bento-offline', 'on')") && /addInitScript/.test(driveJs), 'drive.cjs turns the offline switch on before the page loads')
+ok(/ctx\.route\(\/\^https\?:\/, \(r\) => r\.abort\(\)\)/.test(driveJs) && /routeWebSocket/.test(driveJs), 'drive.cjs aborts every http(s) request and closes every socket')
+const used = [...driveJs.matchAll(/window\.bento\.(\w+)/g)].map((m) => m[1])
+for (const api of new Set(used)) ok(['loadDoc', 'validate', 'serialize', 'doc'].includes(api) && (api === 'doc' ? /get doc\(\)/.test(mainSrc) : mainSrc.includes(`  ${api}`)), `drive.cjs calls window.bento.${api}, which exists`)
+ok(/filter\(\(s\) => !s\.stateOf && !s\.hidden\)/.test(driveJs), 'drive.cjs walks the slides inLinearFlow walks (no hidden, no states)')
+ok(/className = 'ed-stage'/.test(read('slides/src/editor/canvas.ts')) && driveJs.includes("'.ed-stage'"), 'drive.cjs photographs the editor stage, .ed-stage')
+const apiRows = tableRows(section(app, /^## The page's API/m)).map((r) => /^`(\w+)\(/.exec(r[0])?.[1] ?? '')
+for (const api of apiRows) ok(!!api && mainSrc.includes(`  ${api}`), `app.md's API table: window.bento.${api} exists`)
+
 console.log('\nthe file holds the full form\n')
 ok(parseDoc(JSON.stringify({ compact: true, slides: [{ elements: [{ type: 'text', x: 0, y: 0, w: 10, h: 10, html: 'x' }] }] })) === null, 'a compact document without format is refused when the file opens')
 ok(/bootWith\(parsed \|\| starterDoc\(\), !parsed\)/.test(mainSrc) && /const parsed = embedded \? parseDoc\(embedded\) : null/.test(mainSrc), '…and the app boots its starter deck instead (main.ts reads the block with parseDoc, not the compact loader)')
 const withFormat = parseDoc(JSON.stringify({ compact: true, format: 'bento/slides', slides: [{ layout: 'title', elements: [{ role: 'title', md: 'x' }, { type: 'shape', shape: 'rect', x: 0, y: 0, w: 9, h: 9 }] }] }))!
 ok(withFormat.slides[0].elements.length === 0, 'with format, a role-placed element and a shape without fill are dropped')
+const inkText = expandDocWithStats({ compact: true, theme: { background: '#101418', color: '#C0FFEE', fontFamily: 'Georgia, serif' }, slides: [{ elements: [{ type: 'text', x: 0, y: 0, w: 99, h: 30, html: 'x' }] }] }).doc.slides[0].elements[0] as unknown as Record<string, any>
+ok(inkText.color === readableInk('#101418') && inkText.color !== '#C0FFEE' && inkText.fontFamily === FONT_STACK, `compact text with no color or fontFamily gets a readable ink (${inkText.color}) and the system stack, not the theme's`)
+ok(/text `color` that is\s+a plain readable ink for the slide background, not `theme\.color`/.test(gotchas), 'SKILL.md says so')
+ok(/slideNumber: \(doc\.present\?\.slideNumber \?\? true\)/.test(presentSrc) && /progress: doc\.present\?\.progress \?\? true/.test(presentSrc) && /"present": \{ "slideNumber": false \}/.test(gotchas), 'the show draws its counter and progress bar unless present says otherwise, as SKILL.md says')
 const laid = expandDocWithStats({ compact: true, theme: { background: '#101418', color: '#F2F0EA', fontFamily: 'Georgia, serif' }, slides: [{ layout: 'title', elements: [{ role: 'title', md: 'Hi' }] }] }).doc
 const lt = laid.slides[0].elements.find((e) => e.role === 'title') as unknown as Record<string, any>
 ok(laid.slides[0].background === '#FFFFFF' && lt.fontFamily === FONT_STACK && lt.color !== '#F2F0EA', 'a built-in layout brings a white slide, its own text colour and the system stack, not the deck theme')
@@ -444,6 +501,11 @@ try {
   ok(JSON.stringify(out.collab) === JSON.stringify(['room', 'key', 'ownerPriv']), 'inspect.mjs lists the collab field names')
   ok(out.slides?.length === start.slides.length && Object.keys(out.components ?? {}).length === 3 && Object.keys(out.tokens?.set ?? {}).length > 0, 'inspect.mjs reports the slides, the three starter components and the tokens')
   ok(/^\d+ of \d+ style values carry a themeRefs binding$/.test(out.bound ?? ''), `inspect.mjs reports the bound share (${out.bound})`)
+  const radius = out.tokens?.set?.['radius.md']
+  ok(JSON.stringify(radius) === JSON.stringify(['number', start.theme.tokens.set['radius.md'].values.default]), `inspect.mjs gives each token's type and active value (radius.md: ${JSON.stringify(radius)})`)
+  const card = out.components?.['sd-cmp-card']?.main?.ids ?? []
+  ok(card.length > 0 && card.every((id: string) => start.slides.some((sl: any) => sl.elements.some((e: any) => e.id === id && e.component?.main))), `inspect.mjs lists a component main's element ids (${card.length})`)
+  ok(Array.isArray(out.textExtent) && out.textExtent[0] >= 0 && out.textExtent[1] <= 1280, `inspect.mjs reports the text extent (${JSON.stringify(out.textExtent)})`)
   const empty = join(tmp, 'empty.bento.html')
   writeFileSync(empty, before + after)
   ok(run(['inspect.mjs', empty]).stdout.trim() === '{"empty": true}', 'inspect.mjs says when the block is empty')
@@ -494,7 +556,8 @@ for (const [f, t] of sources) {
     if (value === undefined) { ok(false, `${f}: a json block parses (${src.slice(0, 50)}…)`); continue }
     const items: any[] = Array.isArray(value) ? value : [value]
     let doc: Record<string, any>
-    if (items[0]?.tokens) doc = { format: 'bento/slides', theme: { background: '#FFFFFF', color: '#000000', accent: '#F7A600', fontFamily: 'x', ...items[0] }, slides: [{ id: 's', background: '#FFFFFF', transition: 'none', notes: '', elements: [] }] }
+    if (items[0]?.compact) doc = items[0]
+    else if (items[0]?.tokens) doc = { format: 'bento/slides', theme: { background: '#FFFFFF', color: '#000000', accent: '#F7A600', fontFamily: 'x', ...items[0] }, slides: [{ id: 's', background: '#FFFFFF', transition: 'none', notes: '', elements: [] }] }
     else if (items[0]?.elements) doc = { format: 'bento/slides', slides: items }
     else doc = { format: 'bento/slides', slides: [{ id: 's', background: '#FFFFFF', transition: 'none', notes: '', elements: items }] }
     const loaded = parseDocInputReport(JSON.stringify(doc), false)
@@ -503,7 +566,8 @@ for (const [f, t] of sources) {
     examples++
     ok(!!loaded && dropped.length === 0 && errors.length === 0, `${f}: example ${examples} loads with nothing dropped and no error${dropped.length ? ` (dropped ${dropped.map((d) => d.path).join(', ')})` : ''}${errors.length ? ` (${errors.map((e) => e.code).join(', ')})` : ''}`)
     const els = loaded?.doc.slides.flatMap((s) => s.elements) ?? []
-    ok(els.length === items.flatMap((i) => i.elements ?? (i.tokens ? [] : [i])).length, `${f}: example ${examples} keeps every element`)
+    const want = items[0]?.compact ? items[0].slides.flatMap((sl: any) => sl.elements ?? []) : items.flatMap((i) => i.elements ?? (i.tokens ? [] : [i]))
+    ok(els.length === want.length, `${f}: example ${examples} keeps every element`)
   }
 }
 ok(examples >= 6, `${examples} complete examples checked`)

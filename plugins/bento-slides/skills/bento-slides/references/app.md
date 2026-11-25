@@ -1,0 +1,88 @@
+# Driving the app
+
+Read this when you can run a headless browser: it gives you the compact form,
+layouts and roles, text fitted to its box, the validator and pictures of every
+slide, all in one call per round.
+
+## `drive.cjs`: load, check, look, save in one call
+
+Save this as `drive.cjs` and run
+`node drive.cjs deck.bento.html doc.json shots/`. It needs the `playwright`
+package and works with no network: the app's offline switch is on, so a deck
+with `collab` keys does not join its live room.
+
+```js
+// node drive.cjs deck.bento.html [doc.json] [shots-dir]
+// Opens the deck in headless Chromium with the app's network switched off,
+// loads doc.json (full or compact) when given, prints the load report and
+// validate() findings as JSON, writes one PNG per slide in the show to
+// shots-dir when given, and saves the deck back to its path after a load.
+// Needs the playwright package. MARGIN=64 sets validate()'s side margin.
+const { chromium } = require('playwright')
+const { readFileSync, writeFileSync, mkdirSync } = require('node:fs')
+const { resolve, join } = require('node:path')
+const [deck, json, shots] = process.argv.slice(2)
+;(async () => {
+  const browser = await chromium.launch()
+  const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
+  await ctx.addInitScript(() => localStorage.setItem('bento-offline', 'on'))
+  if (ctx.routeWebSocket) await ctx.routeWebSocket(/.*/, (ws) => ws.close())
+  await ctx.route(/^https?:/, (r) => r.abort())
+  const page = await ctx.newPage()
+  await page.goto('file://' + resolve(deck))
+  await page.waitForFunction(() => window.bento && window.bento.loadDoc)
+  const out = {}
+  if (json) {
+    out.load = await page.evaluate((j) => {
+      const r = window.bento.loadDoc(j)
+      return r && { dropped: r.dropped, expanded: r.expanded, fitted: r.fitted, laidOut: r.laidOut }
+    }, readFileSync(json, 'utf8'))
+    if (!out.load) throw new Error('not a bento/slides document: nothing was loaded')
+  }
+  await page.evaluate(() => document.fonts.ready)
+  await page.waitForTimeout(300) // boxes measured before the fonts settled are fitted again
+  const margin = process.env.MARGIN === undefined ? undefined : { margin: Number(process.env.MARGIN) }
+  const v = await page.evaluate((m) => window.bento.validate(undefined, m), margin)
+  out.counts = v.counts
+  out.findings = v.findings.filter((f) => f.code !== 'collab-secrets-present')
+    .map((f) => [f.severity, f.code, f.slide, f.element, f.message].filter(Boolean).join(' | '))
+  if (shots) {
+    mkdirSync(shots, { recursive: true })
+    const n = await page.evaluate(() => window.bento.doc.slides.filter((s) => !s.stateOf && !s.hidden).length)
+    await page.keyboard.press('Escape')
+    for (let i = 0; i < n; i++) {
+      if (i) await page.keyboard.press('ArrowDown')
+      await page.waitForTimeout(250)
+      await page.locator('.ed-stage').screenshot({ path: join(shots, `slide-${String(i + 1).padStart(2, '0')}.png`) })
+    }
+    out.shots = n
+  }
+  if (json) writeFileSync(deck, await page.evaluate(() => window.bento.serialize()))
+  await browser.close()
+  console.log(JSON.stringify(out, null, 1))
+})().catch((e) => { console.error(e.message); process.exit(1) })
+```
+
+- `doc.json` is a whole document, full or compact (`"compact": true`): it
+  replaces the deck's content and keeps its `docId` and `collab`, so start an
+  edit from the deck's own document (`window.bento.read({ compact: true })` in
+  the page, or the block itself).
+- `load.dropped` lists every key, element or role the loader discarded or
+  re-placed, with its path. `findings` is `validate()` minus the sharing-key
+  notice. Fix, run again, and stop when nothing you caused remains.
+- The PNGs are the slides in the show, in order; hidden and state slides are
+  not walked, so check those by eye in the editor or move them into the walk
+  while you check.
+- Leave out `doc.json` to check and photograph a deck without changing it.
+
+## The page's API (`window.bento`)
+
+| Call | Returns |
+|---|---|
+| `read()` / `read({ compact: true })` | the document, without its `collab` keys |
+| `loadDoc(json)` | the load report (`dropped`, `expanded`, `fitted`, `laidOut`, `findings`), or `false` when the JSON is not a document |
+| `validate(undefined, { margin })` | `{ ok, counts, findings }`; each finding `{ code, severity, message, slide, element, path }` |
+| `measure({ html, w, fontSize, lineHeight, h })` | `{ height, width, lines }`, plus `fits` and `overflow` when you pass `h` |
+| `compact()` | the open deck as compact JSON |
+| `schema()` | the format as JSON Schema |
+| `serialize()` | the whole file, `collab` keys included: write it to disk, do not print it |

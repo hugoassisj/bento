@@ -35,8 +35,9 @@ pre-1.0.
   lays slides out with layouts, roles and auto-layout frames instead of
   hand-placed coordinates, checks its work with the app's validator and by
   looking at every slide, and says so when it could not. The skill is now a
-  short main file plus references on design systems, defaults, motion, data
-  and editing a file safely; installed as a plugin it carries all of them.
+  short main file plus references on design systems, defaults, motion, data,
+  editing a file safely and driving the app (one script loads, checks,
+  photographs and saves a deck); installed as a plugin it carries all of them.
 
 ## [1.3.0] — 2026-11-22
 

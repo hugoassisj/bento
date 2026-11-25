@@ -1,8 +1,7 @@
 # Editing a deck on disk
 
-Read this when you edit a `.bento.html` file directly: reading the block
-safely, writing it back, ids, a shared deck, and getting the empty app. The
-file contract in `SKILL.md` section 1 is the rule; this is how to follow it.
+Read this when you read or write a `.bento.html` file directly, or need the
+empty app. `SKILL.md` section 1 is the rule; these scripts follow it.
 
 ## Getting the empty app
 
@@ -13,19 +12,15 @@ file to write into (this is the only step that needs the network):
 curl -fsSL https://bento.page/releases/slides/Bento_Slides.bento.html -o "Q4_Review.bento.html"
 ```
 
-(Windows without curl:
-`iwr https://bento.page/releases/slides/Bento_Slides.bento.html -OutFile Q4_Review.bento.html`.)
-Name the file after the deck's topic, and check that it contains
-`id="bento-doc"`. Its block is empty: opened in a browser it shows a starter
-deck to a new user, but on disk there is nothing to discard or copy from, so
-write a whole new document into it.
+(Windows: `iwr <same URL> -OutFile Q4_Review.bento.html`.) Name it after the
+deck's topic. Its block is empty (a browser shows a starter deck in its
+place), so write a whole new document into it.
 
 ## Reading the block: `inspect.mjs`
 
-Save this as `inspect.mjs` and run `node inspect.mjs deck.bento.html`. It
-prints the outline and the design system as JSON (the `collab` field names,
-never their values; the number of assets, never their data), which is
-everything step 1 of the workflow needs.
+`node inspect.mjs deck.bento.html` prints the outline and the design system
+as JSON: everything step 1 of the workflow needs, with `collab` field names
+but no values and an asset count but no data.
 
 ```js
 // node inspect.mjs deck.bento.html
@@ -55,20 +50,23 @@ for (const s of doc.slides) {
   for (const e of s.elements) {
     if (!e.component) continue
     const c = (components[e.component.id] ??= { main: null, copies: new Set() })
-    if (e.component.main) c.main ??= { slide: s.id, name: e.groupName ?? e.name ?? '' }
+    if (e.component.main) (c.main ??= { slide: s.id, name: e.groupName ?? e.name ?? '', ids: [] }).ids.push(e.id)
     else c.copies.add(`${s.id}/${e.groupId ?? e.id}`)
   }
 }
+const W = doc.size?.width ?? 1280
+const boxes = doc.slides.flatMap((s) => s.elements).filter((e) => e.type === 'text' && e.w < W * 0.9)
+const tk = doc.theme?.tokens
+const mode = tk?.mode ?? tk?.modes?.[0] ?? 'default'
 const textOf = (e) => (e.html ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)
 console.log(JSON.stringify({
   format: doc.format, title: doc.title, size: doc.size,
   collab: collab ? Object.keys(collab) : null,
   assets: assets ? Object.keys(assets).length : 0,
   theme: { ...doc.theme, tokens: undefined },
-  tokens: doc.theme?.tokens && {
-    modes: doc.theme.tokens.modes ?? ['default'], mode: doc.theme.tokens.mode,
-    set: Object.fromEntries(Object.entries(doc.theme.tokens.set ?? {}).map(([n, t]) => [n, t.type])),
-  },
+  tokens: tk && { modes: tk.modes ?? ['default'], mode, // name: [type, value in the active mode]
+    set: Object.fromEntries(Object.entries(tk.set ?? {}).map(([n, t]) => [n, [t.type, t.values?.[mode] ?? Object.values(t.values ?? {})[0]]])) },
+  textExtent: boxes.length ? [Math.min(...boxes.map((e) => e.x)), Math.max(...boxes.map((e) => e.x + e.w))] : null,
   bound: `${bound} of ${values} style values carry a themeRefs binding`,
   refs: Object.fromEntries([...refs].sort((a, b) => b[1] - a[1])),
   components: Object.fromEntries(Object.entries(components).map(([id, c]) => [id, { main: c.main, copies: c.copies.size }])),
@@ -80,22 +78,23 @@ console.log(JSON.stringify({
     ...(s.stateOf ? { stateOf: s.stateOf } : {}), ...(s.hidden ? { hidden: true } : {}),
     elements: s.elements.length, text: s.elements.filter((e) => e.type === 'text').map(textOf).filter(Boolean).slice(0, 3),
   })),
-}, null, 1))
+}))
 ```
 
-`bound` counts the style values (paint, type, stroke, shadow and similar)
-that carry a `themeRefs` binding; a deck that binds many of its values expects
-yours to be bound too. `refs` shows which slots and tokens the deck actually
-uses, most used first.
-
-To work on the document, parse the block the same way and keep `collab` and
-`assets` out of anything you print. `jq 'del(.collab, .assets)'` on the
-extracted JSON does the same in a shell.
+`tokens.set` gives each token's type and its value in the active mode: the
+literal to write beside a `$name` ref. `bound` counts style values (paint,
+type, stroke, shadow) carrying a binding; a deck that binds many expects
+yours bound too. `refs` lists the slots and tokens it uses, most used first.
+`textExtent` is the leftmost and rightmost edge of its text boxes, its
+margins in practice. A component's `main.ids` are the elements to duplicate
+for a copy. To work on the document
+yourself, parse the block the same way and keep `collab` and `assets` out of
+anything you print.
 
 ## Writing the block back: `splice.mjs`
 
-Write the full document you want to a JSON file (without `collab`; with or
-without `assets`) and run `node splice.mjs deck.bento.html doc.json`.
+Write the full document to a JSON file (without `collab`; with or without
+`assets`) and run `node splice.mjs deck.bento.html doc.json`.
 
 ```js
 // node splice.mjs deck.bento.html doc.json
@@ -126,58 +125,19 @@ const start = block.index + block[1].length
 writeFileSync(file, `${html.slice(0, start)}\n${text}\n${html.slice(start + block[2].length)}`)
 ```
 
-It refuses a compact document, a password-protected deck and anything that is
-not a bento/slides document. A `$` in the text (a formula, a price) is safe:
-the script splices by position, not with a string replacement that would read
-`$&` as a pattern.
+It refuses a compact document, a password-protected deck and anything that
+is not a bento/slides document, and splices by position, so a `$` in the text
+(a formula, a price) is safe.
 
-## Ids
+## Ids and changes
 
-- Keep every existing `id`: comments, links, morph pairing and component
-  copies refer to them.
-- A new element needs an `id` unique on its slide. A readable, deterministic
-  scheme (`s4-chart`, `s4-note-1`) makes a re-run produce the same ids. Reuse
-  an id on the next slide on purpose, to morph.
-- A new slide needs an `id` unique in the deck; a `link` or `stateOf` names it.
-- In the compact form an element may leave `id` out; it becomes
-  `<slideId>-<type>-<index>`.
-
-## Changing an existing deck
-
-- Change what the user asked for and leave the rest as it is, including keys
-  you do not recognise and the order of slides and elements you did not move.
-- Adding slides: copy the structure of a neighbouring slide made from the same
-  layout (the deck's `layouts`, or the slide your new one follows), so the new
-  slide shares its geometry, its bindings and its furniture's ids.
-- Removing an element that is a frame removes its layout, not its children:
-  they keep their boxes. Remove the children too, or move them.
-- A component main deleted from the deck leaves its copies without a main; the
-  app promotes the first copy to be the new main when you delete it in the
-  editor, so delete a main there, or not at all.
-
-## A deck that is shared live
-
-`collab` in the block holds the deck's live-session credentials; the app mints
-them when a deck is created, so treat every deck that has them as one that can
-join a room. `splice.mjs` keeps `collab` untouched. Before you open such a deck in a browser you
-drive, set `localStorage['bento-offline'] = 'on'` before the page loads (for
-example in an init script), or the app joins the room and every edit you make
-reaches everyone in it. Tell the user the deck carries live-session keys.
-
-## Through the app instead
-
-With a browser you drive, the app does the splicing, the escaping and the
-derived values (frames, components, bindings) for you:
-
-1. Open the deck (offline switch on if it has `collab`).
-2. `window.bento.read()` returns the document without its keys
-   (`window.bento.read({ compact: true })` in the compact form).
-3. `window.bento.loadDoc(json)` loads your full or compact document, keeps the
-   open deck's `docId` and session, and returns the load report (`dropped`,
-   `findings`, `expanded`, `fitted`, `laidOut`); `false` means the JSON was not
-   a document and nothing changed.
-4. `window.bento.measure({ html, w, fontSize, lineHeight })` returns
-   `{ height, width, lines }` for text you have not placed yet.
-5. `window.bento.serialize()` returns the whole file; write it to the deck's
-   path. It carries the `collab` keys, so write it straight to disk and do not
-   print it.
+- Keep every existing `id`: comments, links, morph pairs and component copies
+  refer to them. A new element needs an `id` unique on its slide, a new slide
+  one unique in the deck; a readable scheme (`s4-chart`) keeps re-runs stable.
+- Change what the user asked for and leave the rest, including keys you do
+  not recognise and the order of what you did not move.
+- A new slide is best copied from a neighbour made from the same layout, so it
+  shares that slide's geometry, bindings and furniture ids.
+- Removing a frame from the JSON leaves its children where they are; remove
+  or move them too. Delete a component main in the editor (it promotes the
+  first copy to be the new main), not in the JSON.

@@ -11,8 +11,8 @@ something, do that.
 ## Canvas and margins
 
 - **Canvas.** If you are creating the deck and the user named no format,
-  1280×720 (16:9) is a good default, because it is what the editor creates and
-  what the built-in layouts are drawn for. If the deck has its own `size`,
+  1280×720 (16:9) is a good default, because it is what the editor creates;
+  the built-in layouts scale to it. If the deck has its own `size`,
   work in it; all coordinates are px on that canvas.
 - **Side margins.** If the deck shows no margin of its own, 96 px left and
   right on a 1280-wide canvas (content between x 96 and x 1184) is a good
@@ -35,8 +35,8 @@ something, do that.
   any width, so it is usually the better choice.
 - **Vertical rhythm.** If the deck has no title band of its own, a title at
   `y 72`, `h 84` with content from `y 208` leaves 416 px of content height
-  above a 96 px bottom margin, so the slide keeps the same margin on every
-  side.
+  above a 96 px bottom margin, because a title sits a little higher than the
+  content it heads.
 
 ## Type
 
@@ -77,7 +77,3 @@ something, do that.
 - **Speaker notes.** On a deck you are creating, notes on every slide are a
   good default, because they travel in the file and double as the talk
   track.
-- **Show chrome.** If your slides number themselves (a `{{page}}` footer),
-  set `"present": { "slideNumber": false }`, because the show otherwise draws
-  its own counter on top of yours; add `"progress": false` if the design has
-  its own progress mark.

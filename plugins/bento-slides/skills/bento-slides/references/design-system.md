@@ -32,13 +32,13 @@ path:
 
 ## Palette slots
 
-The theme's colours are named slots, mirroring a PowerPoint colour scheme:
+The theme's colours are named slots (an office colour scheme's names):
 
 | Slot | Where its colour lives | When the deck does not set it |
 |---|---|---|
-| `bg1` | `theme.background` | a required theme field |
-| `tx1` | `theme.color` | a required theme field |
-| `accent1` | `theme.accent` | a required theme field |
+| `bg1` | `theme.background` | the editor's default, `#FFFFFF` |
+| `tx1` | `theme.color` | the editor's default, `#1E2A3A` |
+| `accent1` | `theme.accent` | the editor's default, `#F7A600` |
 | `bg2` | `theme.palette.bg2` | `theme.color` |
 | `tx2` | `theme.palette.tx2` | `theme.background` |
 | `accent2`, `accent3`, `accent4`, `accent5`, `accent6` | `theme.palette.accent2` to `.accent6` | `theme.accent` |
@@ -46,63 +46,46 @@ The theme's colours are named slots, mirroring a PowerPoint colour scheme:
 
 A palette ref is the slot name, optionally shifted in lightness by up to 100
 percent: `"accent1"`, `"accent2 -19%"` (darker), `"bg2 +40%"` (lighter). The
-bound literal keeps its own opacity: a translucent fill linked to `accent1`
-stays translucent. The app may append ` /a` to a ref whose field keeps its own
-opacity; leave it there.
-
-A deck that sets `theme.palette` slots, or binds to them, has chosen its
-colours by slot. Bind new colours to those slots (with a shift for a tint)
-rather than writing new hex values.
+literal keeps its own opacity, and the app may append ` /a` to such a ref;
+leave it. A deck that binds to slots has chosen its colours by slot: bind new
+colours to a slot (shifted for a tint) rather than writing new hex values.
 
 ## Design tokens
 
 `theme.tokens` holds named values of six types and, optionally, modes:
 
 ```json
-"tokens": {
-  "modes": ["light", "dark"], "mode": "light",
-  "set": {
-    "ink":        { "type": "color",      "values": { "light": "#1E2A3A", "dark": "#F2F0EA" } },
-    "space.gap":  { "type": "number",     "values": { "light": 16, "dark": 16 } },
-    "size.body":  { "type": "fontSize",   "values": { "light": 24, "dark": 24 } },
-    "font.body":  { "type": "fontFamily", "values": { "light": "'Instrument Sans', system-ui, sans-serif", "dark": "'Instrument Sans', system-ui, sans-serif" } },
-    "dim":        { "type": "opacity",    "values": { "light": 0.6, "dark": 0.6 } },
-    "shadow.card":{ "type": "shadow",     "values": { "light": { "y": 14, "blur": 34, "color": "rgba(30,42,58,0.10)" }, "dark": { "y": 14, "blur": 34, "color": "rgba(0,0,0,0.4)" } } }
-  } }
+"tokens": { "modes": ["light", "dark"], "mode": "light", "set": {
+  "ink":         { "type": "color",  "values": { "light": "#1E2A3A", "dark": "#F2F0EA" } },
+  "space.gap":   { "type": "number", "values": { "light": 16, "dark": 16 } },
+  "shadow.card": { "type": "shadow", "values": { "light": { "y": 14, "blur": 34, "color": "rgba(30,42,58,0.10)" }, "dark": { "y": 14, "blur": 34, "color": "rgba(0,0,0,0.4)" } } } } }
 ```
 
 - The types are `color`, `number` (any dimension: gap, radius, stroke),
-  `fontSize`, `opacity` (0 to 1), `fontFamily` and `shadow`.
+  `fontSize`, `opacity` (0 to 1), `fontFamily` and `shadow` (`x`, `y`,
+  `blur`, `color`).
 - A token name starts with a letter, then letters, digits, `.`, `-` or `_`,
   64 characters at most. A ref to it is `$` plus the name: `"$space.gap"`.
 - Without `modes` the deck has one mode, `default`, and every value is keyed
   `"default"`. Without `mode` the first mode is active. A token with no value
   for the active mode uses the first mode that has one.
 - A new token goes in `set` with a value for every mode; name it in the
-  hand-off. Its uses are bound like any other.
-- Changing a token's value or the active `mode` belongs in the app (the Tokens
-  tab), where every bound literal follows. In the JSON alone it unbinds them
-  (gotcha 1 in `SKILL.md`).
-
-What `window.bento.validate()` says about bindings: `token-unknown` (a `$ref`
-to a token the set lacks), `theme-ref-malformed`, `theme-ref-unknown-slot`
-(an empty slot), `theme-ref-dangling` (a ref on a path that holds no value)
-and `theme-ref-stale` (a slot-bound literal that the next palette edit will
-replace).
+  hand-off. Changing an existing value or the active `mode` belongs in the
+  app's Tokens tab (gotcha 1 in `SKILL.md`).
+- `validate()` reports `token-unknown` (a `$ref` the set lacks),
+  `theme-ref-malformed`, `theme-ref-unknown-slot` (an empty slot),
+  `theme-ref-dangling` (nothing at that path) and `theme-ref-stale` (a
+  slot-bound literal the next palette edit will replace).
 
 ## Components
 
 A component is a set of ordinary elements sharing `component.id`. The set
 marked `"main": true` is the main; every other set with that id is a copy, one
 copy per `groupId`. `component.key` pairs each copy element with its
-counterpart in the main.
-
-```json
-{ "id": "btn-bg",    "type": "shape", "groupId": "g-btn",  "component": { "id": "button", "key": "k0", "main": true }, … },
-{ "id": "btn-label", "type": "text",  "groupId": "g-btn",  "component": { "id": "button", "key": "k1", "main": true }, "html": "Start", … },
-{ "id": "cta-bg",    "type": "shape", "groupId": "g-cta",  "component": { "id": "button", "key": "k0" }, … },
-{ "id": "cta-label", "type": "text",  "groupId": "g-cta",  "component": { "id": "button", "key": "k1", "over": ["html"] }, "html": "Buy now", … }
-```
+counterpart in the main. A main's label `{ "groupId": "g-btn", "component":
+{ "id": "button", "key": "k1", "main": true }, "html": "Start", … }` has a
+copy `{ "groupId": "g-cta", "component": { "id": "button", "key": "k1",
+"over": ["html"] }, "html": "Buy now", … }`.
 
 - A copy takes every property from its main except its own `id`, `groupId`,
   `groupName`, `name`, `component`, `x`/`y` (it keeps an offset from the
@@ -189,15 +172,12 @@ editor's *Save slide as layout* writes. Their text elements carry a
 
 ## Fonts
 
-- `theme.fontFamily` is the body face; a text box without `fontFamily` in the
-  full form uses it. `theme.codeFontFamily` is the face for code elements.
-- `doc.fonts` lists the faces the deck carries: `{ "family", "asset",
-  "weight", "style" }`. `asset` is a key into `doc.assets` holding a woff2 data
-  URI, or one of the two faces the app ships: `builtin:fraunces-900`
-  (Fraunces, weight 900) and `builtin:instrument-sans` (Instrument Sans, 400
-  to 700).
-- A `fontFamily` naming a face the deck does not carry falls back silently to
-  the next family in the stack for every viewer who lacks it, and it looks
-  right to whoever has it installed. `validate()` reports it as
-  `font-not-embedded`. Write a full stack, `"'Fraunces', Georgia, serif"`, so
-  the fallback is one you chose.
+- `theme.fontFamily` is the body face (a full-form text box without
+  `fontFamily` uses it); `theme.codeFontFamily` is the code face.
+- `doc.fonts` entries are `{ "family", "asset", "weight", "style" }`, where
+  `asset` is a `doc.assets` key holding a woff2 data URI or one of the two
+  built-in keys named in `SKILL.md`.
+- A face the deck does not carry falls back silently for every viewer who
+  lacks it, while looking right to whoever has it installed
+  (`font-not-embedded`). Write a full stack, `"'Fraunces', Georgia, serif"`,
+  so the fallback is one you chose.

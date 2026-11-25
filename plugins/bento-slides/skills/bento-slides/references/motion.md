@@ -10,20 +10,23 @@ timing), match it.
 
 A slide's `transition` is `none`, `fade`, `slide`, `zoom` or `morph`. On a
 `morph` slide, every element whose morph key matches an element on the
-previous slide tweens from there: position, size, colour and gradients. The morph key is `morphId` when set, else `id`; it must be unique
-within a slide.
+previous slide tweens from there: position, size, colour and gradients.
+The morph key is `morphId` when set, else `id`; it must be unique within a
+slide.
 
 ```json
-{ "id": "s1", "transition": "none", "elements": [
-  { "id": "headline", "type": "text", "x": 96, "y": 140, "w": 900, "h": 200, "html": "Big claim.", "fontSize": 120, "fontWeight": 900, "color": "#111111", "align": "left", "valign": "top", "lineHeight": 1, "rotation": 0, "opacity": 1 },
-  { "id": "bar", "type": "shape", "shape": "rect", "x": 96, "y": 380, "w": 320, "h": 16, "fill": "#E8442E", "stroke": "none", "strokeWidth": 0, "radius": 0, "rotation": 0, "opacity": 1 } ] }
+{ "compact": true, "slides": [
+  { "id": "s1", "transition": "none", "elements": [
+    { "id": "headline", "type": "text", "x": 96, "y": 140, "w": 900, "h": 200, "html": "Big claim.", "fontSize": 120, "fontWeight": 900 },
+    { "id": "bar", "type": "shape", "shape": "rect", "x": 96, "y": 380, "w": 320, "h": 16, "fill": "#E8442E" } ] },
+  { "id": "s2", "transition": "morph", "elements": [
+    { "id": "headline", "type": "text", "x": 96, "y": 84, "w": 500, "h": 80, "html": "Big claim.", "fontSize": 40, "fontWeight": 900 },
+    { "id": "bar", "type": "shape", "shape": "rect", "x": 96, "y": 170, "w": 16, "h": 450, "fill": "#E8442E" } ] } ] }
 ```
 
-```json
-{ "id": "s2", "transition": "morph", "elements": [
-  { "id": "headline", "type": "text", "x": 96, "y": 84, "w": 500, "h": 80, "html": "Big claim.", "fontSize": 40, "fontWeight": 900, "color": "#888888", "align": "left", "valign": "top", "lineHeight": 1, "rotation": 0, "opacity": 1 },
-  { "id": "bar", "type": "shape", "shape": "rect", "x": 96, "y": 170, "w": 16, "h": 450, "fill": "#E8442E", "stroke": "none", "strokeWidth": 0, "radius": 0, "rotation": 0, "opacity": 1 } ] }
-```
+The headline shrinks into a running head and the bar swings upright. (This is
+the compact form; written into the file, each element carries its type's
+full key set, `SKILL.md` section 6.)
 
 - Carrying two to four ids through a run of slides and rearranging them is
   what makes a deck feel continuous. Generated ids need to be deterministic,

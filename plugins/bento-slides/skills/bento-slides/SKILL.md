@@ -74,7 +74,8 @@ the network; authoring, editing and checking do not.
 menu (the bento/slides wordmark, top left) has *Copy document JSON*, *Copy
 compact JSON (for agents)* and *Replace from JSON…* under "Advanced", and ⌘K
 (Ctrl+K) finds them by name. Copies made this way leave `collab` out, and
-*Replace from JSON…* keeps the open deck's identity and session.
+*Replace from JSON…* keeps the open deck's identity and session. It takes the
+compact form too, the shortest whole deck you can return.
 
 ## 2. Precedence: the deck's design system wins
 
@@ -108,8 +109,9 @@ When a system exists:
   with the literal equal to the token's (or slot's) current value:
   `"color": "#1E2A3A", "themeRefs": { "color": "$ink" }` for a token,
   `"fill": "#F7A600", "themeRefs": { "fill": "accent1" }` for a palette slot.
-- A value the system lacks becomes a new token, which you name in the hand-off.
-  Do not edit an existing token's value to get it.
+- A colour or size you will reuse that the system lacks becomes a new token,
+  named in the hand-off; a one-off can stay a literal. Do not edit an existing
+  token's value to get it.
 - Leave the theme, tokens, modes, palette slots, fonts, component mains and
   layouts as they are unless the user asks you to change them.
 - Reuse before you build: a copy of an existing component instead of a
@@ -122,54 +124,52 @@ palette refs and shifts, components, frames and fonts.
 
 ## 3. Workflow
 
-**Inspect → plan → author → lint → render → look → apply.**
+**Inspect → plan → author → check → look → apply.** With a headless browser,
+`references/app.md`'s `drive.cjs` loads, checks, photographs and saves the
+deck in one call per round.
 
 1. **Inspect.** Find the block, check `format`, list `collab` field names, set
-   `assets` aside. Record `size`, the system (section 2), the slide ids and
-   what each slide holds. `references/editing.md` has a script that prints all
-   of this without printing a key or a picture.
-2. **Plan.** For each slide: what the material is, which feature carries it
-   (section 4), which layout it uses (the deck's own first), and which tokens,
-   slots and components it reuses.
+   `assets` aside, and record `size`, the system (section 2), the slide ids and
+   what each slide holds. `references/editing.md`'s `inspect.mjs` prints all
+   of it without a key or a picture.
+2. **Plan** every slide before writing any: the material, the feature that
+   carries it (section 4), its layout (the deck's own first), and the tokens,
+   slots and components it reuses. Then write the whole document in one go.
 3. **Author.** Prefer what places things for you over coordinates:
-   - with the app open (a browser you drive), write the **compact form** and
-     load it with `window.bento.loadDoc(json)`. It replaces the whole
-     document, so start an edit from `window.bento.read({ compact: true })`.
-     Give a slide a `layout` and its elements a `role` and the layout places
-     them; leave a text box's `h` out and it is sized to its text; write `md`
-     instead of `html`;
-   - for rows, columns and grids, use an **auto-layout frame**: the app
-     computes the children's positions, in the file as well as in the browser;
+   - with a browser, write the **compact form** and load it with
+     `window.bento.loadDoc(json)`. It replaces the whole document, so start an
+     edit from `window.bento.read({ compact: true })`. A slide's `layout` and
+     its elements' `role` place them; a text box without `h` is sized to its
+     text; `md` replaces `html`;
+   - for rows, columns, grids and cards, use an **auto-layout frame**: the
+     app computes the children's boxes, in the file as well as in a browser;
    - write `x y w h` yourself only where no layout or frame fits.
-   Writing to the file directly (no browser), use the full form: copy geometry
-   from the deck's own layouts and slides, and let frames do the arithmetic.
-4. **Lint.** In the app, `loadDoc` returns a report: `dropped` lists every key
-   or element the gate discarded and why, `findings` is `window.bento.validate()`
-   on the loaded deck (overflow, off-canvas, broken links and refs, unknown
-   keys). Fix the JSON and load again until nothing you caused remains. Its
-   `past-margin` finding assumes 96 px sides on a 1280-wide canvas; for a deck
-   with other margins call `window.bento.validate(undefined, { margin: 64 })`
-   with the deck's own number, or `0` to turn it off.
-5. **Render.** Open the deck (the file itself, or the app after `loadDoc`).
-   Before you open a deck that carries `collab` keys in a browser you drive,
-   turn the app's offline switch on (`localStorage['bento-offline'] = 'on'`
-   set before the page loads), or it can join the deck's live room and your
-   edits reach everyone in it.
-6. **Look** at every slide. With nothing selected, the arrow keys walk the
-   slides in the editor; the File menu's *Export slides as images…* writes one
-   picture per slide in the show, leaving out hidden and state slides, so
-   step to those in the editor. Overflowing text, crowded elements, a heading
-   that wrapped to three lines and a chart that ignored a key are invisible in
-   the JSON and obvious on screen.
-7. **Apply.** From the browser, `window.bento.serialize()` returns the whole
-   file with your document in it; write that to the deck's path. Without a
-   browser, splice the full JSON into the block (`references/editing.md`).
-   Then hand off: what changed, new tokens you added, findings you left and
-   why.
+   Without a browser, write the full form, copying geometry from the deck's
+   own layouts and slides.
+4. **Check.** `loadDoc` returns a report: `dropped` lists every key, element
+   or role the loader discarded or re-placed, and `findings` is
+   `window.bento.validate()` (overflow, off-canvas, broken links and refs,
+   unknown keys). Fix and load again until nothing you caused remains.
+   `past-margin` assumes 96 px sides on a 1280-wide canvas: for a deck with
+   other margins pass its own, `window.bento.validate(undefined, { margin: 64 })`,
+   or `0` to turn the check off. Before a browser you drive opens a deck that
+   carries `collab` keys, set `localStorage['bento-offline'] = 'on'` (before
+   the page loads), or it can join the deck's live room and your edits reach
+   everyone in it.
+5. **Look** at every slide: overflow, crowding, a heading wrapped to three
+   lines and a chart that ignored a key are invisible in the JSON. `drive.cjs`
+   writes one PNG per slide; by hand, the arrow keys walk the slides in the
+   editor (nothing selected), and the File menu's *Export slides as images…*
+   writes one picture per slide in the show, leaving out hidden and state
+   slides.
+6. **Apply.** From the browser, `window.bento.serialize()` returns the whole
+   file; write it to the deck's path. Without one, splice the full JSON into
+   the block (`editing.md`'s `splice.mjs`). Hand off what changed, the tokens
+   you added, and the findings you left and why.
 
-**With no browser at all** you cannot lint or look. Say so plainly in the
-hand-off, check your JSON against the gotchas in section 5, and ask the user to
-open the deck and page through it.
+**With no browser at all** you cannot check or look. Say so plainly in the
+hand-off, check your JSON against section 5, and ask the user to open the deck
+and page through it.
 
 ## 4. Material to feature
 
@@ -233,16 +233,22 @@ And a few more that cost a guess each time:
   the deck's theme. On a deck with its own theme, use the deck's `layouts`, or
   set and bind `background`, `color` and `fontFamily` on what the built-in
   placed.
-- **`fontFamily` left out means two different things.** In the full form, a
-  text box without `fontFamily` renders in `theme.fontFamily`, which is what
-  lets the deck's face change in one place. In the compact form an omitted
-  `fontFamily` is filled with the editor's system stack. Write the deck's
-  stack (bound to its font token, if it has one) on compact text.
+- **An omitted field means different things in the two forms.** In the full
+  form a text box without `fontFamily` renders in `theme.fontFamily`, so the
+  deck's face changes in one place. In the compact form every omitted field
+  is the editor's default: the system font stack, and a text `color` that is
+  a plain readable ink for the slide background, not `theme.color`. On a deck
+  with a theme, write `color` and `fontFamily` on compact text, bound to the
+  deck's slots or tokens.
 - **Unknown keys are ignored.** A typo (`fontSze`) simply does not apply; the
   load report's `dropped` and validate's `unknown-key` name it.
 - **Morph pairs by id.** Elements tween between consecutive slides only when
   they share an `id` (or `morphId`) and the later slide has
   `"transition": "morph"`. Different ids cut.
+- **The show draws its own page counter and progress bar.** If the slides
+  number themselves (a `{{page}}` footer), set
+  `"present": { "slideNumber": false }`, and `"progress": false` if the design
+  has its own progress mark.
 - **Faces the app carries.** A `doc.fonts` entry may name
   `builtin:fraunces-900` (Fraunces at 900) or `builtin:instrument-sans`
   (Instrument Sans, 400 to 700) as its `asset`, and no font bytes go into the
@@ -289,6 +295,7 @@ own lacks them, and sections 1 to 6 still hold without them.
   hover behaviour.
 - `references/data.md`: read when the material has numbers, a grid of values,
   code, a formula or a clip.
-- `references/editing.md`: read when you edit a file on disk (reading the
-  block safely, writing it back, ids, a shared deck) or when you need the empty
-  app.
+- `references/editing.md`: read when you read or write the file on disk
+  (`inspect.mjs`, `splice.mjs`, ids) or need the empty app.
+- `references/app.md`: read when you can run a headless browser
+  (`drive.cjs`: load, check, photograph and save in one call).

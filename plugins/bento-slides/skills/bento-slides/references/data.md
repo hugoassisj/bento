@@ -6,56 +6,58 @@ table style, its code palette), reuse that style.
 
 ## Charts
 
-A chart element has a `preset` (`bar`, `line`, `pie`, `scatter`) and an
-`option`: pure JSON shaped like an ECharts option. The engine is the app's
-own charts-lite, not ECharts: it reads the option's shape and ignores every
-key it does not implement, without a warning.
+A chart has a `preset` (`bar`, `line`, `pie`, `scatter`) and an `option`
+shaped like an ECharts option. The engine is the app's own charts-lite: it
+draws from the keys below and ignores every other key without a word.
 
 ```json
 { "id": "c1", "type": "chart", "x": 96, "y": 260, "w": 1088, "h": 380, "rotation": 0, "opacity": 1, "preset": "bar",
   "option": {
     "color": ["#1E2A3A", "#F7A600"],
-    "xAxis": { "type": "category", "data": ["2022", "2023", "2024", "2025"] },
-    "yAxis": { "type": "value" },
-    "series": [{ "type": "bar", "name": "Revenue", "data": [420, 780, 1300, 2450] }],
-    "tooltip": { "trigger": "item" } } }
+    "legend": { "bottom": 0 }, "grid": { "left": 72, "right": 56 },
+    "xAxis": { "data": ["2022", "2023", "2024", "2025"] },
+    "yAxis": [{ "name": "Revenue" }, { "axisLabel": { "formatter": "{value}%" } }],
+    "series": [
+      { "type": "bar", "name": "Revenue", "data": [420, 780, 1300, 2450] },
+      { "type": "line", "name": "Margin", "yAxisIndex": 1, "data": [8, 11, 14, 19] } ],
+    "tooltip": { "trigger": "axis" } } }
 ```
 
+What charts-lite reads:
+
+| Where | Keys |
+|---|---|
+| top level | `color` (series colours in order), `series`, `xAxis`, `yAxis`, `legend`, `grid` (`left`, `right`, `top`, `bottom`), `tooltip` (`trigger` only), `textStyle` (`fontFamily`), `dataZoom` (a non-empty array turns on wheel zoom) |
+| every series | `type`, `name`, `data` |
+| bar | `yAxisIndex`, `itemStyle.color`, `itemStyle.borderRadius` |
+| line | `yAxisIndex`, `lineStyle.color`, `lineStyle.width`, `smooth`, `symbol` (`"none"` hides the dots), `symbolSize`, `areaStyle` (present fills the area; `areaStyle.color`) |
+| scatter | `itemStyle.color`, `symbolSize`; `data` is `[x, y]` pairs and `xAxis` has no `data` |
+| pie | `radius`, `label.formatter` (or `label: false`), `label.color`, `itemStyle.borderColor`, `itemStyle.borderWidth`; `data` is `{ "name", "value" }` items |
+| `xAxis` | `data` (the categories), `axisLabel` (`color`, `fontSize`, `fontWeight`), `axisLine.lineStyle` (`color`, `width`) |
+| `yAxis` (one, or an array of two) | `name`, `min`, `max`, `axisLabel` (`color`, `fontSize`, `fontWeight`, `formatter`); the first axis's `splitLine.lineStyle` (`color`, `width`) |
+| `legend` | `top`, `bottom`, `itemWidth`, `itemHeight`, `itemGap`, `textStyle` (`color`, `fontSize`, `fontWeight`); a `legend` key draws a legend whatever it says (`show` is not read) |
+
 - **Data.** Bar and line `data` are JSON numbers; an object or a numeric
-  string renders as 0. A pie series takes `{ "name", "value" }` items. Colour
-  by series, not per bar.
-- **Colours.** Without `option.color` (or a series' `itemStyle.color`) a chart
-  draws in the engine's default palette, not the deck's. Take the series
-  colours from `theme.chartPalette` when the deck has one, else from its
-  palette slots, and write them into `option.color`.
-- **Formatters** are template strings, not functions, and only two are read.
-  A pie series' `label.formatter` substitutes `{b}` (the name), `{c}` (the
-  value) and `{d}` (the percent). A value axis's `axisLabel.formatter`
-  substitutes `{value}` (`"{value}%"`). A tooltip's `formatter` is not read:
-  the tooltip shows the name and value itself.
-- **Two scales** (a volume and a percentage): make `yAxis` an array of two
-  `{ "type": "value" }` axes and point the second series at the second axis
-  with `"yAxisIndex": 1`, drawn as a `line` over the bars.
-- **What it honours**:
-  - top level: `color`, `series`, `xAxis`, `yAxis`, `legend`, `grid`,
-    `tooltip` (`trigger` only), `textStyle` (`fontFamily`), `dataZoom`
-  - any series: `type`, `name`, `data`, `yAxisIndex`, `itemStyle.color`
-  - bar: `itemStyle.borderRadius`
-  - line: `smooth`, `symbol`, `symbolSize`, `lineStyle.color`,
-    `lineStyle.width`, `areaStyle.color`
-  - pie: `radius`, `label.formatter` (or `label: false`),
-    `itemStyle.borderColor`, `itemStyle.borderWidth`
-  - axes: `type`, `data`, `min`, `max`, `axisLabel` (`fontSize`,
-    `fontWeight`, `color`, `formatter`), `axisLine`, `splitLine`
-  - legend: `top`, `bottom`, `itemWidth`, `itemHeight`, `itemGap`,
-    `textStyle.color`, `textStyle.fontSize`, `textStyle.fontWeight`. A
-    `legend` key draws a legend whatever it says (its `show` is not read), so
-    leave the key out for none.
-- Value labels on a bar or line series are not drawn (only pie labels are).
-  Numbers that must be readable go in a table or text beside the chart.
-- Two consecutive chart slides that share the chart's id and morph tween the
-  data, so a chart can change with the story.
-- `validate()` reports chart keys the engine ignores as `chart-key-ignored`.
+  string draws as 0.
+- **Colours.** Pie slices take `option.color` in order, and so does every
+  series without its own colour (`itemStyle.color` on a bar or scatter,
+  `lineStyle.color` on a line). Without `option.color` the chart uses the
+  engine's palette, not the deck's: write `theme.chartPalette` (or the
+  palette slots) into `option.color`.
+- **Formatters** are strings, and only two are read: a pie `label.formatter`
+  substitutes `{b}` (name), `{c}` (value) and `{d}` (percent); a y-axis
+  `axisLabel.formatter` substitutes `{value}`. A tooltip shows the name and
+  value itself; its `formatter` is not read.
+- **Two scales**: an array of two `yAxis` entries and `"yAxisIndex": 1` on the
+  series that uses the second, as in the example.
+- Value labels on bars and lines are not drawn; numbers that must be read go
+  in a table or text beside the chart.
+- Consecutive slides sharing a chart's id with `"transition": "morph"` tween
+  its data.
+- `validate()`'s `chart-key-ignored` names an unknown key at the top level, on
+  a series, an axis or the legend only. It passes some keys charts-lite does
+  not draw (an axis `type`, a bar's `barWidth`, `legend.show`): the table
+  above is what draws.
 
 ## Tables
 
@@ -65,16 +67,17 @@ key it does not implement, without a warning.
   "columns": [{ "w": 1.4 }, { "w": 1 }, { "w": 1 }],
   "rows": [
     { "cells": [{ "html": "Plan" }, { "html": "Price", "align": "right" }, { "html": "Seats", "align": "right" }] },
-    { "cells": [{ "html": "Team" }, { "html": "$29" }, { "html": "5" }] },
-    { "cells": [{ "html": "Business" }, { "html": "$79" }, { "html": "25" }] } ],
+    { "cells": [{ "html": "Team" }, { "html": "$29", "align": "right" }, { "html": "5", "align": "right" }] },
+    { "cells": [{ "html": "Business" }, { "html": "$79", "align": "right" }, { "html": "25", "align": "right" }] } ],
   "style": { "headerBg": "#1E2A3A", "headerColor": "#FFFFFF", "zebra": "rgba(30,42,58,0.05)",
     "borderColor": "rgba(30,42,58,0.14)", "borderWidth": 1, "cellPadX": 16, "cellPadY": 11,
     "fontSize": 18, "color": "#1E2A3A", "radius": 10 } }
 ```
 
 - `columns` are relative width weights. A cell takes `html` (the same tags as
-  a text box), `align`, `color`, `bg` and `bold`. `header: true` styles the
-  first row as the header.
+  a text box), `align`, `color`, `bg` and `bold`; alignment is per cell, so
+  right-align a number column in every row. `header: true` styles the first
+  row as the header.
 - `style` takes `headerBg`, `headerColor`, `zebra`, `borderColor`,
   `borderWidth`, `cellPadX`, `cellPadY`, `fontSize`, `fontFamily`, `color` and
   `radius`. A deck's `theme.table` holds the style its new tables start from;
@@ -86,27 +89,19 @@ key it does not implement, without a warning.
 
 ## Code
 
-A `code` element shows source with syntax colours:
-`"content"` is the source text and `"grammarName"` the language:
-`js`, `ts`, `py`, `rust`, `go`, `java`, `sh`, `sql`, `c`, `cpp`, `csharp`,
-`kotlin`, `swift`, `scala`, `dart`, `zig`, `php`, `ruby`, `perl`, `lua`,
-`r`, `julia`, `powershell`, `haskell`, `elixir`, `erlang`, `clojure`,
-`ocaml`, `fsharp`, `json`, `yaml`, `toml`, `ini`, `xml`, `html`, `css`,
-`graphql`, `proto`, `dockerfile`, `makefile`, `asm`, `elm`, `nim`,
-`crystal`, `solidity`, `hcl`, `nix`, `matlab`, `fortran`, `pascal`,
-`groovy`, `verilog`, `vhdl`, `latex`, `objc`, `scheme`, `lisp`, `prolog`,
-`ada`, `d`, `gleam`, `batch`, `awk`, `tcl`, `vb`, `scss`, `nginx`, `jinja`,
-`sparql`, `cypher`, `fish`, `apex`, `purescript`, `odin`, `zsh`,
-`diff` or `md`. An unknown name is read as `js`.
+A `code` element shows `content` with syntax colours. `grammarName` is the
+language id: `js`, `ts`, `py`, `go`, `rust`, `java`, `c`, `cpp`, `csharp`,
+`sql`, `sh`, `json`, `yaml`, `html`, `css` and 60 more of the usual short
+ids, plus `diff` and `md`; an unknown id is read as `js`.
 
 - The colours come from `theme.codePalette` (`c` comment, `s` string, `n`
   number, `k` keyword, `f` call, `p` punctuation, `a` diff added, `d` diff
   removed); plain text takes the element's `color`. The face is
   `theme.codeFontFamily` when the deck sets it.
 - Consecutive slides with a code element of the same id and
-  `"transition": "morph"` move each token from its old place to its new one,
-  which shows a refactor as it happens. A slower `present.morphSeconds` (1 to
-  1.5) suits these short moves.
+  `"transition": "morph"` move each token to its new place, which shows a
+  refactor as it happens; a slower `present.morphSeconds` suits these short
+  moves.
 - `"fx": { "typeWriter": true }` types the code in when the slide appears.
 
 ## Maths
