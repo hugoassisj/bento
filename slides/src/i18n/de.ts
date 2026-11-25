@@ -5,7 +5,7 @@ import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
   "Build order": "Einblendreihenfolge",
-  "With the slide": "Mit der Folie",
+  "With the slide ({n})": "Mit der Folie ({n})",
   "Click {n}": "Klick {n}",
   "Stagger": "Versatz",
   "Show build order": "Einblendreihenfolge zeigen",

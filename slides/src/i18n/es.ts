@@ -5,7 +5,7 @@ import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
   "Build order": "Orden de aparición",
-  "With the slide": "Con la diapositiva",
+  "With the slide ({n})": "Con la diapositiva ({n})",
   "Click {n}": "Clic {n}",
   "Stagger": "Escalonado",
   "Show build order": "Mostrar orden de aparición",

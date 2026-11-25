@@ -5,7 +5,7 @@ import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
   "Build order": "出现顺序",
-  "With the slide": "与幻灯片一起",
+  "With the slide ({n})": "与幻灯片一起（{n}）",
   "Click {n}": "单击 {n}",
   "Stagger": "错开",
   "Show build order": "显示出现顺序",

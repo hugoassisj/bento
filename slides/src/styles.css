@@ -1526,18 +1526,24 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
 .ed-build { display: flex; flex-direction: column; margin: 2px 0 8px; }
 .ed-build-still { padding: 3px 6px 5px; font-size: 12px; color: var(--muted); }
 .ed-build-group { padding: 2px 0 4px; border-radius: 6px; }
-.ed-build-head { padding: 2px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.ed-build-head { display: grid; grid-template-columns: 14px minmax(0, 1fr) 84px auto; column-gap: 5px; padding: 2px 6px; border: 1px solid transparent; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.ed-build-head > span:first-child { grid-column: 1 / 3; }
+/* Stagger's caption ends where its fields end, and may run left over the picker column */
+.ed-build-beats .ed-build-head { grid-template-columns: 14px minmax(0, 1fr) 84px 34px 22px; padding-inline: 8px 2px; }
+.ed-build-beat-cap { grid-column: 3 / 5; text-align: end; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ed-build-row {
-  display: flex; align-items: center; gap: 5px; box-sizing: border-box; min-height: 28px;
-  padding: 2px 2px 2px 8px; border-radius: 6px; border: 1px solid transparent;
-  font-size: 12px; cursor: grab; user-select: none; touch-action: none;
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) 84px auto; align-items: center; column-gap: 5px;
+  box-sizing: border-box; min-height: 28px; padding: 2px 2px 2px 8px; border-radius: 6px; border: 1px solid transparent;
+  /* a swipe scrolls the panel; a finger picks a row up only after resting on it (buildorder.ts) */
+  font-size: 12px; cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: pan-y;
 }
+.ed-build-beats .ed-build-row { grid-template-columns: 14px minmax(0, 1fr) 84px 34px 22px; }
 .ed-build-row:hover { background: rgb(94 118 153 / 0.10); }
 .ed-build-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .ed-build-row.dragging { opacity: 0.4; }
-.ed-props .ed-build-row select { flex: none; width: 84px; height: 24px; font-size: 11.5px; }
-.ed-props .ed-build-row .ed-num { flex: none; width: 34px; }
-.ed-build-row .ed-build-remove { flex: none; padding: 3px; color: var(--muted); }
+.ed-props .ed-build-row select { width: 84px; height: 24px; font-size: 11.5px; }
+.ed-props .ed-build-row .ed-num { width: 34px; box-sizing: border-box; }
+.ed-build-row .ed-build-remove { justify-self: end; padding: 3px; color: var(--muted); }
 .ed-build-row .ed-build-remove svg { width: 12px; height: 12px; }
 .ed-build-group.drop-before { box-shadow: 0 -2px 0 0 var(--accent); }
 .ed-build-group.drop-after { box-shadow: 0 2px 0 0 var(--accent); }

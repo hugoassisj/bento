@@ -29,7 +29,10 @@ pre-1.0.
   click, grouped by click ("Click 1", "Click 2" …), with a count of what is
   shown with the slide. Drag a row between groups to give it its own click
   there, or onto a group to reveal it with that group; the clicks stay
-  numbered 1, 2, 3 with no gaps, and each change is one undo step. Each row
+  numbered 1, 2, 3 with no gaps (a slide whose numbers skip, such as 2, 5, 9,
+  is renumbered 1, 2, 3 by its first change in the list), and each change is
+  one undo step. Escape cancels a drag. On a touch screen a swipe scrolls the
+  panel as usual; rest a finger on a row to pick it up. Each row
   sets the element's entrance and has a button to show it with the slide
   again; elements sharing a click get a Stagger number for the order they
   enter in. Pointing at a row outlines its element on the canvas, and a click

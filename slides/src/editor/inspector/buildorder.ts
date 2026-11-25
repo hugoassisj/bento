@@ -99,11 +99,16 @@ export function buildBuildOrder(p: PropsPanel) {
   if (still) {
     const line = document.createElement('div')
     line.className = 'ed-build-still'
-    line.textContent = `${t('With the slide')} (${still})`
+    line.textContent = t('With the slide ({n})', { n: still })
     list.appendChild(line)
   }
   const byId = new Map(slide.elements.map((e) => [e.id, e]))
-  stepGroups(slide.elements).forEach((ids, k) => {
+  const groups = stepGroups(slide.elements)
+  // Stagger has a column of its own whenever a step is shared, so every
+  // row's entrance picker stays in one column down the list
+  const beat = groups.some((g) => g.length > 1)
+  list.classList.toggle('ed-build-beats', beat)
+  groups.forEach((ids, k) => {
     // the press it comes on: a hand-written 2, 5, 9 is pressed 1, 2, 3
     const name = t('Click {n}', { n: k + 1 })
     const group = document.createElement('div')
@@ -114,19 +119,28 @@ export function buildBuildOrder(p: PropsPanel) {
     group.dataset.step = String(stepOf(byId.get(ids[0])!))
     const head = document.createElement('div')
     head.className = 'ed-build-head'
-    head.textContent = name
     head.setAttribute('aria-hidden', 'true')
+    const title = document.createElement('span')
+    title.textContent = name
+    head.appendChild(title)
+    if (ids.length > 1) {
+      // the Stagger fields' visible caption, over their column
+      const cap = document.createElement('span')
+      cap.className = 'ed-build-beat-cap'
+      cap.textContent = t('Stagger')
+      head.appendChild(cap)
+    }
     const rows = document.createElement('div')
     rows.setAttribute('role', 'list')
     const members = staggered(ids.map((id) => byId.get(id)!))
-    for (const { el, at } of members) rows.appendChild(buildRow(p, slide, el, members.length > 1 ? at : null))
+    for (const { el, at } of members) rows.appendChild(buildRow(p, slide, el, members.length > 1 ? at : null, beat))
     group.append(head, rows)
     list.appendChild(group)
   })
   p.host.appendChild(list)
 }
 
-function buildRow(p: PropsPanel, slide: Slide, el: SlideElement, stagger: number | null): HTMLElement {
+function buildRow(p: PropsPanel, slide: Slide, el: SlideElement, stagger: number | null, beatColumn: boolean): HTMLElement {
   const row = document.createElement('div')
   row.className = 'ed-build-row'
   row.dataset.id = el.id
@@ -150,7 +164,7 @@ function buildRow(p: PropsPanel, slide: Slide, el: SlideElement, stagger: number
     beat.title = t('Stagger')
     beat.setAttribute('aria-label', t('Stagger'))
     row.appendChild(beat)
-  }
+  } else if (beatColumn) row.appendChild(document.createElement('span')) // the column, empty
   const remove = document.createElement('button')
   remove.type = 'button'
   remove.className = 'ed-btn ed-btn-icon ed-build-remove'
@@ -212,12 +226,34 @@ type Drop = { group: HTMLElement; index: number; step: number; where: 'before' |
 /** The drag in progress, kept off the rows: a rebuild replaces every row. */
 let drag: { id: string; x: number; y: number; on: boolean } | null = null
 
+/** How long a finger rests on a row before it picks the row up. Until then a
+ *  touch is the panel's: a swipe scrolls it (rows are touch-action: pan-y). */
+const HOLD_MS = 350
+
+/**
+ * A mouse or pen drags a row once it moves 4px. A finger must rest on the row
+ * first (HOLD_MS, moving less than 8px); moving sooner is a scroll, and the
+ * drag stands down. Escape ends a drag without dropping, and so does a move
+ * that arrives with no button held (the button came up outside the window).
+ */
 function startDrag(p: PropsPanel, id: string, ev: PointerEvent) {
+  const touch = ev.pointerType === 'touch'
   drag = { id, x: ev.clientX, y: ev.clientY, on: false }
+  const lift = () => {
+    if (!drag) return
+    drag.on = true
+    endPreview()
+    p.host.querySelector(`.ed-build-row[data-id="${CSS.escape(id)}"]`)?.classList.add('dragging')
+  }
+  const hold = touch ? setTimeout(lift, HOLD_MS) : 0
   const done = () => {
+    clearTimeout(hold)
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
     window.removeEventListener('pointercancel', cancel)
+    window.removeEventListener('keydown', key, true)
+    window.removeEventListener('touchmove', still)
+    window.removeEventListener('contextmenu', still, true)
     mark(p, null)
     const d = drag
     drag = null
@@ -225,10 +261,12 @@ function startDrag(p: PropsPanel, id: string, ev: PointerEvent) {
   }
   const move = (e: PointerEvent) => {
     if (!drag) return
-    if (!drag.on && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) return
+    if (!touch && e.buttons === 0) { done(); return } // released outside the window: no drop
     if (!drag.on) {
-      drag.on = true
-      endPreview()
+      const far = Math.hypot(e.clientX - drag.x, e.clientY - drag.y)
+      if (touch) { if (far >= 8) done(); return } // a swipe before the hold: the panel scrolls
+      if (far < 4) return
+      lift()
     }
     e.preventDefault()
     mark(p, dropAt(p, e.clientY, e.clientX))
@@ -237,13 +275,26 @@ function startDrag(p: PropsPanel, id: string, ev: PointerEvent) {
     const target = dropAt(p, e.clientY, e.clientX)
     const d = done()
     if (!d) return
-    if (!d.on) { p.store.select([id]); return } // a click: select the element
+    if (!d.on) { p.store.select([id]); return } // a click or a tap: select the element
     if (target) applySteps(p, dropPatches(p.store.slide.elements, id, target))
   }
   const cancel = () => { done() }
+  const key = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return
+    e.preventDefault(); e.stopPropagation()
+    done() // the release that follows finds no drag: nothing drops
+  }
+  // a finger that has picked a row up moves it, not the panel, and its long
+  // press opens no menu
+  const still = (e: Event) => { if (drag?.on) e.preventDefault() }
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
   window.addEventListener('pointercancel', cancel)
+  window.addEventListener('keydown', key, true)
+  if (touch) {
+    window.addEventListener('touchmove', still, { passive: false })
+    window.addEventListener('contextmenu', still, true)
+  }
 }
 
 /** Where a drag at (x, y) would land, read off the groups on screen: onto a

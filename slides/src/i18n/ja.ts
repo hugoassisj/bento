@@ -5,7 +5,7 @@ import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
   "Build order": "表示順",
-  "With the slide": "スライドと同時",
+  "With the slide ({n})": "スライドと同時（{n}）",
   "Click {n}": "クリック {n}",
   "Stagger": "時間差",
   "Show build order": "表示順を表示",
