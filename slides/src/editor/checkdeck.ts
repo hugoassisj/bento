@@ -190,8 +190,21 @@ export class CheckDeck {
     this.panel.hidden = false
     this.chip.setAttribute('aria-expanded', 'true')
     this.run()
-    const first = this.panel.querySelector<HTMLElement>('.ed-check-jump') ?? this.panel.querySelector<HTMLElement>('.ed-check-close')
-    first?.focus({ preventScroll: true })
+    this.focusRow()
+  }
+
+  /** The rows a person can see: a folded tip is in the DOM but not on screen. */
+  private visibleRows(): HTMLElement[] {
+    return [...this.list.querySelectorAll<HTMLElement>('.ed-check-jump')].filter((b) => b.offsetParent !== null)
+  }
+
+  /** Focus the row with this key if it is on screen, else the first row on
+   *  screen, else the close button — never nothing, so Escape always reaches
+   *  the panel (with only folded tips, the first row in the DOM is hidden). */
+  private focusRow(key?: string) {
+    const rows = this.visibleRows()
+    const to = (key && rows.find((b) => b.dataset.key === key)) || rows[0] || this.panel.querySelector<HTMLElement>('.ed-check-close')
+    to?.focus({ preventScroll: true })
   }
 
   close() {
@@ -238,6 +251,7 @@ export class CheckDeck {
     }
     if (!this.isOpen) return
     const keepFocus = (document.activeElement as HTMLElement | null)?.dataset?.key
+    const hadFocus = this.panel.contains(document.activeElement)
     this.summary.textContent = words
     const shown = this.only ? r.findings.filter((f) => this.only!.has(findingKey(f))) : r.findings
     this.filterNote.hidden = !this.only
@@ -280,7 +294,8 @@ export class CheckDeck {
       kids.push(toggle, box)
     }
     this.list.replaceChildren(...kids)
-    if (keepFocus) this.list.querySelector<HTMLElement>(`.ed-check-jump[data-key="${CSS.escape(keepFocus)}"]`)?.focus({ preventScroll: true })
+    // a repaint replaces the rows: keep focus where it was, or in the panel
+    if (hadFocus && !this.panel.contains(document.activeElement)) this.focusRow(keepFocus)
   }
 
   /** Rows in deck order — the deck's own findings first, then slide by slide,
@@ -381,12 +396,12 @@ export class CheckDeck {
       b.title = title
       b.addEventListener('click', () => {
         // the row goes once the finding does: hand focus to the next row
-        const next = b.closest('.ed-check-row')?.nextElementSibling?.querySelector<HTMLElement>('.ed-check-jump')?.dataset.key
+        const rows = this.visibleRows()
+        const mine = b.closest('.ed-check-row')?.querySelector<HTMLElement>('.ed-check-jump')
+        const next = rows[rows.indexOf(mine!) + 1]?.dataset.key
         run()
         this.run()
-        const to = (next && this.list.querySelector<HTMLElement>(`.ed-check-jump[data-key="${CSS.escape(next)}"]`))
-          || this.list.querySelector<HTMLElement>('.ed-check-jump') || this.panel.querySelector<HTMLElement>('.ed-check-close')
-        to?.focus({ preventScroll: true })
+        this.focusRow(next)
       })
       return b
     }

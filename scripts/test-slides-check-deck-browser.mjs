@@ -108,6 +108,15 @@ try {
     const box = await p.locator(selector).first().boundingBox()
     await p.mouse.click(box.x + Math.min(box.width / 2, 40), box.y + box.height / 2)
   }
+  /** focus is on something on screen inside the panel (a folded row is not) */
+  const focusInPanel = () => p.evaluate(() => {
+    const a = document.activeElement, r = a?.getBoundingClientRect()
+    return !!a && !!a.closest('#ed-check') && r.width > 0 && r.height > 0 && a.offsetParent !== null
+  })
+  const escapeCloses = async () => {
+    await p.keyboard.press('Escape')
+    return p.evaluate(() => document.querySelector('#ed-check').hidden)
+  }
   const elH = (id) => p.evaluate((id) => window.bento.doc.slides.flatMap((s) => s.elements).find((e) => e.id === id)?.h, id)
   const codesNow = () => p.evaluate(() => window.bento.validate().findings.map((f) => f.code))
 
@@ -143,9 +152,31 @@ try {
   })
   ok(/^Tips \(\d+\)$/.test(tips.label ?? '') && tips.expanded === 'false' && tips.hidden === true, `info findings sit folded under "${tips.label}" (aria-expanded ${tips.expanded})`)
   ok(tips.empty, 'with only tips, the panel still says there are no issues')
+  // the first row in the DOM is a folded tip: focus must not land on it
+  ok(await focusInPanel(), 'opened from the File menu with only folded tips, focus is on something visible in the panel')
+  ok(await escapeCloses(), 'and Escape closes the panel')
+  await p.keyboard.press('Control+k')
+  await p.waitForSelector('.ed-cmdk-input')
+  await p.keyboard.type('Check deck')
+  await p.keyboard.press('Enter')
+  await p.waitForSelector('#ed-check:not([hidden])')
+  ok(await focusInPanel(), 'opened from ⌘K with only folded tips, focus is on something visible in the panel')
+  ok(await escapeCloses(), 'and Escape closes the panel')
+  await openPanel()
   await clickIn('#ed-check .ed-check-tips')
   ok(await p.evaluate(() => !document.querySelector('#ed-check .ed-check-tiplist').hidden), 'the Tips toggle unfolds them')
   await closePanel()
+
+  // fixing the last warning, with folded tips below it
+  await load(deck([{ id: 's1', background: '#F2F0EA', elements: [
+    text('last', 120, 40, '<p>The only warning: words enough to wrap over lines in this short box.</p>'),
+    { id: 'bleed', type: 'shape', shape: 'rect', x: 1100, y: 500, w: 400, h: 400, fill: '#E0DDD5' }] }]))
+  await openPanel()
+  if (await p.evaluate(() => document.querySelector('#ed-check .ed-check-tips')?.getAttribute('aria-expanded') === 'true')) await clickIn('#ed-check .ed-check-tips')
+  await clickIn('#ed-check .ed-check-row[data-code="text-overflow"] .ed-check-fix')
+  await p.waitForTimeout(100)
+  ok(!(await codesNow()).includes('text-overflow') && await focusInPanel(), 'after fixing the last warning (only folded tips left), focus stays on something visible in the panel')
+  ok(await escapeCloses(), 'and Escape closes the panel')
 
   // 1 + 2. the table that runs off the slide ---------------------------------
   console.log('table overflow')
