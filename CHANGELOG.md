@@ -21,12 +21,12 @@ pre-1.0.
   colour, size or font can name one of your theme colours or tokens
   (`"fill": "accent1"`, `"radius": "$radius.md"`), and the element stays
   linked to it, so changing the theme later recolours it too. A shape the
-  agent left uncoloured takes your accent instead of orange, text it left
-  without a font or colour uses your theme's font and text colour (and keeps
-  following them, so it stays readable when you change the theme), `use` places a copy of one of your
-  components, and `like` starts a slide from an earlier one. A name that does
-  not exist is listed in the load report with the ones that do. Saved files
-  are unchanged.
+  agent left uncoloured takes your accent instead of orange, and text and
+  tables it left without a font or colours use your theme's font and text
+  colour and keep following them, so they stay readable when you change the
+  theme. `use` places a copy of one of your components, and `like` starts a
+  slide from an earlier one. A name that does not exist is listed in the load
+  report with the ones that do. Saved files are unchanged.
 - **Placing a deck's text by layout role never loses or swaps it.** In a deck
   an assistant loads with a layout and roles, writing the right column before
   the left one no longer swaps them, and a role the layout does not have no
