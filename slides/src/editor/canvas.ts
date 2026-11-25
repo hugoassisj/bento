@@ -534,13 +534,16 @@ export class SlideCanvas {
   /**
    * Is space free to mean "pan" right now? Not while any text is being edited
    * on the canvas, and not while a panel field, the title or any other input
-   * has focus — in all of those a space is a character the user typed.
+   * has focus — in all of those a space is a character the user typed — nor
+   * while focus is inside a dialog, where Space presses the focused button.
    */
   private canGrabSpace(): boolean {
     if (this.editing || this.editingCell || this.isPathEditing) return false
     const el = document.activeElement as HTMLElement | null
     if (!el) return true
     if (el.isContentEditable) return false
+    // a dialog's button takes Space as a press, as every button does
+    if (el.closest('.bkd-overlay, .ed-about-overlay, .ed-gate-overlay, dialog[open]')) return false
     const tag = el.tagName
     return tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT'
   }
