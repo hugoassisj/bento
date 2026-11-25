@@ -692,10 +692,15 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 /* Play slide (editor/playslide.ts): the slide plays over the canvas, in the
    canvas's own box; it takes every press (Esc or a click stops it) and the
    handles step aside while it runs */
-.ed-play-overlay { position: absolute; left: 0; top: 0; z-index: 1000; overflow: hidden; cursor: pointer; }
+/* opaque, over black as the show is: a fading or sliding layer must never
+   let the live, fully built slide show through */
+.ed-play-overlay { position: absolute; left: 0; top: 0; z-index: 1000; overflow: hidden; cursor: pointer; background: #000; }
 .ed-play-overlay .ed-play-layer { position: absolute; left: 0; top: 0; }
 .ed-play-overlay * { pointer-events: none !important; }
-.ed-stage-scale:has(.ed-play-overlay) .moveable-control-box { visibility: hidden !important; }
+/* editing chrome steps aside: the handles, and whatever the stage carries
+   beside the slide (step badges, comment pins, the comment tool's preview) */
+.ed-stage-scale:has(.ed-play-overlay) .moveable-control-box,
+.ed-stage:has(.ed-play-overlay) > :not(.ed-stage-scale) { visibility: hidden !important; }
 
 /* ————— properties panel ————— */
 

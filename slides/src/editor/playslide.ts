@@ -67,6 +67,11 @@ export function playSlide(stage: HTMLElement, doc: BentoDoc, index: number, onEn
   if (from) { to.style.visibility = 'hidden'; overlay.append(from) }
   overlay.append(to)
   stage.appendChild(overlay)
+  // Focus leaves the control that started it (Enter or Space on ▶ would
+  // otherwise start it again) and comes back when the play ends on its own
+  // or by Esc or a click on the stage.
+  const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null
+  opener?.blur()
 
   // One clock for the whole play, on the shared engine: a manual clock
   // (window.bento.anim.setManual) steps it like every tween it starts.
@@ -74,7 +79,7 @@ export function playSlide(stage: HTMLElement, doc: BentoDoc, index: number, onEn
   const after = (secs: number, fn: () => void) => { anim.to(clock, { duration: secs, ease: 'none', onComplete: fn }) }
 
   let done = false
-  const stop = () => {
+  const finish = (refocus: boolean) => {
     if (done) return
     done = true
     anim.killTweensOf(clock)
@@ -83,31 +88,40 @@ export function playSlide(stage: HTMLElement, doc: BentoDoc, index: number, onEn
     overlay.remove()
     window.removeEventListener('keydown', onKey, true)
     for (const t of POINTER) window.removeEventListener(t, onPointer, true)
+    if (refocus && opener?.isConnected && (!document.activeElement || document.activeElement === document.body)) opener.focus({ preventScroll: true })
     onEnd()
   }
+  const stop = () => finish(false)
 
-  // Esc and a click stop it and are spent doing so: the editor never sees
-  // them, so the selection survives. A press anywhere else stops it too, and
-  // goes on to do what it does (a thumbnail, a field).
+  // Esc, Enter, Space and a click on the stage stop it and are spent doing
+  // so: the editor never sees them, so the selection survives and no edit
+  // starts. Any other key, or a press anywhere else, stops it first and then
+  // does what it does (a thumbnail, a field, an arrow) — on the canvas you
+  // can see, never on the slide hidden under the play.
+  const SPENT = new Set(['Escape', 'Enter', ' ', 'Spacebar'])
   const onKey = (ev: KeyboardEvent) => {
-    if (ev.key !== 'Escape') return
-    ev.preventDefault()
-    ev.stopImmediatePropagation()
+    if (/^(Shift|Control|Alt|AltGraph|Meta|CapsLock|Fn|OS|Hyper|Super)$/.test(ev.key)) return
+    if (SPENT.has(ev.key)) {
+      ev.preventDefault()
+      ev.stopImmediatePropagation()
+      finish(true)
+      return
+    }
     stop()
   }
-  const POINTER = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'dblclick', 'contextmenu'] as const
+  const POINTER = ['pointerdown', 'mousedown', 'touchstart', 'pointerup', 'mouseup', 'click', 'dblclick', 'contextmenu'] as const
   const onPointer = (ev: Event) => {
     if (!overlay.contains(ev.target as Node)) {
-      if (ev.type === 'pointerdown') stop()
+      if (ev.type === 'pointerdown' || ev.type === 'touchstart') stop()
       return
     }
     ev.preventDefault()
     ev.stopImmediatePropagation()
     // the rest of the gesture lands on the overlay too, then it goes
-    if (ev.type === 'click' || ev.type === 'contextmenu') stop()
+    if (ev.type === 'click' || ev.type === 'contextmenu') finish(true)
   }
   window.addEventListener('keydown', onKey, true)
-  for (const t of POINTER) window.addEventListener(t, onPointer, true)
+  for (const t of POINTER) window.addEventListener(t, onPointer, { capture: true, passive: false })
 
   const ambient = slide.elements.some((el) => el.fx?.loop || el.fx?.ambient === 'kenburns')
     || !!to.querySelector('.bento-el-svg animate, .bento-el-svg [style*="animation"], .bento-el-svg style')
@@ -146,7 +160,7 @@ export function playSlide(stage: HTMLElement, doc: BentoDoc, index: number, onEn
         wait(STEP_GAP, next)
         return
       }
-      wait(ambient && !reduce ? Math.max(END_HOLD, AMBIENT_HOLD - since) : END_HOLD, stop)
+      wait(ambient && !reduce ? Math.max(END_HOLD, AMBIENT_HOLD - since) : END_HOLD, () => finish(true))
     }
     wait(Math.max(settle, 0.3) + (steps.hasNext() ? 0.4 : 0), next)
   }
@@ -161,7 +175,10 @@ export function playSlide(stage: HTMLElement, doc: BentoDoc, index: number, onEn
  * leaves by ITS transition, the incoming one arrives by its own (Reveal reads
  * each section's data-transition for its own side). Returns the seconds taken.
  */
-function transitionLayers(from: HTMLElement, to: HTMLElement, out: string, inn: string, width: number): number {
+function transitionLayers(from: HTMLElement, to: HTMLElement, outRaw: string, innRaw: string, width: number): number {
+  // a value Reveal has no rule for gets the deck's default, fade (present.ts)
+  const known = (v: string) => (v === 'none' || v === 'slide' || v === 'zoom' ? v : 'fade')
+  const out = known(outRaw), inn = known(innRaw)
   const vars = { duration: TRANSITION, ease: 'power2.out' }
   let took = 0
   if (out === 'fade') { anim.fromTo(from, { opacity: 1 }, { opacity: 0, ...vars }); took = TRANSITION }

@@ -2782,12 +2782,15 @@ export class Editor {
     this.canvas.commitTextEdit()
     const stage = this.root.querySelector<HTMLElement>('.ed-stage-scale')
     if (!stage) return
-    const offs = (['doc', 'selection', 'current', 'slides'] as const).map((e) => this.store.on(e, () => this.play?.stop()))
+    let offs: Array<() => void> = []
     const play = playSlide(stage, this.store.doc, this.store.currentIndex, () => {
       offs.forEach((off) => off())
       if (this.play === play) this.play = null
     })
     this.play = play
+    // after it starts: moving focus off ▶ may commit a field, which is not
+    // something to stop for
+    offs = (['doc', 'selection', 'current', 'slides'] as const).map((e) => this.store.on(e, () => play.stop()))
   }
 
   /**

@@ -15420,10 +15420,16 @@ recorded Play transition's fixed 700ms wait as a known ceiling.
   canvas and the show cannot disagree. Only Reveal's CSS section transitions
   (fade, slide, zoom, none) are redrawn with tweens, from that same value. No
   show is started, so the 700ms wait has nothing left to wait for.
-- **What stops it.** Esc or a click on the stage (both swallowed, so the
-  selection survives); any press elsewhere (and it goes on to do what it
-  does); an edit, an undo, a selection change or another slide (store events).
-  Starting the show stops it too.
+- **What stops it.** Esc, Enter, Space or a click on the stage (all
+  swallowed, so the selection survives, no edit starts and ▶ is not pressed
+  again; focus leaves ▶ while it plays and returns when it ends); any other
+  key or a press elsewhere stops it FIRST and then does what it does, on the
+  canvas you can see; an edit, an undo, a selection change or another slide
+  (store events). Starting the show stops it too.
+- **Opaque, over black, as the show is.** A fading, sliding or zooming layer
+  must never let the live, fully built slide show through; the stage's own
+  chrome beside the slide (step badges, comment pins) is hidden while it
+  plays, as Moveable's handles are.
 - **Where it lives.** One control, "▶ Play slide", in the slide's Transition
   section and at the foot of an element's Morph section; the `play-slide`
   command (⌘K); ⇧-click on the Slideshow pill. No second ▶ beside the pill:
