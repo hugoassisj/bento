@@ -30,6 +30,7 @@ import { measureElements, measureTables } from './measure.ts'
 import { BUILTIN_FONTS } from './fonts.ts'
 import { eachRef, keepAlpha, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
 import { tokenName } from './tokens.ts'
+import { flagged } from './layout.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
 
@@ -294,11 +295,21 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
             ? `Elements here carry showOnHover, but this slide's hover is "${slide.hover.type}", so they always show. Set hover to { "type": "reveal" }.`
             : `Elements here carry showOnHover, but this slide has no hover, so they always show. Set hover to { "type": "reveal" }.` })
       }
-      const groups = new Set(slide.elements.map((e) => e.group).filter(Boolean))
+      // A trigger is another element the pointer can be on: drawn (not hidden,
+      // nor in a hidden frame) and drawn at rest — one that itself waits on a
+      // hover set other than the resting one is invisible and takes no pointer.
+      // An element is never its own trigger, for the same reason.
+      const hiddenHere = flagged(slide, 'hidden')
+      const atRest = (e: SlideElement) => !hiddenHere.has(e.id) && (!e.showOnHover || e.showOnHover === slide.hover?.default)
       for (const el of slide.elements) {
-        if (!el.showOnHover || groups.has(el.showOnHover) || el.showOnHover === slide.hover?.default) continue
+        const set = el.showOnHover
+        if (!set || set === slide.hover?.default) continue
+        const carriers = slide.elements.filter((e) => e.group === set)
+        if (carriers.some((e) => e.id !== el.id && atRest(e))) continue
         add({ code: 'hover-set-unreachable', severity: 'warning', slide: sid, element: el.id, path: 'showOnHover',
-          message: `showOnHover is "${el.showOnHover}", but no element on this slide has that group, so nothing can show it. Give the trigger element "group": "${el.showOnHover}".` })
+          message: carriers.length
+            ? `showOnHover is "${set}", but every element with that group (${carriers.map((e) => `"${e.id}"`).join(', ')}) is hidden, waits on a hover set itself, or is this element, so the pointer can never be on it. Give "group": "${set}" to an element that is always drawn.`
+            : `showOnHover is "${set}", but no element on this slide has that group, so nothing can show it. Give the trigger element "group": "${set}".` })
       }
     }
 

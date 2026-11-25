@@ -19,8 +19,11 @@
 //                    typed where a group belongs): `hover-set-unreachable`.
 //   3. hover off   — showOnHover and group agree but the slide's hover is
 //                    absent, or 'focus-group': `hover-off`, once per slide.
-//   4. the set named by hover.default shows at rest, so it needs no trigger.
-//   5. the starter deck and a slide with no reveal at all stay quiet.
+//   4. a trigger the pointer can never be on does not count: the element
+//      itself, a hidden one (or one in a hidden frame), one that waits on a
+//      hover set other than the resting one.
+//   5. the set named by hover.default shows at rest, so it needs no trigger.
+//   6. the starter deck and a slide with no reveal at all stay quiet.
 
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { validateDoc } from '../slides/src/validate.ts'
@@ -79,6 +82,25 @@ const dim = deck({ hover: { type: 'focus-group' }, elements: [rect('trig', { gro
 ok(codes(dim) === 'hover-off@s1', `…and on a slide whose hover dims other groups (${codes(dim) || 'none'})`)
 const both = deck({ elements: [rect('trig'), text('card', { showOnHover: 'Rectangle' })] })
 ok(codes(both) === 'hover-off@s1 hover-set-unreachable@card', `the audit's first attempt (a layer name typed, nothing else) reports both (${codes(both) || 'none'})`)
+
+// 3b. a trigger the pointer can never be on ------------------------------------
+// an element is never its own trigger: hidden at rest, it takes no pointer
+const self = deck({ hover: { type: 'reveal' }, elements: [rect('other'), text('card', { showOnHover: 'x', group: 'x' })] })
+ok(codes(self) === 'hover-set-unreachable@card', `an element carrying its own set's group is not its own trigger (${codes(self) || 'none'})`)
+const hiddenTrig = deck({ hover: { type: 'reveal' }, elements: [rect('trig', { group: 'g', hidden: true }), text('card', { showOnHover: 'g' })] })
+ok(codes(hiddenTrig) === 'hover-set-unreachable@card', `a hidden trigger cannot be pointed at (${codes(hiddenTrig) || 'none'})`)
+{
+  const f = hover(hiddenTrig)[0]
+  ok(!!f && f.message.includes('"trig"') && /hidden/.test(f.message), `…and the message names it and says why (${f?.message ?? 'none'})`)
+}
+const inHiddenFrame = deck({ hover: { type: 'reveal' }, elements: [rect('frame', { hidden: true, layout: { dir: 'col', gap: 0, pad: [0, 0, 0, 0] } } as Partial<SlideElement>), rect('trig', { group: 'g', parentId: 'frame' } as Partial<SlideElement>), text('card', { showOnHover: 'g' })] })
+ok(codes(inHiddenFrame) === 'hover-set-unreachable@card', `nor one inside a hidden frame (${codes(inHiddenFrame) || 'none'})`)
+const inSet = deck({ hover: { type: 'reveal' }, elements: [rect('trig', { group: 'g', showOnHover: 'other' }), text('card', { showOnHover: 'g' }), rect('t2', { x: 500, group: 'other' })] })
+ok(codes(inSet) === 'hover-set-unreachable@card', `nor one that itself waits on another hover set (${codes(inSet) || 'none'})`)
+const inRest = deck({ hover: { type: 'reveal', default: 'intro' }, elements: [rect('trig', { group: 'g', showOnHover: 'intro' }), text('card', { showOnHover: 'g' })] })
+ok(hover(inRest).length === 0, `a trigger in the resting set is drawn at rest and can reveal (${codes(inRest) || 'none'})`)
+const twoMembers = deck({ hover: { type: 'reveal' }, elements: [text('a', { showOnHover: 'x', group: 'x' }), text('b', { y: 320, showOnHover: 'x' })] })
+ok(codes(twoMembers) === 'hover-set-unreachable@a hover-set-unreachable@b', `a set member carrying the group reveals neither itself nor the others (${codes(twoMembers) || 'none'})`)
 
 // 4. the resting set -----------------------------------------------------------
 const rest = deck({ hover: { type: 'reveal', default: 'intro' }, elements: [rect('trig', { group: 'Rectangle' }), text('card', { showOnHover: 'Rectangle' }), text('hello', { y: 320, showOnHover: 'intro' })] })
