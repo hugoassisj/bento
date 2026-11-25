@@ -180,6 +180,35 @@ try {
   await p.keyboard.press('Escape')
   for (let i = 0; i < 4 && (await doc()).slides[0].elements.length; i++) { await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(200) }
 
+  console.log('\na double-click on a comment marker\n')
+  await p.evaluate(() => window.bento.loadDoc(JSON.stringify({ compact: true, slides: [
+    { id: 'c1', elements: [], comments: [{ id: 'cm1', author: 'Ana', text: 'Start here?', at: '2026-11-01T10:00:00.000Z', x: 640, y: 360 }] },
+  ] })))
+  await p.waitForTimeout(400)
+  const marker = await p.evaluate(() => { const m = document.querySelector('.ed-comment-marker'); if (!m) return null; const r = m.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })
+  ok(!!marker && (await doc()).slides[0].elements.length === 0, 'an empty slide with a comment marker')
+  if (marker) await p.mouse.dblclick(marker.x, marker.y)
+  await p.waitForTimeout(300)
+  d = await doc()
+  ok(d.slides[0].elements.length === 0, `a double-click on the marker makes no text box (${d.slides[0].elements.map((e) => e.type).join(', ') || 'none'})`)
+  ok(await p.evaluate(() => !!document.querySelector('.ed-comment-pop .ed-comment-reply')), 'it opens the thread')
+  ok(!(await p.evaluate(() => !!document.querySelector('.ed-stage-scale .bento-editing'))), 'and no text edit takes the keyboard')
+  await p.click('.ed-comment-pop .ed-comment-reply')
+  await p.keyboard.type('Yes')
+  ok(await p.evaluate(() => document.activeElement?.classList.contains('ed-comment-reply') && document.activeElement.value === 'Yes'), 'Reply takes what is typed')
+  d = await doc()
+  ok(d.slides[0].elements.length === 0, `and the slide is still empty (${d.slides[0].elements.length})`)
+  await p.evaluate(() => document.querySelector('.ed-comment-pop')?.remove())
+  await p.evaluate(() => document.activeElement?.blur())
+  const had2 = (await doc()).slides[0].elements.length
+  await p.mouse.dblclick(at.x, at.y)
+  await p.waitForTimeout(300)
+  d = await doc()
+  ok(had2 === 0 && d.slides[0].elements.length === 1 && d.slides[0].elements[0].type === 'text', `a double-click on the bare slide beside it still makes a text box (${had2} → ${d.slides[0].elements.length})`)
+  await p.keyboard.press('Escape')
+  await p.keyboard.press('Escape')
+  for (let i = 0; i < 4 && (await doc()).slides[0].elements.length; i++) { await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(200) }
+
   console.log('\nwhat leaves the editor\n')
   await p.evaluate(() => { window.print = () => {} })
   await p.keyboard.press('ControlOrMeta+p')
