@@ -31,6 +31,9 @@ function reportGuard(dropped: Dropped[]) {
   if (dropped.length) console.info('[bento] opened file: neutralised', dropped)
 }
 import { validateDoc, type ValidateOpts } from './validate'
+import { outlineDoc, docStats, deckHash, type OutlineOpts } from './outline'
+import { patchStore } from './patchstore'
+import type { PatchOpts } from './ops'
 import { buildSchema } from './schema'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
@@ -397,6 +400,43 @@ dismissSplash()
       })
     }
     return parsed.report
+  },
+  /**
+   * The deck as an agent reads it before an edit (src/outline.ts): every
+   * text, table cell, chart series, picture and note, addressed
+   * `<slide>/<element id>`, with roles, frames, components, steps, links and
+   * the palette/token bindings, under a header with the deck's design system
+   * and a content hash. Slides are numbered by position in doc.slides,
+   * states and hidden slides included — the numbers patch() takes. No
+   * sharing keys, no asset bytes, about a tenth of the document. `{ slide: n }`
+   * = one slide in full (each element as compact JSON); `{ find: 'words' }`
+   * narrows; `{ from, to }` pages a capped outline.
+   */
+  outline(opts?: OutlineOpts): string {
+    try { return outlineDoc(store.doc, opts ?? {}) } catch (e) { return `# outline failed: ${String((e as Error)?.message ?? e)}` }
+  },
+  /**
+   * Change the deck without handing it back (src/ops.ts). A list of ops,
+   * `[{ op: 'edits', id: '3/sd-title', text: 'New title' }, …]`, run in order,
+   * or one object of verb lists — verbs: edits, notes, cells, chart, style,
+   * set, insert, delete, slide, add, remove, move. Every op is checked
+   * through the gate pasted JSON meets before anything changes; then ALL of
+   * it applies as ONE undo step, or none of it does. Never touches docId,
+   * collab or readonly; never throws. Returns `{ ok: true, committed,
+   * replies (one per op), skipped, hint?, findings (only new ones), fixed,
+   * slides, hash }` or `{ ok: false, err: 'bad-patch' | 'stale' | 'readonly'
+   * | 'failed', detail }`. Options: `base` (the hash from outline(): refused
+   * as stale if the deck changed since), `dryRun`, `partial` (apply what
+   * passes), `outline` (the touched slides, after).
+   */
+  patch(ops: unknown, opts?: PatchOpts) {
+    return patchStore(store, ops, opts)
+  },
+  /** A tiny summary: slide and element counts, bytes, the largest assets,
+   *  embedded fonts, tokens, components, bound vs literal paint/type
+   *  values, and the content hash patch() takes as `base`. */
+  stats() {
+    return { ...docStats(store.doc, JSON.stringify(agentCopy(store.doc))), hash: deckHash(store.doc) }
   },
   /**
    * The document as compact JSON: every field equal to what the editor would
