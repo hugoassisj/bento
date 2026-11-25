@@ -29,8 +29,11 @@
 //      warns, while a shadow switched off, or one that stays inside, does not;
 //   7. against the rendered pixels (the oracle is a screenshot, not the
 //      measuring code): for Latin, italics, flags, a ZWJ emoji, Thai stacked
-//      marks, combining accents and Arabic, ink 4px past any of the four edges
-//      always warns, and plain Latin ink 12px inside is info.
+//      marks, combining accents, Arabic, an underline, a strike, a link, an
+//      inline code chip and two mitred outlines, paint 4px past any of the
+//      four edges always warns, and the Latin rows are info once their paint
+//      is clearly inside (12px; 40-80px for decorations and outlines, which
+//      are bounded rather than traced).
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -136,14 +139,28 @@ try {
     ['thai stacked', '\u0E1B\u0E31\u0E49\u0E48', false],
     ['combining', 'e\u0301A\u030Ag\u0327', false],
     ['arabic', '\u0633\u0644\u0627\u0645 \u0639\u0644\u064A\u0643\u0645', false],
+    // paint that is not a glyph but is still drawn: an underline below
+    // capitals with no descender, a strike across the side bearings, a
+    // link's underline, an inline code chip's background and padding, and
+    // thick outlines whose mitred corners spike past the glyph (a sharp apex
+    // reaches 1.3x the stroke width). Decorations and outlines are bounded,
+    // not traced, so "inside" is asked of them further from the edge: the
+    // fifth column (default 12px).
+    ['underline', '<u>HELLO</u>', true, {}, 40],
+    ['strike', '<s>TOTAL</s>', true],
+    ['link', '<a href="https://example.com/">LINK</a>', true, {}, 40],
+    ['code chip', '<code>npm i</code>', true],
+    ['mitred outline', 'WAVE', true, { textStroke: { width: 14, color: '#000000' }, fontWeight: 700 }, 40],
+    ['sharp mitre', '\u039B', true, { textStroke: { width: 30, color: '#000000' }, fontWeight: 100 }, 80],
   ]
   const FS = 140
-  const box = (html, edge) => ({
+  const box = (html, edge, extra = {}) => ({
     id: 'a', type: 'text', rotation: 0, opacity: 1, fontWeight: 400, lineHeight: 1.25, html, fontSize: FS, color: '#000000',
     w: 1100, h: 560,
     // the box reaches far past the ink on the side under test
     align: edge === 'left' ? 'right' : edge === 'right' ? 'left' : 'center',
     valign: edge === 'top' ? 'bottom' : edge === 'bottom' ? 'top' : 'middle',
+    ...extra,
   })
   const HOME = { x: 90, y: 80 } // where the whole box fits on the slide
   const truth = async (el) => {
@@ -185,21 +202,21 @@ try {
     const v = window.bento.validate({ ...window.bento.read(), slides: [{ id: 's1', elements: [el] }] })
     return v.findings.filter((f) => f.code === 'out-of-canvas').map((f) => f.severity).join(',') || 'none'
   }, el)
-  for (const [name, html, plain] of strings) {
+  for (const [name, html, plain, extra, insideBy = 12] of strings) {
     const row = []
     let bad = []
     for (const edge of ['left', 'right', 'top', 'bottom']) {
-      const el = box(html, edge)
+      const el = box(html, edge, extra)
       const ink = await truth(el)
       if (!ink) { bad.push(`${edge}: nothing drawn`); continue }
       const cut = await severity({ ...el, ...placeAt(ink, edge, 4) })
-      const inside = await severity({ ...el, ...placeAt(ink, edge, -12) })
+      const inside = await severity({ ...el, ...placeAt(ink, edge, -insideBy) })
       row.push(`${edge} cut:${cut} inside:${inside}`)
       if (cut !== 'warning') bad.push(`${edge}: ink 4px past the edge reads ${cut}`)
-      if (plain && inside !== 'info') bad.push(`${edge}: ink 12px inside reads ${inside}`)
+      if (plain && inside !== 'info') bad.push(`${edge}: ink ${insideBy}px inside reads ${inside}`)
       if (!['info', 'warning'].includes(inside)) bad.push(`${edge}: the box no longer overhangs (${inside})`)
     }
-    ok(!bad.length, `${name}: cut ink warns at every edge${plain ? ', ink inside is info' : ''} (${bad.length ? bad.join('; ') : row.join(' | ')})`)
+    ok(!bad.length, `${name}: cut ink warns at every edge${plain ? `, ink ${insideBy}px inside is info` : ''} (${bad.length ? bad.join('; ') : row.join(' | ')})`)
   }
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
