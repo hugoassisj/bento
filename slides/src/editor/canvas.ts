@@ -38,7 +38,8 @@ import { canAccept, flagged, frameChildren, isFrame, layoutSlide, moveInFrame, m
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
-import { hoverIssue, isOrphan, useReveal } from './hoverreveal'
+import { hoverIssue, isOrphan, unreachableTriggersOf, useReveal } from './hoverreveal'
+import { labelIn } from './layerrows'
 
 /** How far a finger may travel and still count as a tap rather than a drag.
  *  10px matches what a thumb does on glass while trying to hold still. */
@@ -1492,7 +1493,10 @@ export class SlideCanvas {
       if (hoverIssue(slide, set)) chip.classList.add('ed-setchip-warn')
       if (isOrphan(slide, set)) {
         chip.classList.add('ed-setchip-warn', 'ed-setchip-orphan')
-        chip.title = t('Nothing on this slide is in the group “{group}”.', { group: set })
+        const blocked = unreachableTriggersOf(slide, set).map((e) => labelIn(slide, e, t)).join(', ')
+        chip.title = blocked
+          ? t('{name} is hidden or shows only on hover, so the pointer can never reach it.', { name: blocked })
+          : t('Nothing on this slide is in the group “{group}”.', { group: set })
         bar.appendChild(this.setBarFix(t('Pick the trigger'), chip.title, () => {
           const member = slide.elements.find((e) => e.showOnHover === set)
           if (!member) return

@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "This slide’s hover dims other groups: this always shows, and pointing at {name} dims everything outside its group.": "此幻灯片的悬停设置为使其他组变暗：它始终可见，指向{name}时，其所在组以外的内容都会变暗。",
+  "{name} is hidden or shows only on hover, so the pointer can never reach it.": "{name}已隐藏或只在悬停时显示，所以指针永远无法指向它。",
   "Always visible": "始终可见",
   "This slide’s hover is off, so this always shows.": "此幻灯片的悬停已关闭，所以它始终可见。",
   "Turn on": "开启",

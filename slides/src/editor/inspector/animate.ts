@@ -13,7 +13,7 @@ import { stepOf } from '../../steps'
 import { morphPartners, morphSource, walkSource, wouldPair } from '../morph'
 import { labelIn } from '../layerrows'
 import { cssColor } from '../../render'
-import { hoverIssue, newGroupName, triggersOf, useReveal } from '../hoverreveal'
+import { hoverIssue, newGroupName, reachable, setTriggerGroup, triggersOf, unreachableTriggersOf, useReveal } from '../hoverreveal'
 
 /**
  * Morph section. The morph key is `morphId ?? id`: by default an element
@@ -564,6 +564,10 @@ function buildHoverReveal(p: PropsPanel, el: SlideElement) {
   const set = el.showOnHover
   const triggers = set ? triggersOf(slide, set, el.id) : []
   const names = triggers.map((e) => labelIn(slide, e, t)).join(', ')
+  // carrying the group but never under the pointer: hidden, waiting on a
+  // hover set itself — this element included, which is never its own trigger
+  const blocked = set && !triggers.length ? unreachableTriggersOf(slide, set) : []
+  const blockedNames = blocked.map((e) => labelIn(slide, e, t)).join(', ')
 
   const pick = document.createElement('button')
   pick.type = 'button'
@@ -573,7 +577,7 @@ function buildHoverReveal(p: PropsPanel, el: SlideElement) {
   chosen.className = 'ed-morph-pick-txt'
   // a hand-typed set with no trigger shows the name it waits on — the
   // author's own words, not an id
-  chosen.textContent = !set ? t('Always visible') : names || `“${set}”`
+  chosen.textContent = !set ? t('Always visible') : names || blockedNames || `“${set}”`
   pick.append(chosen)
   pick.insertAdjacentHTML('beforeend', ICONS.chevron)
   pick.addEventListener('click', () => openHoverPicker(p, el, pick))
@@ -599,8 +603,16 @@ function buildHoverReveal(p: PropsPanel, el: SlideElement) {
     const issue = hoverIssue(slide, set)
     const reveal = () => p.store.commit(() => useReveal(slide))
     if (issue === 'off') line('off', t('This slide’s hover is off, so this always shows.'), fix(t('Turn on'), reveal))
-    else if (issue === 'dim') line('dim', t('This slide’s hover dims other groups, so this always shows.'), fix(t('Switch to Switch content'), reveal))
-    if (!triggers.length && set !== slide.hover?.default) {
+    // On a dimming slide the trigger's group already counts: pointing at it
+    // dims everything outside it. Said rather than deferred — holding the
+    // group back until the switch would leave the pick nowhere to live (the
+    // format has no place for "the trigger chosen, not yet written").
+    else if (issue === 'dim') line('dim', triggers.length
+      ? t('This slide’s hover dims other groups: this always shows, and pointing at {name} dims everything outside its group.', { name: names })
+      : t('This slide’s hover dims other groups, so this always shows.'), fix(t('Switch to Switch content'), reveal))
+    if (!triggers.length && set !== slide.hover?.default && blocked.length) {
+      line('hidden', t('{name} is hidden or shows only on hover, so the pointer can never reach it.', { name: blockedNames }), fix(t('Pick the trigger'), () => openHoverPicker(p, el, pick)))
+    } else if (!triggers.length && set !== slide.hover?.default) {
       line('orphan', t('Nothing on this slide is in the group “{group}”.', { group: set }), fix(t('Pick the trigger'), () => openHoverPicker(p, el, pick)))
     } else if (!issue) {
       line('ok', triggers.length
@@ -672,7 +684,7 @@ function openHoverPicker(p: PropsPanel, el: SlideElement, anchor: HTMLElement) {
       if (!me) return
       if (!trig || !g) { delete me.showOnHover; return }
       const tr = slide.elements.find((x) => x.id === trig.id)
-      if (tr && !tr.group) tr.group = g
+      if (tr && !tr.group) setTriggerGroup(p.store.doc, tr, g)
       me.showOnHover = g
       if (!slide.hover) useReveal(slide) // never over a hover the author chose
     })
@@ -691,7 +703,8 @@ function openHoverPicker(p: PropsPanel, el: SlideElement, anchor: HTMLElement) {
     return o
   }
   if (el.showOnHover) list.append(option(t('Always visible'), null))
-  const others = slide.elements.filter((e) => e.id !== el.id)
+  // only what the pointer can be on in the show: not hidden, drawn at rest
+  const others = slide.elements.filter((e) => e.id !== el.id && reachable(slide, e))
   for (const e of others) list.append(option(labelIn(slide, e, t), e.id, e, !!el.showOnHover && e.group === el.showOnHover))
   if (!others.length) { const n = document.createElement('div'); n.className = 'ed-hint'; n.textContent = t('Nothing else on this slide to point at.'); list.append(n) }
 

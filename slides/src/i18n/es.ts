@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
+  "This slide’s hover dims other groups: this always shows, and pointing at {name} dims everything outside its group.": "El hover de esta diapositiva atenúa otros grupos: esto siempre se ve, y apuntar a {name} atenúa todo lo que está fuera de su grupo.",
+  "{name} is hidden or shows only on hover, so the pointer can never reach it.": "{name} está oculto o solo aparece con hover, así que el puntero nunca puede llegar a él.",
   "Always visible": "Siempre visible",
   "This slide’s hover is off, so this always shows.": "El hover de esta diapositiva está desactivado, así que esto siempre se ve.",
   "Turn on": "Activar",

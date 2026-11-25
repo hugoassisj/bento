@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "This slide’s hover dims other groups: this always shows, and pointing at {name} dims everything outside its group.": "このスライドのホバーは他のグループを暗くする設定です。これは常に表示され、{name}を指すとそのグループ以外がすべて暗くなります。",
+  "{name} is hidden or shows only on hover, so the pointer can never reach it.": "{name}は非表示か、ホバー時にだけ表示されるため、ポインターが届くことはありません。",
   "Always visible": "常に表示",
   "This slide’s hover is off, so this always shows.": "このスライドのホバーはオフなので、これは常に表示されます。",
   "Turn on": "オンにする",

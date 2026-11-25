@@ -3879,7 +3879,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-morph-opt:hover, .ed-morph-opt:focus-visible { background: var(--chip); outline: none; }
 .ed-morph-opt:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-ink); }
 .ed-morph-hint { flex: none; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); }
-.ed-hover-status[data-state='off'], .ed-hover-status[data-state='dim'], .ed-hover-status[data-state='orphan'] { color: var(--danger); }
+.ed-hover-status[data-state='off'], .ed-hover-status[data-state='dim'], .ed-hover-status[data-state='orphan'], .ed-hover-status[data-state='hidden'] { color: var(--danger); }
 .ed-hover-adv > summary { font-size: 11px; color: var(--muted); padding: 4px 0; cursor: pointer; }
 .ed-morph-opt[aria-selected='true'] { background: var(--chip); }
 @media (prefers-reduced-motion: reduce) { .ed-morph-pick { animation: none; } }
