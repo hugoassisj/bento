@@ -455,7 +455,7 @@ if (app.ownsSiteContent) {
   cpSync(join(site, `${app.dir}/agents.md`), join(site, 'agents.md'))
   // The harness skill (canonical home: the Claude Code plugin at
   // plugins/bento-slides). Published three ways: the raw SKILL.md (curl
-  // one-liner), a claude.ai-uploadable zip, and a compat copy at the old
+  // one-liner), the uploadable skill zip, and a compat copy at the old
   // bento-deck URL. The zip carries the WHOLE skill folder inside
   // bento-slides/ (folder-inside-zip), minus evals/, with the shell this
   // release signs and the schema bundled into assets/, so an uploaded skill

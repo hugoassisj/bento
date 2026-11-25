@@ -5,9 +5,9 @@
 // scripts/test-slides-skill-zip.ts can build the zip offline and read its
 // listing without cutting a release.
 //
-// The skill's canonical home is the Claude Code plugin
-// (plugins/bento-slides/skills/bento-slides/). A plugin install gets the whole
-// folder; the claude.ai-uploadable zip used to carry `bento-slides/SKILL.md`
+// The skill's canonical home is the plugin
+// (plugins/bento-slides/skills/bento-slides/). The plugin install gets the whole
+// folder; the uploadable skill zip used to carry `bento-slides/SKILL.md`
 // alone, so people who uploaded it got no references, no scripts and no app to
 // work offline with. The zip now carries the whole folder, minus any `evals/`
 // (graders and cases are for developing the skill, not for using it), plus two
@@ -28,7 +28,7 @@ import { basename, join, resolve } from 'node:path'
 
 /** The skill folder, relative to the repository root. */
 export const SKILL_DIR = 'plugins/bento-slides/skills/bento-slides'
-/** The folder name inside the zip (claude.ai wants folder-inside-zip). */
+/** The folder name inside the zip (skill hosts want folder-inside-zip). */
 export const SKILL_NAME = 'bento-slides'
 /** Where the references are published, relative to the site root. */
 export const REFERENCES_SITE_DIR = 'slides/agents'

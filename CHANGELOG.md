@@ -11,12 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **The skill you upload to Claude carries everything it needs.** The
-  download at `bento.page/skills/bento-slides.zip` used to hold the skill's
-  main file alone. It now holds the whole skill folder: its reference pages,
-  its scripts, and a copy of the app and of the document schema, so a skill
-  uploaded to claude.ai can make and check decks without fetching anything.
-  The reference pages are also published beside the agent guide, at
+- **The uploadable skill zip carries the whole skill folder.** The download
+  at `bento.page/skills/bento-slides.zip` used to hold the skill's main file
+  alone. It now holds everything in the skill folder (whatever reference
+  pages and scripts it has), plus a copy of the app and of the document
+  schema, so an uploaded skill has the app file at hand. Any reference pages
+  are also published beside the agent guide, at
   `bento.page/slides/agents/<topic>.md`.
 
 - **Speaker notes start folded, and fold out of the way.** A new editor

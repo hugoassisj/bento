@@ -7,7 +7,7 @@
 //     node scripts/test-slides-skill-zip.ts
 //
 // A slides release used to zip `bento-slides/SKILL.md` alone, so whoever
-// uploaded the skill to claude.ai (or used it through the API) got no
+// uploaded it through a hosted assistant's skill upload got no
 // references, no scripts and no app to work offline with. release.mjs now
 // packages through scripts/skill-package.mjs; this rig builds the zip into a
 // temp directory, offline, and reads its listing back with `unzip`.
@@ -85,7 +85,7 @@ const fxList = listing(fxZip)
 ok(JSON.stringify([...fxList].sort()) === JSON.stringify(expected), `the zip lists exactly the folder minus evals/ and dot-entries, plus the two assets (${fxList.length} entries)`)
 if (JSON.stringify([...fxList].sort()) !== JSON.stringify(expected)) console.log(`        got: ${fxList.join(', ')}`)
 ok(JSON.stringify(entries) === JSON.stringify(fxList), 'buildSkillZip returns the entries in the order the zip holds them')
-ok(fxList.every((e) => e.startsWith(`${SKILL_NAME}/`)), `every entry sits inside ${SKILL_NAME}/ (claude.ai wants folder-inside-zip)`)
+ok(fxList.every((e) => e.startsWith(`${SKILL_NAME}/`)), `every entry sits inside ${SKILL_NAME}/ (skill hosts want folder-inside-zip)`)
 ok(!fxList.some((e) => e.endsWith('/')), 'no directory entries (the shape the one-file zip had)')
 ok(!fxList.some((e) => e.split('/').includes('evals')), 'no evals/ folder at any depth')
 ok(!fxList.some((e) => e.split('/').some((s) => s.startsWith('.'))), 'no dot-files')

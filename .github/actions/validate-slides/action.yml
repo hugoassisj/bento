@@ -753,7 +753,7 @@ runs:
       run: node scripts/test-slides-alpha-refs.ts
     - name: The skill zip carries the whole skill folder
       # A slides release zipped bento-slides/SKILL.md alone, so a skill
-      # uploaded to claude.ai had no references, scripts or app. The zip now
+      # uploaded to a skill host had no references, scripts or app. The zip now
       # carries the folder minus evals/, plus the signed shell and the schema
       # in assets/; references/*.md are published at /slides/agents/. Rows: a
       # fixture zips to the exact listing, the refusals, the real folder, the
