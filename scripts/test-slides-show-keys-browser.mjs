@@ -6,7 +6,7 @@
 //
 // WHAT THIS PROVES, on the Showcase (which has state slides) with reveal steps
 // added to slide 2 and a state slide appended at the end, with real keys:
-//   1. the keys Reveal used to own — / . ; : V J K G C A — do nothing: the
+//   1. the keys Reveal used to own — / . ; : V J K C A — do nothing: the
 //      index does not move, `.reveal` never gets `paused`, no overlay opens;
 //   2. a REAL Shift+/ (Shift held down, so the event carries shiftKey — a
 //      bare press('?') without Shift is what misled the audit), F1 and H open
@@ -20,7 +20,8 @@
 //      ↑ and ↓ walk and wake exactly like ← and → as well;
 //   4. Home and End land on the first and last slide of the linear flow,
 //      never on the trailing state slide;
-//   5. O still opens the overview and Esc closes it without ending the show;
+//   5. O opens the show's slide grid (MP-09), never Reveal's overview, and Esc
+//      closes it without ending the show;
 //   6. the sheet's text comes from the catalogs (de) and turns around under
 //      an RTL chrome (the overlay itself stays LTR: it draws the document);
 //   7. the first show in a browser says "Press ? for keyboard shortcuts"
@@ -99,7 +100,7 @@ try {
     ok(before && before.h === 1 && before.hidden === 1, `CONTROL: → twice lands on slide 2 with one of its two steps still hidden (${JSON.stringify(before)})`)
 
     // 1. retired keys
-    const retired = [['Slash', '/'], ['Period', '.'], ['Semicolon', ';'], ['Shift+Semicolon', ':'], ['v', 'V'], ['j', 'J'], ['k', 'K'], ['g', 'G'], ['c', 'C'], ['a', 'A']]
+    const retired = [['Slash', '/'], ['Period', '.'], ['Semicolon', ';'], ['Shift+Semicolon', ':'], ['v', 'V'], ['j', 'J'], ['k', 'K'], ['c', 'C'], ['a', 'A']]
     for (const [k, name] of retired) {
       await press(p, k)
       const s = await state(p)
@@ -124,10 +125,10 @@ try {
     ok(!!sheet && sheet.visible, `2. Shift+/ opens the sheet inside the show (${JSON.stringify(sheet && { rows: sheet.rows.length })})`)
     ok(sheet?.modal === 'true' && sheet.inBox && sheet.title === 'Keyboard shortcuts', `2. it is a modal dialog named by its title ("${sheet?.title}")`)
     ok(sheet?.focused, '2. focus moves into the sheet')
-    const want = ['→', '↓', 'PageDown', 'Space', '←', '↑', 'PageUp', 'Home', 'End', 'S', 'F', 'B', 'L', 'M', '?', 'F1', 'Esc']
+    const want = ['→', '↓', 'PageDown', 'Space', '←', '↑', 'PageUp', 'Home', 'End', 'S', 'F', 'B', 'L', 'M', 'G', 'O', '?', 'F1', 'Esc']
     const caps = (sheet?.rows ?? []).flat()
     ok(want.every((k) => caps.includes(k)), `2. it lists the show's keys (${(sheet?.rows ?? []).map((r) => r.join(' ')).join(' | ')})`)
-    ok(!caps.includes('O') && !caps.includes('G') && !caps.includes('V'), '2. and nothing it does not do or does not advertise (no O, G, V)')
+    ok(!caps.includes('V') && !caps.includes('J'), '2. and nothing it does not do or does not advertise (no V, J)')
     ok(sheet?.dir === 'ltr', `6. CONTROL: in English the sheet reads left to right (${sheet?.dir})`)
     let s = await state(p)
     ok(s && !s.paused && s.h === before.h && s.hidden === before.hidden, `2. opening it pauses nothing and moves nothing (${JSON.stringify(s)})`)
@@ -213,12 +214,13 @@ try {
     s = await state(p)
     ok(s?.h === 0, `4. Home lands on the first (${s?.h})`)
 
-    // 5. overview kept
+    // 5. O is the slide grid now, never Reveal's overview
+    const grid = () => p.evaluate(() => { const g = document.querySelector('.bento-show-grid'); return !!g && !g.hidden })
     await press(p, 'o', 400)
-    ok((await state(p))?.overview, '5. O still opens the overview')
+    ok(await grid() && !(await state(p))?.overview, '5. O opens the slide grid, not the overview')
     await press(p, 'Escape', 400)
     s = await state(p)
-    ok(s && !s.overview, `5. Esc closes it and the show goes on (${JSON.stringify(s)})`)
+    ok(s && !s.overview && !(await grid()), `5. Esc closes it and the show goes on (${JSON.stringify(s)})`)
 
     // 7. the hint is once per browser
     await press(p, 'Escape', 400)

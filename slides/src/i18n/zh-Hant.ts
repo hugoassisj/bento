@@ -4,6 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "All slides": "全部投影片",
+  "Go to {n}": "前往 {n}",
+  "All slides — pick one to jump to": "全部投影片 — 選擇一張跳轉過去",
+  "Go to a slide: type its number, then Enter": "前往投影片：輸入編號，然後按 Enter",
   "Press ? for keyboard shortcuts": "按 ? 查看鍵盤快速鍵",
   "Audience screen is black": "觀眾畫面已黑幕",
   "View": "檢視",
@@ -661,7 +665,6 @@ export const zhHant: Catalog = {
   "Links are off in offline mode": "離線模式下連結已關閉",
   "Walk the slides when nothing is selected; nudge the selection otherwise": "未選取任何內容時切換投影片；否則微調所選內容",
   "Black screen — and back": "黑畫面 — 再返回",
-  "All slides in the speaker view — pick one to jump to": "在講者檢視中顯示全部投影片 — 選擇一張跳轉",
   "Previous · next slide, or the next reveal step on a slide that has them": "上一張 · 下一張投影片，或在有顯示步驟的投影片上進入下一步",
   "Add a code snippet": "新增程式碼片段",
   "Source Code": "原始碼",

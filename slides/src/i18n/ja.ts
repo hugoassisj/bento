@@ -4,6 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "All slides": "すべてのスライド",
+  "Go to {n}": "{n} へ移動",
+  "All slides — pick one to jump to": "すべてのスライド — 選ぶとそこへ移動",
+  "Go to a slide: type its number, then Enter": "スライドへ移動：番号を入力して Enter",
   "Press ? for keyboard shortcuts": "? キーでキーボードショートカットを表示",
   "Audience screen is black": "聴衆の画面はブラックスクリーン中です",
   "View": "表示",
@@ -661,7 +665,6 @@ export const ja: Catalog = {
   "Links are off in offline mode": "オフラインモードではリンクは無効です",
   "Walk the slides when nothing is selected; nudge the selection otherwise": "何も選択していないときはスライドを移動、選択中は選択範囲を微調整",
   "Black screen — and back": "ブラックスクリーン — そして戻る",
-  "All slides in the speaker view — pick one to jump to": "発表者ビューで全スライドを表示 — 選ぶとそこへ移動",
   "Previous · next slide, or the next reveal step on a slide that has them": "前・次のスライド、またはステップのあるスライドでは次の表示ステップ",
   "Add a code snippet": "コードスニペットを追加",
   "Source Code": "ソースコード",

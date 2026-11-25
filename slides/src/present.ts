@@ -17,6 +17,7 @@ import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { hintWindow, paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { speakerWindowTitle } from './wintitle'
 import { setupSpeakerLayout } from './speakerlayout'
+import { slideGrid, slideThumb, walkGrid, type SlideGrid } from './showgrid'
 import { ICONS } from './icons'
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
@@ -775,6 +776,8 @@ export function startPresentation(
     // table, and walked N/P/Home/End past reveal steps and into state slides.
     keyboard: false,
     help: false,
+    // G and O open the show's own slide grid; Reveal's overview never opens
+    overview: false,
     plugins: [],
   })
 
@@ -1126,20 +1129,10 @@ export function startPresentation(
       if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }, 1000)
 
-    // a clickable thumbnail: an imported slide render inside a button, badged
-    // with its slide number; clicking jumps the live show there.
-    const thumb = (idx: number, w: number): HTMLElement => {
-      const b = d.createElement('button')
-      b.className = 'sv-thumb'
-      b.dataset.idx = String(idx)
-      b.appendChild(d.importNode(svSlide(idx, w), true))
-      const num = d.createElement('span')
-      num.className = 'sv-thumb-n'
-      num.textContent = String(visibleIndex(idx))
-      b.appendChild(num)
-      b.addEventListener('click', () => { deck.slide(idx, 0); toggleGrid(false) })
-      return b
-    }
+    // a clickable thumbnail (showgrid.ts, shared with the show's own grid):
+    // clicking jumps the live show there.
+    const thumb = (idx: number, w: number): HTMLElement =>
+      slideThumb(d, svSlide(idx, w), idx, visibleIndex(idx), () => { deck.slide(idx, 0); toggleGrid(false) })
 
     const rail = d.querySelector('.sv-rail')!
     for (const idx of railIndices) rail.appendChild(thumb(idx, 150))
@@ -1147,15 +1140,7 @@ export function startPresentation(
     // all-slides grid overlay — built lazily on first open (cheap for small decks,
     // but a big deck shouldn't pay for it unless the presenter asks).
     const grid = d.querySelector('.sv-grid') as HTMLElement
-    const gridInner = d.querySelector('.sv-grid-inner')!
-    let gridBuilt = false
-    const toggleGrid = (on?: boolean) => {
-      const show = on ?? grid.hasAttribute('hidden')
-      if (show && !gridBuilt) { for (const idx of railIndices) gridInner.appendChild(thumb(idx, 240)); gridBuilt = true }
-      grid.toggleAttribute('hidden', !show)
-      if (show) updateSpeakerControls()
-    }
-    grid.addEventListener('click', (ev) => { if (ev.target === grid) toggleGrid(false) })
+    const { toggle: toggleGrid } = slideGrid(grid, railIndices, (idx) => thumb(idx, 240), updateSpeakerControls)
 
     const doNav = (k: string) => {
       if (k === 'first') goFirst()
@@ -1305,9 +1290,10 @@ export function startPresentation(
   // ——— the show's keys: ONE table drives the handler and the ? sheet ———
   // Reveal's own keyboard is off (`keyboard: false`), so a key that is not
   // here does nothing. `keys` are KeyboardEvent.key values, letters lower
-  // case; a row without a label works but is not listed. The labels are the
-  // editor shortcut sheet's own Present rows, so both sheets say the same.
-  const SHOW_KEYS: Array<{ label?: string; does: Array<[keys: string[], run: (ev: KeyboardEvent) => void]> }> = [
+  // case; a row without a label works but is not listed; `caps` replaces the
+  // keys the sheet shows. The labels are the editor shortcut sheet's own
+  // Present rows, so both sheets say the same.
+  const SHOW_KEYS: Array<{ label?: string; caps?: string[]; does: Array<[keys: string[], run: (ev: KeyboardEvent) => void]> }> = [
     { label: 'Previous · next slide, or the next reveal step on a slide that has them',
       // a press on a black screen only wakes it (wakeIfBlack): nobody can see the deck move
       does: [[['ArrowLeft', 'ArrowUp', 'PageUp', 'p'], () => { if (!wakeIfBlack()) goPrev() }], [['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'n'], () => { if (!wakeIfBlack()) goNext() }]] },
@@ -1318,10 +1304,12 @@ export function startPresentation(
     { label: 'Black screen — and back', does: [[['b'], () => toggleBlack()]] },
     { label: 'Toggle laser pointer while presenting', does: [[['l'], (ev) => { if (!ev.repeat) toggleLaser() }]] },
     { label: 'Reduce motion — pause animations (also honours your OS setting)', does: [[['m'], () => toggleReduceMotion()]] },
+    // a grid you cannot see is no use: opening it wakes a black screen
+    { label: 'All slides — pick one to jump to', does: [[['g', 'o'], () => { wakeIfBlack(); toggleShowGrid() }]] },
+    // the digits start a number; while one is typed, gotoKey owns Enter and Backspace
+    { label: 'Go to a slide: type its number, then Enter', caps: ['0–9', 'Enter'], does: [[[...'0123456789'], (ev) => typeGoto(ev.key)]] },
     { label: 'Keyboard shortcuts', does: [[['?', 'F1', 'h'], () => openKeys()]] },
     { label: 'End the show', does: [[['Escape'], () => exit()]] },
-    // Reveal's overview, kept as it was until the show has a slide grid of its own
-    { does: [[['o'], () => deck.toggleOverview()]] },
   ]
   const CAP: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', ' ': 'Space', Escape: 'Esc' }
 
@@ -1358,7 +1346,7 @@ export function startPresentation(
       if (!row.label) continue
       const tr = table.insertRow()
       const keys = tr.insertCell()
-      row.does.forEach(([ks], i) => {
+      ;(row.caps ? [row.caps] : row.does.map(([ks]) => ks)).forEach((ks, i) => {
         if (i) keys.append(' · ')
         for (const k of ks) keys.appendChild(document.createElement('kbd')).textContent = CAP[k] ?? (k.length === 1 ? k.toUpperCase() : k)
       })
@@ -1381,6 +1369,111 @@ export function startPresentation(
     keysHint = true
   }
 
+  // ——— jump to a slide: the G/O grid and number-then-Enter ———
+  // Local chrome like the ? sheet: only the nav that results reaches a live
+  // audience. An audience copy may use them while it can browse; the lock
+  // closes them and keeps them shut (updateFollowChip). Below the laser and
+  // the blackout; G and a jump wake a black screen first.
+  const canJump = () => !follow.locked
+  let showGrid: SlideGrid | null = null
+  let gridEl: HTMLElement | null = null
+  let gridOpener: Element | null = null
+  const jumpTo = (idx: number) => {
+    toggleShowGrid(false)
+    clearGoto()
+    wakeIfBlack()
+    if (idx !== deck.getIndices().h) deck.slide(idx, 0)
+  }
+  const toggleShowGrid = (on?: boolean) => {
+    if (!gridEl) {
+      if (on === false) return
+      gridEl = document.createElement('div')
+      gridEl.className = 'sv-grid bento-show-grid'
+      gridEl.hidden = true
+      gridEl.setAttribute('role', 'dialog')
+      gridEl.setAttribute('aria-label', t('All slides'))
+      gridEl.appendChild(document.createElement('div')).className = 'sv-grid-inner'
+      overlay.appendChild(gridEl)
+      showGrid = slideGrid(gridEl, railIndices, (idx) => slideThumb(document, svSlide(idx, 240), idx, visibleIndex(idx), jumpTo), () => {
+        const cur = deck.getIndices().h
+        const anchor = String(isState(cur) ? anchorOf(cur) : cur)
+        for (const b of gridEl!.querySelectorAll<HTMLElement>('.sv-thumb')) {
+          b.classList.toggle('current', b.dataset.idx === anchor)
+          if (b.dataset.idx === anchor) b.focus()
+        }
+      })
+    }
+    const want = on ?? !showGrid!.open
+    if (want === showGrid!.open || (want && !canJump())) return
+    if (want) gridOpener = document.activeElement
+    showGrid!.toggle(want)
+    if (want) return
+    // focus goes back where it was, as the ? sheet's does
+    const back = gridOpener as HTMLElement | null
+    gridOpener = null
+    if (back?.isConnected && back !== document.body && !gridEl.contains(back)) back.focus?.()
+    else if (gridEl.contains(document.activeElement)) (document.activeElement as HTMLElement).blur()
+  }
+  // keys while the grid is open: arrows (and the clicker's) walk the focus
+  // ring, Enter or Space picks, Esc closes; the rest are the show's
+  const GRID_WALK: Record<string, string> = { PageDown: 'ArrowRight', n: 'ArrowRight', PageUp: 'ArrowLeft', p: 'ArrowLeft' }
+  const gridKey = (key: string): boolean => {
+    if (!gridEl || !showGrid?.open) return false
+    if (key === 'Escape') { toggleShowGrid(false); return true }
+    const walk = GRID_WALK[key] ?? key
+    const pick = key === 'Enter' || key === ' '
+    if (!pick && !/^(Arrow(Left|Right|Up|Down)|Home|End)$/.test(walk)) return false
+    if (wakeIfBlack()) return true // the grid sits under the blackout: show it first
+    if (!pick) return walkGrid(gridEl, walk)
+    const at = document.activeElement as HTMLElement | null
+    if (at?.classList.contains('sv-thumb') && gridEl.contains(at)) jumpTo(Number(at.dataset.idx))
+    return true
+  }
+
+  // a typed slide number gathers in a "Go to 12" chip; Enter goes to the
+  // slide that carries that number (the counter's and the thumbnails'), out
+  // of range shakes the chip and goes nowhere; a pause or Esc clears it
+  let gotoNum = ''
+  let gotoTimer = 0
+  let gotoChip: HTMLElement | null = null
+  const clearGoto = () => {
+    gotoNum = ''
+    clearTimeout(gotoTimer)
+    gotoChip?.classList.remove('show', 'bad')
+  }
+  const showGoto = (bad = false) => {
+    if (!gotoChip) {
+      gotoChip = overlay.appendChild(document.createElement('div'))
+      gotoChip.className = 'bento-show-goto'
+      gotoChip.setAttribute('role', 'status')
+      gotoChip.dir = document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr' // chrome, in a pinned-LTR overlay
+    }
+    gotoChip.textContent = t('Go to {n}', { n: gotoNum })
+    gotoChip.classList.remove('bad')
+    if (bad) { void gotoChip.offsetWidth; gotoChip.classList.add('bad') } // restart the shake
+    gotoChip.classList.add('show')
+    clearTimeout(gotoTimer)
+    gotoTimer = window.setTimeout(clearGoto, 1500)
+  }
+  const typeGoto = (digit: string) => {
+    if (!canJump() || (!gotoNum && digit === '0')) return
+    gotoNum = (gotoNum + digit).slice(0, 4)
+    showGoto()
+  }
+  const gotoKey = (key: string): boolean => {
+    if (!gotoNum) return false
+    if (/^[0-9]$/.test(key)) typeGoto(key)
+    else if (key === 'Backspace') { gotoNum = gotoNum.slice(0, -1); if (gotoNum) showGoto(); else clearGoto() }
+    else if (key === 'Escape') clearGoto()
+    else if (key === 'Enter') {
+      const n = Number(gotoNum)
+      const idx = railIndices.find((i) => paginates(doc.slides[i], doc) && visibleIndex(i) === n)
+      if (idx === undefined) showGoto(true)
+      else jumpTo(idx)
+    } else return false
+    return true
+  }
+
   // Capture-phase keys, dispatched through SHOW_KEYS. Reveal drops key events
   // when focus sits in odd places (a leftover form field, a host-embedded
   // frame) — present mode has no fields, so arrows are always navigation.
@@ -1400,10 +1493,11 @@ export function startPresentation(
       return
     }
     const key = raw === '/' && ev.shiftKey ? '?' : raw.length === 1 ? raw.toLowerCase() : raw
-    if (key === 'Escape' && deck.isOverview()) { // Esc closes the overview first
+    // a number being typed, then an open grid, take their keys first (Esc
+    // included: it closes them and the show goes on)
+    if (gotoKey(key) || gridKey(key)) {
       ev.preventDefault()
       ev.stopPropagation()
-      deck.toggleOverview(false)
       return
     }
     for (const row of SHOW_KEYS) {
@@ -1595,6 +1689,7 @@ export function startPresentation(
   const updateFollowChip = () => {
     if (!followChip) return
     const state = follow.label()
+    if (follow.locked) { toggleShowGrid(false); clearGoto() } // held on the presenter's slide
     followChip.classList.toggle('following', follow.following)
     followChip.toggleAttribute('disabled', follow.locked)
     followChip.textContent = state === 'locked'

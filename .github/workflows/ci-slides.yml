@@ -733,8 +733,8 @@ jobs:
         # no move); a real Shift+/, F1 or H opens the ? sheet of the show's
         # keys (a dialog, from the catalogs, RTL-aware, never in the speaker
         # window) and any key closes it; N/P walk like →/← through steps and
-        # past state slides; Home/End stay in the linear flow; O and Esc keep
-        # the overview; the first show says "Press ? …" once.
+        # past state slides; Home/End stay in the linear flow; O opens the
+        # slide grid and Esc closes it; the first show says "Press ? …" once.
         run: node scripts/test-slides-show-keys-browser.mjs
       - name: Jump to a slide from the show in Chromium
         if: ${{ !cancelled() }}

@@ -30,7 +30,7 @@
 //      relay inside the browser: nothing leaves the machine) may open the grid
 //      and type a number while it can browse, and may not while the presenter
 //      holds it locked — the lock closes an open grid.
-// On the parent commit 1, 2, 3, 4, 5, 6's Ctrl chord, 7 and 9 fail (13 of 47
+// On the parent commit 1, 2, 3, 4, 5, 6's key check, 7 and 9 fail (13 of 47
 // checks pass); 8 passes there too: it guards the speaker grid through the
 // shared builder.
 import { fileURLToPath } from 'node:url'
@@ -206,7 +206,9 @@ try {
     await press(p, 'Control+3')
     s = await state(p)
     const leak = await p.evaluate(() => window.__leak)
-    ok(leak.join() === 'C+3:false' && !s?.chip, `6. no show key reached the page, and Ctrl+3 passed to the browser untouched (${leak.join(' ')}; chip ${s?.chip})`)
+    // the one key that may pass is the late Enter of 4, which nothing owned (an
+    // unlisted key, like any other: the editor ignores keys while presenting)
+    ok(leak.join() === 'Enter:false,C+3:false' && !s?.chip, `6. no key the grid or the number owned reached the page, and Ctrl+3 passed to the browser untouched (${leak.join(' ')}; chip ${s?.chip})`)
 
     // 7. the ? sheet
     await shiftSlash(p)

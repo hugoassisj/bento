@@ -4,6 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "All slides": "Toutes les diapositives",
+  "Go to {n}": "Aller à {n}",
+  "All slides — pick one to jump to": "Toutes les diapositives — choisissez-en une pour y aller",
+  "Go to a slide: type its number, then Enter": "Aller à une diapositive : tapez son numéro, puis Entrée",
   "Press ? for keyboard shortcuts": "Appuyez sur ? pour afficher les raccourcis clavier",
   "Audience screen is black": "L’écran du public est noir",
   "View": "Affichage",
@@ -661,7 +665,6 @@ export const fr: Catalog = {
   "Links are off in offline mode": "Les liens sont désactivés en mode hors ligne",
   "Walk the slides when nothing is selected; nudge the selection otherwise": "Parcourt les diapositives quand rien n’est sélectionné ; sinon, déplace la sélection",
   "Black screen — and back": "Écran noir — et retour",
-  "All slides in the speaker view — pick one to jump to": "Toutes les diapositives dans la vue présentateur — choisissez-en une pour y aller",
   "Previous · next slide, or the next reveal step on a slide that has them": "Diapositive précédente · suivante, ou l’étape de révélation suivante sur une diapositive qui en a",
   "Add a code snippet": "Ajouter un extrait de code",
   "Source Code": "Code source",

@@ -4,6 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "All slides": "全部幻灯片",
+  "Go to {n}": "转到 {n}",
+  "All slides — pick one to jump to": "全部幻灯片 — 选择一张跳转过去",
+  "Go to a slide: type its number, then Enter": "跳转到幻灯片：输入编号，然后按 Enter",
   "Press ? for keyboard shortcuts": "按 ? 查看键盘快捷键",
   "Audience screen is black": "观众屏幕已黑屏",
   "View": "视图",
@@ -661,7 +665,6 @@ export const zhHans: Catalog = {
   "Links are off in offline mode": "离线模式下链接已关闭",
   "Walk the slides when nothing is selected; nudge the selection otherwise": "未选中任何内容时切换幻灯片；否则微调所选内容",
   "Black screen — and back": "黑屏 — 再返回",
-  "All slides in the speaker view — pick one to jump to": "在演讲者视图中显示全部幻灯片 — 选择一张跳转",
   "Previous · next slide, or the next reveal step on a slide that has them": "上一张 · 下一张幻灯片，或在有显示步骤的幻灯片上进入下一步",
   "Add a code snippet": "添加代码片段",
   "Source Code": "源代码",
