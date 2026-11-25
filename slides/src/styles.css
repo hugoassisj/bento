@@ -1778,7 +1778,42 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
     page-break-after: always;
     break-after: page;
   }
+  /* One page per click step: what the show has not revealed yet stays off
+     that page (the show's own rule is scoped to its overlay) */
+  #bento-print .bento-step-hidden { visibility: hidden !important; }
+  /* Slides with notes: a portrait page, the slide above its notes; the page
+     box grows with a long text and the browser breaks it onto the next page */
+  #bento-print .bp-page.bp-notes {
+    height: auto;
+    overflow: visible;
+    padding: 0 80px;
+    box-sizing: border-box;
+  }
+  #bento-print .bp-notes .bp-slide {
+    width: 1440px;
+    overflow: hidden;
+    break-inside: avoid;
+    position: relative;
+  }
+  /* a hairline round the slide, drawn inside its box (an outline would paint
+     outside it and show at the foot of the page before) */
+  #bento-print .bp-notes .bp-slide::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid #c9d0da;
+    pointer-events: none;
+  }
+  #bento-print .bp-notes-text {
+    margin-top: 56px;
+    font-size: 30px;
+    line-height: 1.5;
+    color: #1e2a3a;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 }
+.ed-print-sheet .ed-row select { width: auto; min-width: 200px; }
 
 /* moveable accents */
 .moveable-control-box {

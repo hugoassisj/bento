@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Print or save as PDF": "列印或儲存為 PDF",
+  "Pages": "頁面",
+  "Slides with notes": "投影片及備忘稿",
+  "One page per click step": "每個點擊步驟一頁",
+  "Backgrounds": "背景",
+  "Full quality": "完整畫質",
+  "Lighter file": "較小檔案",
+  "Print": "列印",
+  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "隱藏的投影片和狀態不會包含在內。按 {keys} 可依這些選項直接再次列印，不顯示此視窗。",
+  "Print with the last choice": "依上次的選擇列印",
+  "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "投影片、備忘稿頁或每個點擊步驟一頁 — 瀏覽器的列印對話框可儲存 PDF。按住 Shift 點擊則依上次的選擇列印。",
   "View": "檢視",
   "Current slide": "目前投影片",
   "Slide thumbnails": "投影片縮圖",
@@ -1221,7 +1232,6 @@ export const zhHant: Catalog = {
   "Save without password": "不使用密碼儲存",
   "Save with password…": "使用密碼儲存…",
   "Print or save as PDF…": "列印或存成 PDF…",
-  "Every slide on its own page — your browser’s print dialog saves a PDF.": "每張投影片各佔一頁 — 瀏覽器的列印對話框可存成 PDF。",
   "Document properties…": "文件屬性…",
   "Title, author, company, subject, event and keywords — {{author}} and friends fill in from here.": "標題、作者、公司、主旨、活動和關鍵字 — {{author}} 等由此填入。",
   "Advanced": "進階",

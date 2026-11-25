@@ -9,14 +9,15 @@ import {
   MEDIA_EMBED_BUDGET,
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
-  paginates, inLinearFlow,
+  paginates,
   type ChartElement, type ShapeKind, type ShapeElement, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
-import { cssColor, renderSlide, renderThumbnail } from '../render'
+import { cssColor, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
+import { lastPrintOptions, openPrintSheet, printDeck } from './printpdf'
 import { adoptComponents, components, detach, mainsLost, makeComponent, promoteCopy, resetOverrides } from '../components'
 import { goToMain, selectedComponent } from './inspector/component'
 import { activeMode, bindToken, modesOf } from '../tokens'
@@ -163,7 +164,7 @@ let menuDescSeq = 0
  * the description as tooltip and ARIA description (D2). Every command menu
  * builds its rows here, so their markup cannot drift apart.
  */
-function menuRow(icon: string, label: string, title: string, onClick: () => void, keys?: string, cmd?: string): HTMLButtonElement {
+function menuRow(icon: string, label: string, title: string, onClick: (ev: MouseEvent) => void, keys?: string, cmd?: string): HTMLButtonElement {
   const b = document.createElement('button')
   b.type = 'button'
   b.className = 'ed-btn ed-menu-row'
@@ -1195,8 +1196,8 @@ export class Editor {
       if (mark) el.dataset.phoneSaveas = '1'
       return el
     }
-    const item = (icon: string, label: string, title: string, onClick: () => void, cmd?: string) =>
-      into.appendChild(tag(menuRow(icon, label, title, () => { close(); onClick() }, cmd ? this.commands.find((c) => c.id === cmd)?.keys : undefined, cmd)))
+    const item = (icon: string, label: string, title: string, onClick: (ev?: MouseEvent) => void, cmd?: string) =>
+      into.appendChild(tag(menuRow(icon, label, title, (ev) => { close(); onClick(ev) }, cmd ? this.commands.find((c) => c.id === cmd)?.keys : undefined, cmd)))
     const cap = (text: string) => {
       const c = div('ed-menu-cap')
       c.textContent = text
@@ -1213,7 +1214,7 @@ export class Editor {
       () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') }, 'import-pptx')
     sep()
     cap(t('Export'))
-    item(ICONS.pdf, t('Print or save as PDF…'), t('Every slide on its own page — your browser’s print dialog saves a PDF.'), () => this.exportPdf(), 'export-pdf')
+    item(ICONS.pdf, t('Print or save as PDF…'), t('Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.'), (ev) => this.exportPdf(!!ev?.shiftKey), 'export-pdf')
     // the dialog explains itself; a tooltip here would say the same twice
     item(ICONS.image, t('Export slides as images…'), '', () => this.exportImages(), 'export-images')
     item(ICONS.exportDoc, t('Export for PowerPoint…'),
@@ -2571,40 +2572,18 @@ export class Editor {
   }
 
   /**
-   * Export the deck to PDF via the browser's print pipeline: every linear
-   * slide becomes one exact 1600×900 page. Anything outside the linear flow
-   * stays off the paper: a state is reachable only through interaction, and a
-   * hidden slide is material the audience was not meant to be handed.
+   * Export the deck to PDF via the browser's print pipeline (editor/printpdf.ts):
+   * a short sheet picks the pages (slides · slides with notes · one page per
+   * click step) and the backgrounds, then the browser's print dialog saves the
+   * PDF. `again` (⇧⌘P, or Shift on the menu row) skips the sheet and prints
+   * with the last choice. Anything outside the linear flow stays off the
+   * paper: a state is reachable only through interaction, and a hidden slide
+   * is material the audience was not meant to be handed.
    */
-  exportPdf() {
+  exportPdf(again = false) {
     this.canvas.commitTextEdit()
-    document.getElementById('bento-print')?.remove()
-    const box = div('')
-    box.id = 'bento-print'
-    // page geometry follows the deck's aspect (width normalised to 1600)
-    const pageH = Math.round((1600 * this.store.doc.size.height) / this.store.doc.size.width)
-    const pageCss = document.createElement('style')
-    pageCss.textContent = `@page { size: 1600px ${pageH}px; margin: 0; } #bento-print .bp-page { height: ${pageH}px; }`
-    box.appendChild(pageCss)
-    for (const slide of this.store.doc.slides) {
-      if (!inLinearFlow(slide)) continue
-      const page = div('bp-page')
-      const surface = renderSlide(slide, this.store.doc, { svgAsImage: true, hidePlaceholders: true })
-      // normalise to the print page size regardless of doc size
-      const s = 1600 / this.store.doc.size.width
-      surface.style.transformOrigin = '0 0'
-      if (s !== 1) surface.style.transform = `scale(${s})`
-      page.appendChild(surface)
-      box.appendChild(page)
-    }
-    document.body.appendChild(box)
-    const cleanup = () => {
-      box.remove()
-      window.removeEventListener('afterprint', cleanup)
-    }
-    window.addEventListener('afterprint', cleanup)
-    // give the freshly-inserted images a beat to decode before printing
-    setTimeout(() => window.print(), 250)
+    if (again) printDeck(this.store.doc, lastPrintOptions())
+    else openPrintSheet(this.store.doc, this.commands.find((c) => c.id === 'export-pdf-again')?.keys ?? '')
   }
 
   /** Slides as PNG/JPEG files (discussions #243, #261) — editor/exportimages.ts. */
@@ -3852,6 +3831,7 @@ export class Editor {
       { id: 'select-parent', label: 'Select parent', keys: 'Esc', scope: 'canvas', when: () => canvasFree() && sel().length > 0 && sel().every((e) => !!e.parentId && !!this.store.element(e.parentId)), run: () => this.store.select([...new Set(sel().map((e) => e.parentId!))]) },
       { id: 'play-transition', label: 'Play transition', scope: 'always', when: () => !!walkSource(this.store.doc, this.store.slide), run: () => this.playTransition() },
       { id: 'export-pdf', label: 'Print or save as PDF…', keys: `${MOD}P`, scope: 'always', inField: true, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'p', run: () => this.exportPdf() },
+      { id: 'export-pdf-again', label: 'Print with the last choice', keys: `⇧${MOD}P`, scope: 'always', inField: true, match: (ev, mod) => mod && ev.shiftKey && !ev.altKey && key(ev) === 'p', run: () => this.exportPdf(true) },
       { id: 'preferences', label: 'Preferences', keys: `${MOD},`, scope: 'always', inField: true, match: (ev, mod) => mod && ev.key === ',', run: () => this.openPreferences() },
       { id: 'doc-props', label: 'Document properties…', scope: 'always', run: () => this.openDocProps() },
       { id: 'version-history', label: 'Version history…', scope: 'always', run: () => void this.openVersionHistory() },

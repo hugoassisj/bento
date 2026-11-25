@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Print or save as PDF": "Stampa o salva come PDF",
+  "Pages": "Pagine",
+  "Slides with notes": "Diapositive con note",
+  "One page per click step": "Una pagina per passo di clic",
+  "Backgrounds": "Sfondi",
+  "Full quality": "Qualità piena",
+  "Lighter file": "File più leggero",
+  "Print": "Stampa",
+  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "Le diapositive nascoste e gli stati restano fuori. {keys} ristampa con queste scelte, senza questa finestra.",
+  "Print with the last choice": "Stampa con l’ultima scelta",
+  "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "Diapositive, pagine di note o una pagina per passo di clic — la finestra di stampa del browser salva il PDF. Maiusc-clic stampa con l’ultima scelta.",
   "View": "Vista",
   "Current slide": "Diapositiva attuale",
   "Slide thumbnails": "Miniature delle diapositive",
@@ -1221,7 +1232,6 @@ export const it: Catalog = {
   "Save without password": "Salva senza password",
   "Save with password…": "Salva con password…",
   "Print or save as PDF…": "Stampa o salva come PDF…",
-  "Every slide on its own page — your browser’s print dialog saves a PDF.": "Ogni diapositiva su una pagina — la finestra di stampa del browser salva un PDF.",
   "Document properties…": "Proprietà del documento…",
   "Title, author, company, subject, event and keywords — {{author}} and friends fill in from here.": "Titolo, autore, azienda, oggetto, evento e parole chiave — {{author}} e gli altri si compilano da qui.",
   "Advanced": "Avanzate",

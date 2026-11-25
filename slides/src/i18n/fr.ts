@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "Print or save as PDF": "Imprimer ou enregistrer en PDF",
+  "Pages": "Pages",
+  "Slides with notes": "Diapositives avec notes",
+  "One page per click step": "Une page par étape de clic",
+  "Backgrounds": "Arrière-plans",
+  "Full quality": "Qualité maximale",
+  "Lighter file": "Fichier plus léger",
+  "Print": "Imprimer",
+  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "Les diapositives masquées et les états restent exclus. {keys} réimprime avec ces choix, sans cette fenêtre.",
+  "Print with the last choice": "Imprimer avec le dernier choix",
+  "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "Diapositives, pages de notes ou une page par étape de clic — la boîte d’impression du navigateur enregistre le PDF. Maj-clic imprime avec le dernier choix.",
   "View": "Affichage",
   "Current slide": "Diapositive actuelle",
   "Slide thumbnails": "Miniatures des diapositives",
@@ -1221,7 +1232,6 @@ export const fr: Catalog = {
   "Save without password": "Enregistrer sans mot de passe",
   "Save with password…": "Enregistrer avec un mot de passe…",
   "Print or save as PDF…": "Imprimer ou enregistrer en PDF…",
-  "Every slide on its own page — your browser’s print dialog saves a PDF.": "Chaque diapositive sur sa propre page — la boîte d’impression du navigateur enregistre un PDF.",
   "Document properties…": "Propriétés du document…",
   "Title, author, company, subject, event and keywords — {{author}} and friends fill in from here.": "Titre, auteur, société, sujet, événement et mots-clés — {{author}} et les autres se remplissent d’ici.",
   "Advanced": "Avancé",

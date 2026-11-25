@@ -16,6 +16,18 @@ pre-1.0.
   button beside Slideshow shows and hides them, and carries a dot when the
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
+- **Print or save as PDF asks what to print.** ⌘P now opens a short sheet
+  before the browser's print dialog. Pages: Slides (one page per slide, as
+  before, and still the default), Slides with notes (a portrait page with the
+  slide above its speaker notes, running on to the next page when the notes
+  are long), or One page per click step (a slide that reveals three points
+  one at a time prints as four pages, so the PDF steps through the talk on its
+  own). Backgrounds: Full quality, or Lighter file, which draws full-slide
+  pictures and textures at the size they print — the showcase deck's PDF goes
+  from 36 MB to 3.4 MB in Chromium, and its text stays text. Hidden slides and
+  states stay out, as before. Your choice is remembered in this browser, never
+  in the deck; ⇧⌘P, or Shift-clicking the File menu row, prints with it again
+  without the sheet.
 
 ## [1.3.0] — 2026-11-22
 

@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Print or save as PDF": "印刷または PDF として保存",
+  "Pages": "ページ",
+  "Slides with notes": "スライドとノート",
+  "One page per click step": "クリックのステップごとに 1 ページ",
+  "Backgrounds": "背景",
+  "Full quality": "最高品質",
+  "Lighter file": "軽いファイル",
+  "Print": "印刷",
+  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "非表示のスライドと状態は含まれません。{keys} でこの画面を出さずに同じ設定で再印刷できます。",
+  "Print with the last choice": "前回の設定で印刷",
+  "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "スライド、ノートページ、またはクリックのステップごとに 1 ページ — ブラウザの印刷ダイアログで PDF を保存します。Shift クリックで前回の設定のまま印刷します。",
   "View": "表示",
   "Current slide": "現在のスライド",
   "Slide thumbnails": "スライドのサムネイル",
@@ -1221,7 +1232,6 @@ export const ja: Catalog = {
   "Save without password": "パスワードなしで保存",
   "Save with password…": "パスワード付きで保存…",
   "Print or save as PDF…": "印刷または PDF として保存…",
-  "Every slide on its own page — your browser’s print dialog saves a PDF.": "スライドを 1 枚ずつのページに — ブラウザの印刷ダイアログで PDF を保存できます。",
   "Document properties…": "ドキュメントのプロパティ…",
   "Title, author, company, subject, event and keywords — {{author}} and friends fill in from here.": "タイトル、作成者、会社、件名、イベント、キーワード — {{author}} などはここから入力されます。",
   "Advanced": "詳細",

@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Print or save as PDF": "打印或存储为 PDF",
+  "Pages": "页面",
+  "Slides with notes": "幻灯片及备注",
+  "One page per click step": "每个点击步骤一页",
+  "Backgrounds": "背景",
+  "Full quality": "完整画质",
+  "Lighter file": "较小文件",
+  "Print": "打印",
+  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "隐藏的幻灯片和状态不会包含在内。按 {keys} 可按这些选项直接再次打印，不显示此窗口。",
+  "Print with the last choice": "按上次的选择打印",
+  "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "幻灯片、备注页或每个点击步骤一页 — 浏览器的打印对话框可保存 PDF。按住 Shift 点击则按上次的选择打印。",
   "View": "视图",
   "Current slide": "当前幻灯片",
   "Slide thumbnails": "幻灯片缩略图",
@@ -1221,7 +1232,6 @@ export const zhHans: Catalog = {
   "Save without password": "不带密码保存",
   "Save with password…": "带密码保存…",
   "Print or save as PDF…": "打印或存为 PDF…",
-  "Every slide on its own page — your browser’s print dialog saves a PDF.": "每张幻灯片单独一页 — 浏览器的打印对话框可保存 PDF。",
   "Document properties…": "文档属性…",
   "Title, author, company, subject, event and keywords — {{author}} and friends fill in from here.": "标题、作者、公司、主题、活动和关键词 — {{author}} 等由此填入。",
   "Advanced": "高级",

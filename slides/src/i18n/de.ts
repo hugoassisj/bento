@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Print or save as PDF": "Drucken oder als PDF sichern",
+  "Pages": "Seiten",
+  "Slides with notes": "Folien mit Notizen",
+  "One page per click step": "Eine Seite pro Klickschritt",
+  "Backgrounds": "Hintergründe",
+  "Full quality": "Volle Qualität",
+  "Lighter file": "Kleinere Datei",
+  "Print": "Drucken",
+  "Hidden slides and states stay out. {keys} prints again with these choices, without this sheet.": "Ausgeblendete Folien und Zustände bleiben draußen. {keys} druckt erneut mit dieser Auswahl, ohne dieses Fenster.",
+  "Print with the last choice": "Mit der letzten Auswahl drucken",
+  "Slides, notes pages or a page per click step — your browser’s print dialog saves the PDF. Shift-click prints with the last choice.": "Folien, Notizseiten oder eine Seite pro Klickschritt — der Druckdialog des Browsers sichert das PDF. Umschalt-Klick druckt mit der letzten Auswahl.",
   "View": "Ansicht",
   "Current slide": "Aktuelle Folie",
   "Slide thumbnails": "Folienminiaturen",
@@ -1221,7 +1232,6 @@ export const de: Catalog = {
   "Save without password": "Ohne Passwort speichern",
   "Save with password…": "Mit Passwort speichern…",
   "Print or save as PDF…": "Drucken oder als PDF sichern…",
-  "Every slide on its own page — your browser’s print dialog saves a PDF.": "Jede Folie auf einer eigenen Seite — der Druckdialog des Browsers sichert ein PDF.",
   "Document properties…": "Dokumenteigenschaften…",
   "Title, author, company, subject, event and keywords — {{author}} and friends fill in from here.": "Titel, Autor, Firma, Thema, Anlass und Stichwörter — {{author}} und Co. werden von hier ausgefüllt.",
   "Advanced": "Erweitert",

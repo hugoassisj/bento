@@ -17,6 +17,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { StepState, maxStep, stepOf, stepsOf, shownAt } from '../slides/src/steps.ts'
+import { coversSlide, pageSteps, printPlan, readPrintOptions } from '../slides/src/printplan.ts'
+import type { Slide } from '../slides/src/model.ts'
 
 let failures = 0
 let checks = 0
@@ -93,6 +95,29 @@ ok(/nav\(\{[^}]*step: steps\.step/.test(present), 'the presenter\'s nav payload 
 ok(/followStep\(jump, /.test(present), 'the audience applies the presenter\'s step')
 ok(/\.bento-step-hidden/.test(readFileSync(join(root, 'slides/src/styles.css'), 'utf8')), 'the hidden-step class is styled (visibility, not display)')
 ok(/step: num\(0, 1e4\)/.test(readFileSync(join(root, 'slides/src/untrusted.ts'), 'utf8')), 'the shape gate bounds fx.step')
+
+console.log('\nprint: one page per click step (printplan.ts)\n')
+{
+  const three = [el('t'), el('a', 1), el('b', 2), el('c', 3)]
+  ok(pageSteps(three).join(',') === '0,1,2,3', 'steps 1, 2, 3 print as four pages: 0, 1, 2, 3')
+  const shown = pageSteps(three).map((st) => three.filter((e) => shownAt(e, st)).map((e) => e.id).join(''))
+  ok(shown.join('|') === 't|ta|tab|tabc', `each page shows one more step, in order (${shown.join(' | ')})`)
+  ok(pageSteps([el('a'), el('b')]).join(',') === '0', 'a slide with no steps is one page')
+  ok(pageSteps(slide).join(',') === '0,1,2,5', 'gaps are not pages: 1, 2, 5 print as 0, 1, 2, 5')
+  const sl = (id: string, elements: ReturnType<typeof el>[], extra: Partial<Slide> = {}) =>
+    ({ id, background: '#fff', notes: '', transition: 'none', elements, ...extra }) as unknown as Slide
+  const deck = [sl('s1', three), sl('s2', [el('x')]), sl('st', three, { stateOf: 's1' }), sl('hd', three, { hidden: true }), sl('s3', [el('y', 1)])]
+  const plan = (pages: 'slides' | 'notes' | 'steps') => printPlan(deck, pages).map((pg) => `${pg.slide.id}${pg.step === null ? '' : ':' + pg.step}`).join(',')
+  ok(plan('slides') === 's1,s2,s3', `slides: one page per linear slide, every step shown (${plan('slides')})`)
+  ok(plan('notes') === 's1,s2,s3', `notes: the same slides (${plan('notes')})`)
+  ok(plan('steps') === 's1:0,s1:1,s1:2,s1:3,s2:0,s3:0,s3:1', `steps: a page per step, states and hidden slides out (${plan('steps')})`)
+  ok(JSON.stringify(readPrintOptions(null)) === '{"pages":"slides","backgrounds":"full"}', 'nothing stored: Slides, Full quality')
+  ok(JSON.stringify(readPrintOptions('{"pages":"steps","backgrounds":"light"}')) === '{"pages":"steps","backgrounds":"light"}', 'a stored choice is read back')
+  ok(JSON.stringify(readPrintOptions('{"pages":"all","backgrounds":7}')) === '{"pages":"slides","backgrounds":"full"}' && readPrintOptions('not json').pages === 'slides', 'anything else falls back to the default')
+  const size = { width: 1280, height: 720 }
+  ok(coversSlide({ x: 0, y: 0, w: 1280, h: 720 }, size) && coversSlide({ x: -100, y: -100, w: 1480, h: 920 }, size), 'a full-bleed box covers the slide')
+  ok(!coversSlide({ x: 700, y: -80, w: 680, h: 680 }, size) && !coversSlide({ x: 40, y: 40, w: 80, h: 80 }, size), 'a corner glow or an icon does not (the part on the slide counts)')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
