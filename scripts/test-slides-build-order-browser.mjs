@@ -21,7 +21,11 @@
 //   7. with three elements selected, one Entrance choice sets all three, and
 //      the picker says Mixed while they differ;
 //   8. "Show build order" in an element's Reveal row takes the panel back to
-//      the list with its first row focused.
+//      the list with its first row focused;
+//   9. Escape mid-drag cancels the drop (the release after it does nothing),
+//      and so does a move that arrives with no button held; on touch a swipe
+//      that starts on a row scrolls the inspector and leaves the document
+//      byte-identical, while a long press picks the row up and a tap selects.
 // No network: every http(s) request is aborted, WebSockets are closed, and
 // the deck is told it is offline before it loads.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -110,13 +114,45 @@ try {
   ok(await steps() === 'a:1 b:2 c:3', `one undo puts every step back: it was one undo step (${await steps()})`)
   ok(await badges() === '1 2 3', 'and the badges with it')
 
+  console.log('\n2b. Escape, and a release outside the window, drop nothing\n')
+  const docNow = () => p.evaluate(() => JSON.stringify(window.bento.doc.slides))
+  const armAt = async (id, to) => {
+    const r = await row(id).boundingBox()
+    await p.mouse.move(r.x + 50, r.y + r.height / 2)
+    await p.mouse.down()
+    await p.mouse.move(r.x + 50, r.y + r.height / 2 - 12, { steps: 4 })
+    await p.mouse.move(to.x, to.y, { steps: 8 })
+  }
+  const unchanged = await docNow()
+  const ge = await group(0).boundingBox()
+  await armAt('c', { x: ge.x + 60, y: ge.y + 3 })
+  ok(await p.locator('.ed-props .ed-build .drop-before').count() === 1, 'mid-drag the list marks where the row would land')
+  await p.keyboard.press('Escape')
+  ok(await p.locator('.ed-props .ed-build .drop-before, .ed-props .ed-build .dragging').count() === 0, 'Escape clears the marks')
+  await p.mouse.up()
+  await p.waitForTimeout(150)
+  ok(await docNow() === unchanged, `and the release after it drops nothing: the drag was cancelled, not just hidden (${await steps()})`)
+  ok(await p.evaluate(() => window.bento.selection.length) === 0, '…nor does it count as a click')
+  await armAt('c', { x: ge.x + 60, y: ge.y + 3 })
+  // the button comes up outside the window: no pointerup, the next move has no button held
+  await p.evaluate(({ x, y }) => window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, buttons: 0, pointerType: 'mouse', bubbles: true })), { x: ge.x + 60, y: ge.y + 3 })
+  ok(await p.locator('.ed-props .ed-build .drop-before, .ed-props .ed-build .dragging').count() === 0, 'a move with no button held ends the drag')
+  await p.mouse.up()
+  await p.waitForTimeout(150)
+  ok(await docNow() === unchanged, `and nothing drops (${await steps()})`)
+
   console.log('\n3. drop onto a group\n')
+  await load([1, 2, 3]); await p.waitForTimeout(300)
   const g1 = await group(0).boundingBox()
   const snap2 = await dragRow('c', { x: g1.x + 60, y: g1.y + g1.height / 2 })
   ok(await steps() === 'a:1 b:2 c:1', `c dropped onto step 1 is revealed with a (${await steps()})`)
   ok(await listed() === 'Click 1=a+c | Click 2=b', `one group holds both (${await listed()})`)
   ok(agree(snap2), 'the badges agree')
   ok(await p.locator('.ed-props .ed-build-group').first().locator('.ed-num').count() === 2, 'a group of two offers Stagger on each row')
+  ok((await p.locator('.ed-props .ed-build-group').first().locator('.ed-build-beat-cap').allTextContents()).join() === 'Stagger', 'its column has a visible caption, "Stagger"')
+  const pickerX = await p.$$eval('.ed-props .ed-build-row select', (ss) => ss.map((x) => Math.round(x.getBoundingClientRect().left)))
+  const removeX = await p.$$eval('.ed-props .ed-build-row .ed-build-remove', (ss) => ss.map((x) => Math.round(x.getBoundingClientRect().right)))
+  ok(new Set(pickerX).size === 1 && new Set(removeX).size === 1, `every row's picker and remove button stay in one column, with or without Stagger (${pickerX} / ${removeX})`)
   const beats = () => p.$$eval('.ed-props .ed-build-group:first-child .ed-num, .ed-props .ed-build-still + .ed-build-group .ed-num', (ns) => ns.map((n) => n.value).join(' '))
   ok(await beats() === '0 1', `in slide order, one beat apart, as the show staggers them (${await beats()})`)
   const beat = row('c').locator('.ed-num')
@@ -224,6 +260,62 @@ try {
   ok(await p.evaluate(() => document.activeElement?.classList.contains('ed-build-row') && document.activeElement.dataset.id) === 'a', 'and focuses the first row of the list')
 
   ok(!errors.length, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
+
+  console.log('\n9. touch: a swipe scrolls, a long press picks a row up\n')
+  const tctx = await browser.newContext({ viewport: { width: 1280, height: 560 }, hasTouch: true })
+  await tctx.route(/^https?:/, (r) => r.abort())
+  if (tctx.routeWebSocket) await tctx.routeWebSocket(/.*/, (ws) => ws.close())
+  await tctx.addInitScript(() => {
+    localStorage.setItem('bento-offline', 'on')
+    localStorage.setItem('bento-panel-tab', '"animate"')
+  })
+  const tp = await tctx.newPage()
+  tp.on('pageerror', (e) => errors.push(e.message))
+  await tp.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+  await tp.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale [data-el-id]'))
+  const twelve = Array.from({ length: 12 }, (_, i) => ({ id: 'e' + i, type: 'text', x: 100, y: 20 + i * 40, w: 400, h: 34, rotation: 0, opacity: 1, html: 'Item ' + i, fontSize: 20, color: '#222222', fx: { step: i + 1 } }))
+  await tp.evaluate((els) => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    d.slides = [{ id: 's1', background: '#ffffff', notes: '', transition: 'fade', elements: els }]
+    window.bento.loadDoc(JSON.stringify(d))
+  }, twelve)
+  await tp.waitForTimeout(400)
+  const cdp = await tctx.newCDPSession(tp)
+  const tsteps = () => tp.evaluate(() => window.bento.doc.slides[0].elements.map((e) => e.fx?.step ?? 0).join(','))
+  const tdoc = () => tp.evaluate(() => JSON.stringify(window.bento.doc.slides))
+  const scrollTop = () => tp.evaluate(() => document.querySelector('.ed-props').scrollTop)
+  const touch = async (pts, holdMs = 0) => {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pts[0]] })
+    if (holdMs) await tp.waitForTimeout(holdMs)
+    for (const q of pts.slice(1)) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [q] }); await tp.waitForTimeout(16) }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await tp.waitForTimeout(300)
+  }
+  const line = (x, y0, y1, n = 15) => Array.from({ length: n + 1 }, (_, k) => ({ x, y: y0 + (y1 - y0) * k / n }))
+  ok(await tp.evaluate(() => { const h = document.querySelector('.ed-props'); return h.scrollHeight > h.clientHeight + 40 }), 'the inspector is taller than its column: there is something to scroll')
+  const before0 = await tdoc()
+  const r3 = await tp.locator('.ed-build-row[data-id="e3"]').boundingBox()
+  const top0 = await scrollTop()
+  await touch(line(r3.x + 40, r3.y + r3.height / 2, Math.max(5, r3.y - 160)))
+  ok(await scrollTop() > top0 + 40, `a vertical swipe that starts on a row scrolls the inspector (${top0} → ${await scrollTop()})`)
+  ok(await tdoc() === before0, `and leaves the document byte-identical (${await tsteps()})`)
+  await tp.evaluate(() => { document.querySelector('.ed-build').scrollIntoView({ block: 'start' }) })
+  await tp.waitForTimeout(150)
+  const t2 = await tp.locator('.ed-build-row[data-id="e2"]').boundingBox()
+  const tg0 = await tp.locator('.ed-build-group').nth(0).boundingBox()
+  await touch(line(t2.x + 40, t2.y + t2.height / 2, tg0.y + tg0.height / 2), 600)
+  ok((await tsteps()).startsWith('1,2,1,3,'), `a long press, then a drag onto Click 1, reveals e2 with e0 (${await tsteps()})`)
+  await tp.evaluate(() => window.bento.undo())
+  await tp.waitForTimeout(200)
+  await tp.evaluate(() => { document.querySelector('.ed-build').scrollIntoView({ block: 'start' }) })
+  await tp.waitForTimeout(150)
+  const t1 = await tp.locator('.ed-build-row[data-id="e1"]').boundingBox()
+  await tp.touchscreen.tap(t1.x + 40, t1.y + t1.height / 2)
+  await tp.waitForTimeout(200)
+  ok(await tp.evaluate(() => window.bento.selection.join()) === 'e1', 'a tap on a row selects its element')
+  ok(await tdoc() === before0, 'and changes nothing')
+  ok(!errors.length, `no page errors on touch${errors.length ? ': ' + errors.join(' | ') : ''}`)
+  await tctx.close()
 } finally {
   await browser.close()
 }
