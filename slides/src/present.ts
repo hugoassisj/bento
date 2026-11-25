@@ -89,8 +89,7 @@ export function startPresentation(
     broadcast?: PresentBroadcast
   } = {},
 ): PresentSession {
-  MORPH_DURATION = Math.min(6, Math.max(0.1, doc.present?.morphSeconds ?? MORPH_DURATION_DEFAULT))
-  TYPE_WRITER_DURATION = Math.min(1, Math.max(0.08, doc.present?.typeWriterSeconds ?? TYPE_WRITER_DURATION_DEFAULT))
+  configureMotion(doc)
 
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
@@ -109,7 +108,7 @@ export function startPresentation(
 
   // Extracted from the forEach so the broadcast viewer can rebuild one
   // section when the presenter's document changes underneath it. The index
-  // is the loop's: `morphNext` looks one slide ahead.
+  // is the loop's: sectionTransition looks one slide ahead.
   const buildSection = (slide: BentoDoc['slides'][number], i: number) => {
     const section = document.createElement('section')
     // Morph slides swap instantly; the Flip animation supplies the motion.
@@ -127,9 +126,7 @@ export function startPresentation(
     // exact value `none` cuts, so a slide handing off to a morph cuts in as
     // well as out. That is the deliberate trade: an instant cut into the
     // "before" frame costs less than a dissolve painted over the morph itself.
-    const morphNext = doc.slides[i + 1]?.transition === 'morph'
-    section.dataset.transition =
-      slide.transition === 'morph' || morphNext ? 'none' : slide.transition
+    section.dataset.transition = sectionTransition(doc, i)
     if (!inLinearFlow(slide)) section.dataset.bentoState = '1' // dimmed in overview
     const surface = renderSlide(slide, doc, { hidePlaceholders: true, liveMedia: true })
     // Web links: rel set AT MOUNT, in the show only, never stored — a click
@@ -163,21 +160,13 @@ export function startPresentation(
   // ——— reveal steps (fx.step): → reveals the next step before it leaves the
   // slide, ← hides the last one before it leaves. Decisions in steps.ts.
   const steps = new StepState<SlideElement>()
-  /** Hide/show every stepped element of a section for the current step. */
-  const applyStep = (section: HTMLElement, slide: Slide, step: number) => {
-    for (const el of slide.elements ?? []) {
-      if (!stepOf(el)) continue
-      const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
-      node?.classList.toggle('bento-step-hidden', !shownAt(el, step))
-    }
-  }
   const currentSection = () => deck.getCurrentSlide() as HTMLElement | null
   const revealStep = (r: { step: number; reveal: SlideElement[] }) => {
     const cur = deck.getIndices().h
     const section = currentSection()
     if (!section) return
     applyStep(section, doc.slides[cur], r.step)
-    if (!reduceMotion) runEnterFx(doc.slides[cur], section, new Set(r.reveal.map((el) => el.id)), true)
+    if (!reduceMotion) runRevealFx(doc.slides[cur], section, r.reveal)
     sendNav(cur)
     updateSpeakerControls()
   }
@@ -699,12 +688,6 @@ export function startPresentation(
   // animations, Reveal's section transitions). Mirrors how locale/auto-check
   // are viewer prefs that never enter the document format.
   const reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-  const readMotionPref = (): boolean | null => {
-    try {
-      const v = lsGet('bento-reduce-motion')
-      return v === 'on' ? true : v === 'off' ? false : null
-    } catch { return null }
-  }
   let reduceMotion = readMotionPref() ?? reduceQuery.matches
   overlay.classList.toggle('reduce-motion', reduceMotion)
 
@@ -1388,20 +1371,10 @@ export function startPresentation(
     applyStep(to, doc.slides[toIdx], steps.step)
     // Morph forward into a morph slide, and un-morph when backing out of one.
     const morphing =
-      from &&
+      !!from &&
       ((forward && doc.slides[toIdx]?.transition === 'morph') ||
         (!forward && doc.slides[fromIdx]?.transition === 'morph'))
-    if (morphing) {
-      if (!reduceMotion) {
-        runMorph(doc, from!, to, fromIdx, toIdx)
-        runMorphArrivalCountUps(doc.slides[fromIdx], doc.slides[toIdx], to)
-      }
-    }
-    else if (!reduceMotion) runEnterFx(doc.slides[toIdx], to, undefined, false, steps.step)
-    if (!reduceMotion) {
-      runAmbientFx(doc.slides[toIdx], to)
-      restartSvgAnimations(to)
-    }
+    if (!reduceMotion) runArrivalFx(doc, from, to, fromIdx, toIdx, morphing, steps.step)
     wireHoverFocus(doc.slides[toIdx], to)
     if (from) disposeLiveCharts(doc.slides[fromIdx], from)
     mountLiveCharts(doc.slides[toIdx], to, morphing ? doc.slides[fromIdx] : undefined)
@@ -1599,6 +1572,83 @@ export function startPresentation(
 
   return { exit, goTo, setBlack, setRemoteLaser }
 }
+
+// --- shared with the editor's Play slide (editor/playslide.ts) ---------------
+//
+// What a slide does when the show arrives on it, in pieces the editor can call
+// on its own rendering, so a slide played on the canvas and the same slide in
+// the show cannot disagree.
+
+/** Per-deck motion timings (doc.present); returns the morph's seconds. */
+export function configureMotion(doc: BentoDoc): number {
+  MORPH_DURATION = Math.min(6, Math.max(0.1, doc.present?.morphSeconds ?? MORPH_DURATION_DEFAULT))
+  TYPE_WRITER_DURATION = Math.min(1, Math.max(0.08, doc.present?.typeWriterSeconds ?? TYPE_WRITER_DURATION_DEFAULT))
+  return MORPH_DURATION
+}
+
+/** The Reveal transition slide `i`'s section carries: `none` for a morph
+ *  slide and for the slide before one (why: the comment in buildSection). */
+export function sectionTransition(doc: BentoDoc, i: number): string {
+  const slide = doc.slides[i]
+  return slide?.transition === 'morph' || doc.slides[i + 1]?.transition === 'morph' ? 'none' : (slide?.transition ?? 'fade')
+}
+
+/** The viewer's reduced-motion choice: localStorage 'bento-reduce-motion'
+ *  on/off, null when they never chose (then the OS preference rules). */
+function readMotionPref(): boolean | null {
+  try {
+    const v = lsGet('bento-reduce-motion')
+    return v === 'on' ? true : v === 'off' ? false : null
+  } catch { return null }
+}
+
+/** Does this viewer get reduced motion right now (their choice, else the OS)? */
+export function reduceMotionPreferred(): boolean {
+  return readMotionPref() ?? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+/** Hide/show every stepped element of a section for the current step. */
+export function applyStep(section: HTMLElement, slide: Slide, step: number) {
+  for (const el of slide.elements ?? []) {
+    if (!stepOf(el)) continue
+    const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+    node?.classList.toggle('bento-step-hidden', !shownAt(el, step))
+  }
+}
+
+/**
+ * The arrival motion: the morph from the slide before (with count-ups for what
+ * it did not carry) or the entrances, then the ambient loops, pan and zoom and
+ * svg animations. Elements hidden by the step counter wait for their step.
+ */
+export function runArrivalFx(doc: BentoDoc, from: HTMLElement | undefined, to: HTMLElement, fromIdx: number, toIdx: number, morphing: boolean, step: number) {
+  if (morphing && from) {
+    runMorph(doc, from, to, fromIdx, toIdx)
+    runMorphArrivalCountUps(doc.slides[fromIdx], doc.slides[toIdx], to)
+  } else runEnterFx(doc.slides[toIdx], to, undefined, false, step)
+  runAmbientFx(doc.slides[toIdx], to)
+  restartSvgAnimations(to)
+}
+
+/** A build step's entrances: what it just revealed comes in (a plain fade
+ *  for an element with no entrance of its own). */
+export function runRevealFx(slide: Slide, section: HTMLElement, reveal: SlideElement[]) {
+  runEnterFx(slide, section, new Set(reveal.map((el) => el.id)), true)
+}
+
+/** Stop every tween and typewriter inside `scope`, where they are. */
+export function stopFxIn(scope: HTMLElement) {
+  settleTypeWriter(scope)
+  anim.killTweensOf(scope)
+  anim.killTweensOf(scope.querySelectorAll('*'))
+}
+
+/** Measure a displayed slide's formulas so a morph out of it can move their
+ *  symbols; forgetSlideSymbols drops every measurement (keyed by index). */
+export function measureSlideSymbols(doc: BentoDoc, section: HTMLElement, idx: number) { cacheSlideSymbols(doc, section, idx) }
+export function forgetSlideSymbols() { symCache.clear(); structCache.clear() }
+
+export { applyRevealSet }
 
 // --- media playback -----------------------------------------------------------
 

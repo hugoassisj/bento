@@ -11,6 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Play a slide without leaving the editor.** ▶ Play slide, in the Animate
+  tab, plays the slide right on the canvas: its transition in from the slide
+  before, its entrances, then each click step in turn, with loops, pan and zoom
+  and count-ups running — and then you are back where you were, with the same
+  selection, without pressing anything. Esc or a click stops it. It replaces
+  "Play transition", which started a slideshow you then had to leave;
+  ⇧-clicking Slideshow now plays the slide on the canvas too. Nothing about the
+  deck changes when you play it.
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the

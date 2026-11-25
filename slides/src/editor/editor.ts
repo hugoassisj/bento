@@ -50,6 +50,7 @@ import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, is
 import { MOD, dispatch, openPalette, titleFor, type Command } from './commands'
 import { openShortcuts } from './shortcuts'
 import { stepOf } from '../steps'
+import { playSlide, type SlidePlay } from './playslide'
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
@@ -209,6 +210,8 @@ export class Editor {
   /** The slide the list last scrolled into view (highlightSidebar). */
   private thumbRevealed = -1
   private presenting = false
+  /** the Play slide running on the stage, if one is */
+  private play: SlidePlay | null = null
   private updatesB!: HTMLElement
   private avatarsBox!: HTMLElement
   private shareB!: HTMLElement
@@ -605,8 +608,8 @@ export class Editor {
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
     const pill = div('ed-dropdown ed-present-pill')
-    const showB = btn(ICONS.slideshow, t('Slideshow'), (ev) => ev.shiftKey ? this.playTransition() : this.present(false, true),
-      t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays the transition into this slide'))
+    const showB = btn(ICONS.slideshow, t('Slideshow'), (ev) => ev.shiftKey ? this.playSlide() : this.present(false, true),
+      t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends; ⇧-click plays this slide on the canvas'))
     showB.classList.add('ed-pill-main')
     // Nudge: newcomers don't always spot how to start a show — run the neon
     // runner around the Slideshow pill on EVERY editor load until they've
@@ -756,7 +759,7 @@ export class Editor {
     this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
     this.panel.onListIndent = (dir) => { this.canvas.indentList(dir) }
     this.panel.onMorphPreview = (t) => this.canvas.previewMorph(t)
-    this.panel.onPlayTransition = () => this.playTransition()
+    this.panel.onPlaySlide = () => this.playSlide()
 
     if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }
@@ -2755,6 +2758,7 @@ export class Editor {
 
   present(fromStart = false, fullscreen = true, at = fromStart ? 0 : this.store.currentIndex) {
     if (this.presenting) return null
+    this.play?.stop()
     // They've started a slideshow — retire the first-run nudge for good.
     lsSet('bento-slideshow-started', '1')
     document.querySelector('.ed-hint-pulse')?.classList.remove('ed-hint-pulse')
@@ -2768,15 +2772,22 @@ export class Editor {
     }, { fullscreen, broadcast: this.presenterBroadcast() })
   }
 
-  /** Check a transition without presenting the deck: start on the slide the
-   *  show arrives from and step once into this one. */
-  playTransition() {
-    const here = this.store.currentIndex
-    const src = walkSource(this.store.doc, this.store.slide)
-    if (!src) return this.toast(t('Nothing comes before this slide.'))
-    const show = this.present(false, false, this.store.doc.slides.indexOf(src))
-    // ponytail: a fixed beat for the show to settle before stepping; a ready event if it ever jumps
-    if (show) setTimeout(() => show.goTo(here), 700)
+  /** Watch this slide's motion without presenting: its transition in,
+   *  entrances and build steps play on the stage, then the editor is back
+   *  (editor/playslide.ts). Anything that changes what is on the canvas — an
+   *  edit, an undo, another selection or slide — stops it first. */
+  playSlide() {
+    if (this.presenting) return
+    this.play?.stop()
+    this.canvas.commitTextEdit()
+    const stage = this.root.querySelector<HTMLElement>('.ed-stage-scale')
+    if (!stage) return
+    const offs = (['doc', 'selection', 'current', 'slides'] as const).map((e) => this.store.on(e, () => this.play?.stop()))
+    const play = playSlide(stage, this.store.doc, this.store.currentIndex, () => {
+      offs.forEach((off) => off())
+      if (this.play === play) this.play = null
+    })
+    this.play = play
   }
 
   /**
@@ -3850,7 +3861,7 @@ export class Editor {
         this.store.select(this.store.slide.elements.filter((e) => !locked.has(e.id) && !hidden.has(e.id) && !(e.parentId && ids.has(e.parentId))).map((e) => e.id))
       } },
       { id: 'select-parent', label: 'Select parent', keys: 'Esc', scope: 'canvas', when: () => canvasFree() && sel().length > 0 && sel().every((e) => !!e.parentId && !!this.store.element(e.parentId)), run: () => this.store.select([...new Set(sel().map((e) => e.parentId!))]) },
-      { id: 'play-transition', label: 'Play transition', scope: 'always', when: () => !!walkSource(this.store.doc, this.store.slide), run: () => this.playTransition() },
+      { id: 'play-slide', label: 'Play slide', scope: 'always', run: () => this.playSlide() },
       { id: 'export-pdf', label: 'Print or save as PDF…', keys: `${MOD}P`, scope: 'always', inField: true, match: (ev, mod) => mod && !ev.shiftKey && !ev.altKey && key(ev) === 'p', run: () => this.exportPdf() },
       { id: 'preferences', label: 'Preferences', keys: `${MOD},`, scope: 'always', inField: true, match: (ev, mod) => mod && ev.key === ',', run: () => this.openPreferences() },
       { id: 'doc-props', label: 'Document properties…', scope: 'always', run: () => this.openDocProps() },

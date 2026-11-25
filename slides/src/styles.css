@@ -689,6 +689,13 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 /* !important: Moveable writes display/visibility inline (as .ed-reader does) */
 .ed-stage-scale:has(.bento-editing) .moveable-control-box { visibility: hidden !important; }
+/* Play slide (editor/playslide.ts): the slide plays over the canvas, in the
+   canvas's own box; it takes every press (Esc or a click stops it) and the
+   handles step aside while it runs */
+.ed-play-overlay { position: absolute; left: 0; top: 0; z-index: 1000; overflow: hidden; cursor: pointer; }
+.ed-play-overlay .ed-play-layer { position: absolute; left: 0; top: 0; }
+.ed-play-overlay * { pointer-events: none !important; }
+.ed-stage-scale:has(.ed-play-overlay) .moveable-control-box { visibility: hidden !important; }
 
 /* ————— properties panel ————— */
 
@@ -1990,7 +1997,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
    not display — it keeps its box (nothing reflows when it appears), keeps
    morph and layout measurements honest, and its entrance tween can start
    from opacity 0 the moment the class comes off. Present-mode only. */
-.bento-present-overlay .bento-step-hidden { visibility: hidden !important; pointer-events: none; }
+.bento-present-overlay .bento-step-hidden, .ed-play-overlay .bento-step-hidden { visibility: hidden !important; pointer-events: none; }
 
 /* transient confirmation pill in present mode (e.g. Reduced motion on/off) */
 .bento-present-toast {
@@ -3838,8 +3845,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 
 /* --- morph: one truth, a usable picker, a toast that can act --- */
 .ed-morph-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.ed-morph-use, .ed-morph-play { height: 26px; padding: 0 10px; }
-.ed-morph-play { margin-top: 6px; }
+.ed-morph-use, .ed-play-slide { height: 26px; padding: 0 10px; }
+.ed-play-slide { margin-top: 6px; }
 .ed-morph-pick-btn { box-sizing: border-box; width: 100%; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; justify-content: space-between; background: var(--field); border: 1px solid var(--field-line); border-radius: 6px; }
 .ed-morph-pick-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: start; }
 .ed-morph-pick-btn svg { flex: none; width: 12px; height: 12px; stroke-width: 2.25; transform: rotate(90deg); color: var(--muted); }

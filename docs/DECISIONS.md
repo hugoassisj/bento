@@ -15396,3 +15396,42 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-25 — slides: Play slide plays on the stage; Play transition is gone
+
+Amends 2026-10-30 "one truth for 'will this morph'", whose last sentence
+recorded Play transition's fixed 700ms wait as a known ceiling.
+
+- **On the stage, never in the show.** ▶ Play slide renders the slide (and
+  the slide the show arrives from) afresh into an overlay inside
+  `.ed-stage-scale` — the canvas's own box and zoom — and plays the incoming
+  transition, the entrances, then each build step with a fixed gap, with
+  loops, pan and zoom and count-ups running; then the overlay goes and the
+  editor is as it was (editor/playslide.ts). Playing on the live canvas nodes
+  (fxpreview.ts does that for one entrance) was rejected: steps and
+  transitions would have to hide and restyle nodes Moveable is attached to,
+  and an edit mid-play would commit a transient state. The overlay's nodes
+  are throwaway, so stopping anywhere is removing it.
+- **The show's own motion.** The arrival (morph or entrances, ambient fx),
+  a step's reveal, the step-hiding, the per-deck timings, the reduced-motion
+  choice and each section's Reveal transition value are present.ts exports the
+  show itself now calls (`runArrivalFx`, `runRevealFx`, `applyStep`,
+  `configureMotion`, `reduceMotionPreferred`, `sectionTransition`), so the
+  canvas and the show cannot disagree. Only Reveal's CSS section transitions
+  (fade, slide, zoom, none) are redrawn with tweens, from that same value. No
+  show is started, so the 700ms wait has nothing left to wait for.
+- **What stops it.** Esc or a click on the stage (both swallowed, so the
+  selection survives); any press elsewhere (and it goes on to do what it
+  does); an edit, an undo, a selection change or another slide (store events).
+  Starting the show stops it too.
+- **Where it lives.** One control, "▶ Play slide", in the slide's Transition
+  section and at the foot of an element's Morph section; the `play-slide`
+  command (⌘K); ⇧-click on the Slideshow pill. No second ▶ beside the pill:
+  the pill already has a menu and the notes toggle beside it. "Play
+  transition" (button, command, ⇧-click) is removed, not kept beside it.
+- **Reduced motion** plays as the show does under it: no transition and no
+  fx, the slide at its final frame, the steps still revealed one by one.
+- **Not played:** live charts' entrance and data morph, and media autoplay —
+  the overlay draws charts as snapshots and leaves media paused, as the
+  canvas does.
+- **Guard.** `scripts/test-slides-play-slide-browser.mjs`.

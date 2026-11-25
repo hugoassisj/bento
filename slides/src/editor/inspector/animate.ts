@@ -119,15 +119,20 @@ export function buildMorphProps(p: PropsPanel, el: SlideElement) {
     range.addEventListener('blur', () => { range.value = '100'; p.onMorphPreview?.(null) })
     row(p, 'Preview', range)
   }
-  if (src) {
-    const play = document.createElement('button')
-    play.type = 'button'
-    play.className = 'ed-btn ed-morph-play'
-    play.textContent = t('▶ Play transition')
-    play.title = t('Present from the slide before and step into this one')
-    play.addEventListener('click', () => p.onPlayTransition?.())
-    p.host.appendChild(play)
-  }
+  playSlideButton(p)
+}
+
+/** ▶ Play slide: the slide's transition in, entrances and build steps, played
+ *  on the canvas (editor/playslide.ts). In the slide's Transition section and
+ *  an element's Morph section — the same control on both. */
+export function playSlideButton(p: PropsPanel) {
+  const play = document.createElement('button')
+  play.type = 'button'
+  play.className = 'ed-btn ed-play-slide'
+  play.textContent = t('▶ Play slide')
+  play.title = t('Play this slide here on the canvas: its transition, entrances and build steps. Esc or a click stops it.')
+  play.addEventListener('click', () => p.onPlaySlide?.())
+  p.host.appendChild(play)
 }
 
 /** "Slide 2 · Revenue card" — the page, then the element as Layers names it

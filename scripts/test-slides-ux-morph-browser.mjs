@@ -22,7 +22,8 @@
 //      user moves on, and Tab moves on (not to the page body); a text pair
 //      says its words swap at once.
 //   5. A duplicated slide whose elements move is offered Morph once; the
-//      Play transition command presents from the slide before into this one.
+//      Play slide command plays it on the stage, without a slideshow, and the
+//      editor comes back by itself (the play itself: test-slides-play-slide-browser.mjs).
 //   6. The New slide button at the bottom of the list adds at the end.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -167,7 +168,7 @@ try {
   ok(after.tag && after.tag !== 'BODY', `Tab moves on to the next control (${after.tag})`)
   ok(!after.leaving, 'moving on puts the slide back')
 
-  console.log('\n5. duplicate, move, morph; play the transition\n')
+  console.log('\n5. duplicate, move, morph; play the slide\n')
   await thumb(0)
   await p.locator('.ed-sidebar .ed-thumb').nth(0).evaluate((n) => [...n.querySelectorAll('button')].find((b) => /Duplicate slide/.test(b.title + (b.getAttribute('aria-label') ?? '')))?.click())
   await p.waitForTimeout(300)
@@ -184,16 +185,14 @@ try {
   await thumb(2)
   await p.keyboard.press('Escape')
   await p.keyboard.press('Meta+k'); await p.waitForTimeout(200)
-  await p.keyboard.type('play transition'); await p.waitForTimeout(150)
+  await p.keyboard.type('play slide'); await p.waitForTimeout(150)
   const offered = await p.evaluate(() => document.querySelector('.ed-cmdk')?.innerText ?? '')
-  ok(/Play transition/.test(offered), 'Play transition is a command')
+  ok(/Play slide/.test(offered), 'Play slide is a command')
   await p.keyboard.press('Enter')
-  await p.waitForSelector('.bento-present-overlay', { timeout: 3000 }).catch(() => {})
-  const startAt = await p.evaluate(() => [...document.querySelectorAll('.bento-present-overlay .slides > section')].findIndex((s) => s.classList.contains('present')))
-  await p.waitForTimeout(1500)
-  const endAt = await p.evaluate(() => [...document.querySelectorAll('.bento-present-overlay .slides > section')].findIndex((s) => s.classList.contains('present')))
-  ok(startAt === 1 && endAt === 2, `it presents from the slide before and steps into this one (${startAt} → ${endAt})`)
-  await p.keyboard.press('Escape'); await p.waitForTimeout(400)
+  const played = await p.waitForSelector('.ed-stage-scale .ed-play-overlay', { timeout: 3000 }).then(() => true, () => false)
+  ok(played && await p.locator('.bento-present-overlay').count() === 0, 'it plays on the stage, not in a slideshow')
+  const ended = await p.waitForFunction(() => !document.querySelector('.ed-play-overlay'), null, { timeout: 8000 }).then(() => true, () => false)
+  ok(ended, 'and the editor comes back by itself')
 
   console.log('\n6. New slide at the bottom adds at the end\n')
   await thumb(0)
