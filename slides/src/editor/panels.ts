@@ -80,6 +80,16 @@ export class PropsPanel {
     for (const end of ['pointerup', 'dragend', 'drop'] as const) {
       window.addEventListener(end, () => { if (this.pressed) { this.pressed = false; catchUp() } }, true)
     }
+    // the canvas "Hover set:" bar's Pick the trigger (canvas.ts): the Interact
+    // tab, its section open, the trigger picker open (animate.ts)
+    document.addEventListener('bento:hover-pick', () => {
+      const btn = this.host.querySelector<HTMLElement>('.ed-hover-pick-btn')
+      if (!btn) return
+      this.host.querySelector<HTMLElement>('.ed-tabs [data-panel-tab="interact"]')?.click()
+      const head = btn.closest('.ed-section-body')?.previousElementSibling
+      if (head instanceof HTMLElement && head.classList.contains('closed')) head.click()
+      btn.click()
+    })
     this.rebuild()
   }
 
@@ -229,6 +239,7 @@ export class PropsPanel {
     const tabs = [['format', t('Format'), ICONS.tabFormat], ['animate', t('Animate'), ICONS.tabAnimate], ['interact', t('Interact'), ICONS.tabInteract]] as const
     for (const [id, label, glyph] of tabs) {
       const b = iconTab(glyph, label)
+      b.dataset.panelTab = id
       b.setAttribute('aria-selected', String(this.tab === id))
       b.addEventListener('click', () => {
         this.tab = id

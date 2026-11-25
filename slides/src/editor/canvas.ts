@@ -38,6 +38,7 @@ import { canAccept, flagged, frameChildren, isFrame, layoutSlide, moveInFrame, m
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
+import { hoverIssue, isOrphan, useReveal } from './hoverreveal'
 
 /** How far a finger may travel and still count as a tap rather than a drag.
  *  10px matches what a thumb does on glass while trying to hold still. */
@@ -1486,8 +1487,40 @@ export class SlideCanvas {
         this.render()
       })
       bar.appendChild(chip)
+      // a set the show can never reveal says so, with the one click that
+      // fixes it — the same words and action as the inspector (hoverreveal.ts)
+      if (hoverIssue(slide, set)) chip.classList.add('ed-setchip-warn')
+      if (isOrphan(slide, set)) {
+        chip.classList.add('ed-setchip-warn', 'ed-setchip-orphan')
+        chip.title = t('Nothing on this slide is in the group “{group}”.', { group: set })
+        bar.appendChild(this.setBarFix(t('Pick the trigger'), chip.title, () => {
+          const member = slide.elements.find((e) => e.showOnHover === set)
+          if (!member) return
+          this.store.hoverPreview = set
+          this.render()
+          this.store.select([member.id])
+          document.dispatchEvent(new CustomEvent('bento:hover-pick'))
+        }))
+      }
+    }
+    // the slide's hover is off, or dims instead of switching: no set reveals
+    const off = hoverIssue(slide, sets[0])
+    if (off === 'off' || off === 'dim') {
+      const why = off === 'off' ? t('This slide’s hover is off, so this always shows.') : t('This slide’s hover dims other groups, so this always shows.')
+      for (const chip of bar.querySelectorAll<HTMLElement>('.ed-setchip:not(.ed-setchip-orphan)')) chip.title = why
+      bar.appendChild(this.setBarFix(off === 'off' ? t('Turn on') : t('Switch to Switch content'), why, () => this.store.commit(() => useReveal(slide))))
     }
     this.wrap.appendChild(bar)
+  }
+
+  private setBarFix(label: string, why: string, run: () => void): HTMLButtonElement {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'ed-setbar-fix'
+    b.textContent = `⚠ ${label}`
+    b.title = why
+    b.addEventListener('click', run)
+    return b
   }
 
   /** Frame children moved by followFrames — put back by unfollow on an abandoned gesture. */

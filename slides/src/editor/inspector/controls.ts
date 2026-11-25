@@ -52,7 +52,7 @@ export const ROW_TIPS: Record<string, string> = {
   'Seconds per lap': 'How long one lap takes — lower is faster',
   'Motion path': 'The motion path — edit it as draggable points on the canvas',
   'Lap speed': 'How the speed changes during one lap — constant, or easing in and out at the ends',
-  'Show on hover of': 'Type a Hover group name: this element stays hidden until the pointer is on an element of that group (slide’s On hover: Switch content). Empty = always visible.',
+  'Show on hover of': 'Pick the element the pointer must be on, while presenting, for this one to show. Picking it sets up the rest. Always visible = no hover.',
   'Hover group': 'A name shared by elements that react to the pointer together while presenting (see On hover on the slide). Not the same as ⌘G grouping.',
   'Link to': 'Clicking this element during the show jumps to the chosen slide',
   'Web link': 'Clicking this element during the show opens this web page in a new tab (https:// only)',

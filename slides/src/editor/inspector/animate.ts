@@ -13,6 +13,7 @@ import { stepOf } from '../../steps'
 import { morphPartners, morphSource, walkSource, wouldPair } from '../morph'
 import { labelIn } from '../layerrows'
 import { cssColor } from '../../render'
+import { hoverIssue, newGroupName, triggersOf, useReveal } from '../hoverreveal'
 
 /**
  * Morph section. The morph key is `morphId ?? id`: by default an element
@@ -492,33 +493,7 @@ export function buildPresentingProps(p: PropsPanel, el: SlideElement) {
   // section, on the Interact tab.
   section(p, t('Interactivity'))
 
-  // hover-reveal set membership
-  const soh = document.createElement('input')
-  soh.type = 'text'
-  soh.placeholder = t('always visible')
-  soh.value = el.showOnHover ?? ''
-  soh.addEventListener('change', () => {
-    p.mutate(el.id, (e) => {
-      if (soh.value) e.showOnHover = soh.value
-      else delete e.showOnHover
-    }, true)
-    // follow the element into its new set so it stays visible/editable
-    p.store.hoverPreview = soh.value || null
-    p.store.emit('current')
-  })
-  row(p, 'Show on hover of', soh)
-
-  // group tag (hover focus & interaction targeting)
-  const group = document.createElement('input')
-  group.type = 'text'
-  group.placeholder = t('None')
-  group.value = el.group ?? ''
-  group.addEventListener('change', () =>
-    p.mutate(el.id, (e) => {
-      if (group.value) e.group = group.value
-      else delete e.group
-    }, true))
-  row(p, 'Hover group', group)
+  buildHoverReveal(p, el)
 
   // link → slide picker
   const sel = document.createElement('select')
@@ -573,6 +548,177 @@ export function buildPresentingProps(p: PropsPanel, el: SlideElement) {
   makeState.title = t('Copies this slide as a variant and links this element to it: while presenting, clicking the element opens the copy. Edit the copy to show what changes.')
   makeState.addEventListener('click', () => createLinkedState(p, el))
   p.host.appendChild(makeState)
+}
+
+/**
+ * Show on hover of: one picker instead of two names that had to match. The
+ * reveal needs the target's showOnHover, a trigger whose hover group has that
+ * value and the slide's hover on Switch content; choosing a trigger writes all
+ * three in one undo step (hoverreveal.ts). A slide whose hover dims other
+ * groups is never switched silently: the status line says so and offers the
+ * switch. The status line says what the show will do, or what is missing,
+ * with the one click that fixes it. Machine ids are never shown.
+ */
+function buildHoverReveal(p: PropsPanel, el: SlideElement) {
+  const slide = p.store.slide
+  const set = el.showOnHover
+  const triggers = set ? triggersOf(slide, set, el.id) : []
+  const names = triggers.map((e) => labelIn(slide, e, t)).join(', ')
+
+  const pick = document.createElement('button')
+  pick.type = 'button'
+  pick.className = 'ed-btn ed-morph-pick-btn ed-hover-pick-btn'
+  pick.setAttribute('aria-haspopup', 'listbox')
+  const chosen = document.createElement('span')
+  chosen.className = 'ed-morph-pick-txt'
+  // a hand-typed set with no trigger shows the name it waits on — the
+  // author's own words, not an id
+  chosen.textContent = !set ? t('Always visible') : names || `“${set}”`
+  pick.append(chosen)
+  pick.insertAdjacentHTML('beforeend', ICONS.chevron)
+  pick.addEventListener('click', () => openHoverPicker(p, el, pick))
+  row(p, 'Show on hover of', pick)
+
+  if (set) {
+    const fix = (label: string, run: () => void) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-btn ed-morph-use ed-hover-fix'
+      b.textContent = label
+      b.addEventListener('click', run)
+      return b
+    }
+    const line = (state: string, text: string, action?: HTMLButtonElement) => {
+      const s = document.createElement('p')
+      s.className = 'ed-hint ed-status ed-morph-status ed-hover-status'
+      s.dataset.state = state
+      s.textContent = text
+      if (action) s.append(' ', action)
+      p.host.appendChild(s)
+    }
+    const issue = hoverIssue(slide, set)
+    const reveal = () => p.store.commit(() => useReveal(slide))
+    if (issue === 'off') line('off', t('This slide’s hover is off, so this always shows.'), fix(t('Turn on'), reveal))
+    else if (issue === 'dim') line('dim', t('This slide’s hover dims other groups, so this always shows.'), fix(t('Switch to Switch content'), reveal))
+    if (!triggers.length && set !== slide.hover?.default) {
+      line('orphan', t('Nothing on this slide is in the group “{group}”.', { group: set }), fix(t('Pick the trigger'), () => openHoverPicker(p, el, pick)))
+    } else if (!issue) {
+      line('ok', triggers.length
+        ? t('Shows while the pointer is on {name}.', { name: names })
+        : t('Shows at rest, until the pointer is on another hover group.'))
+    }
+  }
+
+  // the hover group itself, for a trigger shared by several elements: open
+  // when this element carries one, so a value is never hidden
+  const adv = document.createElement('details')
+  adv.className = 'ed-hover-adv'
+  adv.open = !!el.group
+  const sum = document.createElement('summary')
+  sum.textContent = t('Advanced')
+  adv.append(sum)
+  const group = document.createElement('input')
+  group.type = 'text'
+  group.placeholder = t('None')
+  group.value = el.group ?? ''
+  group.addEventListener('change', () =>
+    p.mutate(el.id, (e) => {
+      if (group.value) e.group = group.value
+      else delete e.group
+    }, true))
+  const groupRow = row(p, 'Hover group', group)
+  const note = document.createElement('p')
+  note.className = 'ed-hint'
+  note.textContent = t('Elements that share a Hover group act as one trigger. Not the same as ⌘G grouping.')
+  adv.append(groupRow, note)
+  p.host.appendChild(adv)
+}
+
+/**
+ * The trigger picker: the slide's other elements by their Layers names, the
+ * morph picker's look and keys (type to filter, arrows, Enter, Esc). Choosing
+ * one gives it a hover group if it has none, puts this element in that set,
+ * and turns the slide's hover on when it is off — one undo step.
+ */
+function openHoverPicker(p: PropsPanel, el: SlideElement, anchor: HTMLElement) {
+  document.querySelector('.ed-morph-pick')?.remove()
+  const slide = p.store.slide
+  const box = document.createElement('div')
+  box.className = 'ed-morph-pick ed-hover-pick ed-pop'
+  box.setAttribute('role', 'dialog')
+  box.setAttribute('aria-label', t('Show on hover of'))
+  const filter = document.createElement('input')
+  filter.type = 'search'
+  filter.placeholder = t('Find an element')
+  filter.setAttribute('aria-label', t('Find an element'))
+  const list = document.createElement('div')
+  list.setAttribute('role', 'listbox')
+  box.append(filter, list)
+
+  const close = (refocus = true) => {
+    box.remove()
+    document.removeEventListener('pointerdown', outside, true)
+    if (refocus) anchor.focus()
+  }
+  const outside = (ev: PointerEvent) => { if (!box.contains(ev.target as Node) && ev.target !== anchor) close(false) }
+  const choose = (id: string | null) => {
+    close()
+    const trig = id ? slide.elements.find((e) => e.id === id) : undefined
+    const g = trig ? trig.group ?? newGroupName(slide, trig, el, labelIn(slide, trig, t)) : null
+    // follow the element into its set so it stays visible and editable
+    p.store.hoverPreview = g
+    p.store.commit(() => {
+      const me = slide.elements.find((x) => x.id === el.id)
+      if (!me) return
+      if (!trig || !g) { delete me.showOnHover; return }
+      const tr = slide.elements.find((x) => x.id === trig.id)
+      if (tr && !tr.group) tr.group = g
+      me.showOnHover = g
+      if (!slide.hover) useReveal(slide) // never over a hover the author chose
+    })
+    // the commit rebuilt the panel: focus the picker that replaced this one
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.ed-props .ed-hover-pick-btn')?.focus())
+  }
+  const option = (label: string, id: string | null, hint?: SlideElement, selected = false) => {
+    const o = document.createElement('div')
+    o.setAttribute('role', 'option')
+    o.setAttribute('aria-selected', String(selected))
+    o.tabIndex = -1
+    o.className = 'ed-morph-opt'
+    if (hint) o.append(hintOf(hint))
+    o.append(label)
+    o.addEventListener('click', () => choose(id))
+    return o
+  }
+  if (el.showOnHover) list.append(option(t('Always visible'), null))
+  const others = slide.elements.filter((e) => e.id !== el.id)
+  for (const e of others) list.append(option(labelIn(slide, e, t), e.id, e, !!el.showOnHover && e.group === el.showOnHover))
+  if (!others.length) { const n = document.createElement('div'); n.className = 'ed-hint'; n.textContent = t('Nothing else on this slide to point at.'); list.append(n) }
+
+  const options = () => [...list.querySelectorAll<HTMLElement>('[role=option]')].filter((o) => !o.hidden)
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase()
+    for (const o of list.querySelectorAll<HTMLElement>('[role=option]')) o.hidden = !!q && !o.textContent!.toLowerCase().includes(q)
+  })
+  box.addEventListener('keydown', (ev) => {
+    const all = options()
+    const i = all.indexOf(document.activeElement as HTMLElement)
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); close() }
+    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault(); ev.stopPropagation()
+      const n = ev.key === 'ArrowDown' ? Math.min(i + 1, all.length - 1) : i - 1
+      if (n < 0) filter.focus(); else all[n]?.focus()
+    } else if ((ev.key === 'Enter' || ev.key === ' ') && i >= 0) { ev.preventDefault(); ev.stopPropagation(); all[i].click() }
+    else if (ev.key === 'Enter' && document.activeElement === filter) { ev.preventDefault(); ev.stopPropagation(); all[0]?.click() }
+    else ev.stopPropagation() // typing in the filter is not a tool key
+  })
+
+  document.body.appendChild(box)
+  const r = anchor.getBoundingClientRect()
+  box.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8))}px`
+  box.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - box.offsetHeight - 8))}px`
+  setTimeout(() => document.addEventListener('pointerdown', outside, true))
+  filter.focus()
 }
 
 /**
