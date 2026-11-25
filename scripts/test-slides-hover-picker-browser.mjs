@@ -19,6 +19,7 @@
 //      and its Pick the trigger opens the picker.
 //   3b. A trigger the pointer can never be on — the element itself, a hidden
 //      one — is flagged, not counted, and the picker leaves hidden ones out.
+//      So is one in the RESTING set: in the show it flickers (measured).
 //      A component main picked as the trigger keeps its group to itself: the
 //      copy on another slide records the key as overridden (one undo step).
 //   4. validate() reports hover-set-unreachable and hover-off on those slides
@@ -50,7 +51,9 @@ const SLIDES = [
   slide('s6', [rect('s6-r'), text('s6-t', 'Own trigger', { showOnHover: 'x', group: 'x', name: 'Self' })], { hover: { type: 'reveal' } }), // its own trigger
   slide('s7', [rect('s7-h', { group: 'h', hidden: true, name: 'Hidden box' }), rect('s7-v', { x: 450, name: 'Visible box' }), text('s7-t', 'Behind a hidden box', { showOnHover: 'h' })], { hover: { type: 'reveal' } }),
   slide('s8', [rect('s8-m', { name: 'Button', groupId: 'gcmp', component: { id: 'cmp', key: 'k', main: true } }), text('s8-t', 'Main card')]),
-  slide('s9', [rect('s8-m', { name: 'Button', groupId: 'gcmp2', component: { id: 'cmp', key: 'k' } }), text('s9-t', 'Elsewhere')], { hover: { type: 'focus-group' } }),
+  slide('s9', [rect('s9-c', { name: 'Button', groupId: 'gcmp2', component: { id: 'cmp', key: 'k' } }), text('s9-t', 'Elsewhere')], { hover: { type: 'focus-group' } }),
+  // a trigger in the RESTING set: pointed at, it shows its group's set, which hides it
+  slide('s10', [rect('s10-r', { group: 'g', showOnHover: 'intro', name: 'Resting box' }), text('s10-t', 'Card', { showOnHover: 'g' }), text('s10-i', 'Intro', { y: 400, showOnHover: 'intro' })], { hover: { type: 'reveal', default: 'intro' } }),
 ]
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
@@ -153,7 +156,7 @@ try {
     ok(s2.hover?.type === 'focus-group' && !!s2.elements[1].showOnHover && s2.elements[0].group === s2.elements[1].showOnHover,
       `on a Dim other groups slide the pick sets trigger and target, and leaves the slide's hover alone (${JSON.stringify(s2.hover)})`)
     const st = await status()
-    ok(st.some((x) => x.startsWith('dim:') && x.includes('pointing at Rectangle dims everything outside its group')), `the status line says the slide dims other groups, and that pointing at the trigger now dims the rest (${JSON.stringify(st)})`)
+    ok(st.some((x) => x.startsWith('dim:') && x.includes('pointing at Rectangle dims the other hover groups')), `the status line says the slide dims other groups, and that pointing at the trigger dims the other hover groups (${JSON.stringify(st)})`)
     const fix = p.locator('.ed-props .ed-hover-status[data-state="dim"] .ed-hover-fix')
     ok((await fix.innerText().catch(() => '')).trim() === 'Switch to Switch content', 'and offers Switch to Switch content')
     if (await fix.count()) { await fix.click(); await p.waitForTimeout(300) }
@@ -211,6 +214,18 @@ try {
     ok(opts.includes('Visible box') && !opts.includes('Hidden box'), `the picker leaves hidden elements out (${JSON.stringify(opts)})`)
     await p.keyboard.press('Escape'); await p.waitForTimeout(150)
   }
+  await goSlide(9)
+  await p.locator('.ed-setchip', { hasText: /^g$/ }).click(); await p.waitForTimeout(250) // the card's set, on the canvas
+  await selectEl('s10-t')
+  await interact()
+  {
+    const st = await status()
+    ok(st.length === 1 && st[0].startsWith('hidden:') && st[0].includes('Resting box'), `a trigger in the resting set is reported unreachable, not working (${JSON.stringify(st)})`)
+    await openPicker()
+    const opts = (await p.locator('.ed-hover-pick [role=option]').allInnerTexts()).map((x) => x.trim())
+    ok(!opts.includes('Resting box'), `the picker leaves out an element that is in a hover set itself (${JSON.stringify(opts)})`)
+    await p.keyboard.press('Escape'); await p.waitForTimeout(150)
+  }
   await goSlide(7)
   await selectEl('s8-t')
   await interact()
@@ -229,7 +244,7 @@ try {
   // ---- 4. the validator ----------------------------------------------------------
   {
     const f = await p.evaluate(() => window.bento.validate().findings.filter((x) => x.code.startsWith('hover-')).map((x) => `${x.code}@${x.element ?? x.slide}`).sort())
-    ok(JSON.stringify(f) === JSON.stringify(['hover-off@s5', 'hover-set-unreachable@s4-t', 'hover-set-unreachable@s6-t', 'hover-set-unreachable@s7-t']),
+    ok(JSON.stringify(f) === JSON.stringify(['hover-off@s5', 'hover-set-unreachable@s10-t', 'hover-set-unreachable@s4-t', 'hover-set-unreachable@s6-t', 'hover-set-unreachable@s7-t']),
       `validate() reports hover-off on the slide with hover off, hover-set-unreachable on the typed layer name, nothing on the working slides (${JSON.stringify(f)})`)
   }
 
@@ -251,6 +266,34 @@ try {
   ok((await status()).some((x) => x.startsWith('ok:') && x.includes('Italy')), 'and the status line says it works')
   const s3 = (await doc())[2]
   ok(s3.elements[0].group === 'italy' && s3.elements[1].showOnHover === 'italy' && s3.hover.type === 'reveal' && !('default' in s3.hover), 'opening and inspecting it changed nothing')
+
+  // the resting-set trigger in the show: what the editor and validate() call
+  // unreachable really is — the pointer held still on it, the sets swap
+  await goSlide(9)
+  await present()
+  {
+    const c = await centre('.reveal section.present [data-el-id="s10-r"]')
+    await p.mouse.move(c.x, c.y, { steps: 4 })
+    // count the show's own decisions, not sampled pixels: every time it flips
+    // a set member's opacity (present.ts applyRevealSet writes style.opacity)
+    const swaps = await p.evaluate(() => new Promise((done) => {
+      const nodes = [...document.querySelectorAll('.reveal section.present [data-show-on-hover]')]
+      const last = new Map(nodes.map((n) => [n, n.style.opacity]))
+      let swaps = 0
+      const mo = new MutationObserver((recs) => {
+        for (const r of recs) {
+          const n = r.target
+          if (n.style.opacity !== last.get(n)) { swaps++; last.set(n, n.style.opacity) }
+        }
+      })
+      for (const n of nodes) mo.observe(n, { attributes: true, attributeFilter: ['style'] })
+      setTimeout(() => { mo.disconnect(); done(swaps) }, 600)
+    }))
+    const reported = (await p.evaluate(() => window.bento.validate().findings.some((x) => x.code === 'hover-set-unreachable' && x.element === 's10-t')))
+    ok(swaps === 0 || reported, `a resting-set trigger in the show: the sets flip ${swaps} times in 600 ms with the pointer still — steady, or reported unreachable (${reported})`)
+    await hoverOut()
+  }
+  await exitShow()
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
