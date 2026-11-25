@@ -33,6 +33,7 @@
 import type { BentoDoc, Slide, SlideElement } from './model.ts'
 import { inLinearFlow } from './model.ts'
 import { compactDoc } from './compact.ts'
+import { markdownToHtml } from './editor/markdown.ts'
 import { paletteOf, PALETTE_SLOTS, slotIsSet } from './palette.ts'
 import { activeMode, modesOf, tokenValue } from './tokens.ts'
 import { components } from './components.ts'
@@ -44,9 +45,9 @@ const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.i
 /** Text per element in the deck view; the slide view carries it whole. */
 export const OUTLINE_TEXT_MAX = 300
 /** Speaker notes in the deck view (the slide view carries them whole). */
-export const OUTLINE_NOTES_MAX = 72
+export const OUTLINE_NOTES_MAX = 64
 /** The deck view stops adding slides past this many characters and says where it stopped. */
-export const OUTLINE_MAX = 48000
+export const OUTLINE_MAX = 34000
 /** A string longer than this that is markup or bytes is elided in the slide view. */
 const ELIDE_OVER = 400
 /** What an elided value reads as. A patch that writes one back is refused. */
@@ -66,6 +67,8 @@ export function words(s: unknown): string {
 }
 
 const cap = (s: string, max: number) => s.length <= max ? s : `${s.slice(0, max)}…(+${s.length - max} chars)`
+/** A text the outline cut: an edit that sends it back is refused (ops.ts). */
+export const CUT = /…\(\+\d+ chars\)$/
 const q = (s: string, max = OUTLINE_TEXT_MAX) => JSON.stringify(cap(s, max))
 
 /** `{color=tx1 fill=$color.card}`: what an element's values are bound to. */
@@ -121,17 +124,67 @@ function tokenText(v: unknown): string {
   return String(v)
 }
 
+// --- text as an agent writes it back -----------------------------------------
+//
+// An outline that flattened `<br>` and `<b>` to spaces invited an edit that
+// destroyed them: retitling with the outline's own words turned a three-line
+// title into one line. So a text is printed in the markdown `edits` accepts
+// (**bold**, *italic*, `code`, ~~strike~~, [links](https://…), line breaks as
+// \n, bullets as typed) — and only when that markdown converts back to the
+// very html stored. Anything markdown cannot say (a list, a heading, an
+// attribute) is printed as `html "…"`, which `edits {id, html}` takes back.
+// Either way, sending the outline's text unchanged is a no-op.
+
+const MARKS: Record<string, string> = { b: '**', strong: '**', i: '*', em: '*', s: '~~', strike: '~~', del: '~~', code: '`' }
+const decode = (t: string) => t.replace(/&nbsp;/g, '\u00a0').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+/** html and markdownToHtml's output compared: an NBSP is one character however it is spelled */
+const sameHtml = (a: string, b: string) => a.replace(/&nbsp;/g, '\u00a0').replace(/<br\s*\/?>/gi, '<br>') === b.replace(/&nbsp;/g, '\u00a0').replace(/<br\s*\/?>/gi, '<br>')
+
+function htmlToMd(html: string, escape: boolean): string | null {
+  let out = ''
+  const href: string[] = []
+  for (const tok of html.split(/(<[^>]*>)/)) {
+    if (!tok) continue
+    if (tok.startsWith('<')) {
+      const m = /^<(\/?)([a-z0-9]+)([^>]*)>$/i.exec(tok)
+      if (!m) return null
+      const [, close, name, attrs] = m
+      const tag = name.toLowerCase()
+      if (tag === 'br') { out += '\n'; continue }
+      if (MARKS[tag] && !attrs.trim()) { out += MARKS[tag]; continue }
+      if (tag === 'a' && close) { const h = href.pop(); if (h === undefined) return null; out += `](${h})`; continue }
+      const hm = tag === 'a' ? /^\s+href="([^"]*)"\s*$/.exec(attrs) : null
+      if (!hm) return null
+      href.push(decode(hm[1])); out += '['
+      continue
+    }
+    const t = decode(tok)
+    out += escape ? t.replace(/([*_~`])/g, '\\$1') : t
+  }
+  return href.length ? null : out
+}
+
+/** How the outline prints a stored text html, so that sending it back changes nothing. */
+export function textForm(html: string): { md: string } | { html: string } {
+  for (const esc of [false, true]) {
+    const md = htmlToMd(html, esc)
+    if (md !== null && sameHtml(markdownToHtml(md), html)) return { md }
+  }
+  return { html }
+}
+const showText = (html: string, max: number) => { const f = textForm(html); return 'md' in f ? q(f.md, max) : `html ${q(f.html, max)}` }
+
 /** The content of one element, as the deck view says it. Empty = decoration. */
 function content(el: SlideElement, full: boolean): string {
   const e = el as unknown as Obj
   const max = full ? Infinity : OUTLINE_TEXT_MAX
   switch (el.type) {
-    case 'text': { const w = words(e.html); return w && (full || !/^(\{\{[^}]*\}\}\s*)+$/.test(w)) ? q(w, max) : '' }
+    case 'text': { const w = words(e.html); return w && (full || !/^(\{\{[^}]*\}\}\s*)+$/.test(w)) ? showText(String(e.html), max) : '' }
     case 'code': { const c = typeof e.content === 'string' ? e.content : ''; return c.trim() ? q(c, max) : '' }
     case 'table': {
       const rows = Array.isArray(e.rows) ? (e.rows as Obj[]) : []
-      return rows.map((r, ri) => (Array.isArray(r.cells) ? (r.cells as Obj[]) : [])
-        .map((c, ci) => `r${ri + 1}c${ci + 1} ${q(words(c.html), full ? Infinity : 80)}`).join(' | ')).join(' / ')
+      return rows.map((r, ri) => `r${ri + 1}: ${(Array.isArray(r.cells) ? (r.cells as Obj[]) : [])
+        .map((c) => showText(String(c.html ?? ''), full ? Infinity : 80)).join(' | ')}`).join(' / ')
     }
     case 'chart': {
       const opt = isObj(e.option) ? e.option : {}
@@ -164,6 +217,7 @@ function flags(el: SlideElement, comps: Map<string, string>): string {
   const st = stepOf(el)
   if (st > 0) out.push(`step ${st}`)
   if (typeof el.link === 'string') out.push(`→ ${el.link}`)
+  if (el.type === 'chart' && isObj(e.source) && typeof e.source.tableId === 'string') out.push(`← table ${e.source.tableId}`)
   if (el.hidden) out.push('hidden')
   if (el.locked) out.push('locked')
   if (el.showOnHover) out.push(`on hover ${el.showOnHover}`)
@@ -259,7 +313,7 @@ function slideBlock(doc: BentoDoc, s: Slide, n: number, comps: Map<string, strin
 function header(doc: BentoDoc): string[] {
   const shown = doc.slides.filter(inLinearFlow).length
   const out = [`# ${JSON.stringify(doc.title ?? '')} · ${doc.slides.length} slides (${shown} in the show) · ${doc.size.width}×${doc.size.height} · hash ${deckHash(doc)}`]
-  out.push('# address <slide>/<element id> · slides numbered by position, states and hidden included · outline({slide: n}) = one slide in full · patch(ops, {base: hash})')
+  out.push('# address <slide>/<element id>; slides by position, states and hidden included; outline({slide: n}) shows one in full; patch(ops, {base: hash})')
   const pal = paletteOf(doc)
   const slots = PALETTE_SLOTS.filter((k) => slotIsSet(doc, k) && pal[k]).map((k) => `${k} ${pal[k]}`)
   out.push(`palette: ${slots.join(', ')}`)
@@ -316,7 +370,12 @@ function slideFull(doc: BentoDoc, s: Slide, n: number): string[] {
     const e: Obj = { ...(els[i] ?? {}) }
     delete e.id
     if (full.type === 'embed') { if ('doc' in e) e.doc = elided('document', JSON.stringify(e.doc ?? '').length) }
-    if (isObj(e.themeRefs)) e.themeRefs = Object.fromEntries(Object.entries(e.themeRefs).map(([k, v]) => [k, bare(String(v))]))
+    if (isObj(e.themeRefs)) {
+      // a field bound at the top level is its binding's value: the literal is
+      // left out (a field that keeps its own opacity, " /a", keeps it)
+      for (const [k, v] of Object.entries(e.themeRefs)) if (!k.includes('.') && !/\/a\s*$/.test(String(v))) delete e[k]
+      e.themeRefs = Object.fromEntries(Object.entries(e.themeRefs).map(([k, v]) => [k, bare(String(v))]))
+    }
     lines.push(`${n}/${full.id} ${JSON.stringify(elide(e))}`)
   })
   if (s.notes?.trim()) lines.push(`notes ${JSON.stringify(s.notes)}`)
@@ -367,7 +426,7 @@ export function outlineDoc(doc: BentoDoc, opts: OutlineOpts = {}): string {
   if (opts.slide !== undefined) {
     const hit = slideAt(doc, opts.slide)
     if (!hit) return `# no slide ${JSON.stringify(opts.slide)}: the deck has ${doc.slides.length}, numbered by position, or name one by its id`
-    return [`# hash ${deckHash(doc)} · each line: <slide>/<element id> and the element as compact JSON`, ...slideFull(doc, hit.slide, hit.n)].join('\n')
+    return [`# hash ${deckHash(doc)} · each line: <slide>/<element id> and the element as compact JSON; a field named in themeRefs takes its value from that binding`, ...slideFull(doc, hit.slide, hit.n)].join('\n')
   }
   const usual = usualRefs(doc)
   const lines = header(doc)
@@ -421,7 +480,7 @@ export interface DeckStats {
   /** the largest assets first (inline bytes, or an offloaded blob's size) */
   assets: Array<{ key: string; bytes: number }>
   /** embedded font faces */
-  fonts: Array<{ family: string; bytes: number }>
+  fonts: Array<{ family: string; bytes: number; builtin?: true }>
   tokens: number
   components: number
   /** paint and type values (fill, stroke, color, fontFamily, fontSize, radius,
@@ -462,7 +521,7 @@ export function docStats(doc: BentoDoc, agentJson: string): DeckStats {
     bytes: agentJson.length,
     outlineBytes: outlineDoc(doc).length,
     assets: [...assets].map(([key, bytes]) => ({ key, bytes })).sort((a, b) => b.bytes - a.bytes).slice(0, 10),
-    fonts: (doc.fonts ?? []).map((f) => ({ family: f.family, bytes: fontBytes(f.asset) })),
+    fonts: (doc.fonts ?? []).map((f) => /^builtin:/.test(f.asset) ? { family: f.family, bytes: 0, builtin: true as const } : { family: f.family, bytes: fontBytes(f.asset) }),
     tokens: Object.keys(doc.theme.tokens?.set ?? {}).length,
     components: components(doc).length,
     bound,

@@ -40,14 +40,15 @@
 // against — the outline the agent read — however earlier ops in the same
 // patch moved things, so "add after 3, remove 5, move 7 to 2" means what it
 // read as; a slide the patch added is named by its id. The object form runs
-// its content verbs first, then remove, add, move (the PR's order).
+// its content verbs first, then add, remove, move.
 //
 // ALL OR NOTHING (Google Slides' batchUpdate contract). Every op is run on a
 // copy and every result gated before anything is committed; if any op is
 // refused, nothing changes and every op still gets its reply — index-aligned,
 // each saying what it resolved to, or why it was refused and what to do
 // instead. `{ partial: true }` applies what passes (the Assistant's old
-// behaviour). New element and slide ids may be the caller's own (checked
+// behaviour), and a refused op leaves nothing behind (patchDoc re-runs the
+// patch without it). New element and slide ids may be the caller's own (checked
 // unique across the deck), so later ops can name them. `{ base }` takes the
 // hash outline() printed: a deck that changed since is refused as stale.
 // Re-applying an op that is already true is a no-op (`unchanged`); re-adding
@@ -82,7 +83,8 @@ import { isFrame, moveInFrame, moveIntoFrame, withDescendants } from './layout.t
 import { sanitizeElement, sanitizeSlide, withDropReport, TOKEN_KEYS, SLIDE_TOKEN_KEYS } from './untrusted.ts'
 import { deriveMemory, derive } from './derive.ts'
 import type { Finding, ValidateResult } from './validate.ts'
-import { ELIDED, deckHash, slideOutline } from './outline.ts'
+import { CUT, ELIDED, deckHash, slideOutline, textForm } from './outline.ts'
+import { moveBlock, parentOf, unitOf } from './editor/slidesel.ts'
 
 type Obj = Record<string, unknown>
 type El = SlideElement & Obj
@@ -186,7 +188,7 @@ const verbOf = (k: unknown): string | null => !str(k) ? null : (VERBS as readonl
  * The patch as an ordered op list. An ARRAY of `{op: '<verb>', …}` runs in
  * its own order — later ops may name what earlier ones created. The OBJECT
  * form (PR #532's, what the Assistant's extension writes) runs its content
- * verbs first, then remove, add, move. A string is the error (bad-patch).
+ * verbs first, then add, remove, move. A string is the error (bad-patch).
  */
 export function normalizeOps(input: unknown): Op[] | string {
   if (Array.isArray(input)) {
@@ -366,18 +368,44 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
     return bad ? null : el
   }
 
+  /** a slide's unit — it and its interactive states (editor/slidesel.ts):
+   *  states live right after their parent and move with it (discussion #514) */
+  const unitEnd = (s: Slide): number => { const u = unitOf(work, parentOf(work, work.indexOf(s))); return Math.max(...u) }
+  const parentSlide = (s: Slide): Slide => work[parentOf(work, work.indexOf(s))] ?? s
+
+  /** refuse the fields a verb does not take, naming the ones it does */
+  const only = (a: unknown, verb: string, allowed: readonly string[]): boolean => {
+    if (!isObj(a)) return true
+    const bad = Object.keys(a).filter((k) => !allowed.includes(k))
+    if (bad.length) refuse(`${verb} does not take ${bad.map((k) => JSON.stringify(k)).join(', ')}; its fields are ${allowed.join(', ')}`)
+    return !bad.length
+  }
+  /** the new html for a text the outline printed: unchanged when the text is the outline's own */
+  const newHtml = (o: Obj, old: string, addr: string): string | null => {
+    if (str(o.html)) return o.html
+    if (!str(o.text)) { refuse('give text (markdown, as the outline prints it) or html'); return null }
+    if (CUT.test(o.text)) { refuse(`that text was cut short in the outline; read outline({ slide: ${addr.split('/')[0]} }) for the whole of it`); return null }
+    const was = textForm(old)
+    if ('md' in was && was.md === o.text) return old
+    if ('html' in was) notes.push(`${addr}: its old formatting had no markdown form and was replaced; send {id, html} to keep markup`)
+    return toHtml(o.text)
+  }
+
   // ---- the verbs, one op at a time
   const run: Record<string, (a: unknown) => void> = {
     edits(e) {
       const h = isObj(e) ? elRef(e.id) : 'an edit is {id: "<slide>/<element id>", text}'
       if (typeof h === 'string') { name(said('edit', e)); refuse(h); return }
       name(`edit ${h.addr}`)
-      const text = (e as Obj).text
-      if (!str(text)) { refuse('text must be a string (markdown: **bold**, *italic*, - bullets)'); return }
+      if (!only(e, 'edits', ['id', 'text', 'html'])) return
+      const o = e as Obj
       const before = JSON.stringify(h.el)
-      if (h.el.type === 'text') h.el.html = toHtml(text)
-      else if (h.el.type === 'code') h.el.content = text.slice(0, TEXT_EDIT_MAX)
-      else { refuse(`${h.addr} is a ${h.el.type}; edits change text and code elements (cells for a table, chart for a chart, set for anything else)`); return }
+      if (h.el.type === 'text') { const html = newHtml(o, String(h.el.html ?? ''), h.addr); if (html === null) return; h.el.html = html }
+      else if (h.el.type === 'code') {
+        if (!str(o.text)) { refuse('a code element takes text'); return }
+        if (CUT.test(o.text)) { refuse(`that text was cut short in the outline; read outline({ slide: ${h.addr.split('/')[0]} }) for the whole of it`); return }
+        h.el.content = o.text.slice(0, TEXT_EDIT_MAX)
+      } else { refuse(`${h.addr} is a ${h.el.type}; edits change text and code elements (cells for a table, chart for a chart, set for anything else)`); return }
       if (JSON.stringify(h.el) === before) replies[i].unchanged = true
       wrote(h.el); wroteKey(h.el, h.el.type === 'code' ? 'content' : 'html')
     },
@@ -385,8 +413,10 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
       const s = isObj(n) ? slideRef(n.slide) : 'notes are {slide, text}'
       if (typeof s === 'string') { name(said('notes', n, 'slide')); refuse(s); return }
       name(`notes ${num(s)}`)
+      if (!only(n, 'notes', ['slide', 'text'])) return
       const text = (n as Obj).text
       if (!str(text)) { refuse('text must be a string'); return }
+      if (CUT.test(text)) { refuse(`those notes were cut short in the outline; read outline({ slide: ${num(s)} }) for the whole of them`); return }
       if (s.notes === text.slice(0, TEXT_EDIT_MAX)) { replies[i].unchanged = true; return }
       s.notes = text.slice(0, TEXT_EDIT_MAX)
       wrote(s); wroteKey(s, 'notes')
@@ -396,6 +426,7 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
       if (typeof h === 'string') { name(said('cell', c)); refuse(h); return }
       const o = c as Obj
       name(`cell ${h.addr} r${String(o.row)}c${String(o.col)}`)
+      if (!only(c, 'cells', ['id', 'row', 'col', 'text', 'html'])) return
       if (h.el.type !== 'table') { refuse(`${h.addr} is a ${h.el.type}, not a table`); return }
       const rows = Array.isArray(h.el.rows) ? (h.el.rows as unknown as Obj[]) : []
       const width = rows[0] && Array.isArray(rows[0].cells) ? (rows[0].cells as unknown[]).length : 0
@@ -403,8 +434,8 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
       const cells = row && Array.isArray(row.cells) ? (row.cells as Obj[]) : []
       const cell = int(o.col) && o.col >= 1 && o.col <= cells.length ? cells[o.col - 1] : null
       if (!cell) { refuse(`the table has ${rows.length} rows × ${width} columns, numbered from 1`); return }
-      if (!str(o.text)) { refuse('text must be a string'); return }
-      const html = toHtml(o.text)
+      const html = newHtml(o, String(cell.html ?? ''), h.addr)
+      if (html === null) return
       if (cell.html === html) { replies[i].unchanged = true; return }
       cell.html = html
       wrote(h.el); wroteKey(h.el, 'rows')
@@ -413,6 +444,7 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
       const h = isObj(ch) ? elRef(ch.id) : 'a chart op is {id, series: [{name, data}], categories?}'
       if (typeof h === 'string') { name(said('chart', ch)); refuse(h); return }
       name(`chart ${h.addr}`)
+      if (!only(ch, 'chart', ['id', 'series', 'categories'])) return
       if (h.el.type !== 'chart') { refuse(`${h.addr} is a ${h.el.type}, not a chart`); return }
       const src = isObj(h.el.source) ? h.el.source.tableId : undefined
       if (src) { refuse(`the chart follows table ${String(src)} on its slide; change that table's cells instead`); return }
@@ -444,6 +476,7 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
       const h = isObj(st) ? elRef(st.id) : 'a style op is {id, size?: "bigger"|"smaller", weight?: "bold"|"normal", align?: "left"|"center"|"right"}'
       if (typeof h === 'string') { name(said('style', st)); refuse(h); return }
       name(`style ${h.addr}`)
+      if (!only(st, 'style', ['id', 'size', 'weight', 'align'])) return
       if (h.el.type !== 'text') { refuse(`${h.addr} is a ${h.el.type}; style changes text (set for anything else)`); return }
       const o = st as Obj
       const before = JSON.stringify(h.el)
@@ -496,6 +529,7 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
       if (parent !== undefined && !(isFrame(frame) && !frame.locked)) { refuse(`parentId: ${JSON.stringify(o.parentId)} is not an unlocked auto-layout frame on slide ${num(s)}`); return }
       const at = int(o.at) ? o.at : Infinity
       if (o.use !== undefined) {
+        if (!only(e, 'insert (use)', ['slide', 'use', 'x', 'y', 'texts', 'parentId', 'at'])) return
         // a copy of a component: its main's elements, fresh ids, the main's sig
         const all = components(view())
         const comp = all.find((c) => c.id === o.use || c.name === o.use)
@@ -542,6 +576,7 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
     delete(d) {
       const h = elRef(isObj(d) ? d.id : d)
       if (typeof h === 'string') { name(said('delete', d)); refuse(h); return }
+      if (!only(d, 'delete', ['id'])) return
       const gone = new Set(withDescendants(h.slide, [h.el]).map((e) => e.id))
       name(gone.size > 1 ? `delete ${h.addr} (+${gone.size - 1} inside)` : `delete ${h.addr}`)
       h.slide.elements = h.slide.elements.filter((e) => !gone.has(e.id))
@@ -576,6 +611,7 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
     remove(r) {
       const s = slideRef(isObj(r) ? r.slide : r)
       if (typeof s === 'string') { name(said('remove', isObj(r) ? r.slide : r)); refuse(s); return }
+      if (!only(r, 'remove', ['slide'])) return
       const states = work.filter((x) => x.stateOf === s.id)
       name(states.length ? `remove ${num(s)} (+${states.length} states)` : `remove ${num(s)}`)
       for (const x of [s, ...states]) work.splice(work.indexOf(x), 1)
@@ -586,6 +622,7 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
       const anchor = a.after === 0 || a.after === undefined ? null : slideRef(a.after)
       if (typeof anchor === 'string') { name(`add after ${String(a.after)}`); refuse(anchor); return }
       name(`add after ${anchor ? num(anchor) : 0}`)
+      if (!only(a, 'add', ['after', 'from', 'layout', 'id', 'notes', 'elements', 'background', 'transition', 'hidden', 'unnumbered', 'name', ...ADD_ROLES])) return
       if (over('add', ADD_MAX)) { refuse(`over the limit of ${ADD_MAX} new slides in one patch; send the rest in another`); return }
       const id = ownId(a.id)
       if (id === false) return
@@ -631,10 +668,11 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
       const fields: Obj = {}
       for (const k of ['background', 'transition', 'hidden', 'unnumbered', 'name']) if (a[k] !== undefined) fields[k] = a[k]
       writeFields(slide as unknown as Obj, fields, true, true)
-      // after its anchor, and after the slides this patch already put there
-      const key = anchor ?? null
+      // after its anchor's unit (never between a slide and its states), and
+      // after the slides this patch already put there
+      const key = anchor ? parentSlide(anchor) : null
       const prev = lastAdded.get(key)
-      const at = prev ? work.indexOf(prev) + 1 : anchor ? work.indexOf(anchor) + 1 : 0
+      const at = prev && work.includes(prev) ? work.indexOf(prev) + 1 : key ? unitEnd(key) + 1 : 0
       work.splice(at, 0, slide)
       lastAdded.set(key, slide)
       wrote(slide)
@@ -647,10 +685,17 @@ export function applyOps(doc: BentoDoc, list: Op[], san: Sanitizers): OpsOutcome
       name(isObj(m) ? `move ${String(m.slide)}→${String(m.to)}` : 'move')
       if (typeof s === 'string' || typeof t === 'string') { refuse(typeof s === 'string' ? s : t as string); return }
       name(`move ${num(s)}→${num(t)}`)
-      if (s === t) { replies[i].unchanged = true; return }
-      const after = work.indexOf(t) > work.indexOf(s)
-      work.splice(work.indexOf(s), 1)
-      work.splice(work.indexOf(t) + (after ? 1 : 0), 0, s)
+      if (!only(m, 'move', ['slide', 'to'])) return
+      // units move whole (editor/slidesel.ts moveBlock): a parent carries its
+      // states; a state never leaves its parent
+      if (s.stateOf && parentSlide(s) !== s) { refuse(`slide ${num(s)} is a state of slide ${num(parentSlide(s))} and moves with it; move slide ${num(parentSlide(s))}`); return }
+      const tp = parentSlide(t)
+      if (tp === s) { replies[i].unchanged = true; return }
+      const si = work.indexOf(s), ti = work.indexOf(tp)
+      const drop = ti > si ? unitEnd(tp) + 1 : ti
+      const next = moveBlock(work, [si], drop)
+      if (next === work) { replies[i].unchanged = true; return }
+      work.splice(0, work.length, ...next)
     },
   }
 
@@ -734,11 +779,16 @@ function clean(el: El, was: El | undefined, san: Sanitizers): string[] {
   return did
 }
 
-/** Every http(s) host+path a value refers to (PR #532 condition F: the
- *  fetches a patch introduces are named, never added silently). */
+/** Every http(s) host+path a value refers to, wherever in a string it sits
+ *  (PR #532 condition F: the fetches a patch introduces are named, never
+ *  added silently). */
 export function remoteUrls(v: unknown, out = new Set<string>()): Set<string> {
   if (str(v)) {
-    if (/^https?:\/\//i.test(v) && v.length < 2048) { try { const u = new URL(v); out.add(u.host + (u.pathname === '/' ? '' : u.pathname)) } catch { /* not a URL */ } }
+    // anywhere in a string: a src, but also an <image href> inside svg
+    // markup, a css url(), a link inside text html
+    for (const m of v.matchAll(/https?:\/\/[^\s"'<>()\\]{1,2040}/gi)) {
+      try { const u = new URL(m[0].replace(/&amp;/g, '&')); out.add(u.host + (u.pathname === '/' ? '' : u.pathname)) } catch { /* not a URL */ }
+    }
   } else if (Array.isArray(v)) { for (const x of v) remoteUrls(x, out) }
   else if (isObj(v)) { for (const [k, x] of Object.entries(v)) if (k !== 'comments') remoteUrls(x, out) }
   return out
@@ -763,7 +813,7 @@ export interface PatchReport {
   /** whether the document changed (one undo step) */
   committed: boolean
   dryRun?: true
-  /** one per op, in op order (the object form: content verbs, then remove, add, move) */
+  /** one per op, in op order (the object form: content verbs, then add, remove, move) */
   replies: Reply[]
   /** the refused ops alone, with their index in `replies` */
   skipped: Array<Skip & { i: number }>
@@ -812,7 +862,22 @@ export function patchDoc(doc: BentoDoc, input: unknown, opts: PatchOpts, env: Pa
     if (opts.base !== undefined && opts.base !== now) {
       return { next: null, report: { ok: false, err: 'stale', detail: `the deck changed since the outline this patch was written against (base ${String(opts.base)}, now ${now}); read outline() again and rebuild the patch`, hash: now } }
     }
-    const r = applyOps(doc, list, env.san)
+    let r = applyOps(doc, list, env.san)
+    if (opts.partial) {
+      // a refused op must leave nothing behind, not even the fields it wrote
+      // before it was refused: run again from the document with the refused
+      // ops held back, until no op is newly refused (each round drops one at
+      // least, so this ends). Every round starts from `doc`, so a relative
+      // op (style bigger) applies once.
+      const held = new Map<number, Reply>()
+      for (let round = 0; round < list.length + 1; round++) {
+        const fresh = r.replies.map((x, k) => ({ x, k })).filter(({ x, k }) => !x.ok && !held.has(k))
+        if (!fresh.length) break
+        for (const { x, k } of fresh) held.set(k, x)
+        r = applyOps(doc, list.map((o, k) => held.has(k) ? { ...o, bad: 'held back' } : o), env.san)
+      }
+      for (const [k, x] of held) r.replies[k] = x
+    }
     const refused = r.replies.filter((x) => !x.ok).length
     const changed = r.slides.length !== doc.slides.length || r.slides.some((s, k) => s !== doc.slides[k])
     const usable = changed && (!refused || !!opts.partial)

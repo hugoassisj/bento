@@ -24,7 +24,9 @@ import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from './render'
 import { validateDoc } from './validate'
 
 /** The last patch this page committed: a retry of it (same ops, same base)
- *  against the deck it produced is answered as already applied, not as stale. */
+ *  against the deck it produced is answered as already applied, not as
+ *  stale. In memory and one patch deep: a reload, or any later patch,
+ *  forgets it. */
 let last: { base: string; ops: string; hash: string; report: PatchReport } | null = null
 
 export function patchStore(store: Store, ops: unknown, opts: PatchOpts = {}): (PatchReport & { alreadyApplied?: true }) | PatchError {
@@ -33,7 +35,7 @@ export function patchStore(store: Store, ops: unknown, opts: PatchOpts = {}): (P
     return { ok: false, err: 'readonly', detail: 'this copy of the deck is read-only here; nothing was changed (a dry run still reports)' }
   }
   let opsKey = ''
-  try { opsKey = typeof ops === 'string' ? ops : JSON.stringify(ops) } catch { /* reported by patchDoc */ }
+  try { opsKey = (o.partial ? 'partial ' : '') + (typeof ops === 'string' ? ops : JSON.stringify(ops)) } catch { /* reported by patchDoc */ }
   if (last && o.base !== undefined && o.base === last.base && opsKey === last.ops && deckHash(store.doc) === last.hash) {
     return { ...last.report, committed: false, alreadyApplied: true }
   }
@@ -42,21 +44,22 @@ export function patchStore(store: Store, ops: unknown, opts: PatchOpts = {}): (P
     fit: (doc, stats) => { if (fitAutoHeights(doc, stats)) restack(doc, stats) },
     validate: (doc) => validateDoc(doc),
   })
-  if (!next) return report
+  if (!next || !report.ok) return report
   const slides = next.slides
   store.commit(() => { store.doc.slides = slides }, 'slides')
-  if (report.ok) {
-    const done = { ...report, hash: deckHash(store.doc) }
-    if (o.base !== undefined) last = { base: o.base, ops: opsKey, hash: done.hash, report: done }
-    return done
-  }
   // heights measured while a deck font was still loading: fit again once the
-  // fonts settle, as loadDoc does (one more undoable step only if one moved)
+  // fonts settle, as loadDoc does (one more undoable step only if one moved,
+  // and only while the deck is still the one this patch made)
   if (fit?.autoHeight.length && typeof document !== 'undefined' && document.fonts?.status === 'loading') {
     void document.fonts.ready.then(() => {
       if (store.doc.slides !== slides) return
-      if (fitAutoHeights(store.doc, fit)) { restack(store.doc, fit); store.commit(() => {}) }
+      // measured on a copy first, so the undo step exists only when a box
+      // moves, and holds the heights from before the fit
+      if (!fitAutoHeights(JSON.parse(JSON.stringify(store.doc)), fit)) return
+      store.commit(() => { fitAutoHeights(store.doc, fit); restack(store.doc, fit) })
     })
   }
-  return report
+  const done = { ...report, hash: deckHash(store.doc) }
+  if (o.base !== undefined) last = { base: o.base, ops: opsKey, hash: done.hash, report: done }
+  return done
 }

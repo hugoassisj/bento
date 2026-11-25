@@ -131,6 +131,65 @@ try {
       await page.evaluate(() => window.bento.undo())
       ok(await snap(page) === j0, 'one undo removes the added slide and its text')
 
+      console.log('\nthe outline round-trips formatting (real sanitizer)')
+      const fmt = await page.evaluate(() => {
+        const line = window.bento.outline().split('\n').find((l) => l.startsWith(' 1/sd-title '))
+        const text = JSON.parse(line.slice(line.indexOf('"'), line.lastIndexOf('"') + 1))
+        const same = window.bento.patch([{ op: 'edits', id: '1/sd-title', text }])
+        const one = window.bento.patch([{ op: 'edits', id: '1/sd-title', text: text.replace('file', 'deck') }])
+        const html = window.bento.doc.slides[0].elements.find((e) => e.id === 'sd-title').html
+        window.bento.undo()
+        return { text, same, one, html }
+      })
+      ok(fmt.text.includes('\n') && fmt.same.replies[0].unchanged && !fmt.same.committed, `the title as printed (${JSON.stringify(fmt.text)}) sent back changes nothing`)
+      ok(fmt.one.committed && (fmt.html.match(/<br>/g) ?? []).length === 2 && fmt.html.includes('deck'), `changing one word keeps both line breaks (${fmt.html})`)
+      const bold = await page.evaluate(() => {
+        const s2 = window.bento.doc.slides[1]
+        const el = s2.elements.find((e) => e.type === 'text' && /<b>/.test(e.html))
+        const line = window.bento.outline({ find: el.id }).split('\n').find((l) => l.includes(`2/${el.id}`))
+        const text = JSON.parse(line.slice(line.indexOf('"'), line.lastIndexOf('"') + 1))
+        const r = window.bento.patch([{ op: 'edits', id: `2/${el.id}`, text: text + '\n**One more** — a fifth line' }])
+        const after = window.bento.doc.slides[1].elements.find((e) => e.id === el.id).html
+        window.bento.undo()
+        return { before: el.html, after, r }
+      })
+      ok(bold.r.committed && bold.after.startsWith(bold.before) && (bold.after.match(/<b>/g) ?? []).length === (bold.before.match(/<b>/g) ?? []).length + 1, 'adding a line keeps every bold lead-in before it')
+      ok(await snap(page) === j0, 'both undone')
+
+      console.log('\nchaining patches by the returned hash')
+      const chain = await page.evaluate(() => {
+        const h0 = window.bento.stats().hash
+        const a = window.bento.patch([{ op: 'notes', slide: 1, text: 'first' }], { base: h0 })
+        const b = window.bento.patch([{ op: 'notes', slide: 2, text: 'second' }], { base: a.hash })
+        window.bento.undo(); window.bento.undo()
+        return { a, b }
+      })
+      ok(chain.a.committed && chain.b.committed && chain.b.hash !== chain.a.hash, 'a patch whose base is the previous report\'s hash applies (the hash is taken after the editor\'s derive pass)')
+      ok(await snap(page) === j0, 'both undone')
+
+      console.log('\ntext measured while a font is still loading is fitted again once it lands')
+      const late = await page.evaluate(async () => {
+        let release
+        const ready = new Promise((r) => { release = r })
+        Object.defineProperty(document.fonts, 'status', { configurable: true, get: () => 'loading' })
+        Object.defineProperty(document.fonts, 'ready', { configurable: true, get: () => ready })
+        const r = window.bento.patch([{ op: 'insert', slide: 1, type: 'text', id: 'late-text', md: 'Measured while a font loads, then again once it arrives.', x: 96, y: 560, w: 240 }])
+        const el = () => window.bento.doc.slides[0].elements.find((e) => e.id === 'late-text')
+        const fitted = el().h
+        el().h = 3 // what a fallback face could have measured; no undo step
+        delete document.fonts.status; delete document.fonts.ready
+        release(document.fonts)
+        await new Promise((r) => setTimeout(r, 300))
+        const refit = el().h
+        window.bento.undo()
+        const undone = el()?.h
+        window.bento.undo()
+        return { r, fitted, refit, undone }
+      })
+      ok(late.r.committed && late.fitted > 20, `the patch measured the box (h ${late.fitted})`)
+      ok(late.refit === late.fitted && late.undone === 3, `once the fonts settle the box is fitted again as its own undo step (h ${late.refit}; undo → ${late.undone})`)
+      ok(await snap(page) === j0, 'all undone')
+
       console.log('\nhostile markup, real sanitizers')
       const h = await page.evaluate(() => window.bento.patch([
         { op: 'set', id: '2/sd-title', html: 'hi <img src=x onerror="window.__pwn=1"> <b onclick="window.__pwn=2">bold</b> <a href="javascript:window.__pwn=3">l</a>' },
@@ -148,6 +207,13 @@ try {
       ok(!/@import|evil\.example/.test(sv.css ?? ''), 'svg css: the @import is gone')
       ok(!('link' in hit), 'the javascript: link was dropped')
       ok(await page.evaluate(() => window.__pwn === undefined), 'nothing ran')
+      await page.evaluate(() => window.bento.undo())
+      const lo = await page.evaluate(() => {
+        const r = window.bento.patch([{ op: 'insert', slide: 2, type: 'svg', id: 'remote-art', x: 0, y: 0, w: 10, h: 10, markup: '<svg viewBox="0 0 10 10"><image href="https://tracker.example/p.gif" width="10" height="10"/></svg>' }])
+        const kept = window.bento.doc.slides[1].elements.find((e) => e.id === 'remote-art')?.markup ?? ''
+        return { r, kept }
+      })
+      ok(lo.r.committed && (!/tracker\.example/.test(lo.kept) || (lo.r.loads ?? []).some((u) => u.startsWith('tracker.example'))), `a remote image inside svg markup is named in loads when it is kept (${JSON.stringify(lo.r.loads)})`)
       await page.evaluate(() => window.bento.undo())
     }
     ok(errors.length === 0, `no page errors (${errors.slice(0, 2).join(' | ')})`)

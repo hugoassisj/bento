@@ -3,7 +3,8 @@
 // Copyright (c) 2026 The Bento authors
 // outline() and patch(): read a deck cheaply, change it surgically.
 //
-// BUNDLED, not run directly — the gate and the renderer import extensionless:
+// BUNDLED, not run directly — the gate and the renderer import extensionless —
+// and run from the repo root (it reads scripts/fixtures/compact-decks):
 //
 //   slides/node_modules/.bin/esbuild scripts/test-slides-ops.ts --bundle \
 //     --platform=node --format=esm --outfile="$TMPDIR/test-slides-ops.mjs" \
@@ -36,8 +37,10 @@
 // (its ops section and condition C payloads), on the live-document patch.
 
 import { starterDoc } from '../slides/src/starterdeck.ts'
-import { outlineDoc, docStats, deckHash, words, OUTLINE_TEXT_MAX } from '../slides/src/outline.ts'
-import { patchDoc, normalizeOps, type PatchReport, type PatchError } from '../slides/src/ops.ts'
+import { outlineDoc, docStats, deckHash, words, textForm, OUTLINE_TEXT_MAX } from '../slides/src/outline.ts'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { patchDoc, normalizeOps, remoteUrls, type PatchReport, type PatchError } from '../slides/src/ops.ts'
 import { validateDoc } from '../slides/src/validate.ts'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../slides/src/render.ts'
 import { mainSig, components } from '../slides/src/components.ts'
@@ -52,6 +55,12 @@ function ok(cond: unknown, msg: string) {
 type Obj = Record<string, any>
 const env = { san: { html: sanitizeHtml, svg: sanitizeSvgMarkup, svgCss: sanitizeSvgCss }, validate: (d: BentoDoc) => validateDoc(d, { measure: false }) }
 const run = (doc: BentoDoc, ops: unknown, opts: Obj = {}) => patchDoc(doc, ops, opts, env)
+// With no DOM the real sanitizeHtml keeps no tag at all (render.ts
+// stripAllTags), which is safe but cannot show that formatting survives. The
+// formatting cases run with this stand-in for the browser's allowlist (the
+// browser rig repeats them with the real one).
+const inline = (h: string) => h.replace(/<(?!\/?(?:b|i|s|code|br)>|a href="https?:\/\/[^"]*">|\/a>)[^>]*>/gi, '')
+const runFmt = (doc: BentoDoc, ops: unknown, opts: Obj = {}) => patchDoc(doc, ops, opts, { ...env, san: { ...env.san, html: inline } })
 const rep = (r: { report: PatchReport | PatchError }) => r.report as PatchReport
 const bytes = (s: string) => Buffer.byteLength(s, 'utf8')
 
@@ -82,12 +91,15 @@ console.log('\noutline: the deck view')
   d.slides.forEach((s, i) => s.elements.forEach((e: Obj) => {
     const w = e.type === 'text' ? words(e.html) : e.type === 'code' ? String(e.content ?? '') : ''
     if (!w || /^(\{\{[^}]*\}\}\s*)+$/.test(w)) return
-    const head = JSON.stringify(w.slice(0, OUTLINE_TEXT_MAX)).slice(0, -1)
+    const f = e.type === 'text' ? textForm(e.html) : { md: w }
+    const head = JSON.stringify(('md' in f ? f.md : f.html).slice(0, OUTLINE_TEXT_MAX)).slice(0, -1)
     if (!o.includes(`${i + 1}/${e.id}`) || !o.includes(head)) missing.push(`${i + 1}/${e.id}`)
   }))
   ok(missing.length === 0, `every element's words are in it, addressed <slide>/<id> (missing: ${missing.slice(0, 5).join(', ') || 'none'})`)
-  const cells = (d.slides.flatMap((s) => s.elements).find((e) => e.type === 'table') as Obj | undefined)?.rows?.flatMap((r: Obj) => r.cells.map((c: Obj) => words(c.html))) ?? []
-  ok(cells.length > 0 && cells.every((c: string) => o.includes(JSON.stringify(c))), `every table cell is in it (${cells.length})`)
+  const table = d.slides.flatMap((s) => s.elements).find((e) => e.type === 'table') as Obj
+  const rowsOk = table.rows.every((r: Obj, ri: number) => o.includes(`r${ri + 1}: ${r.cells.map((c: Obj) => JSON.stringify(words(c.html))).join(' | ')}`))
+  ok(rowsOk, `every table row is in it, as r<n>: "a" | "b" (${table.rows.length} rows)`)
+  ok(/11\/sd-tbl-chart chart .*\(← table sd-table\)/.test(o), 'a chart that follows a table says which')
   ok(/hash [0-9a-z]{14}/.test(o) && o.includes(deckHash(d)), 'the header carries the content hash patch() takes as base')
   ok(/palette: bg1 #/.test(o) && /tokens \(18\)/.test(o) && /components: "Key hint"/.test(o) && /layouts: .*built-in title/.test(o), 'the header names the palette, the 18 tokens, the components and the layouts')
   ok(/state of sd-s-charts/.test(o) && /\(→ sd-s-charts-pie\)/.test(o), 'states and links are marked')
@@ -97,6 +109,50 @@ console.log('\noutline: the deck view')
   const f = outlineDoc(d, { find: 'scatter' })
   ok(f.length < o.length / 3 && f.includes('## 10 ') && !f.includes('## 2 '), `{ find } narrows to the slides and lines that match (${f.length} chars)`)
   ok(outlineDoc(d, { find: 'zzzz-nothing' }).includes('nothing matches'), '{ find } says so when nothing matches')
+}
+
+console.log('\noutline → edits round-trips every text')
+{
+  // the outline prints each text as the markdown edits takes (or html when
+  // markdown cannot say it): sending it back must change nothing
+  const root = process.cwd() // bundled: run from the repo root
+  const decks: Array<[string, BentoDoc]> = [['starter', starterDoc()]]
+  const fx = join(root, 'scripts/fixtures/compact-decks')
+  for (const f of readdirSync(fx).filter((f) => f.endsWith('.json')).sort()) decks.push([f, JSON.parse(readFileSync(join(fx, f), 'utf8'))])
+  for (const [name, d] of decks) {
+    const ops: Obj[] = []
+    let html = 0
+    d.slides.forEach((s, i) => s.elements.forEach((e: Obj) => {
+      if (e.type === 'text' && e.html) { const f = textForm(e.html); if ('html' in f) html++; ops.push({ op: 'edits', id: `${i + 1}/${e.id}`, ...('md' in f ? { text: f.md } : { html: f.html }) }) }
+      if (e.type === 'table') e.rows.forEach((r: Obj, ri: number) => r.cells.forEach((c: Obj, ci: number) => { const f = textForm(c.html); ops.push({ op: 'cells', id: `${i + 1}/${e.id}`, row: ri + 1, col: ci + 1, ...('md' in f ? { text: f.md } : { html: f.html }) }) }))
+    }))
+    const R = rep(run(d, ops))
+    const changed = R.replies.filter((x) => !x.unchanged)
+    ok(R.ok && !R.committed && changed.length === 0, `${name}: ${ops.length} texts and cells sent back as the outline prints them are all unchanged (${html} printed as html; changed: ${changed.slice(0, 3).map((x) => x.op + (x.reason ? ' ' + x.reason : '')).join('; ') || 'none'})`)
+  }
+  const d = starterDoc()
+  const one = rep(run(d, [{ op: 'edits', id: '1/sd-title', text: 'The file\nis the\nsoftware.' }]))
+  ok(one.replies[0].unchanged && !one.committed, 'the starter title with its line breaks, as printed, is unchanged')
+  const re = runFmt(d, [{ op: 'edits', id: '1/sd-title', text: 'The deck\nis the\nsoftware.' }])
+  ok((re.next!.slides[0].elements.find((e) => e.id === 'sd-title') as Obj).html === 'The deck<br>is the<br>software.', 'changing one word keeps the line breaks')
+  const b = d.slides[1].elements.find((e: Obj) => e.type === 'text' && /<b>/.test(e.html)) as Obj
+  const f = textForm(b.html) as { md: string }
+  const more = runFmt(d, [{ op: 'edits', id: `2/${b.id}`, text: f.md + '\n**One more** — a fifth line' }])
+  const after = (more.next!.slides[1].elements.find((e) => e.id === b.id) as Obj).html
+  ok(after.startsWith(b.html) && (after.match(/<b>/g) ?? []).length === (b.html.match(/<b>/g) ?? []).length + 1, 'adding a line keeps every bold lead-in and line break before it')
+  // markup markdown cannot say: printed as html, taken back as html
+  const lst = starterDoc()
+  lst.slides[1].elements.push({ ...(lst.slides[1].elements.find((e) => e.type === 'text') as Obj), id: 'list', html: '<ul><li>one</li><li>two</li></ul>' } as any)
+  ok(/2\/list html "<ul><li>one<\/li><li>two<\/li><\/ul>"/.test(outlineDoc(lst)), 'a list is printed as html "…"')
+  ok(rep(run(lst, [{ op: 'edits', id: '2/list', html: '<ul><li>one</li><li>two</li></ul>' }])).replies[0].unchanged, 'and taken back unchanged with {id, html}')
+  const flat = rep(run(lst, [{ op: 'edits', id: '2/list', text: 'one two three' }]))
+  ok(flat.committed && (flat.notes ?? []).some((x) => /2\/list: its old formatting had no markdown form/.test(x)), 'replacing it with markdown says the formatting went')
+  const long = starterDoc()
+  ;(long.slides[1].elements.find((e) => e.type === 'text' && !e.role) as Obj).html = 'word '.repeat(100).trim()
+  const cut = outlineDoc(long).split('\n').find((l) => l.includes('word word'))!
+  const cutText = JSON.parse(cut.slice(cut.indexOf('"'), cut.lastIndexOf('"') + 1))
+  const cr = rep(run(long, [{ op: 'edits', id: cut.trim().split(' ')[0], text: cutText }]))
+  ok(!cr.committed && /cut short in the outline; read outline\(\{ slide: 2 \}\)/.test(cr.skipped[0]?.reason ?? ''), 'a text the outline cut short, sent back, is refused (it would lose the rest)')
 }
 
 console.log('\noutline: secrets, assets, the slide view')
@@ -181,7 +237,7 @@ console.log('\npatch: identity and capability never change')
   ], { partial: true })
   const n = r.next ?? d
   ok(n.docId === 'docid-fixture-1' && (n.collab as Obj).key === SECRET && n.readonly === false, 'docId, collab and readonly are the document\'s own')
-  ok(rep(r).skipped.length >= 3 && rep(r).skipped.every((s) => /cannot be|not a slide field/.test(s.reason)), 'each attempt is refused by name')
+  ok(rep(r).skipped.length >= 3 && rep(r).skipped.every((s) => /cannot be|not a slide field|does not take/.test(s.reason)), 'each attempt is refused by name')
   ok(!JSON.stringify(n.slides).includes('evil'), 'nothing of the attempt reached the slides')
 }
 
@@ -203,6 +259,10 @@ console.log('\npatch: hostile content (condition C of PR #532)')
   const hit = n.slides[0].elements.find((e) => e.id === 'hit') as Obj
   ok(hit && !('link' in hit), 'the javascript: link did not reach the document (the shape did, without it)')
   ok((rep(r).notes ?? []).some((x) => /1\/hit link/.test(x)), 'the report says the link was removed')
+  const img = rep(run(d, [{ op: 'insert', slide: 1, type: 'image', id: 'remote-pic', x: 0, y: 0, w: 10, h: 10, src: 'https://pics.example/a.png' }]))
+  ok((img.loads ?? []).includes('pics.example/a.png'), `a remote picture is named in loads (${JSON.stringify(img.loads)})`)
+  const found = [...remoteUrls({ markup: '<svg><image href="https://tracker.example/p.gif"/></svg>', css: '.a{background:url(https://css.example/b.png)}', html: 'x <a href="https://l.example/?a=1&amp;b=2">y</a>' })]
+  ok(['tracker.example/p.gif', 'css.example/b.png', 'l.example'].every((u) => found.includes(u)), `loads finds a URL anywhere in a string: svg markup, css, html (${JSON.stringify(found)})`)
   ok(!/@import|evil\.example/.test(out), 'the svg css @import did not reach the document')
   const t1 = n.slides[0].elements.find((e) => e.id === 'sd-title') as Obj
   ok(/&lt;img/.test(t1.html) && /<b>|bold/.test(t1.html), 'an edit\'s markup is text: escaped, never parsed')
@@ -235,6 +295,55 @@ console.log('\npatch: order, numbering, caller ids')
   const states = run(d, { remove: [8] })
   ok(rep(states).replies[0].op === 'remove 8 (+2 states)' && !states.next!.slides.some((s) => s.stateOf === 'sd-s-charts'), 'removing a slide takes its states with it')
   ok(normalizeOps({ move: [], edits: [{}] }).map((o: Obj) => o.verb).join() === 'edits', 'object form: content verbs run before structure')
+}
+
+console.log('\npatch: a slide and its states are one unit (discussion #514)')
+{
+  const d = starterDoc()
+  const ids = d.slides.map((s) => s.id)
+  const unit = ids.slice(7, 10) // sd-s-charts and its two states
+  const m = run(d, [{ op: 'move', slide: 8, to: 1 }])
+  const got = m.next!.slides.map((s) => s.id)
+  ok(JSON.stringify(got.slice(0, 3)) === JSON.stringify(unit) && got.length === ids.length, 'moving a parent to the front carries its states with it, in order')
+  const fwd = run(d, [{ op: 'move', slide: 2, to: 8 }]).next!.slides.map((s) => s.id)
+  ok(fwd.indexOf(ids[1]) === fwd.indexOf(unit[2]) + 1, 'moving a slide onto a parent lands after that parent\'s states, never between them')
+  const st = rep(run(d, [{ op: 'move', slide: 9, to: 1 }]))
+  ok(!st.committed && /slide 9 is a state of slide 8 and moves with it; move slide 8/.test(st.skipped[0]?.reason ?? ''), 'moving a state away from its parent is refused, saying what to move')
+  for (const after of [8, 9]) {
+    const a = run(d, [{ op: 'add', after, layout: 'title', title: 'New', id: 'fresh' }]).next!.slides.map((s) => s.id)
+    ok(a.indexOf('fresh') === a.indexOf(unit[2]) + 1, `add after ${after} lands after slide 8's last state`)
+  }
+  const two = run(d, [{ op: 'add', after: 8, id: 'a1', layout: 'title', title: 'A' }, { op: 'add', after: 8, id: 'a2', layout: 'title', title: 'B' }]).next!.slides.map((s) => s.id)
+  ok(two.indexOf('a1') === two.indexOf(unit[2]) + 1 && two.indexOf('a2') === two.indexOf('a1') + 1, 'two adds after the same slide keep their order')
+}
+
+console.log('\npatch: partial never keeps part of a refused op')
+{
+  const d = starterDoc()
+  const t0 = d.slides[0].elements.find((e) => e.id === 'sd-title') as Obj
+  const a = run(d, [{ op: 'set', id: '1/sd-title', x: 999, type: 'shape' }], { partial: true })
+  ok(!rep(a).committed && a.next === null && !rep(a).replies[0].ok, 'a set refused for one field commits none of its fields (x stays)')
+  const b = run(d, [{ op: 'set', id: '1/sd-title', y: 5, fontWeight: 'javascript:alert(1)' }, { op: 'notes', slide: 1, text: 'kept' }], { partial: true })
+  const tb = b.next!.slides[0].elements.find((e) => e.id === 'sd-title') as Obj
+  ok(rep(b).committed && tb.y === t0.y && tb.fontWeight === t0.fontWeight && b.next!.slides[0].notes === 'kept', 'a set the gate refuses leaves y as it was; the op that passed applies')
+  const c = run(d, [{ op: 'style', id: '1/sd-title', size: 'bigger' }, { op: 'set', id: '1/sd-title', bogus: 1 }, { op: 'edits', id: '2/nope', text: 'x' }], { partial: true })
+  const tc = c.next!.slides[0].elements.find((e) => e.id === 'sd-title') as Obj
+  ok(tc.fontSize === Math.round(t0.fontSize * 1.25), `a relative op that passes applies once across the retries (${t0.fontSize} → ${tc.fontSize})`)
+  ok(rep(c).replies[1].ok === false && /bogus/.test(rep(c).replies[1].reason ?? '') && /no element "nope"/.test(rep(c).replies[2].reason ?? ''), 'and the refused ops keep their own reasons')
+}
+
+console.log('\npatch: fields a verb does not take')
+{
+  const d = starterDoc()
+  const R = rep(run(d, [
+    { op: 'edits', id: '1/sd-title', txt: 'typo' },
+    { op: 'cells', id: '11/sd-table', row: 1, col: 1, text: 'x', colour: 'red' },
+    { op: 'add', after: 1, title: 'x', subtitel: 'typo' },
+    { op: 'notes', slide: 1, text: 'x', append: true },
+    { op: 'move', slide: 2, to: 3, after: true },
+  ]))
+  ok(R.skipped.length === 5 && /edits does not take "txt"; its fields are id, text, html/.test(R.replies[0].reason ?? ''), `each unknown field is refused with the valid ones (${R.replies[0].reason})`)
+  ok(/add does not take "subtitel"; its fields are after, from, layout/.test(R.replies[2].reason ?? '') && /subtitle/.test(R.replies[2].reason ?? ''), 'add names its fields, roles included')
 }
 
 console.log('\npatch: the design system')
@@ -280,6 +389,7 @@ console.log('\npatch: stale edits, stats')
   ok(rep(g).committed, 'the current hash as base applies')
   const st = docStats(fixture(), JSON.stringify(fixture()))
   ok(st.assets[0].key === 'photo' && st.assets[0].bytes === PNG.length && st.assets.every((a, k) => k === 0 || a.bytes <= st.assets[k - 1].bytes), 'stats() lists the largest assets first')
+  ok(docStats(starterDoc(), '{}').fonts.every((f) => f.builtin === true && f.bytes === 0), 'stats() marks the fonts the shell carries as builtin')
   ok(st.slides === 19 && st.shown === 15 && st.tokens === 18 && st.components === 3 && st.bound > 0 && st.literal > 0 && st.outlineBytes < st.bytes / 5, `stats(): ${st.slides} slides, ${st.shown} shown, ${st.bound} bound / ${st.literal} literal, outline ${st.outlineBytes} B of ${st.bytes} B`)
 }
 
@@ -292,11 +402,15 @@ console.log('\nwhat it costs an agent (bytes / 4 ≈ tokens)')
   while (big.slides.length < 40) big.slides.push(...JSON.parse(JSON.stringify(starterDoc().slides.slice(1, 12))).map((s: Obj, k: number) => ({ ...s, id: `${s.id}-x${big.slides.length + k}`, stateOf: undefined })))
   big.slides.length = 40
   const bo = outlineDoc(big)
+  const huge = starterDoc()
+  while (huge.slides.length < 90) huge.slides.push(...JSON.parse(JSON.stringify(starterDoc().slides.slice(1, 12))).map((s: Obj, k: number) => ({ ...s, id: `${s.id}-y${huge.slides.length + k}`, stateOf: undefined })))
+  const ho = outlineDoc(huge)
   const patch = JSON.stringify([{ op: 'edits', id: '3/sd-title', text: 'Software you never have to install.' }, { op: 'notes', slide: 3, text: 'Say it slowly.' }])
   console.log(`  starter: document ${bytes(full)} B (~${Math.round(bytes(full) / 4)} tok), outline ${bytes(o)} B (~${Math.round(bytes(o) / 4)} tok)`)
   console.log(`  40 slides: document ${bytes(JSON.stringify(big))} B (~${Math.round(bytes(JSON.stringify(big)) / 4)} tok), outline ${bytes(bo)} B (~${Math.round(bytes(bo) / 4)} tok)`)
   console.log(`  a retitle + notes: patch ${bytes(patch)} B (~${Math.round(bytes(patch) / 4)} tok) vs rewriting the document ${bytes(full)} B`)
-  ok(bytes(bo) < bytes(JSON.stringify(big)) / 8 && bytes(bo) <= 48000 + 400, 'a 40-slide outline stays bounded and under an eighth of the document')
+  ok(bytes(bo) < bytes(JSON.stringify(big)) / 8 && bo.length <= 34000, `a 40-slide outline is under an eighth of the document and ~10k tokens (${bo.length} chars)`)
+  ok(ho.length <= 34000 + 400 && /outline\(\{ from: \d+ \}\), or narrow with \{ find/.test(ho), `a ${huge.slides.length}-slide outline stops at the cap and says how to page or narrow (${ho.length} chars)`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
