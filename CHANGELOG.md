@@ -11,6 +11,19 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Agents can change one thing without rewriting the deck.** In the
+  browser, `window.bento.outline()` reads a deck as every word on it, each
+  addressed by slide and element, with the deck's colours, tokens, fonts,
+  components and layouts on top: about a tenth of the document (14.8 KB for
+  the starter deck instead of 150 KB). `window.bento.patch()` then changes
+  exactly what it names (a title, a cell, notes, a new slide copied from one
+  of yours) as one step you can undo, through the same safety checks as
+  pasted JSON, and either all of it applies or none of it does, with a
+  reason for every refusal. Colours and fonts can be named from the deck's
+  own palette and tokens, so new content keeps following your design, and a
+  colleague's edits to other slides are kept. `window.bento.stats()` sums a
+  deck up. The verbs come from the in-editor Assistant proposed in #532.
+
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the

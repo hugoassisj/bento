@@ -103,6 +103,14 @@ Two ways to work with it:
    In the browser console: `window.bento.read()` (read, sharing keys left
    out) / `window.bento.loadDoc(json)` (write, undoable; the open deck keeps
    its own session).
+3. **Targeted edits in the browser** (any agent driving the app): read
+   `window.bento.outline()` (about a tenth of the document, every word
+   addressed) and change what you mean with `window.bento.patch(ops)` —
+   one undo step, nothing else touched. See
+   [Change one thing](#change-one-thing-windowbentooutline-patch-stats) below.
+   Prefer it to `loadDoc` for any change to an existing deck: a whole-document
+   replacement flattens undo to one entry over everything and overwrites what
+   a person typed while you were thinking.
 
 **Reading a deck without its pictures.** A deck saved by a current version
 of Slides keeps its picture data in the top-level `assets` map (elements say
@@ -279,6 +287,103 @@ a link to a slide that does not exist.
 
 This does not replace looking at the deck. It catches what is checkable; the
 rest — whether a slide is any good — still needs eyes.
+
+### Change one thing: `window.bento.outline()`, `patch()`, `stats()`
+
+To retitle one slide you do not need the whole document (about 150 KB for
+the starter deck, ~37k tokens). Read the outline, write a patch.
+
+```js
+const o = window.bento.outline()          // ~15 KB for the starter: every word, addressed
+window.bento.outline({ slide: 3 })        // one slide in full, each element as compact JSON
+window.bento.outline({ find: 'revenue' }) // only the lines that mention it
+window.bento.stats()                      // counts, bytes, largest assets, bound vs literal, hash
+```
+
+The outline's header names the deck's palette slots, tokens, fonts,
+components and layouts, the bindings most elements carry, and a `hash`.
+Each line is one element: its address, role, words, and what an edit must
+respect — `(frame row gap 16)`, `(copy of "Button")`, `(step 2)`,
+`(→ slide-id)`, and the bindings that differ from the usual ones,
+`{color=accent1}`. Decoration (textures, plain shapes) is counted per slide,
+not listed. Long notes are cut at 72 characters and long texts at 300; the
+slide view carries them whole. Sharing keys, embedded documents and asset
+bytes never appear; in the slide view a picture's `src` reads
+`@@elided image/png 34 KB@@`, and writing that placeholder back is refused.
+
+**Addresses and numbering.** An element is `<slide>/<element id>`. The slide is
+its position in `doc.slides`, counting from 1, **interactive states and
+hidden slides included** (the outline marks them), or the slide's id. "Slide
+3" in the show can be another slide; the outline's numbers are the only ones
+an address uses. Inside one patch a slide number always means the deck you
+read, however earlier ops moved things; a slide the patch adds is named by
+its id.
+
+```js
+const r = window.bento.patch([
+  { op: 'edits', id: '3/sd-title', text: 'Software you never install.' },
+  { op: 'notes', slide: 3, text: 'Pause here.' },
+  { op: 'add', after: 3, from: 3, id: 'pricing', title: 'Pricing' },   // duplicate slide 3, retitled
+  { op: 'insert', slide: 'pricing', type: 'text', id: 'price', md: '**€9** a month',
+    x: 96, y: 520, w: 600, color: 'tx1', fontFamily: '$font.body' },
+], { base: hash })                         // the hash from outline()/stats()/the last patch
+// r → { ok: true, committed: true, replies: [{ op: 'edit 3/sd-title', ok: true }, …,
+//       { op: 'add pricing after 3', ok: true, ids: ['pricing'] }, …],
+//       skipped: [], findings: [ …only what this patch introduced ], fixed: 0, slides: 20, hash }
+```
+
+A patch is a list of ops run in order (later ops may name what earlier ones
+created), or one object of verb lists (`{ edits: […], notes: […] }`, which
+runs content verbs first, then `remove`, `add`, `move`). The verbs:
+
+| verb | one op | does |
+|---|---|---|
+| `edits` | `{id, text}` | the words of a text (markdown: `**bold**`, `*italic*`, `- bullets`) or a code element |
+| `notes` | `{slide, text}` | speaker notes |
+| `cells` | `{id, row, col, text}` | one table cell, from 1 |
+| `chart` | `{id, series: [{name, data}], categories?}` | a chart's numbers (not one linked to a table: edit the table) |
+| `style` | `{id, size?, weight?, align?}` | `bigger`/`smaller`, `bold`/`normal`, `left`/`center`/`right` |
+| `set` | `{id, …fields, detach?, at?}` | merge fields onto an element; objects merge one level, `null` deletes; `parentId` moves it into a frame, `at` reorders it there |
+| `insert` | `{slide, type, …fields, id?, parentId?}` | a new element in compact form (defaults filled; text without `h` is measured) |
+| `insert` | `{slide, use: "<component>", x?, y?, texts?}` | a copy of a component; `texts` keys are the main's text ids |
+| `delete` | `{id}` or `"n/id"` | an element and everything inside it |
+| `slide` | `{slide, background?, transition?, hidden?, unnumbered?, name?, notes?, layout?}` | slide fields; `layout` re-arranges the slide onto a layout |
+| `add` | `{after, from?, layout?, id?, title?, subtitle?, body?, left?, right?, kicker?, quote?, attribution?, card1–3?, notes?, elements?}` | a new slide: a duplicate of `from` (ids kept, so it morphs with it) or a layout filled by role |
+| `remove` | `{slide}` or a number | a slide, with its states |
+| `move` | `{slide, to}` | put slide N where slide M is |
+
+**Use the deck's design system.** A colour may be a palette slot (`"accent1"`,
+`"accent2 -20%"`) and any paint or type value a token (`"$color.card"`,
+`"$font.body"`, `"$radius.md"`): the literal and the binding are written
+together, so the value follows the deck from then on. A field that is already
+bound is never silently overwritten with a literal; the op is refused and
+says so. Name a slot or token to rebind, or add `"detach": true` when the user
+asked for a one-off colour. Prefer `add … from` (a slide of this deck) over a
+built-in layout, and `insert … use` over drawing a look-alike.
+
+**All or nothing, one undo step.** Every op is checked, through the same gate
+pasted JSON meets, before anything changes. If any op is refused, nothing is
+committed, every op still gets its reply (index-aligned, with the address it
+resolved to or the reason and what to do instead), `skipped` lists the
+refused ones by index, and `hint` says what to do. Fix and send the whole
+patch again, or pass `{ partial: true }` to apply the rest. A committed patch
+is one undo step; ⌘Z restores the deck byte for byte. It is applied to the
+live deck as an edit, so the editor keeps its slide and a collaborator's
+changes to other slides survive — which is why it is the right tool even for
+large changes, and `loadDoc` is not.
+
+**Options.** `base`: the hash you read; a deck that changed since is refused
+as `stale` ("read outline() again"), and the same patch retried with its base
+after it applied is answered `alreadyApplied`. `dryRun: true`: the same report,
+nothing changed (no undo step). `outline: true`: the touched slides' outline
+after the change. An op that is already true replies `unchanged`; adding an
+id that exists is refused by name, so a retry never duplicates.
+
+**Errors.** `{ ok: false, err, detail }`: `bad-patch` (not a list or an object
+of verbs), `stale`, `readonly` (a read-only copy; a dry run still answers), or
+`failed`. `patch()` never throws, and never changes `docId`, `collab`,
+`readonly`, the theme, the tokens, the layouts, the assets or the fonts:
+fields like those are refused by name.
 
 ## Minimal valid document
 

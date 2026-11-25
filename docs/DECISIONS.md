@@ -15396,3 +15396,27 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-25 — slides: agents read an addressed outline and write patches, all or nothing
+
+`window.bento.outline()`, `patch(ops)` and `stats()` are the agent path for
+changing an existing deck; `loadDoc` stays for whole documents.
+- **Addresses** are `<slide>/<element id>`; a slide is its 1-based position in
+  `doc.slides`, states and hidden slides included, or its id. Inside one patch
+  a number means the deck as read (the outline), never a position shifted by
+  an earlier op; new slides are named by id.
+- **The verbs are PR #532's** (edits, notes, cells, chart, style, set, insert,
+  delete, slide, add, remove, move), the vocabulary its extension already
+  teaches, not a second one modelled on another product; the object form it
+  writes is accepted beside an ordered list.
+- **All or nothing by default**, as Google Slides' batchUpdate: every op is
+  checked through the element and slide gate on a copy, replies are
+  index-aligned, one refusal commits nothing (`partial: true` opts out).
+- **A computed content hash** (`base`) guards stale edits; no format key.
+- **Commit, not replaceDoc**: only touched slides are new objects, so a live
+  session's diff carries only them and the derive memory survives.
+- **A bound value is never silently replaced by a literal** (`detach: true`
+  says so); slot and token names write literal and binding together.
+- The format-side modules live in `slides/src/ops.ts` and `outline.ts` for the
+  Assistant (AS-01), the CLI and a tool server to import; the browser half is
+  `patchstore.ts`. Rigs: `test-slides-ops.ts`, `test-slides-patch-api-browser.mjs`.
