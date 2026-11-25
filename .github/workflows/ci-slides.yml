@@ -734,6 +734,7 @@ jobs:
         # With fonts loaded and measuring on, the starter reports zero errors
         # and zero warnings; a text box that overhangs the canvas with every
         # glyph inside is info (a deliberate bleed), and one whose glyphs,
-        # shadow or blur are cropped by an edge still warns. Checked against
-        # screenshots for Latin, flags, emoji, Thai, combining marks, Arabic.
+        # decorations, code chip, outline, shadow or blur are cropped by an
+        # edge still warns. Checked against screenshots for Latin, flags,
+        # emoji, Thai, combining marks, Arabic, underlines and outlines.
         run: node scripts/test-slides-starter-clean-browser.mjs

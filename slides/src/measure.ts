@@ -163,11 +163,27 @@ export interface InkBox { left: number; top: number; right: number; bottom: numb
 const COLLAPSIBLE = /[ \t\n\r\f]+/g
 
 /**
- * Where each text element actually paints — its glyphs, plus whatever its
- * outline stroke, shadows and blur spread around them — in slide px, rendered
+ * A box that contains everything a text element paints, in slide px, rendered
  * at the element's own size through `renderElement` and in one host. What the
  * out-of-canvas check uses to tell a deliberate bleed (box past the edge,
- * everything drawn inside) from cropped words.
+ * everything drawn inside) from cropped words. Exactly what goes in it:
+ *
+ *   - glyph ink, MEASURED: the run on each line shaped by canvas measureText
+ *     (see HOW), placed by the DOM's layout of that run;
+ *   - an inline element's painted box, MEASURED: its border box as laid out,
+ *     padding included (the background chip of inline code);
+ *   - decoration lines, BOUNDED: the DOM does not report where an underline,
+ *     strike or overline is drawn, so each gets a band across its fragment's
+ *     width, placed from the baseline with a margin that contains it;
+ *   - an outline stroke, shadows and blur, BOUNDED: the glyph box grown by
+ *     twice the stroke width (a mitred corner), and by each shadow's offset
+ *     plus three times its blur (see `spread`).
+ *
+ * The measured parts land within about 1px of the faintest drawn pixel; the
+ * bounded parts are wider than what is drawn by up to a fifth of the font
+ * size, so a decorated or outlined bleed has to sit further inside the edge
+ * before it reads as one. Both are checked against screenshots in
+ * scripts/test-slides-starter-clean-browser.mjs.
  *
  * HOW. A line of text is measured as a RUN, never character by character: a
  * flag is two code points and one glyph, a Thai or combining mark stacks on
@@ -183,8 +199,9 @@ const COLLAPSIBLE = /[ \t\n\r\f]+/g
  * line box the Range reports must be the font's ascent plus descent (what
  * places the baseline). Either failing, or anything this cannot attribute — a
  * rotated or mirrored element, a list's markers, a picture or formula, text
- * transforms or font features, no Intl.Segmenter or no glyph metrics — gives
- * `null`, "not measured", which a caller must never read as "inside".
+ * transforms or font features, an inline box-shadow or outline, no
+ * Intl.Segmenter or no glyph metrics — gives `null`, "not measured", which a
+ * caller must never read as "inside".
  */
 export function measureInk(els: Array<{ el: TextElement; fields?: FieldContext }>, doc: BentoDoc): Array<InkBox | null> {
   if (!els.length) return []
@@ -275,13 +292,54 @@ function glyphBox(
     }
   }
   if (!box) return null
+  // Paint inline elements add around the glyphs: a chip's background and
+  // padding (inline code), and decoration lines (underline, strike, a link's
+  // underline). Neither is in a glyph's ink, so neither came out of
+  // measureText above.
+  const add = (g: InkBox) => {
+    box = { left: Math.min(box!.left, g.left), top: Math.min(box!.top, g.top), right: Math.max(box!.right, g.right), bottom: Math.max(box!.bottom, g.bottom) }
+  }
+  for (const e of Array.from(inner.querySelectorAll<HTMLElement>('*'))) {
+    const cs = getComputedStyle(e)
+    if (cs.boxShadow !== 'none' || (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0)) return null
+    const frags = Array.from(e.getClientRects()).filter((r) => r.width || r.height)
+    // a painted box: its border box, padding included, exactly as laid out
+    const bordered = ['Top', 'Right', 'Bottom', 'Left'].some((k) =>
+      parseFloat(cs.getPropertyValue(`border-${k.toLowerCase()}-width`)) > 0 && cs.getPropertyValue(`border-${k.toLowerCase()}-style`) !== 'none')
+    if (!/^(transparent|rgba\([^)]*,\s*0\))$/.test(cs.backgroundColor) || cs.backgroundImage !== 'none' || bordered) {
+      for (const r of frags) add({ left: r.left, top: r.top, right: r.right, bottom: r.bottom })
+    }
+    const deco = cs.textDecorationLine
+    if (!deco || deco === 'none') continue
+    // The DOM does not report where a decoration line is drawn, so each one
+    // is given a band that contains it: across the fragment's whole width,
+    // and placed from the baseline with room to spare (a font's underline
+    // sits about 0.1-0.15em below the baseline, about 0.07em thick; a strike
+    // about 0.3em above it). Measured against screenshots in the rig.
+    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontStretch === '100%' ? '' : cs.fontStretch} ${cs.fontSize} ${cs.fontFamily}`
+    const m = ctx.measureText('H')
+    if (typeof m.fontBoundingBoxAscent !== 'number') return null
+    const fs = parseFloat(cs.fontSize) || 0
+    const thick = parseFloat(cs.textDecorationThickness)
+    const t = Number.isFinite(thick) ? thick : 0.1 * fs
+    const off = parseFloat(cs.textUnderlineOffset)
+    const under = Math.max(0, Number.isFinite(off) ? off : 0) + 0.18 * fs + t + 1
+    for (const r of frags) {
+      if (Math.abs(r.height - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) > 1) return null
+      const baseline = r.top + m.fontBoundingBoxAscent
+      if (deco.includes('underline')) add({ left: r.left, right: r.right, top: baseline, bottom: baseline + under })
+      if (deco.includes('line-through')) add({ left: r.left, right: r.right, top: baseline - 0.45 * fs - t, bottom: baseline - 0.15 * fs + t })
+      if (deco.includes('overline')) add({ left: r.left, right: r.right, top: r.top - t - 1, bottom: r.top + t + 1 })
+    }
+  }
   return { left: box.left - origin.left, top: box.top - origin.top, right: box.right - origin.left, bottom: box.bottom - origin.top }
 }
 
 /**
  * Grow the glyph box by everything else the element paints around its
- * glyphs, then place it on the slide. An outline stroke paints at least half
- * its width outside the glyph (more at a mitred corner). Each drop shadow is the box so far, offset and
+ * glyphs, then place it on the slide. An outline stroke paints half its
+ * width outside a smooth outline and up to twice its width at a mitred corner
+ * (miter limit 4), so it counts as twice its width. Each drop shadow is the box so far, offset and
  * blurred — CSS filters chain, so a second shadow shadows the first — and a
  * blur spreads the result. A blur is taken to reach three times its value
  * (three standard deviations, reading the value as the larger of the two
@@ -289,9 +347,9 @@ function glyphBox(
  */
 function spread(b: InkBox, el: TextElement, x: number, y: number): InkBox {
   const grow = (k: number) => { b = { left: b.left - k, top: b.top - k, right: b.right + k, bottom: b.bottom + k } }
-  // half the width by geometry; a full width covers the corners a mitred
-  // join pushes further out
-  if (el.textStroke?.width) grow(Math.abs(el.textStroke.width))
+  // half the width along a smooth outline, but a mitred corner spikes out to
+  // the miter limit (4, Skia's) times half the width: twice the width
+  if (el.textStroke?.width) grow(2 * Math.abs(el.textStroke.width))
   const shadows = Array.isArray(el.shadow) ? el.shadow : el.shadow ? [el.shadow] : []
   for (const s of shadows) {
     const dx = Number(s.x) || 0

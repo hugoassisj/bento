@@ -15422,18 +15422,32 @@ replaced before this shipped.
   mirrored, lists, inline pictures or formulas, text transforms, font
   features, no `Intl.Segmenter`) is not measured and keeps the warning. The
   rule must never produce a false info; the 2px inset is there because the
-  measurement lands within about 1px of the faintest antialiased pixel
-  against screenshots (18 strings × 4 edges, minimum clearance 1.4px with
-  the inset).
+  glyph measurement lands within about 1px of the faintest antialiased pixel
+  against screenshots (37 strings and styles × 4 edges over rounds 2 and 3,
+  minimum clearance 1.2px with the inset).
+- **Everything drawn counts, measured where the DOM can, bounded where it
+  cannot.** Glyph ink and an inline element's painted box (inline code's
+  background chip and padding: its border box as laid out) are measured.
+  Decoration lines (underline, strike, overline, a link's underline) are not
+  reported by the DOM, so each gets a band across its fragment's width from
+  the baseline: underline to `offset + 0.18em + thickness + 1px` below it,
+  strike `0.15-0.45em` above it. A text outline counts as twice its width,
+  the mitred-corner bound at Skia's miter limit of 4 (a sharp apex measured
+  1.3x). Against screenshots the bounded bands are wider than what is drawn
+  by up to about 0.18em (25px at 140px type), so a decorated or outlined
+  bleed has to sit further inside before it reads as one; the rig asks
+  40-80px of those rows. Round 2 of review found decorations, chips and
+  mitre spikes cut while the rule said info; that is what this closes.
 - **Shadows and blur count as paint, padded, not refused.** A drop shadow is
   the box so far, offset and spread by three times its blur (CSS filters
   chain, so stacked shadows accumulate); an element blur spreads by three
-  times its value; a text outline by its full width. Three times reads the
-  blur as a standard deviation, the larger of the two conventions, so the
-  pad errs wide. Chosen over "any shadow keeps the warning" because a soft
-  shadow is common on display type and would otherwise make every bleed a
-  warning; a shadow switched off with the eye (`shadowHidden`) is not drawn
-  and not counted.
+  times its value. Three times reads the blur as a standard deviation, the
+  larger of the two conventions, so the pad errs wide. Chosen over "any
+  shadow keeps the warning" because a soft shadow is common on display type
+  and would otherwise make every bleed a warning; a shadow switched off with
+  the eye (`shadowHidden`) is not drawn and not counted. An inline
+  box-shadow or outline is not measured at all (the element keeps the
+  warning).
 - **No `decorative` key.** Marking a deliberate bleed explicitly would be a
   format addition; the ink rule makes it unnecessary for the case that
   prompted it. Raise it separately (with screen-reader skipping as its own

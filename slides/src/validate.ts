@@ -486,12 +486,13 @@ function validateChart(
 }
 
 /**
- * A text box past the canvas edge that paints everything inside it (glyphs,
- * outline, shadows, blur) is a deliberate bleed, like a shape's: nothing a
- * reader needs is cropped, so the finding drops to info. Where any of it
- * reaches the edge, or the glyphs could not be measured (rotated, mirrored,
- * lists, pictures, a run canvas and DOM shaped differently), the warning
- * stands. Ink comes from measure.ts, the same render.
+ * A text box past the canvas edge whose paint box (measure.ts measureInk:
+ * glyph ink and inline chips measured; decorations, outline, shadows and blur
+ * bounded) sits at least 2px inside the canvas is a deliberate bleed, like a
+ * shape's: nothing drawn is cropped, so the finding drops to info. Where the
+ * box reaches the edge, or the element could not be measured (rotated,
+ * mirrored, lists, pictures, a run canvas and DOM shaped differently), the
+ * warning stands.
  */
 function settleOverhangs(doc: BentoDoc, overhangs: Array<{ slide: Slide; el: TextElement; finding: Finding }>) {
   if (!overhangs.length) return
