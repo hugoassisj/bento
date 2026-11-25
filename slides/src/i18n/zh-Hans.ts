@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Too much to tidy on this slide": "此幻灯片上的内容太多，无法整理",
   "Distribute horizontally": "水平分布",
   "Distribute vertically": "垂直分布",
   "Same width": "相同宽度",

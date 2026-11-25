@@ -24,8 +24,10 @@
 //      runs nothing; ← → never nudge the selection behind a menu; rows that
 //      cannot apply are disabled and say why; Tidy up
 //      squares a row and a 2×3 scatter in one undo step with no frame, its
-//      toast's Use auto layout wraps exactly as ⇧A does, and a frame's children
-//      are never moved by it.
+//      toast's Use auto layout wraps exactly as ⇧A does, a title over its cards
+//      settles on the slide in one run, a selection too big for the slide does
+//      not move and the toast says so, and a frame's children are never moved
+//      by it.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -383,6 +385,31 @@ try {
 
     await run(async () => {
     await desk()
+    // f2. an ordinary slide — a title over three cards — tidies into two lines
+    // on the slide by the menu, and a second run moves nothing; two photos too
+    // big for any arrangement do not move, and the toast says so
+    const box = (id, x, y, w, h) => ({ id, type: 'shape', shape: 'rect', x, y, w, h, fill: '#88aadd' })
+    await load([box('t', 90, 50, 1100, 90), box('c1', 80, 175, 340, 440), box('c2', 465, 190, 340, 440), box('c3', 870, 182, 340, 440)])
+    await q.keyboard.press(`${mod}+a`); await q.waitForTimeout(100)
+    await menuOn('c2'); await hoverArrange()
+    await q.click('#ed-ctxmenu-sub [data-cmd="tidy-up"]'); await q.waitForTimeout(250)
+    const t1 = await els()
+    const onSlide = (list) => list.every((e) => e.x >= 0 && e.y >= 0 && e.x + e.w <= 1280 && e.y + e.h <= 720)
+    ok(onSlide(t1) && t1.slice(1).every((e) => e.y === t1[1].y) && t1[0].y + t1[0].h < t1[1].y, `a title over three cards: two lines, on the slide (${t1.map((e) => `${e.x},${e.y}`).join(' · ')})`)
+    await q.keyboard.press(`${mod}+k`); await q.keyboard.type('Tidy up'); await q.keyboard.press('Enter'); await q.waitForTimeout(250)
+    ok(JSON.stringify(await els()) === JSON.stringify(t1), 'a second Tidy up moves nothing')
+    const photos = [box('p1', 100, 50, 800, 600), box('p2', 380, 80, 800, 600)]
+    await load(photos)
+    await q.keyboard.press(`${mod}+a`); await q.waitForTimeout(100)
+    await q.keyboard.press(`${mod}+k`); await q.keyboard.type('Tidy up'); await q.keyboard.press('Enter')
+    await q.waitForSelector('.ed-toast.show', { timeout: 3000 })
+    const said = await q.$eval('.ed-toast', (t) => ({ text: t.textContent, act: !!t.querySelector('.ed-toast-act') }))
+    ok(/Too much to tidy on this slide/.test(said.text) && !/Tidied/.test(said.text) && !said.act, `two 800×600 photos: the toast says there is too much (${said.text})`)
+    ok(JSON.stringify((await els()).map((e) => [e.x, e.y])) === JSON.stringify(photos.map((e) => [e.x, e.y])), '…and nothing moved')
+    })
+
+    await run(async () => {
+    await desk()
     // g. a frame's children are the frame's: never moved by Tidy up
     await load([
       { id: 'f', type: 'shape', shape: 'rect', x: 100, y: 150, w: 700, h: 160, fill: '#eeeeee', layout: { dir: 'row', gap: 24, pad: [16, 16, 16, 16], hug: true } },
@@ -455,6 +482,18 @@ try {
       const al = await (await q.$('#ed-ctxmenu-sub [data-cmd="align-top"]')).boundingBox()
       await tap(al.x + al.width / 2, al.y + al.height / 2); await q.waitForTimeout(200)
       ok(!(await q.$('.ed-ctxmenu')) && (await els()).every((e) => e.y === 195), `${how}: a tap on a row of it runs that row (Align top: y ${(await els()).map((e) => e.y).join(', ')})`)
+      // a title over its cards, tidied from the submenu by tap: on the slide, settled
+      await load([rect('t', 90, 50, { w: 1100, h: 90 }), rect('c1', 80, 175, { w: 340, h: 440 }), rect('c2', 465, 190, { w: 340, h: 440 }), rect('c3', 870, 182, { w: 340, h: 440 })])
+      await q.keyboard.press(`${mod}+a`); await q.waitForTimeout(100)
+      await menuOn('c2')
+      const ar = await arrangeRect()
+      await tap(ar.x + ar.width / 2, ar.y + ar.height / 2); await q.waitForTimeout(200)
+      const td = await (await q.$('#ed-ctxmenu-sub [data-cmd="tidy-up"]')).boundingBox()
+      await tap(td.x + td.width / 2, td.y + td.height / 2); await q.waitForTimeout(250)
+      const tl = await els()
+      ok(tl.every((e) => e.x >= 0 && e.y >= 0 && e.x + e.w <= 1280 && e.y + e.h <= 720) && tl.slice(1).every((e) => e.y === tl[1].y), `${how}: Tidy up by tap puts a title over its cards on the slide (${tl.map((e) => `${e.x},${e.y}`).join(' · ')})`)
+      await q.keyboard.press(`${mod}+k`); await q.keyboard.type('Tidy up'); await q.keyboard.press('Enter'); await q.waitForTimeout(250)
+      ok(JSON.stringify(await els()) === JSON.stringify(tl), `${how}: …settled in one run`)
       ok(s.errors.length === 0, `${how}: no page errors${s.errors.length ? ': ' + s.errors.join(' | ') : ''}`)
       await s.ctx.close()
     })

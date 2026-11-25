@@ -15418,24 +15418,32 @@ replaced before this shipped.
   appeared under the pointer. It is part of the menu's singleton and mounts on
   the body, never inside the list, because a list that scrolls clips both
   axes. The topbar dropdowns do not share this code.
-- **Tidy up arranges in place and makes no frame.** It detects a row, a column
-  or a grid from the selection (`editor/tidy.ts`, pure geometry) by bands
-  first: all in one band across is a row and one band down a column, however
-  tall or wide the boxes, so a tidied row never reads as a column the second
-  time. It keeps sizes and the median gap already there, measured between
-  columns and rows. A loose scatter that is not a grid is reordered by x (by
-  y when it spreads taller than wide) and laid out as a row or column, wrapped
-  where it must.
-- **It keeps to the slide.** A row or column too long first tightens to one
-  even gap (down to 8px, or less if it already had less) and stays a row; only
-  then does it wrap into lines, and one to a line turns it the other way (two
-  tall photos go side by side). A grid too big tightens its gaps, then is laid
-  out again in reading order; the last resort packs shelves tallest first;
-  then the whole is shifted back inside. Only a selection with more box than
-  any of those arrangements can fit overruns, from the top-left corner, and
-  then it is left as it is the second time. A second Tidy up moves nothing:
-  `scripts/test-slides-tidy.ts` holds that, and the on-slide rule, over 4000
-  seeded random selections. A group moves whole, a frame's child never moves.
+- **Tidy up arranges in place and makes no frame.** `editor/tidy.ts` is pure
+  geometry. A selection that reads as a grid (two or more bands each way, a
+  box per cell) snaps to its column and row tracks, the gaps between tracks it
+  had. Everything else is laid out as LINES: the bands across, top to bottom,
+  each left to right (reading order), every line its own widths, top-aligned,
+  the lines stacked down — a row is one line, a column a line per box, a
+  slide's title over its cards two lines. A loose scatter is read the same
+  way, by its bands, so it is reordered into reading order; a diagonal (every
+  box a band of its own both ways) is one line along its wider spread. Gaps
+  are the medians already there, along the lines and between them. Sizes are
+  kept; a group moves whole, a frame's child never moves.
+- **It keeps to the slide, or does nothing.** The first layout that fits the
+  slide wins: the grid, then tightened; the lines as they are, tightened (one
+  even gap, down to 8px, or less if they already had less), each line wrapped
+  where it runs too long, everything re-flowed in reading order, and shelves
+  tallest first; then the same read down the columns. The winner is shifted
+  back inside. When none fits, nothing moves and the toast says "Too much to
+  tidy on this slide" — never "Tidied" with something off the slide. Shared
+  column slots across lines are deliberately NOT used: one wide title made
+  every slot title-wide and threw ordinary slides off the edge.
+- **A second run moves nothing.** A selection already in any arrangement Tidy
+  up makes (on the slide) is left exactly where it is, so no reading can flip
+  it to another. `scripts/test-slides-tidy.ts` holds this, the on-slide rule
+  and "whenever a 8px tallest-first shelf packing fits, Tidy up fits" over
+  thousands of seeded selections — titled slides, big photos, title-wide strips,
+  rows, columns, grids, scatters — at 1280×720 and 1920×1080.
   Making a frame is ⇧A's job, offered from the toast afterwards.
   Commands `match-width`, `match-height` and `tidy-up` have no keys of their
   own (⌘K and the menu); `distribute-x`/`-y` are labelled "Distribute

@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Too much to tidy on this slide": "このスライドでは整頓しきれません",
   "Distribute horizontally": "左右に均等配置",
   "Distribute vertically": "上下に均等配置",
   "Same width": "幅を揃える",

@@ -7,6 +7,7 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Too much to tidy on this slide": "Coisas demais para organizar neste slide",
   "Distribute horizontally": "Distribuir horizontalmente",
   "Distribute vertically": "Distribuir verticalmente",
   "Same width": "Mesma largura",

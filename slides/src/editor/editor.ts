@@ -4450,10 +4450,13 @@ export class Editor {
   }
 
   /** Tidy up, then offer to keep it so: Use auto layout wraps the same
-   *  elements in a frame exactly as ⇧A would. */
+   *  elements in a frame exactly as ⇧A would. When nothing fits the slide,
+   *  nothing moved, and the toast says so instead. */
   private tidyUp() {
     const ids = this.store.selection.slice()
-    if (!tidyUp(this.panel, this.store.selectedElements)) return
+    const done = tidyUp(this.panel, this.store.selectedElements)
+    if (done === 'too-much') return this.toast(t('Too much to tidy on this slide'), undefined, 'tidy')
+    if (!done) return
     this.toast(t('Tidied. Keep it tidy?'), {
       label: t('Use auto layout'),
       run: () => this.panel.addAutoLayout(ids.map((id) => this.store.element(id)).filter((e): e is SlideElement => !!e)),
