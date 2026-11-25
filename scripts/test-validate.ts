@@ -337,7 +337,7 @@ ok(refCodes(refDoc({ fill: 'accent1' }, '#123456')).has('theme-ref-stale'),
   const main = rect({ id: 'm1', fill: '#ff0000', groupId: 'gm', component: { id: 'c1', key: 'k0', main: true } })
   const copy = (fill: string, c: Record<string, unknown> = {}) => rect({ id: 'c1a', x: 400, fill, groupId: 'gc', component: { id: 'c1', key: 'k0', ...c } })
   const unsynced = found(slideDoc([main, copy('#00ff00')]), 'component-copy-unsynced')
-  ok(unsynced.length === 1 && unsynced[0].severity === 'warning' && unsynced[0].element === 'c1a' && unsynced[0].message.includes('fill') && unsynced[0].message.includes('"reset"'),
+  ok(unsynced.length === 1 && unsynced[0].severity === 'warning' && unsynced[0].element === 'c1a' && unsynced[0].message.includes('"fill": "#ff0000"'),
     `a copy with no sig that differs from its main is component-copy-unsynced, naming the keys and the fix (${unsynced.map((f) => f.message).join(' | ')})`)
   ok(found(slideDoc([main, copy('#00ff00', { sig: 'reset' })]), 'component-copy-unsynced').length === 0, 'a copy with sig "reset" is silent — it follows its main')
   ok(found(slideDoc([main, copy('#ff0000')]), 'component-copy-unsynced').length === 0, 'a copy with no sig that equals its main is silent — nothing becomes an override')
@@ -355,6 +355,32 @@ ok(refCodes(refDoc({ fill: 'accent1' }, '#123456')).has('theme-ref-stale'),
   const msgs = [stale[0], unsynced[0], parents[0], found(tokDoc({ themeRefs: { stroke: '$color.card' } }), 'token-stale')[0]].map((f) => f?.message ?? '')
   ok(msgs.every((m) => /^(Write|Set|Name)\b/.test(last(m)) && /"[^"]+"/.test(last(m)) && m.endsWith('.')),
     `each message's last sentence is one instruction naming what to write (${msgs.map(last).join(' | ')})`)
+
+  // the instruction goes to the property's owner, and says no more than is true
+  const alphaStale = found(tokDoc({ fill: '#12345680', themeRefs: { fill: '$color.card' } }), 'token-stale')[0]?.message ?? ''
+  ok(alphaStale.includes('holds "#F2F0EA" ("#F2F0EA80" at this colour\'s own opacity)') && alphaStale.includes('Write "#F2F0EA80" at "fill"'),
+    `a translucent bound colour: the token's own value is named, and the value to write keeps the opacity (${alphaStale})`)
+  const layDoc = { ...tokDoc({}), layouts: [{ id: 'L1', name: 'L', background: '#FFF', transition: 'fade', notes: '', elements: [
+    rect({ id: 'lx', fill: '#123456', themeRefs: { fill: '$color.card' } })] }] } as any
+  const layStale = found(layDoc, 'token-stale')
+  ok(layStale.length === 1 && layStale[0].element === 'lx' && layStale[0].slide === 'L1' && /^In layout "L1": /.test(layStale[0].message),
+    `a stale binding in one of the deck's own layouts is token-stale too (${layStale.map((f) => f.message).join(' | ')})`)
+  const fd = (kid: Record<string, unknown>) => ({ ...tokDoc({}), theme: tokDoc({}).theme, slides: [{ id: 's1', name: 'one', background: '#FFF', transition: 'fade', notes: '', elements: [
+    rect({ id: 'f', w: 600, layout: { dir: 'row', gap: 10, pad: [0, 0, 0, 0] } }), rect({ id: 'k', parentId: 'f', ...kid })] }] }) as any
+  const sized = { ...fd({ w: 100, sizing: { w: 'fill' }, themeRefs: { w: '$gap' } }) }
+  const fillStale = found(sized, 'token-stale')[0]?.message ?? ''
+  ok(/The frame "f" sets "w"/.test(fillStale) && /Remove themeRefs\["w"\]\.$/.test(fillStale), `a size the frame fills: the instruction is to remove the reference (${fillStale})`)
+  const freeW = found(fd({ w: 100, themeRefs: { w: '$gap' } }), 'token-stale')[0]?.message ?? ''
+  ok(/Write 16 at "w"/.test(freeW), `a frame child's own size is written as usual (${freeW})`)
+  const mainDoc = slideDoc([rect({ id: 'm1', fill: '#ff0000', groupId: 'gm', component: { id: 'c1', key: 'k0', main: true } }),
+    rect({ id: 'c1a', x: 400, fill: '#ff0000', groupId: 'gc', component: { id: 'c1', key: 'k0', sig: 'x' }, themeRefs: { fill: '$color.card' } })])
+  mainDoc.theme = tokDoc({}).theme
+  const copyStale = found(mainDoc, 'token-stale')[0]?.message ?? ''
+  ok(/takes "fill" from its main "m1"/.test(copyStale) && /on the main to keep it bound\.$/.test(copyStale), `a copy's property it takes from its main: the instruction goes to the main (${copyStale})`)
+  const ownDoc = slideDoc([main, copy('#F2F0EA', { }), ])
+  ;(ownDoc.slides[0].elements[1] as any).themeRefs = { fill: '$color.card' }
+  ownDoc.theme = tokDoc({}).theme
+  ok(found(ownDoc, 'component-copy-unsynced').length === 0, 'a copy whose differing property is bound to its own token keeps it on purpose: not reported')
 
   const starterNew = starter.findings.filter((f) => ['token-stale', 'component-copy-unsynced', 'dangling-parent'].includes(f.code))
   ok(starterNew.length === 0, `the starter deck produces none of token-stale, component-copy-unsynced, dangling-parent (${starterNew.map((f) => f.code).join(', ') || 'none'})`)

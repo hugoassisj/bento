@@ -150,13 +150,17 @@ function ways(input, d, bad) {
     const m = /\/themeRefs\/(.+)$/.exec(d.path)
     const prop = m[1]
     const hp = segs(d.path.slice(0, m.index))
-    const w = /Write (.+?) at "([^"]+)"(?: in (\/\S+))? to keep it bound/.exec(r)
+    const w = /Write (.+?) at "([^"]+)"(?: and (.+?) at "([^"]+)")?(?: in (\/\S+))?(?: \([^)]*\))? to keep it bound/.exec(r)
     const rm = /Remove themeRefs\["([^"]+)"\]/.exec(r)
     if (w) {
-      const target = w[3] ? segs(w[3]) : hp
+      const target = w[5] ? segs(w[5]) : hp
       const { next, h } = copyAt(target)
-      if (!h) bad(`advice target ${w[3] ?? d.path} names nothing in the input`)
-      else { setDot(h, w[2], JSON.parse(w[1])); res.push({ how: `write ${w[1]} at ${w[2]}${w[3] ? ' in ' + w[3] : ''}`, next, prop }) }
+      if (!h) bad(`advice target ${w[5] ?? d.path} names nothing in the input`)
+      else {
+        setDot(h, w[2], JSON.parse(w[1]))
+        if (w[3]) setDot(h, w[4], JSON.parse(w[3]))
+        res.push({ how: `write ${w[1]} at ${w[2]}${w[3] ? ` and ${w[3]} at ${w[4]}` : ''}${w[5] ? ' in ' + w[5] : ''}`, next, prop })
+      }
     } else if (rm) {
       const { next, h } = copyAt(hp)
       if (!h?.themeRefs) bad(`advice path ${d.path} has no themeRefs in the input`)
@@ -170,9 +174,11 @@ function ways(input, d, bad) {
   } else if (r.startsWith('override added')) {
     const hp = segs(d.path).slice(0, -1)
     const w = /Write (.+?) at "([^"]+)" on this copy/.exec(r)
+    const rm = /Remove "([^"]+)" from this copy/.exec(r)
     const { next, h } = copyAt(hp)
     if (!h?.component) bad(`override advice path ${d.path} has no component in the input`)
     else if (w) { setDot(h, w[2], JSON.parse(w[1])); res.push({ how: `write the main's ${w[1]} at ${w[2]}`, next }) }
+    else if (rm) { delDot(h, rm[1]); res.push({ how: `remove ${rm[1]} from the copy`, next }) }
     else if (/Set component\.sig to "reset"/.test(r)) { h.component.sig = 'reset'; res.push({ how: 'sig reset', next }) }
     else bad(`override advice names nothing to do: ${r}`)
   } else if (r.startsWith('parent removed')) {
@@ -218,7 +224,7 @@ function valueAt(doc, d, prop) {
 }
 /** "then also: override added on element "cp" ("stroke"), …" — what following announces. */
 const announced = (d) => {
-  const m = /then also: (.+?)\.?$/.exec(d.reason)
+  const m = /then also: ([^)]*)\)/.exec(d.reason)
   return m ? m[1] : ''
 }
 

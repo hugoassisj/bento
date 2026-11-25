@@ -31,7 +31,11 @@ pre-1.0.
   were written rather than in list order, and a `parentId` that names no frame
   is removed. The load report of `loadDoc` and Replace from JSON now lists each
   one under `dropped`, naming the element, pointing at it in the JSON that was
-  sent, and saying what to write instead; `validate()` reports the same on a
+  sent, and saying what to write instead. Each fix works when it is done on
+  its own: it points at where the value comes from (a component's main, the
+  deck's own layout), says when a property cannot be bound at all because
+  the deck sets it (a frame placing its children), and keeps a translucent
+  colour's opacity. `validate()` reports the same on a
   file that was never loaded (`token-stale`, `component-copy-unsynced`,
   `dangling-parent`). On a compact document's slides, and for an element's
   optional properties in a full one, a token reference written without a

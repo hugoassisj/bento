@@ -180,8 +180,8 @@ console.log('\nwhat the derive pass changes is reported\n')
     const r = load(full([main, copy({})]))
     const d = entry(r, '/slides/0/elements/1/fill')
     ok(JSON.stringify(els(r)[1].component.over) === '["fill"]', 'a copy with no sig still keeps its difference as an override (behaviour unchanged)')
-    ok(!!d && /^override added/.test(d.reason) && d.reason.includes('"fill"') && /no sig/.test(d.reason) && d.reason.includes('"reset"'),
-      `the override is reported with the fix (sig "reset") (${show(r)})`)
+    ok(!!d && /^override added/.test(d.reason) && d.reason.includes('"fill"') && /no sig/.test(d.reason) && d.reason.includes('Write "#ff0000" at "fill" on this copy'),
+      `the override is reported with the fix: the main's value, on this copy (${show(r)})`)
     const reset = load(full([main, copy({ sig: 'reset' })]))
     ok(els(reset)[1].fill === '#ff0000' && !els(reset)[1].component.over && reset.report.dropped.length === 0,
       `a copy written with sig "reset" follows its main and reports nothing (fill ${els(reset)[1].fill}, ${show(reset)})`)

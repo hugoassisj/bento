@@ -45,6 +45,7 @@ import { validateDoc, type ValidateResult } from './validate'
 import { sanitizeDoc } from './restoregate'
 import { deriveReported } from './derivelosses'
 import { fillUnwrittenTokens } from './tokens'
+import { derive, deriveMemory } from './derive'
 
 export interface LoadReport {
   ok: true
@@ -90,17 +91,23 @@ export interface InputOptions {
 /** parseDocInput, plus the report. A bare boolean is the old `fit` argument. */
 export function parseDocInputReport(json: string, opts: boolean | InputOptions = {}): { doc: BentoDoc; report: LoadReport } | null {
   const o: InputOptions = typeof opts === 'boolean' ? { fit: opts } : opts
-  return loadInput(json, o, true)
+  return loadInput(json, o)
 }
 
-/** parseDocInputReport's body. `advise`: prove the report's advice to leave a
- *  literal out by loading the input again without it (derivelosses.ts); the
- *  reload itself does not advise, so it never recurses. */
-function loadInput(json: string, o: InputOptions, advise: boolean): { doc: BentoDoc; report: LoadReport } | null {
+/** The proof reload reports nothing. */
+const NO_FINDINGS: ValidateResult = { ok: true, measured: false, counts: { error: 0, warning: 0, info: 0 }, findings: [] }
+
+/** parseDocInputReport's body. With `proof`, only the derived document is
+ *  wanted: derivelosses.ts loads the input again without the literals it
+ *  offers to leave out, to prove the offers. That load fits no text, runs no
+ *  validator and builds no report (so it never recurses). */
+function loadInput(json: string, o: InputOptions, proof = false): { doc: BentoDoc; report: LoadReport } | null {
   const fit = o.fit ?? typeof document !== 'undefined'
   let raw: unknown
   try { raw = JSON.parse(json) } catch { return null }
-  const reload = advise ? (input: unknown) => loadInput(JSON.stringify(input), o, false)?.doc ?? null : undefined
+  // the proof reload measures no text: no offer it proves depends on a fitted height
+  const reload = (input: unknown) => loadInput(JSON.stringify(input), { ...o, fit: false }, true)?.doc ?? null
+  const settle = (doc: BentoDoc) => { if (!proof) return deriveReported(doc, raw, reload); derive(doc, deriveMemory(doc)); return [] }
   if (!isCompact(raw)) {
     const base = parseDoc(json)
     if (!base) return null
@@ -108,8 +115,8 @@ function loadInput(json: string, o: InputOptions, advise: boolean): { doc: Bento
     if (!gated) return null
     const doc = gated.doc
     fillUnwrittenTokens(doc)
-    const derived = deriveReported(doc, raw, reload)
-    return { doc, report: { ok: true, compact: false, dropped: [...gated.dropped, ...derived], expanded: 0, fitted: 0, findings: validateDoc(doc), derived: true, refit: [], laidOut: 0, stacks: [] } }
+    const derived = settle(doc)
+    return { doc, report: { ok: true, compact: false, dropped: [...gated.dropped, ...derived], expanded: 0, fitted: 0, findings: proof ? NO_FINDINGS : validateDoc(doc), derived: true, refit: [], laidOut: 0, stacks: [] } }
   }
   const { doc: expanded, stats } = expandDocWithStats(raw)
   const ex = expanded as unknown as Record<string, unknown>
@@ -140,8 +147,8 @@ function loadInput(json: string, o: InputOptions, advise: boolean): { doc: Bento
   // after the fit, so a hugging frame lays out the measured heights; what it
   // changes in what the author wrote is reported beside the gate's drops
   fillUnwrittenTokens(doc) // layouts are not expanded; elements were (compact.ts)
-  all.push(...deriveReported(doc, raw, reload))
-  return { doc, report: { ok: true, compact: true, dropped: all, expanded: stats.expanded, fitted, findings: validateDoc(doc), derived: true, refit, laidOut: stats.laidOut, stacks: stats.stacks } }
+  all.push(...settle(doc))
+  return { doc, report: { ok: true, compact: true, dropped: all, expanded: stats.expanded, fitted, findings: proof ? NO_FINDINGS : validateDoc(doc), derived: true, refit, laidOut: stats.laidOut, stacks: stats.stacks } }
 }
 
 /**

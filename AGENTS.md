@@ -180,12 +180,16 @@ does not exist for that element type); an invalid value is the right key with
 the wrong type or range. `dropped` also lists what loading changed in what you
 wrote, each naming the element and the fix: a token binding whose literal
 differs from its token, or that had no value and took a default (write the
-token's value), a component copy with no `sig` whose differences become
-permanent overrides (`"sig": "reset"` makes it follow its main), frame
-children laid out in another order than written (children at the same
+token's value; a translucent colour keeps its own opacity), a copy's own
+binding replaced by its main's, a component copy with no `sig` whose
+differences become permanent overrides (write the main's value on the copy),
+frame children laid out in another order than written (children at the same
 coordinate keep array order), and a `parentId` that names no frame. Its paths
-point into the JSON you sent, and each reason ends in the one thing to
-write. A token reference written with no value takes the token's value and
+point into the JSON you sent, and each reason ends in the one thing to write,
+which works when done alone: it names where the value comes from (a copy's
+main, the deck's own layout), says "remove the reference" where the loader
+itself sets the property (a frame's child position, a filled size), and
+says "then also: …" when the fix makes another entry appear. A token reference written with no value takes the token's value and
 stays bound on a compact document's slides, and in a full document for an
 element's optional top-level key. Write the value out everywhere else: a
 required key (a shape's `fill`), a nested one (`layout.gap`), the elements of

@@ -34,7 +34,7 @@ type El = SlideElement & Record<string, unknown> & { component?: Comp }
  *  are the copy's own (instanceOf translates them once, through the copy's ids).
  *  locked and hidden are editing state on one layer: locking or hiding the main
  *  must not lock or hide every copy across the deck. */
-const OWN = new Set(['id', 'groupId', 'groupName', 'name', 'component', 'x', 'y', 'morphId', 'parentId', 'sizing', 'locked', 'hidden'])
+export const OWN: ReadonlySet<string> = new Set(['id', 'groupId', 'groupName', 'name', 'component', 'x', 'y', 'morphId', 'parentId', 'sizing', 'locked', 'hidden'])
 
 export interface ComponentInfo { id: string; name: string; slideId: string; main: El[] }
 
