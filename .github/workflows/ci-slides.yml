@@ -724,7 +724,10 @@ jobs:
         if: ${{ !cancelled() }}
         # Pointing on the speaker view's current-slide preview draws the dot
         # and trail on the audience window at the same slide fraction; release
-        # and leaving fade it; nothing while black; no trail under Reduce
-        # motion; the speaker-side toggle toasts in the speaker view only.
+        # and leaving fade it; the empty margin, B and closing the popup end
+        # the stroke; no trail under Reduce motion; the speaker-side toggle
+        # toasts in the speaker view only. Its live part runs the show module
+        # through the slides dev server (127.0.0.1 only) with a recording
+        # broadcast: ≤ 20 laser frames a second and a pen-up on every ending.
         run: node scripts/test-slides-laser-speaker-browser.mjs
 
