@@ -763,3 +763,17 @@ runs:
       run: |
         slides/node_modules/.bin/esbuild scripts/test-slides-load-report.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-load-report.mjs"
         node "$RUNNER_TEMP/test-slides-load-report.mjs"
+
+    - name: Load-report advice is true when followed alone
+      # Every entry the load report adds ends in what to write. For every
+      # agent fixture and sixteen decks that write each kind of thing it
+      # speaks about (alpha, modes, nested arrays, frames, fill sizing, grids,
+      # components with and without sig, layouts built in and own, states,
+      # tables, palette refs, a full document), each piece of advice is
+      # followed ALONE on the JSON that was sent and the result loaded: no
+      # element, text or binding lost, the advised binding holds, the entry is
+      # gone, nothing unannounced appears (scripts/lib/load-advice.mjs).
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-load-advice.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-load-advice.mjs"
+        node "$RUNNER_TEMP/test-slides-load-advice.mjs"

@@ -721,3 +721,9 @@ jobs:
         # exported to an image; alt is role="img" only where it is a picture.
         run: node scripts/test-slides-render-fixes-browser.mjs
 
+      - name: Load-report advice followed alone in Chromium
+        if: ${{ !cancelled() }}
+        # The same decks and follower as the node rig, through window.bento
+        # .loadDoc in the packaged shell: real fonts, fitted text boxes, and
+        # the editor's own pass on `replace` before the deck is read back.
+        run: node scripts/test-slides-load-advice-browser.mjs
