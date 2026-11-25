@@ -18,10 +18,12 @@ pre-1.0.
   it takes the menu's place with a row to go back. Rows that need more
   elements than you selected are greyed out and say how many they need. New
   **Tidy up** squares a loose selection into an even row, column or grid where
-  it stands, without making a frame and without pushing anything off the
-  slide, and offers to keep it that way with auto layout. ⌘K now finds "Same width",
-  "Same height", "Distribute horizontally" and "Tidy up", and the Format tab's
-  buttons use the same words.
+  it stands, without making a frame, and offers to keep it that way with auto
+  layout. It keeps the selection on the slide whenever it can fit there: a row
+  too long first closes up its gaps, then wraps onto more lines. Tidying again
+  changes nothing. ⌘K
+  now finds "Same width", "Same height", "Distribute horizontally" and "Tidy
+  up", and the Format tab's buttons use the same words.
 
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes

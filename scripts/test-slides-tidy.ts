@@ -14,8 +14,11 @@
 // layout uses. Sizes never change and the result keeps the input's order. A
 // tidied selection is a fixed point (tidying again moves nothing), mixed
 // sizes included: gaps are measured between columns and rows, not between
-// boxes. Nothing is pushed off the slide: a row too long for it wraps into a
-// grid, and an arrangement past an edge is shifted back.
+// boxes, and a row is a row by its bands (one band across), not by where its
+// centres spread. Nothing is pushed off the slide: a row too long for it
+// tightens its gap, then wraps (one to a line turns it into a column), a grid
+// too big tightens and is laid out again, and an arrangement past an edge is
+// shifted back. A seeded property check runs thousands of random selections.
 
 import { detect, medianGap, tidy, type Box } from '../slides/src/editor/tidy.ts'
 
@@ -155,6 +158,68 @@ console.log('\n8. it stays on the slide\n')
   const low = tidy([b(100, 500, 200, 150), b(110, 600, 200, 150), b(95, 640, 200, 150)], SLIDE)
   ok(onSlide(low.boxes), `a column that would run off the bottom stays on the slide (y ${low.boxes.map((x) => x.y).join(', ')})`)
   ok(JSON.stringify(tidy([b(100, 200), b(340, 210), b(610, 195)], SLIDE).boxes) === JSON.stringify(tidy([b(100, 200), b(340, 210), b(610, 195)]).boxes), 'what already fits is not moved by the bounds')
+}
+
+console.log('\n9. when not even two fit on a line, it turns the other way\n')
+{
+  const onSlide = (bs: Box[]) => bs.every((x) => x.x >= 0 && x.y >= 0 && x.x + x.w <= SLIDE.w && x.y + x.h <= SLIDE.h)
+  const settled = (bs: Box[]) => JSON.stringify(tidy(bs, SLIDE).boxes) === JSON.stringify(bs)
+  // two overlapping photos read as a column, but two 400-tall ones never fit down a 720 slide
+  const photos = tidy([b(300, 20, 500, 400), b(320, 300, 500, 400)], SLIDE)
+  ok(onSlide(photos.boxes) && photos.kind === 'row' && photos.boxes[0].y === photos.boxes[1].y, `two 500×400 photos go side by side, on the slide (${photos.boxes.map((x) => `${x.x},${x.y}`).join(' · ')})`)
+  ok(settled(photos.boxes), '…and stay there')
+  const texts = tidy([b(100, 300, 700, 120), b(300, 310, 700, 120), b(500, 305, 700, 120)], SLIDE)
+  ok(onSlide(texts.boxes) && texts.kind === 'col' && texts.boxes.every((x) => x.x === texts.boxes[0].x), `three 700-wide text boxes become a column, on the slide (${texts.boxes.map((x) => `${x.x},${x.y}`).join(' · ')})`)
+  ok(settled(texts.boxes), '…and stay one')
+  const tall = tidy([b(100, 40, 300, 300), b(110, 360, 300, 300), b(500, 40, 300, 300), b(510, 360, 300, 300), b(100, 680, 300, 300), b(500, 690, 300, 300)])
+  const big = tidy(tall.boxes, SLIDE)
+  ok(onSlide(big.boxes), `a 2×3 grid taller than the slide is laid out again to fit (${big.kind}: ${big.boxes.map((x) => `${x.x},${x.y}`).join(' · ')})`)
+  ok(settled(big.boxes), '…and that is a fixed point')
+}
+
+console.log('\n10. a row is a row, a column a column, whatever their sizes\n')
+{
+  const settled = (bs: Box[]) => { const once = tidy(bs, SLIDE); return JSON.stringify(tidy(once.boxes, SLIDE).boxes) === JSON.stringify(once.boxes) }
+  const ts = tidy([b(100, 50, 80, 80), b(220, 60, 80, 600)], SLIDE)
+  ok(ts.kind === 'row' && tidy(ts.boxes, SLIDE).kind === 'row' && settled([b(100, 50, 80, 80), b(220, 60, 80, 600)]), 'tall + short side by side: a row, the first run and the second')
+  const wn = [b(100, 100, 1000, 80), b(500, 230, 80, 80)]
+  ok(tidy(wn, SLIDE).kind === 'col' && settled(wn), 'wide + narrow, one above the other: a column, and it settles')
+  const label = [b(100, 300, 200, 60), b(340, 100, 200, 500), b(580, 320, 200, 60)]
+  ok(tidy(label, SLIDE).kind === 'row' && settled(label), 'label, tall photo, label: a row, and it settles')
+  // fits as a row with its gaps tightened: no wrap
+  const four = tidy([b(5, 300, 270, 120), b(285, 300, 270, 120), b(645, 305, 270, 120), b(1005, 298, 270, 120)], SLIDE)
+  const g4 = gaps(four.boxes, 'x')
+  ok(four.kind === 'row' && four.boxes.every((x) => x.y === four.boxes[0].y) && same(g4) && four.boxes.every((x) => x.x >= 0 && x.x + x.w <= SLIDE.w),
+    `four 270-wide boxes that fit stay a row, the gap tightened to fit (${g4.join(', ')})`)
+  ok(settled(four.boxes), '…and it settles')
+}
+
+console.log('\n11. seeded property check: random rows, columns, grids and scatters\n')
+{
+  let seed = 20261125
+  const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648 }
+  const R = (lo: number, hi: number) => Math.round(lo + rnd() * (hi - lo))
+  const gen = (kind: number): Box[] => {
+    const n = R(2, 9)
+    if (kind === 0) { let x = R(0, 120); const y = R(60, 420); return Array.from({ length: n }, () => { const w = R(40, 220), h = R(30, 260), bx = b(x, y + R(-15, 15), w, h); x += w + R(-10, 50); return bx }) }
+    if (kind === 1) { let y = R(0, 60); const x = R(60, 900); return Array.from({ length: n }, () => { const w = R(40, 300), h = R(25, 140), bx = b(x + R(-15, 15), y, w, h); y += h + R(-10, 30); return bx }) }
+    if (kind === 2) { const r = R(2, 3), c = R(2, 4), out: Box[] = []; for (let i = 0; i < r; i++) for (let j = 0; j < c; j++) out.push(b(60 + j * R(220, 280) + R(-10, 10), 40 + i * R(200, 230) + R(-10, 10), R(60, 180), R(50, 150))); return out }
+    return Array.from({ length: n }, () => { const w = R(30, 360), h = R(30, 280); return b(R(0, SLIDE.w - w), R(0, SLIDE.h - h), w, h) })
+  }
+  const off = (bs: Box[]) => bs.some((x) => x.x < 0 || x.y < 0 || x.x + x.w > SLIDE.w || x.y + x.h > SLIDE.h)
+  const N = 4000
+  let moved = 0, offSlide = 0, resized = 0, example = ''
+  for (let i = 0; i < N; i++) {
+    const bs = gen(i % 4)
+    const r1 = tidy(bs, SLIDE).boxes, r2 = tidy(r1, SLIDE).boxes
+    const fail = (what: string) => { if (!example) example = `${what}: ${JSON.stringify(bs.map((x) => [x.x, x.y, x.w, x.h]))}` }
+    if (JSON.stringify(r1) !== JSON.stringify(r2)) { moved++; fail('moved') }
+    if (!off(bs) && off(r1)) { offSlide++; fail('off') }
+    if (r1.some((x, j) => x.w !== bs[j].w || x.h !== bs[j].h)) { resized++; fail('resized') }
+  }
+  ok(moved === 0, `${N} random selections: a second run moves nothing (${moved} moved)`)
+  ok(offSlide === 0, `…none that started on the slide leaves it (${offSlide} off)`)
+  ok(resized === 0, `…and no size changes (${resized})${example ? ' — first: ' + example : ''}`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

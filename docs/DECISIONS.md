@@ -15419,11 +15419,24 @@ replaced before this shipped.
   the body, never inside the list, because a list that scrolls clips both
   axes. The topbar dropdowns do not share this code.
 - **Tidy up arranges in place and makes no frame.** It detects a row, a column
-  or a grid from the selection (`editor/tidy.ts`, pure geometry), keeps sizes,
-  and uses the median gap already there, measured between columns and rows so
-  a second run moves nothing; it stays on the slide (a row too long wraps into
-  a grid, an arrangement past an edge shifts back); a group moves whole, a
-  frame's child never moves. Making a frame is ⇧A's job, offered from the toast afterwards.
+  or a grid from the selection (`editor/tidy.ts`, pure geometry) by bands
+  first: all in one band across is a row and one band down a column, however
+  tall or wide the boxes, so a tidied row never reads as a column the second
+  time. It keeps sizes and the median gap already there, measured between
+  columns and rows. A loose scatter that is not a grid is reordered by x (by
+  y when it spreads taller than wide) and laid out as a row or column, wrapped
+  where it must.
+- **It keeps to the slide.** A row or column too long first tightens to one
+  even gap (down to 8px, or less if it already had less) and stays a row; only
+  then does it wrap into lines, and one to a line turns it the other way (two
+  tall photos go side by side). A grid too big tightens its gaps, then is laid
+  out again in reading order; the last resort packs shelves tallest first;
+  then the whole is shifted back inside. Only a selection with more box than
+  any of those arrangements can fit overruns, from the top-left corner, and
+  then it is left as it is the second time. A second Tidy up moves nothing:
+  `scripts/test-slides-tidy.ts` holds that, and the on-slide rule, over 4000
+  seeded random selections. A group moves whole, a frame's child never moves.
+  Making a frame is ⇧A's job, offered from the toast afterwards.
   Commands `match-width`, `match-height` and `tidy-up` have no keys of their
   own (⌘K and the menu); `distribute-x`/`-y` are labelled "Distribute
   horizontally / vertically" everywhere.
