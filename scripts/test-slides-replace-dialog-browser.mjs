@@ -30,12 +30,25 @@
 //   9. Enter or Space HELD for 2 s across the review applies nothing and
 //      never reaches the File menu behind the dialog; a click made with the
 //      summary on screen still applies.
+//  10. A finger put down while the dialog resizes (it lands on the scrim) and
+//      held across the summary appearing applies nothing when lifted over
+//      Apply changes — CDP touch events, at CPU throttle 1, 4 and 6; a tap
+//      with the summary on screen applies.
+//  11. The deck changes while the summary is on show — a collaborator in
+//      another tab adds a slide, then edits a text; an undo here: the summary
+//      says the deck changed and Apply reviews again (fresh summary, fresh
+//      half second); the collaborator's slide is never removed without the
+//      tick, and their edit is counted as a changed slide.
 // Also: a fresh summary shows Apply as not ready (aria-disabled) for half a
 // second; "Reviewing…" is on show for a painted frame before a slow parse;
 // applying uses the reviewed document instead of parsing the reply again.
 // Every press waits for a known state first: the dialog reviews a paste by
 // itself, so a press racing that review would test the timing, not the dialog.
-// No network: http(s) aborted, WebSockets closed, offline mode on.
+// No network: http(s) aborted (section 11 serves the shell from 127.0.0.1),
+// WebSockets closed, offline mode on (off in 11, which uses the same-machine
+// channel between two tabs and no relay).
+import { readFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -90,7 +103,7 @@ try {
   }, [text, inputType])
   const reviewedState = () => p.waitForFunction(() => {
     const st = document.querySelector('[role=dialog] [role=status]')
-    return st && st.textContent !== '' && st.getAttribute('aria-busy') !== 'true'
+    return st && st.textContent !== '' && !st.dataset.busy
   }, null, { timeout: 15000 })
   // a paste, then its automatic review on show
   const paste = async (text) => { await input(text, 'insertFromPaste'); await reviewedState() }
@@ -382,6 +395,127 @@ try {
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
   await ctx.close()
+
+  // a reply = the deck with one text changed (fenced, as a chatbot sends it)
+  const edit = (d0, html, at = 1) => { const d = JSON.parse(JSON.stringify(d0)); d.slides[at].elements.find((e) => e.type === 'text').html = html; return d }
+  const fenced = (d) => '```json\n' + JSON.stringify(d, null, 2) + '\n```'
+
+  console.log('\n10. A touch held across the summary appearing\n')
+  for (const rate of [1, 4, 6]) {
+    await run(async () => {
+      const tc = await browser.newContext({ viewport: { width: 1440, height: 900 }, hasTouch: true })
+      await tc.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1'); localStorage.setItem('bento-offline', 'on') } catch {} })
+      await tc.route(/^https?:/, (r) => r.abort())
+      if (tc.routeWebSocket) await tc.routeWebSocket(/.*/, (ws) => ws.close())
+      const q = await tc.newPage()
+      await q.goto('file://' + SHELL)
+      await q.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-topbar'))
+      await q.waitForTimeout(300)
+      const d0 = await q.evaluate(() => { const d = structuredClone(window.bento.doc); delete d.collab; return d })
+      await q.click('.ed-logo'); await q.waitForTimeout(100)
+      await q.click('.ed-file-menu [data-cmd="replace-json"]')
+      await q.waitForSelector('[role=dialog] textarea')
+      const put = (v) => q.evaluate((v) => { const ta = document.querySelector('[role=dialog] textarea'); ta.value = v; ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' })) }, v)
+      const armed = () => q.waitForFunction(() => { const b = document.querySelector('[role=dialog] .ed-btn-primary'); return b?.textContent === 'Apply changes' }, null, { timeout: 30000 })
+      await put(fenced(edit(d0, 'Touch A'))); await armed(); await q.waitForTimeout(800)
+      const box = await q.locator('[role=dialog] .ed-btn-primary').boundingBox()
+      const cx = box.x + box.width / 2, cy = box.y + box.height / 2
+      const cdp = await tc.newCDPSession(q)
+      if (rate > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate })
+      await q.evaluate(() => { window.__downOn = []; document.addEventListener('pointerdown', (e) => window.__downOn.push(e.target.closest?.('.ed-btn-primary') ? 'apply' : e.target.className), true) })
+      // reply B: the old summary clears and the dialog shrinks under the finger
+      await put(fenced(edit(d0, 'Touch B')))
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] })
+      await armed()
+      await q.waitForTimeout(700 * Math.max(1, rate / 2)) // held well past the half second
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+      await q.waitForTimeout(800 * Math.max(1, rate / 2))
+      const r = await q.evaluate(() => ({ downOn: window.__downOn, open: !!document.querySelector('[role=dialog] textarea'), b: window.bento.doc.slides[1].elements.some((e) => e.html === 'Touch B') }))
+      ok(r.downOn[0] && r.downOn[0] !== 'apply', `×${rate}: the finger went down off the button as the dialog resized (${JSON.stringify(r.downOn)})`)
+      ok(!r.b && r.open, `×${rate}: lifted over Apply changes after the summary appeared, it applies nothing`)
+      if (rate > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
+      if (rate === 1) {
+        await q.waitForTimeout(600)
+        await q.touchscreen.tap(cx, cy); await q.waitForTimeout(300)
+        ok(await q.evaluate(() => window.bento.doc.slides[1].elements.some((e) => e.html === 'Touch B')), '×1: a tap with the summary on screen applies it')
+      }
+      await tc.close()
+    })
+  }
+
+  console.log('\n11. The deck changes while the summary is on show\n')
+  await run(async () => {
+    // two tabs of one deck (a fixed docId) share edits over the same-machine channel
+    const html = readFileSync(SHELL, 'utf8')
+    const blockRe = /<script type="application\/bento\+json" id="bento-doc">[\s\S]*?<\/script>/
+    const dd = JSON.parse(original); delete dd.collab
+    dd.docId = 'rig-replace-live-' + Date.now()
+    const page = html.replace(blockRe, () => '<script type="application/bento+json" id="bento-doc">\n' + JSON.stringify(dd).replace(/</g, '\\u003c') + '\n</scr' + 'ipt>')
+    const server = createServer((req, res) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(page) })
+    await new Promise((r) => server.listen(0, '127.0.0.1', r))
+    try {
+      const url = `http://127.0.0.1:${server.address().port}/deck.html`
+      const lc = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+      await lc.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1') } catch {} })
+      if (lc.routeWebSocket) await lc.routeWebSocket(/.*/, (ws) => ws.close())
+      await lc.route('**/*', (r) => { const u = r.request().url(); return u.startsWith('http://127.0.0.1') || /^(data|blob):/.test(u) ? r.continue() : r.abort() })
+      const me = await lc.newPage()
+      await me.goto(url); await me.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-topbar')); await me.waitForTimeout(1500)
+      const them = await lc.newPage()
+      await them.goto(url); await them.waitForFunction(() => window.bento?.doc); await them.waitForTimeout(1500)
+      const base = await me.evaluate(() => JSON.parse(JSON.stringify(window.bento.doc)))
+      const mine = (fn) => me.evaluate(fn)
+      await me.click('.ed-logo'); await me.waitForTimeout(100)
+      await me.click('.ed-file-menu [data-cmd="replace-json"]')
+      await me.waitForSelector('[role=dialog] textarea')
+      const put = (v) => me.evaluate((v) => { const ta = document.querySelector('[role=dialog] textarea'); ta.value = v; ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' })) }, v)
+      const st = () => me.evaluate(() => {
+        const d = document.querySelector('[role=dialog]'); const b = d?.querySelector('.ed-btn-primary'); const tk = d?.querySelector('.ed-replace-confirm')
+        return { status: d?.querySelector('[role=status]')?.textContent ?? '', button: b?.textContent, notReady: b?.getAttribute('aria-disabled') === 'true', disabled: !!b?.disabled, tick: !!tk && !tk.hidden, open: !!d }
+      })
+      const settled = () => me.waitForFunction(() => { const s = document.querySelector('[role=dialog] [role=status]'); return s && s.textContent !== '' && !s.dataset.busy && document.querySelector('[role=dialog] .ed-btn-primary')?.textContent !== 'Review changes' }, null, { timeout: 15000 })
+      const reply = edit(base, 'FROM REPLY')
+      await put(fenced(reply)); await settled(); await me.waitForTimeout(700)
+      let s = await st()
+      ok(s.button === 'Apply changes' && /Slides changed \(1\)/.test(s.status) && !s.notReady, 'the reply is reviewed and ready: one slide changed')
+      // the collaborator adds a slide
+      await them.evaluate(() => { const d = window.bento.doc; const c = JSON.parse(JSON.stringify(d.slides[0])); c.id = 'collab-slide'; c.elements = c.elements.map((e, i) => ({ ...e, id: 'cx' + i })); d.slides.push(c); window.bento.sync.flush() })
+      await me.waitForFunction(() => window.bento.doc.slides.some((x) => x.id === 'collab-slide'), null, { timeout: 10000 })
+      await me.waitForTimeout(200)
+      s = await st()
+      ok(s.button === 'Review changes' && /The deck changed — review again/.test(s.status), `the summary goes stale when the deck changes ("${s.status}", ${s.button})`)
+      await me.click('[role=dialog] .ed-btn-primary'); await settled()
+      s = await st()
+      ok(/Slides removed \(1\): collab-slide/.test(s.status) && s.tick && s.disabled, `Apply reviewed again: the collaborator's slide is counted as removed and needs the tick ("${s.status.slice(0, 120)}")`)
+      ok(s.notReady, 'the fresh summary has its own half second')
+      await me.click('[role=dialog] .ed-btn-primary', { force: true }).catch(() => {})
+      await me.waitForTimeout(700)
+      await me.click('[role=dialog] .ed-btn-primary', { force: true }).catch(() => {})
+      ok(await mine(() => window.bento.doc.slides.some((x) => x.id === 'collab-slide')) && (await st()).open, 'without the tick, pressing Apply leaves the collaborator’s slide in place')
+      // the collaborator edits a text on another slide
+      await them.evaluate(() => { window.bento.doc.slides[2].elements.find((e) => e.type === 'text').html = 'COLLAB EDIT'; window.bento.sync.flush() })
+      await me.waitForFunction(() => window.bento.doc.slides[2].elements.some((e) => e.html === 'COLLAB EDIT'), null, { timeout: 10000 })
+      await me.waitForTimeout(200)
+      s = await st()
+      ok(s.button === 'Review changes' && /The deck changed/.test(s.status) && !s.tick, 'their edit makes the summary stale again (the tick is gone)')
+      await me.click('[role=dialog] .ed-btn-primary'); await settled()
+      s = await st()
+      ok(/Slides changed \(2\)/.test(s.status) && s.status.includes(base.slides[2].id), `the reply would overwrite their edit, and the summary says so (${s.status.slice(0, 160)})`)
+      // an undo here, while the summary is on show
+      await me.waitForTimeout(700)
+      await me.evaluate(() => window.bento.undo()); await me.waitForTimeout(200)
+      s = await st()
+      ok(s.button === 'Review changes' && /The deck changed/.test(s.status), 'an undo in this tab makes it stale too')
+      // and once reviewed again, ticked and given its half second, it applies
+      await me.click('[role=dialog] .ed-btn-primary'); await settled()
+      const tk = await st()
+      if (tk.tick) await me.click('[role=dialog] .ed-replace-confirm input')
+      await me.waitForTimeout(700)
+      await me.click('[role=dialog] .ed-btn-primary'); await me.waitForTimeout(300)
+      ok(await mine(() => window.bento.doc.slides[1].elements.some((e) => e.html === 'FROM REPLY')) && !(await st()).open, 'reviewed again, ticked and confirmed, the reply applies')
+      await lc.close()
+    } finally { server.close() }
+  })
 } finally {
   await browser.close()
 }

@@ -332,6 +332,12 @@ ok(gateAt >= 0,
 const swapAt = pasteCode.indexOf('replaceDoc(')
 ok(gateAt >= 0 && swapAt >= 0 && gateAt < swapAt && !/loadDoc/.test(pasteCode),
   'openReplaceJson() decides the session before replaceDoc, not after')
+// The review's parse may be some time before Apply (the summary stays on
+// show), so the document it made has its identity taken again from the OPEN
+// deck right before the swap: keepLiveIdentity(<reviewed doc>, this.store.doc).
+const keepAt = pasteCode.search(/keepLiveIdentity\([^;]*this\.store\.doc[^;]*\)/)
+ok(keepAt >= 0 && swapAt >= 0 && keepAt < swapAt,
+  'openReplaceJson() takes identity again from this.store.doc (keepLiveIdentity) right before replaceDoc')
 
 // --- 3. no user-facing path writes plaintext --------------------------------
 
