@@ -1504,18 +1504,26 @@ export class Editor {
     // (or within half a second of it) was aimed at "Review changes", not at it
     let armedAt = Infinity
     let readyTimer = 0
-    // when the press on Apply began (pointerdown, or a first Enter/Space
-    // keydown): a click's own time is its release, which can be delivered
-    // long after a press made early. A held key's repeats are never a decision.
-    let pressedAt = 0
+    // A press counts from where and when it BEGAN, never from its release: a
+    // click can be delivered long after a press made early. The last pointer
+    // down is taken on the document, capture phase, while the dialog is open
+    // — a finger put down as the dialog resizes lands on the scrim, and its
+    // release still clicks Apply. Keys: the first Enter/Space keydown on Apply;
+    // a held key's repeats are never a decision. A click consumes them.
+    let downAt = -Infinity
+    let downOnApply = false
+    let keyAt = 0
     let repeatPress = false
+    const onDown = (ev: PointerEvent) => { downAt = ev.timeStamp; downOnApply = applyB.contains(ev.target as Node) }
+    // the deck the summary was taken against: if it moves (a collaborator's
+    // edit, an undo), the summary no longer says what Apply would do
+    let revAt = -1
+    let docAt: unknown = null
     const stale = () => {
       gen++
       reviewed = null
       result = null
       armedAt = Infinity
-      pressedAt = 0
-      repeatPress = false
       clearTimeout(readyTimer)
       applyB.removeAttribute('aria-disabled')
       applyB.textContent = t('Review changes')
@@ -1533,7 +1541,7 @@ export class Editor {
       const busy = div('')
       busy.textContent = t('Reviewing…')
       status.replaceChildren(busy)
-      status.setAttribute('aria-busy', 'true')
+      status.dataset.busy = '1' // not aria-busy: that would keep "Reviewing…" from being read out
       let started = false
       const go = () => {
         if (started) return
@@ -1543,9 +1551,23 @@ export class Editor {
       requestAnimationFrame(() => setTimeout(go, 0)) // after a frame has painted it
       setTimeout(go, 50) // a hidden tab paints no frames
     }
+    // The reply's text is taken out of layout while the review runs: the
+    // load report measures the deck's text in the page, and with a multi-MB
+    // textarea present every measurement laid it out again (seconds per MB).
+    // Shown again in the same task, so it is never painted hidden.
     const run = () => {
+      const focused = document.activeElement === ta
+      const { selectionStart, selectionEnd, scrollTop } = ta
+      ta.style.display = 'none'
+      try { runReview() } finally {
+        ta.style.display = ''
+        ta.scrollTop = scrollTop
+        if (focused) { ta.focus({ preventScroll: true }); ta.setSelectionRange(selectionStart, selectionEnd) }
+      }
+    }
+    const runReview = () => {
       status.replaceChildren()
-      status.removeAttribute('aria-busy')
+      delete status.dataset.busy
       // `ids`: slide ids, set apart so a right-to-left line cannot reorder them
       const say = (text: string, err = false, ids?: string) => {
         const d = div(err ? 'ed-replace-err' : '')
@@ -1601,6 +1623,8 @@ export class Editor {
       }
       reviewed = ta.value
       result = parsed
+      revAt = this.store.revision
+      docAt = this.store.doc
       applyB.textContent = t('Apply changes')
       armedAt = performance.now()
       // shown as not ready while the summary is fresh; a press now does nothing
@@ -1624,11 +1648,19 @@ export class Editor {
       if ((kind === 'insertFromPaste' || kind === 'insertFromDrop') && ta.value.length <= 2_000_000) timer = window.setTimeout(() => review(), 100)
     })
     tick.addEventListener('change', () => { applyB.disabled = !tick.checked })
-    applyB.addEventListener('pointerdown', (ev) => { pressedAt = ev.timeStamp; repeatPress = false })
     applyB.addEventListener('keydown', (ev) => {
       if (ev.key !== 'Enter' && ev.key !== ' ') return
       if (ev.repeat) repeatPress = true
-      else { pressedAt = ev.timeStamp; repeatPress = false }
+      else { keyAt = ev.timeStamp; repeatPress = false }
+    })
+    const offDoc = this.store.on('doc', () => {
+      if (reviewed === null) return
+      stale()
+      const d = div('')
+      d.textContent = t('The deck changed — review again')
+      status.replaceChildren(d)
+      list.replaceChildren()
+      confirmRow.hidden = true
     })
     copyB.addEventListener('click', () => {
       const copy = () => {
@@ -1643,12 +1675,15 @@ export class Editor {
     applyB.addEventListener('click', (ev) => {
       // a held Enter or Space clicks again and again: no repeat is a decision
       if (repeatPress) { repeatPress = false; return }
-      // nothing is applied that the summary on show does not describe
-      if (reviewed !== ta.value || !result) { review(); return }
+      // nothing is applied that the summary on show does not describe — for
+      // this text, against the deck as it is now
+      if (reviewed !== ta.value || !result || this.store.revision !== revAt || this.store.doc !== docAt) { review(); return }
       // …nor by a press begun before that summary was on screen: one queued
-      // while a review ran, or landing as the label changed under it
-      const at = pressedAt && pressedAt <= ev.timeStamp ? pressedAt : ev.timeStamp
-      pressedAt = 0
+      // while a review ran, or landing as the label changed under it. A
+      // pointer's click counts only if its press began on Apply.
+      const at = ev.detail > 0 ? (downOnApply ? downAt : -Infinity) : keyAt && keyAt <= ev.timeStamp ? keyAt : ev.timeStamp
+      downOnApply = false
+      keyAt = 0
       if (at < armedAt + 500) return
       // The pasted text is foreign input, full or compact (src/compact.ts):
       // the gate rebuilds it (restoregate.ts sanitizeDoc), and with `live` the
@@ -1665,6 +1700,7 @@ export class Editor {
       const parsed = result
       if (parsed) keepLiveIdentity(parsed.doc as unknown as Record<string, unknown>, this.store.doc as unknown as Record<string, unknown>)
       if (parsed) {
+        offDoc() // our own replace is not a change under the summary
         this.store.replaceDoc(parsed.doc)
         // the load report, summarised; the whole thing goes to the console
         // where an agent driving the page (or a person) can read the paths
@@ -1681,12 +1717,15 @@ export class Editor {
       clearTimeout(timer)
       // the opener is gone (the ⌘K palette): the File menu's button, not the page
       if (document.activeElement === document.body) (document.querySelector('.ed-logo') as HTMLElement | null)?.focus()
+      document.removeEventListener('pointerdown', onDown, true)
+      offDoc()
     } })
     cancelB.addEventListener('click', () => dlg.close())
     confirmRow.hidden = true
     // opened from a menu row that is now hidden: Escape returns focus to the
     // menu's button instead of dropping it on the page
     ;((document.activeElement as HTMLElement | null)?.closest('.ed-menu')?.parentElement?.firstElementChild as HTMLElement | null)?.focus()
+    document.addEventListener('pointerdown', onDown, true)
     dlg.open()
   }
 

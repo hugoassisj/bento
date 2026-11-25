@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "The deck changed — review again": "文稿已更改 — 请重新检查",
   "Reviewing…": "正在检查…",
   "Paste the JSON a chatbot or tool gave back. A code fence or text around it is fine; nothing changes until you have reviewed the changes and applied them.": "粘贴聊天机器人或工具返回的 JSON。带有代码块或前后有文字都没关系；在你检查并应用更改之前，什么都不会改变。",
   "Copy report": "复制报告",

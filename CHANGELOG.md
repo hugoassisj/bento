@@ -27,9 +27,16 @@ pre-1.0.
   dropped and any warnings, with Copy report to paste back to the chatbot;
   nothing changes until you press Apply changes with that summary in front of
   you, and a reply that would remove slides says how many and asks you to
-  confirm. ⌘Z
-  still undoes the whole replacement in one step, and the deck keeps its own
-  identity and live session.
+  confirm. ⌘Z still undoes the whole replacement in one step, and the deck
+  keeps its own identity and live session.
+- **Replace from JSON never applies a reply you have not seen against the
+  deck as it is.** If someone working on the deck with you adds a slide or
+  edits a text while the summary is on screen (or you undo something), the
+  dialog says the deck changed and Apply reviews again first, so their slide
+  is counted and needs your confirmation before it could be removed. A
+  finger or a mouse button put down before the summary appeared no longer
+  applies it when lifted. Reviewing a reply of several megabytes is also much
+  faster.
 
 ## [1.3.0] — 2026-11-22
 

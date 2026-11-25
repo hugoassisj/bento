@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "The deck changed — review again": "デッキが変更されました — もう一度確認してください",
   "Reviewing…": "確認しています…",
   "Paste the JSON a chatbot or tool gave back. A code fence or text around it is fine; nothing changes until you have reviewed the changes and applied them.": "チャットボットやツールが返した JSON を貼り付けてください。コードブロックや前後の文章があっても問題ありません。変更を確認して適用するまで、何も変わりません。",
   "Copy report": "レポートをコピー",

@@ -31,7 +31,7 @@
 //      never reaches the File menu behind the dialog; a click made with the
 //      summary on screen still applies.
 //  10. A finger put down while the dialog resizes (it lands on the scrim) and
-//      held across the summary appearing applies nothing when lifted over
+//      held while the summary appears under it applies nothing when lifted over
 //      Apply changes — CDP touch events, at CPU throttle 1, 4 and 6; a tap
 //      with the summary on screen applies.
 //  11. The deck changes while the summary is on show — a collaborator in
@@ -211,6 +211,7 @@ try {
     s = await state()
     ok(s.button === 'Apply changes' && /Slides changed \(1\)/.test(s.status), 'a paste is reviewed by itself')
     ok(notReady, 'a fresh summary shows Apply changes as not ready (aria-disabled)')
+    ok(await p.evaluate(() => document.activeElement?.tagName) === 'TEXTAREA', 'the text box keeps focus through the review (it is out of layout while the review measures)')
     ok(await docJson() === original && await dialogOpen(), 'a click while it is not ready applies nothing')
     await p.waitForTimeout(600)
     ok(await p.$eval(primary, (b) => !b.hasAttribute('aria-disabled')), 'half a second on, it is ready')
@@ -295,7 +296,8 @@ try {
       const tickFrames = () => { window.__frames++; requestAnimationFrame(tickFrames) }
       requestAnimationFrame(tickFrames)
       new MutationObserver(() => {
-        if (window.__busyFrame == null && document.querySelector('[role=dialog] [role=status]')?.textContent === 'Reviewing…') window.__busyFrame = window.__frames
+        const st = document.querySelector('[role=dialog] [role=status]')
+        if (window.__busyFrame == null && st?.textContent === 'Reviewing…') { window.__busyFrame = window.__frames; window.__busyAria = st.getAttribute('aria-busy') }
       }).observe(document.body, { subtree: true, childList: true, characterData: true })
       JSON.parse = function (...a) {
         if (a[0] === inner) window.__parsesOfReply++
@@ -324,7 +326,8 @@ try {
     const r = await p.evaluate(() => ({ clicks: window.__clicks, open: !!document.querySelector('[role=dialog] textarea'), b: window.bento.doc.slides[1].elements.some((e) => e.html === 'Version B'), label: document.querySelector('[role=dialog] .ed-btn-primary')?.textContent }))
     ok(r.clicks[0] === 'Apply changes', `the race is staged: the click reached the button after it read "Apply changes" (${JSON.stringify(r.clicks)})`)
     ok(!r.b && r.open && await docJson() === original, 'that click applied nothing; the dialog stays open on the summary')
-    const fr = await p.evaluate(() => ({ busy: window.__busyFrame, parse: window.__parseFrame, n: window.__parsesOfReply }))
+    const fr = await p.evaluate(() => ({ busy: window.__busyFrame, parse: window.__parseFrame, n: window.__parsesOfReply, aria: window.__busyAria }))
+    ok(fr.aria === null, `the status region is not aria-busy while it says "Reviewing…", so it is read out (${fr.aria})`)
     ok(fr.busy != null && fr.parse > fr.busy, `"Reviewing…" was on show for a painted frame before the slow parse began (frame ${fr.busy} → ${fr.parse})`)
     await apply()
     const n2 = await p.evaluate(() => window.__parsesOfReply)
@@ -423,9 +426,13 @@ try {
       const cdp = await tc.newCDPSession(q)
       if (rate > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate })
       await q.evaluate(() => { window.__downOn = []; document.addEventListener('pointerdown', (e) => window.__downOn.push(e.target.closest?.('.ed-btn-primary') ? 'apply' : e.target.className), true) })
-      // reply B: the old summary clears and the dialog shrinks under the finger
-      await put(fenced(edit(d0, 'Touch B')))
+      // reply B arrives: the old summary clears and the dialog shrinks, so the
+      // finger put down where Apply was lands on the scrim. (Typed, so its
+      // review waits for the press below: the finger is down before it runs.)
+      await q.evaluate((v) => { const ta = document.querySelector('[role=dialog] textarea'); ta.value = v; ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' })) }, fenced(edit(d0, 'Touch B')))
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] })
+      // the review runs and the summary appears under the finger
+      await q.evaluate(() => document.querySelector('[role=dialog] .ed-btn-primary').click())
       await armed()
       await q.waitForTimeout(700 * Math.max(1, rate / 2)) // held well past the half second
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
@@ -463,6 +470,10 @@ try {
       await me.goto(url); await me.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-topbar')); await me.waitForTimeout(1500)
       const them = await lc.newPage()
       await them.goto(url); await them.waitForFunction(() => window.bento?.doc); await them.waitForTimeout(1500)
+      await me.bringToFront() // the tab with the dialog is the one in front (a hidden tab paints no frames)
+      // one local step to undo later (the deck's title), before the dialog opens
+      await me.evaluate(() => window.bento.loadDoc(JSON.stringify({ ...window.bento.doc, title: 'Local title' })))
+      await me.waitForTimeout(300)
       const base = await me.evaluate(() => JSON.parse(JSON.stringify(window.bento.doc)))
       const mine = (fn) => me.evaluate(fn)
       await me.click('.ed-logo'); await me.waitForTimeout(100)
@@ -484,10 +495,16 @@ try {
       await me.waitForTimeout(200)
       s = await st()
       ok(s.button === 'Review changes' && /The deck changed — review again/.test(s.status), `the summary goes stale when the deck changes ("${s.status}", ${s.button})`)
+      const flip = me.evaluate(() => new Promise((done) => {
+        const b = document.querySelector('[role=dialog] .ed-btn-primary')
+        const mo = new MutationObserver(() => { if (b.textContent === 'Apply changes') { mo.disconnect(); done(b.getAttribute('aria-disabled') === 'true') } })
+        mo.observe(b, { childList: true, characterData: true, subtree: true })
+      }))
       await me.click('[role=dialog] .ed-btn-primary'); await settled()
+      const freshDwell = await flip
       s = await st()
       ok(/Slides removed \(1\): collab-slide/.test(s.status) && s.tick && s.disabled, `Apply reviewed again: the collaborator's slide is counted as removed and needs the tick ("${s.status.slice(0, 120)}")`)
-      ok(s.notReady, 'the fresh summary has its own half second')
+      ok(freshDwell, 'the fresh summary has its own half second (not ready as it appears)')
       await me.click('[role=dialog] .ed-btn-primary', { force: true }).catch(() => {})
       await me.waitForTimeout(700)
       await me.click('[role=dialog] .ed-btn-primary', { force: true }).catch(() => {})
@@ -505,7 +522,7 @@ try {
       await me.waitForTimeout(700)
       await me.evaluate(() => window.bento.undo()); await me.waitForTimeout(200)
       s = await st()
-      ok(s.button === 'Review changes' && /The deck changed/.test(s.status), 'an undo in this tab makes it stale too')
+      ok(s.button === 'Review changes' && /The deck changed/.test(s.status) && await mine(() => window.bento.doc.title) !== 'Local title', 'an undo in this tab makes it stale too')
       // and once reviewed again, ticked and given its half second, it applies
       await me.click('[role=dialog] .ed-btn-primary'); await settled()
       const tk = await st()
