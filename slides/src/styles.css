@@ -1835,7 +1835,8 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border-radius: 6px;
 }
 .sv-timer:hover { color: var(--accent); }
-.sv-timer.sv-timer-paused { opacity: 0.55; }
+/* dimmed, but even the red over-time digits keep 3:1 on the dark ground */
+.sv-timer.sv-timer-paused { opacity: 0.7; }
 .sv-timer.sv-timer-warn { color: #f5b942; }
 .sv-timer.sv-timer-over { color: #ff6b5e; }
 .sv-timer-mode { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9fb0c3; margin-right: -14px; }

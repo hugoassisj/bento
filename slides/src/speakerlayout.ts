@@ -9,14 +9,27 @@ import { lsGet, lsSet } from '../../kernel/src/storage.ts'
 const layout = { current: true, next: true, notes: true, rail: true, columns: 0.6, rows: null as number | null }
 
 // Notes size is a reading preference of this browser (like reduced motion),
-// so it persists in localStorage; it never enters the document.
+// so it persists in localStorage; it never enters the document. The value in
+// use lives here: storage that refuses the write (full, blocked, sandboxed)
+// only means the choice is not remembered next time.
 const NOTES_SIZES = [16, 18, 20, 24, 28, 32, 40, 48]
 const NOTES_DEFAULT = 24
 const NOTES_KEY = 'bento-speaker-notes-size'
+let notesPx: number | null = null
 const notesSize = () => {
-  const px = Number(lsGet(NOTES_KEY))
-  return NOTES_SIZES.includes(px) ? px : NOTES_DEFAULT
+  if (notesPx === null) {
+    const stored = Number(lsGet(NOTES_KEY))
+    notesPx = NOTES_SIZES.includes(stored) ? stored : NOTES_DEFAULT
+  }
+  return notesPx
 }
+const setNotesSize = (px: number) => {
+  notesPx = px
+  lsSet(NOTES_KEY, String(px))
+}
+// Keys a clicker sends that still drive the show while the target-time field
+// (speakertimer.ts) has focus; Up/Down stay with the field.
+const SHOW_KEYS = [' ', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown']
 
 export function setupSpeakerLayout(w: Window): () => void {
   const d = w.document
@@ -149,6 +162,18 @@ export function setupSpeakerLayout(w: Window): () => void {
     apply()
   })
   view.addEventListener('keydown', (ev) => {
+    // In the target-time field Enter closes View (the value is already live)
+    // and the clicker's keys still reach the show.
+    if ((ev.target as HTMLElement).matches?.('input.sv-target')) {
+      if (SHOW_KEYS.includes(ev.key)) return
+      if (ev.key === 'Enter') {
+        ev.preventDefault()
+        ev.stopPropagation()
+        view.open = false
+        view.querySelector('summary')?.focus()
+        return
+      }
+    }
     // Keys stay in View only while it is open, or when they would toggle it.
     // Focus stays on the summary after closing, and the presenter's clicker
     // keys must reach the show from there.
@@ -190,12 +215,12 @@ export function setupSpeakerLayout(w: Window): () => void {
   const stepSize = (dir: number) => {
     const i = NOTES_SIZES.indexOf(notesSize())
     const next = NOTES_SIZES[Math.max(0, Math.min(NOTES_SIZES.length - 1, i + dir))]
-    lsSet(NOTES_KEY, String(next))
+    setNotesSize(next)
     paintSize()
   }
   smaller.addEventListener('click', () => stepSize(-1))
   larger.addEventListener('click', () => stepSize(1))
-  resetSize.addEventListener('click', () => { lsSet(NOTES_KEY, String(NOTES_DEFAULT)); paintSize() })
+  resetSize.addEventListener('click', () => { setNotesSize(NOTES_DEFAULT); paintSize() })
   const sizeKeys = (ev: KeyboardEvent) => {
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return // ⌘= / ⌘- stay the browser's zoom
     if ((ev.target as HTMLElement | null)?.closest?.('input, textarea, [contenteditable="true"]')) return

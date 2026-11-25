@@ -13,13 +13,13 @@ export type TimerState = 'normal' | 'warn' | 'over'
 const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
 /** What the timer shows after `elapsed` ms, with or without a target (ms).
- *  With one: the time left, amber in its last 10 %, red past zero, then the
- *  overrun counting up with a minus sign. */
+ *  With one: the time left, amber in its last 10 %, red once a whole second
+ *  over, then the overrun counting up with a minus sign (00:00 until then). */
 export function timerFace(elapsed: number, goal: number | null): { text: string; state: TimerState } {
   if (!goal) return { text: mmss(Math.floor(elapsed / 1000)), state: 'normal' }
   const left = goal - elapsed
-  if (left < 0) return { text: `−${mmss(Math.floor(-left / 1000))}`, state: 'over' }
-  return { text: mmss(Math.ceil(left / 1000)), state: left <= goal * 0.1 ? 'warn' : 'normal' }
+  if (left <= -1000) return { text: `−${mmss(Math.floor(-left / 1000))}`, state: 'over' }
+  return { text: mmss(Math.ceil(Math.max(0, left) / 1000)), state: left <= goal * 0.1 ? 'warn' : 'normal' }
 }
 
 /** Set a control's tooltip. While the pointer rests on it the app's hints
@@ -39,7 +39,6 @@ export function setupSpeakerTimer(w: Window): () => void {
   const clock = d.querySelector<HTMLElement>('.sv-clock')
   const mode = d.createElement('span')
   mode.className = 'sv-timer-mode'
-  mode.textContent = t('Remaining')
   face.before(mode)
   const reset = d.createElement('button')
   reset.type = 'button'
@@ -63,6 +62,7 @@ export function setupSpeakerTimer(w: Window): () => void {
     face.classList.toggle('sv-timer-paused', paused)
     tip(face, paused ? t('Resume timer') : t('Pause timer'))
     mode.hidden = !target
+    mode.textContent = f.state === 'over' ? t('Over') : t('Remaining')
     if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
   // Repaint just after each whole second of the timer, so the text turns over

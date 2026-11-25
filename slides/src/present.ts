@@ -1020,8 +1020,10 @@ export function startPresentation(
       nxtBox.replaceChildren(d.importNode(svSlide(cur, undefined, click, coming), true))
       if (label) label.textContent = t('Next click')
     } else {
-      nxtBox.replaceChildren(d.importNode(svSlide(nextVisibleIndex(cur), undefined, 0), true))
-      if (label) label.textContent = t('Next slide')
+      const nxt = nextVisibleIndex(cur)
+      nxtBox.replaceChildren(d.importNode(svSlide(nxt, undefined, 0), true))
+      // past the last slide the pane says "End of deck" itself
+      if (label) label.textContent = nxt >= 0 ? t('Next slide') : t('Next')
     }
   }
   const updateSpeaker = () => {

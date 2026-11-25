@@ -213,6 +213,23 @@ try {
   await startShow(sp)
   ok(await notesPx() === kept && kept > base, `restarting the show keeps the notes size (${await notesPx()}px)`)
   await soft(sizeBtn('reset').click(T))
+  // Storage that refuses the write (full, blocked, sandboxed) only loses the
+  // memory of the choice, never the control itself.
+  await p.evaluate(() => {
+    const set = Storage.prototype.setItem
+    window.__restoreSetItem = () => { Storage.prototype.setItem = set }
+    Storage.prototype.setItem = function (k, v) {
+      if (k === 'bento-speaker-notes-size') throw new DOMException('refused', 'QuotaExceededError')
+      return set.call(this, k, v)
+    }
+  })
+  await soft(sizeBtn('larger').click(T))
+  await press('=')
+  const refused = await notesPx()
+  ok(refused > base + 6, `with storage refusing the write, A+ and = still grow the notes (${base}px → ${refused}px)`)
+  await soft(sizeBtn('reset').click(T))
+  ok(await notesPx() === base, `…and reset still works (${await notesPx()}px)`)
+  await p.evaluate(() => window.__restoreSetItem())
 
   // ——— timer ———
   const timer = () => sp.evaluate(() => {
@@ -251,7 +268,22 @@ try {
   // A 1-minute target: count down, amber in the last 10 %, red past zero.
   await soft(sp.locator('.sv-view summary').click(T))
   await soft(sp.locator('.sv-view input.sv-target').fill('1', T))
-  await sp.keyboard.press('Escape')
+  // A clicker still drives the show while the target field has focus; Enter closes View.
+  const stepsNow = async () => (await panes()).steps
+  const before = await stepsNow()
+  await press('PageDown')
+  const viaPageDown = await stepsNow()
+  await press('ArrowLeft')
+  const viaLeft = await stepsNow()
+  await press('Space')
+  const viaSpace = await stepsNow()
+  const field = await sp.evaluate(() => ({ value: document.querySelector('input.sv-target')?.value,
+    focused: document.activeElement?.classList.contains('sv-target'), open: document.querySelector('.sv-view')?.open }))
+  ok(before === 'Click 1 of 3' && viaPageDown === 'Click 2 of 3' && viaLeft === 'Click 1 of 3' && viaSpace === 'Click 2 of 3'
+    && field.value === '1' && field.focused && field.open,
+  `with focus in Target time, PageDown, ← and Space drive the show and leave the field as typed (${before} → ${viaPageDown} → ${viaLeft} → ${viaSpace}, ${JSON.stringify(field)})`)
+  await press('Enter')
+  ok(!await sp.evaluate(() => document.querySelector('.sv-view').open), 'Enter in Target time closes View')
   const t0 = await timer()
   ok(t0.text === '01:00' && !/sv-timer-(warn|over)/.test(t0.cls) && t0.mode === 'Remaining',
     `with a 1-minute target the timer shows the time remaining ("${t0.text}", "${t0.mode}", ${t0.cls})`)
@@ -266,9 +298,14 @@ try {
   ok(t55.text === '00:05' && /sv-timer-warn/.test(t55.cls) && !/sv-timer-over/.test(t55.cls),
     `55 s in (last 10 %): "00:05", amber (${t55.text}, ${t55.cls})`)
   const amber = await sp.evaluate(() => getComputedStyle(document.querySelector('.sv-timer')).color)
-  await ctx.clock.fastForward(10000)
+  await ctx.clock.fastForward(5500)
+  const t60 = await timer()
+  ok(t60.text === '00:00' && !/sv-timer-over/.test(t60.cls) && t60.mode === 'Remaining',
+    `half a second past the target: "00:00", not yet over (${t60.text}, ${t60.cls}, "${t60.mode}")`)
+  await ctx.clock.fastForward(4500)
   const t65 = await timer()
-  ok(t65.text === '−00:05' && /sv-timer-over/.test(t65.cls), `65 s in: "−00:05", red (${t65.text}, ${t65.cls})`)
+  ok(t65.text === '−00:05' && /sv-timer-over/.test(t65.cls) && t65.mode === 'Over',
+    `65 s in: "−00:05", red, labelled "Over" (${t65.text}, ${t65.cls}, "${t65.mode}")`)
   const red = await sp.evaluate(() => getComputedStyle(document.querySelector('.sv-timer')).color)
   ok(amber !== red && !/^rgb\(233, 237, 243/.test(amber), `the two warning states paint differently (${amber}, ${red})`)
   // Clearing the target goes back to elapsed time.
@@ -286,6 +323,9 @@ try {
   const btn = (k) => sp.evaluate((k) => document.querySelector(`.sv-btn[data-nav="${k}"]`)?.classList.contains('active') ?? null, k)
   await press('End')
   ok((await count()).startsWith('3 /'), `End goes to the last slide (${await count()})`)
+  const end = await sp.evaluate(() => ({ label: document.querySelector('.sv-next-label')?.textContent,
+    end: !!document.querySelector('.sv-nextbox .sv-frame.end') }))
+  ok(end.end && end.label === 'Next', `on the last slide the pane shows "End of deck" under a plain "Next" label (${JSON.stringify(end)})`)
   await press('ArrowLeft')
   ok((await count()).startsWith('2 /'), `← goes back (${await count()})`)
   await press('ArrowRight')

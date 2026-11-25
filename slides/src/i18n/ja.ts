@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Over": "超過",
   "Next click": "次のクリック",
   "Click {n} of {m}": "クリック {n} / {m}",
   "Smaller notes": "ノートを小さく",

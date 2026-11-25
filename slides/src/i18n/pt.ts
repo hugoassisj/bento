@@ -7,6 +7,7 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Over": "Excedido",
   "Next click": "Próximo clique",
   "Click {n} of {m}": "Clique {n} de {m}",
   "Smaller notes": "Notas menores",

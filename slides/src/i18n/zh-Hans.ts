@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Over": "超时",
   "Next click": "下一次点击",
   "Click {n} of {m}": "第 {n} 次点击，共 {m} 次",
   "Smaller notes": "缩小备注",

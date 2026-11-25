@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Over": "Sforato",
   "Next click": "Clic successivo",
   "Click {n} of {m}": "Clic {n} di {m}",
   "Smaller notes": "Note più piccole",

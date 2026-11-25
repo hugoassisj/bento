@@ -384,7 +384,9 @@ anim, charts, i18n, sync), shared by every app.
   in both audience and speaker documents because popup key events do not cross
   windows. `updateSpeakerControls()`
   refreshes highlight/counter/button-state cheaply on every slidechange; the
-  expensive current/next re-render only in `updateSpeaker`. Reveal's notes plugin
+  current/next previews re-render in `updateSpeakerPreviews`, on every slide
+  change (via `updateSpeaker`, which also sets the notes) AND on every reveal
+  step click. Reveal's notes plugin
   is NOT used (it reloads the URL in an iframe → boots a whole second editor).
   **Layout (`src/speakerlayout.ts`)**: two dividers resize current versus side,
   and next versus notes, with pointer capture and keyboard arrows/Home/End.
