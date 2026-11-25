@@ -30,7 +30,6 @@
 // says so.
 
 import type { BentoDoc, Slide, SlideElement } from './model'
-import { REQUIRED_ELEMENT_KEYS } from './model'
 import type { Dropped } from './untrusted'
 import { derive, deriveMemory } from './derive'
 import { tokenDrift, tokenName } from './tokens'
@@ -78,8 +77,11 @@ function inputIndex(input: unknown) {
 
 /** Run the derive pass a freshly loaded document gets (the editor's memory on
  *  `replace`) and return what it changed that the author wrote. `input` is the
- *  parsed text the author sent, for the paths. */
-export function deriveReported(doc: BentoDoc, input: unknown): Dropped[] {
+ *  parsed text the author sent, for the paths. `reload` loads an input the way
+ *  this one was loaded: advice to leave a literal out is given only where the
+ *  input with that literal removed, loaded, keeps every element and the
+ *  binding. */
+export function deriveReported(doc: BentoDoc, input: unknown, reload?: (input: unknown) => BentoDoc | null): Dropped[] {
   const compact = isCompact(input)
   const find = inputIndex(input)
   const groups: Array<{ group: Group; i: number; holder: Slide }> = [
@@ -90,9 +92,11 @@ export function deriveReported(doc: BentoDoc, input: unknown): Dropped[] {
     /** the path to report, and what the author wrote there (when found) */
     path: string
     raw?: Obj
+    /** the holder's key in inputIndex, to find it again in a reloaded document */
+    key: string
     /** "element "x" on slide "s1"", for every reason */
     who: string
-    drift: Array<{ path: string; name: string; have: unknown; want: unknown }>
+    drift: Array<{ path: string; name: string; ref: string; have: unknown; want: unknown }>
     over?: Set<string>
     unsigned?: boolean
     parentId?: string
@@ -109,11 +113,11 @@ export function deriveReported(doc: BentoDoc, input: unknown): Dropped[] {
     const where = `${group === 'slides' ? 'slide' : 'layout'} "${s.id}"`
     const snap = (h: Holder, key: string, loaded: string, who: string) => {
       const found = find(key)
-      const b: Before = { path: found?.path ?? loaded, raw: found?.raw, who: found ? who : `${who} (path in the loaded document)`, drift: [] }
+      const b: Before = { path: found?.path ?? loaded, raw: found?.raw, key, who: found ? who : `${who} (path in the loaded document)`, drift: [] }
       for (const [p, ref] of Object.entries(h.themeRefs ?? {})) {
         const name = tokenName(ref)
         const d = name ? tokenDrift(doc, h, p, name) : null
-        if (name && d) b.drift.push({ path: p, name, ...d })
+        if (name && d) b.drift.push({ path: p, name, ref, ...d })
       }
       before.set(h, b)
       return b
@@ -144,17 +148,14 @@ export function deriveReported(doc: BentoDoc, input: unknown): Dropped[] {
 
   derive(doc, deriveMemory(doc))
 
-  /** Would leaving the literal out have kept the binding? compact.ts fills a
-   *  top-level property from its token; a full document is taken as written,
-   *  so only an element's optional top-level key is filled (compactload.ts),
-   *  and parseDoc fills a table's missing style with a default first. */
-  const omissible = (h: Holder, slide: boolean, path: string) => {
-    if (path.includes('.')) return false
-    if (compact) return true
-    if (slide) return false
-    const type = String(h.type)
-    return !(REQUIRED_ELEMENT_KEYS[type] ?? []).includes(path) && !(type === 'table' && path === 'style')
-  }
+  /** May leaving the literal out be offered? Only where compact.ts fills it
+   *  from the token: a property of a compact SLIDE or its element (a compact
+   *  deck's own layouts are taken as written, so a required literal left out
+   *  deletes the element), top-level, on a holder found in the input, and not
+   *  an auto-height text's h (left out, it is measured on load). A full
+   *  document is taken as written. Each candidate is then proved by `reload`. */
+  const omissible = (group: Group, h: Holder, b: Before, path: string) =>
+    compact && group === 'slides' && !!b.raw && !path.includes('.') && !(h.type === 'text' && path === 'h')
   const readRaw = (o: Obj | undefined, path: string): unknown => {
     let cur: unknown = o
     for (const sg of path.split('.')) cur = isObj(cur) && Object.hasOwn(cur, sg) ? cur[sg] : undefined
@@ -162,6 +163,8 @@ export function deriveReported(doc: BentoDoc, input: unknown): Dropped[] {
   }
 
   const out: Dropped[] = []
+  // dropped bindings whose literal the author wrote, worded once advice is proved
+  const lost: Array<{ entry: Dropped; b: Before; d: Before['drift'][number]; omit: boolean }> = []
   for (const { group, holder: s } of groups) {
     const on = group === 'slides' ? 'this slide' : 'this layout'
     for (const h of [s as unknown as Holder, ...(s.elements as unknown as Holder[])]) {
@@ -172,10 +175,11 @@ export function deriveReported(doc: BentoDoc, input: unknown): Dropped[] {
         if (h.themeRefs?.[d.path]) continue
         // what the author wrote there: unknown when the holder was not found in the input
         const written = b.raw ? readRaw(b.raw, d.path) : d.have
-        const reason = written === undefined
-          ? `binding dropped: ${b.who} has no value at "${d.path}" for token "${d.name}" (${show(d.want)})${d.have === undefined ? '' : `, so loading filled ${show(d.have)}, which differs`}. Write the token's value there`
-          : `binding dropped: ${b.who}: value ${show(d.have)} at "${d.path}" differs from token "${d.name}" (${show(d.want)}). Write the token's value${omissible(h, slide, d.path) ? ', or leave the literal out and it is filled from the token' : ''}`
-        out.push({ path: `${b.path}/themeRefs/${d.path}`, reason })
+        const entry: Dropped = { path: `${b.path}/themeRefs/${d.path}`, reason: '' }
+        out.push(entry)
+        if (written === undefined) {
+          entry.reason = `binding dropped: ${b.who} has no value at "${d.path}" for token "${d.name}" (${show(d.want)})${d.have === undefined ? '' : `, so loading filled ${show(d.have)}`} and the binding was dropped. Write ${show(d.want)} at "${d.path}" to keep it bound.`
+        } else lost.push({ entry, b, d, omit: omissible(group, h, b, d.path) })
       }
       if (slide) continue
       const el = h as unknown as El
@@ -183,12 +187,12 @@ export function deriveReported(doc: BentoDoc, input: unknown): Dropped[] {
         for (const k of el.component?.over ?? []) {
           if (b.over.has(k)) continue
           out.push({ path: `${b.path}/${k}`,
-            reason: `override added: ${b.who}: "${k}" differs from the main and this copy has no sig, so it stays the copy's own and no longer follows the main. Write component.sig "reset" on the copy to follow the main, or leave it if the difference is meant` })
+            reason: `override added: ${b.who}: "${k}" differs from the main and this copy has no sig, so the copy keeps its own "${k}" and stops following the main there. Set component.sig to "reset" on this copy if it should follow the main.` })
         }
       }
       if (b.parentId && el.parentId === undefined) {
         out.push({ path: `${b.path}/parentId`,
-          reason: `parent removed: ${b.who}: parentId "${b.parentId}" ${why.get(el) ?? 'names no frame'}, so parentId and sizing were dropped and the element stays where it is written. Name a frame on ${on} that does not contain this element, or leave parentId out` })
+          reason: `parent removed: ${b.who}: parentId "${b.parentId}" ${why.get(el) ?? 'names no frame'}, so parentId and sizing were dropped and the element stays where it is written. Name a frame on ${on} in parentId (not one inside this element), or remove "parentId".` })
       }
     }
     // frame children laid out in another order than the array, when layout moved them
@@ -201,12 +205,43 @@ export function deriveReported(doc: BentoDoc, input: unknown): Dropped[] {
       if (order.every((k, i) => k === kids[i])) return
       const L = f.layout
       const axis = L.dir === 'grid' ? 'grid cell nearest its written position' : L.wrap ? 'written position, line by line' : `written ${L.dir === 'row' ? 'x' : 'y'}`
-      const same = L.dir === 'row' ? 'x' : L.dir === 'col' ? 'y' : 'x and y'
+      const at = L.dir === 'row' && !L.wrap ? `"x": ${f.x}` : L.dir === 'col' && !L.wrap ? `"y": ${f.y}` : `"x": ${f.x} and "y": ${f.y}`
       const names = order.slice(0, 12).map((k) => k.id).join(', ') + (order.length > 12 ? ', …' : '')
       const b = before.get(f)!
       out.push({ path: b.path,
-        reason: `children reordered: ${b.who} is a frame that lays out its children by each one's ${axis}, not by array order: ${names}. To keep array order, write the children at the same ${same} (the frame's own is fine)` })
+        reason: `children reordered: ${b.who} is a frame that lays out its children by each one's ${axis}, not by array order: ${names}. Write ${at} on every child to lay them out in array order.` })
     })
+  }
+
+  // Prove each offer to leave a literal out: remove them all from a copy of
+  // the input, load it the same way, and keep the offer only where the holder
+  // is still there with the binding held at the token's value. One extra load,
+  // only when a compact deck's literal disagrees with its token.
+  const offers = lost.filter((l) => l.omit)
+  const proved = new Set<(typeof lost)[number]>()
+  if (offers.length && reload) {
+    const next = structuredClone(input)
+    for (const l of offers) {
+      let h: unknown = next
+      for (const sg of l.b.path.split('/').slice(1)) h = Array.isArray(h) ? h[Number(sg)] : isObj(h) ? h[sg] : undefined
+      if (isObj(h)) delete h[l.d.path]
+    }
+    const again = reload(next)
+    if (again) {
+      const at = new Map<string, Holder>()
+      for (const sl of again.slides) {
+        at.set(`slides|${sl.id}`, sl as unknown as Holder)
+        for (const e of sl.elements) at.set(`slides|${sl.id}|${e.id}`, e as unknown as Holder)
+      }
+      for (const l of offers) {
+        const h = at.get(l.b.key)
+        if (h && h.themeRefs?.[l.d.path] === l.d.ref && !tokenDrift(again, h, l.d.path, l.d.name)) proved.add(l)
+      }
+    }
+  }
+  for (const l of lost) {
+    const { d, b } = l
+    l.entry.reason = `binding dropped: ${b.who}: "${d.path}" is ${show(d.have)} but token "${d.name}" holds ${show(d.want)}, so the binding was dropped as a hand edit. Write ${show(d.want)} at "${d.path}" to keep it bound${proved.has(l) ? `, or leave "${d.path}" out and it is filled from the token` : ''}.`
   }
   return out
 }

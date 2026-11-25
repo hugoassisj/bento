@@ -184,12 +184,16 @@ token's value), a component copy with no `sig` whose differences become
 permanent overrides (`"sig": "reset"` makes it follow its main), frame
 children laid out in another order than written (children at the same
 coordinate keep array order), and a `parentId` that names no frame. Its paths
-point into the JSON you sent. A token reference written with no value takes
-the token's value and stays bound in a compact document, and in a full one
-for an element's optional top-level key; a required key (a shape's `fill`)
-or a nested one (`layout.gap`) must be written out. `validate()` reports the
-first two on a file that was never loaded: `token-stale`,
-`component-copy-unsynced`. The FILE is always saved full — the on-disk format is
+point into the JSON you sent, and each reason ends in the one thing to
+write. A token reference written with no value takes the token's value and
+stays bound on a compact document's slides, and in a full document for an
+element's optional top-level key. Write the value out everywhere else: a
+required key (a shape's `fill`), a nested one (`layout.gap`), the elements of
+a deck's own `layouts` (taken as written), and a text's `h` (left out, it is
+measured). The report offers "leave it out" only where loading the deck
+without it was checked to keep the binding. `validate()` reports the token,
+component and parent cases on a file that was never loaded: `token-stale`,
+`component-copy-unsynced`, `dangling-parent`. The FILE is always saved full — the on-disk format is
 unchanged and every shipped shell reads it as before. `slides/src/compact.ts`
 and `compactload.ts` are the whole mechanism; `scripts/test-slides-compact.ts`
 proves the round-trip on the starter deck and the gallery decks, and

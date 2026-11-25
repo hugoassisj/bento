@@ -31,9 +31,9 @@ pre-1.0.
   were written rather than in list order, and a `parentId` that names no frame
   is removed. The load report of `loadDoc` and Replace from JSON now lists each
   one under `dropped`, naming the element, pointing at it in the JSON that was
-  sent, and saying how to write it instead; `validate()` reports the token and
-  component cases on a file that was never loaded (`token-stale`,
-  `component-copy-unsynced`). In a compact document, and for an element's
+  sent, and saying what to write instead; `validate()` reports the same on a
+  file that was never loaded (`token-stale`, `component-copy-unsynced`,
+  `dangling-parent`). On a compact document's slides, and for an element's
   optional properties in a full one, a token reference written without a
   value now takes the token's value on load and stays bound, instead of
   picking up the editor's default colour and losing the binding.

@@ -260,7 +260,7 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       }
     })
   }
-  // what opening the file changes silently: token-stale, component-copy-unsynced
+  // what opening the file changes silently: token-stale, component-copy-unsynced, dangling-parent
   bindingChecks(doc, add)
 
   for (const slide of doc.slides) {

@@ -3,7 +3,7 @@
 //
 // Validator findings for what opening a deck changes silently (validate.ts
 // calls bindingChecks). The derive pass (derive.ts) runs on every open and
-// settles two things an author may have written differently:
+// settles three things an author may have written differently:
 //
 //   token-stale              a token-bound literal that differs from its token
 //                            loses the binding (tokens.ts: with the tokens
@@ -11,10 +11,17 @@
 //                            beside the palette's theme-ref-stale;
 //   component-copy-unsynced  a component copy with no `sig` keeps every
 //                            difference from its main as a permanent override
-//                            (components.ts) — warning.
+//                            (components.ts) — warning;
+//   dangling-parent          a `parentId` naming nothing, a non-frame or the
+//                            element itself is removed with `sizing`
+//                            (layout.ts layoutSlide) — warning.
 //
-// A `parentId` naming no frame (removed by layout.ts layoutSlide) is the
-// validator's `dangling-parent`, which belongs with the value checks.
+// dangling-parent is the code, severity, path and set of conditions the
+// value-checks branch (F-08) gives the same check (it also flags an empty
+// parentId, which layout ignores and this skips), so the two merge to ONE:
+// whichever lands second deletes its own block (keeping this message's last
+// sentence, the instruction), and scripts/test-validate.ts fails while both
+// report it.
 //
 // loadDoc's report lists these as they happen (derivelosses.ts); these
 // findings are for a file written straight to disk, where no report exists.
@@ -32,7 +39,9 @@ import { syncComponents } from './components.ts'
 type El = SlideElement & { groupId?: string; component?: { id: string; main?: boolean; sig?: string; over?: string[] } }
 type Holder = Record<string, unknown> & { themeRefs?: Record<string, string> }
 
-const show = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v))
+import { isFrame } from './layout.ts'
+
+const show = (v: unknown) => JSON.stringify(v)
 
 export function bindingChecks(doc: BentoDoc, add: (f: Finding) => void): void {
   // ---- token-stale --------------------------------------------------------
@@ -44,8 +53,8 @@ export function bindingChecks(doc: BentoDoc, add: (f: Finding) => void): void {
     const at = { slide: slide.id, ...(element ? { element: element.id } : {}) }
     add({ ...at, code: 'token-stale', severity: 'info', path,
       message: d.have === undefined
-        ? `There is no value at "${path}" for token "${name}" (${show(d.want)}), so opening the deck drops the binding. Write ${show(d.want)} there.`
-        : `This value is ${show(d.have)} but its token "${name}" holds ${show(d.want)}, so opening the deck drops the binding and keeps ${show(d.have)}. Write ${show(d.want)} to keep it bound, or clear the reference if ${show(d.have)} was deliberate.` })
+        ? `There is no value at "${path}" for token "${name}" (${show(d.want)}), so opening the deck drops the binding. Write ${show(d.want)} at "${path}" to keep it bound.`
+        : `"${path}" is ${show(d.have)} but its token "${name}" holds ${show(d.want)}, so opening the deck drops the binding and keeps ${show(d.have)}. Write ${show(d.want)} at "${path}" to keep it bound, or remove themeRefs["${path}"] if ${show(d.have)} is meant.` })
   })
 
   // ---- component-copy-unsynced -------------------------------------------
@@ -68,7 +77,23 @@ export function bindingChecks(doc: BentoDoc, add: (f: Finding) => void): void {
       const added = (e.component!.over ?? []).filter((k) => !was.has(k))
       if (!added.length) continue
       add({ slide: s.id, element: e.id, code: 'component-copy-unsynced', severity: 'warning', path: 'component.sig',
-        message: `This copy of component "${e.component!.id}" has no sig, so opening the deck keeps its ${added.map((k) => `"${k}"`).join(', ')} as overrides: it stops following the main there. Write component.sig "reset" to follow the main, or leave it if the difference is meant.` })
+        message: `This copy of component "${e.component!.id}" has no sig, so opening the deck keeps its ${added.map((k) => `"${k}"`).join(', ')} as overrides and it stops following the main there. Set component.sig to "reset" on this copy if it should follow the main.` })
+    }
+  }
+
+  // ---- dangling-parent ----------------------------------------------------
+  for (const s of doc.slides) {
+    const byId = new Map(s.elements.map((e) => [e.id, e]))
+    for (const el of s.elements) {
+      if (!el.parentId) continue // "" is no link: the gate keeps it, layout ignores it
+      const p = byId.get(el.parentId)
+      const why = el.parentId === el.id ? 'names the element itself'
+        : !p ? `names "${el.parentId}", which is not an element on this slide`
+        : !isFrame(p) ? `names "${el.parentId}", which is not a frame (a rect with layout)`
+        : ''
+      if (!why) continue
+      add({ slide: s.id, element: el.id, code: 'dangling-parent', severity: 'warning', path: 'parentId',
+        message: `parentId ${why}, so opening the deck removes it (and sizing) and the element stays where it is written. Name a frame on this slide in "parentId", or remove "parentId".` })
     }
   }
 }

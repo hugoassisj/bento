@@ -90,9 +90,17 @@ export interface InputOptions {
 /** parseDocInput, plus the report. A bare boolean is the old `fit` argument. */
 export function parseDocInputReport(json: string, opts: boolean | InputOptions = {}): { doc: BentoDoc; report: LoadReport } | null {
   const o: InputOptions = typeof opts === 'boolean' ? { fit: opts } : opts
+  return loadInput(json, o, true)
+}
+
+/** parseDocInputReport's body. `advise`: prove the report's advice to leave a
+ *  literal out by loading the input again without it (derivelosses.ts); the
+ *  reload itself does not advise, so it never recurses. */
+function loadInput(json: string, o: InputOptions, advise: boolean): { doc: BentoDoc; report: LoadReport } | null {
   const fit = o.fit ?? typeof document !== 'undefined'
   let raw: unknown
   try { raw = JSON.parse(json) } catch { return null }
+  const reload = advise ? (input: unknown) => loadInput(JSON.stringify(input), o, false)?.doc ?? null : undefined
   if (!isCompact(raw)) {
     const base = parseDoc(json)
     if (!base) return null
@@ -100,7 +108,7 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
     if (!gated) return null
     const doc = gated.doc
     fillUnwrittenTokens(doc)
-    const derived = deriveReported(doc, raw)
+    const derived = deriveReported(doc, raw, reload)
     return { doc, report: { ok: true, compact: false, dropped: [...gated.dropped, ...derived], expanded: 0, fitted: 0, findings: validateDoc(doc), derived: true, refit: [], laidOut: 0, stacks: [] } }
   }
   const { doc: expanded, stats } = expandDocWithStats(raw)
@@ -132,7 +140,7 @@ export function parseDocInputReport(json: string, opts: boolean | InputOptions =
   // after the fit, so a hugging frame lays out the measured heights; what it
   // changes in what the author wrote is reported beside the gate's drops
   fillUnwrittenTokens(doc) // layouts are not expanded; elements were (compact.ts)
-  all.push(...deriveReported(doc, raw))
+  all.push(...deriveReported(doc, raw, reload))
   return { doc, report: { ok: true, compact: true, dropped: all, expanded: stats.expanded, fitted, findings: validateDoc(doc), derived: true, refit, laidOut: stats.laidOut, stacks: stats.stacks } }
 }
 
