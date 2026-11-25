@@ -444,7 +444,10 @@ export class SlideCanvas {
       // an empty slide: a text box where the pointer is, open for typing — the
       // Text tool's click, which is what the empty-slide hint promises. Not
       // when the pair's first press placed a comment: that press disarmed the
-      // comment tool, so only the press itself can say so.
+      // comment tool, so only the press itself can say so. And only on the
+      // slide itself: a comment marker, an editor handle or any other overlay
+      // on the canvas is not the slide.
+      if (!this.surface?.contains(ev.target as Node)) return
       if (this.store.slide.elements.length || this.store.readOnly || this.drawOverlay || this.isCommenting || this.commentPress) return
       const r = this.scaleHost.getBoundingClientRect()
       const el = defaultText({ color: readableInk(this.store.slide.background) })
