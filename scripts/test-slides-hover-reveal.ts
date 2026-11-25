@@ -20,8 +20,8 @@
 //   3. hover off   — showOnHover and group agree but the slide's hover is
 //                    absent, or 'focus-group': `hover-off`, once per slide.
 //   4. a trigger the pointer can never be on does not count: the element
-//      itself, a hidden one (or one in a hidden frame), one that waits on a
-//      hover set other than the resting one.
+//      itself, a hidden one (or one in a hidden frame), one that waits on any
+//      hover set — the resting one included, which would flicker.
 //   5. the set named by hover.default shows at rest, so it needs no trigger.
 //   6. the starter deck and a slide with no reveal at all stay quiet.
 
@@ -98,7 +98,7 @@ ok(codes(inHiddenFrame) === 'hover-set-unreachable@card', `nor one inside a hidd
 const inSet = deck({ hover: { type: 'reveal' }, elements: [rect('trig', { group: 'g', showOnHover: 'other' }), text('card', { showOnHover: 'g' }), rect('t2', { x: 500, group: 'other' })] })
 ok(codes(inSet) === 'hover-set-unreachable@card', `nor one that itself waits on another hover set (${codes(inSet) || 'none'})`)
 const inRest = deck({ hover: { type: 'reveal', default: 'intro' }, elements: [rect('trig', { group: 'g', showOnHover: 'intro' }), text('card', { showOnHover: 'g' })] })
-ok(hover(inRest).length === 0, `a trigger in the resting set is drawn at rest and can reveal (${codes(inRest) || 'none'})`)
+ok(codes(inRest) === 'hover-set-unreachable@card', `nor one in the resting set: pointed at, it shows its group's set, which hides it, and the two flicker (${codes(inRest) || 'none'})`)
 const twoMembers = deck({ hover: { type: 'reveal' }, elements: [text('a', { showOnHover: 'x', group: 'x' }), text('b', { y: 320, showOnHover: 'x' })] })
 ok(codes(twoMembers) === 'hover-set-unreachable@a hover-set-unreachable@b', `a set member carrying the group reveals neither itself nor the others (${codes(twoMembers) || 'none'})`)
 

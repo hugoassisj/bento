@@ -12,13 +12,16 @@ import type { BentoDoc, Slide, SlideElement } from '../model'
 import { flagged } from '../layout'
 
 /**
- * Whether the pointer can ever be on `e` in the show: it is drawn (not hidden,
- * nor inside a hidden frame) and drawn at rest — an element that itself waits
- * on a hover set other than the resting one is invisible and takes no pointer
- * (present.ts applyRevealSet), so it can reveal nothing.
+ * Whether `e` can ever reveal another set in the show: it is drawn (not
+ * hidden, nor inside a hidden frame) and waits on no hover set of its own. One
+ * that waits on a set other than the resting one is invisible and takes no
+ * pointer (present.ts applyRevealSet). One in the RESTING set is drawn at rest,
+ * but pointing at it shows its group's set, which hides it; the pointer is
+ * then on nothing, the resting set comes back, and the two swap for as long as
+ * the pointer stays — a flicker, not a reveal.
  */
 export function reachable(slide: Slide, e: SlideElement, hidden = flagged(slide, 'hidden')): boolean {
-  return !hidden.has(e.id) && (!e.showOnHover || e.showOnHover === slide.hover?.default)
+  return !hidden.has(e.id) && !e.showOnHover
 }
 
 /** The elements on `slide`, other than `skip`, whose hover group is `set` and

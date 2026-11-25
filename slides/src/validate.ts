@@ -295,12 +295,13 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
             ? `Elements here carry showOnHover, but this slide's hover is "${slide.hover.type}", so they always show. Set hover to { "type": "reveal" }.`
             : `Elements here carry showOnHover, but this slide has no hover, so they always show. Set hover to { "type": "reveal" }.` })
       }
-      // A trigger is another element the pointer can be on: drawn (not hidden,
-      // nor in a hidden frame) and drawn at rest — one that itself waits on a
-      // hover set other than the resting one is invisible and takes no pointer.
-      // An element is never its own trigger, for the same reason.
+      // A trigger is another element that is drawn (not hidden, nor in a hidden
+      // frame) and waits on no hover set itself: one in another set is
+      // invisible and takes no pointer; one in the resting set hides itself the
+      // moment it is pointed at, and the two sets swap while the pointer stays
+      // (a flicker). An element is never its own trigger, for the same reason.
       const hiddenHere = flagged(slide, 'hidden')
-      const atRest = (e: SlideElement) => !hiddenHere.has(e.id) && (!e.showOnHover || e.showOnHover === slide.hover?.default)
+      const atRest = (e: SlideElement) => !hiddenHere.has(e.id) && !e.showOnHover
       for (const el of slide.elements) {
         const set = el.showOnHover
         if (!set || set === slide.hover?.default) continue
@@ -308,7 +309,7 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
         if (carriers.some((e) => e.id !== el.id && atRest(e))) continue
         add({ code: 'hover-set-unreachable', severity: 'warning', slide: sid, element: el.id, path: 'showOnHover',
           message: carriers.length
-            ? `showOnHover is "${set}", but every element with that group (${carriers.map((e) => `"${e.id}"`).join(', ')}) is hidden, waits on a hover set itself, or is this element, so the pointer can never be on it. Give "group": "${set}" to an element that is always drawn.`
+            ? `showOnHover is "${set}", but every element with that group (${carriers.map((e) => `"${e.id}"`).join(', ')}) is hidden, waits on a hover set itself, or is this element, so it can never reveal this one. Give "group": "${set}" to an element that is always drawn.`
             : `showOnHover is "${set}", but no element on this slide has that group, so nothing can show it. Give the trigger element "group": "${set}".` })
       }
     }
