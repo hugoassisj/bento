@@ -9,7 +9,9 @@
 //      confirm) with two choices and Cancel, saying how many slides go and how
 //      to undo; Escape, Cancel, and ⌘Z, Delete, Backspace or an arrow
 //      pressed while it is up (an element selected behind it) change nothing;
-//      Up and Down move between the choices; the ⌘K palette's start-scratch entry opens the same dialog.
+//      Up and Down move between the choices; Space activates a choice or
+//      Cancel (the canvas pan does not take it), and still pans the canvas
+//      when no dialog is up; the ⌘K palette's start-scratch entry opens the same dialog.
 //   2. Keep this look leaves one slide that paints in the deck's palette (a
 //      Background edit in the Tokens tab repaints it), tokens intact, no demo
 //      slide; the Showcase's title becomes "Untitled deck", the caret is in
@@ -228,6 +230,54 @@ try {
     ok(s3.title === 'Q3 review' && s3.slides === 1, `a title someone typed is kept (${s3.title})`)
     ok(!(await p.evaluate(() => document.activeElement?.classList.contains('ed-title'))), 'and the caret is not moved to it')
     ok(s3.docId === s0.docId && s3.collab === s0.collab, 'docId and collab unchanged')
+    ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
+    await ctx.close()
+  }
+
+  // ------------------------------------------------------------ Space
+  console.log('\nSpace, from the keyboard')
+  {
+    const { ctx, p, errors } = await boot(browser, 'en-US')
+    const grab = () => p.evaluate(() => document.querySelector('.ed-scroll').style.cursor)
+    const focusName = () => p.evaluate(() => document.activeElement?.dataset?.choice ?? document.activeElement?.textContent)
+    // the pan still works where it belongs: on the canvas, no dialog up
+    await p.locator('.ed-stage-scale').click({ position: { x: 4, y: 4 }, force: true })
+    await p.keyboard.press('Escape')
+    await p.keyboard.down(' ')
+    const armed = await grab()
+    await p.keyboard.up(' ')
+    ok(armed === 'grab' && (await grab()) === '', `Space on the canvas still arms the pan (${armed || 'not armed'})`)
+    const s0 = await state(p)
+    // Cancel: Tab twice from the first choice
+    if (await openFromMenu(p)) {
+      await p.keyboard.press('Tab')
+      await p.keyboard.press('Tab')
+      const at = await focusName()
+      await p.keyboard.press(' ')
+      ok(at === 'Cancel' && !(await dialogUp(p)) && (await state(p)).json === s0.json && (await grab()) === '', `Space on Cancel closes the dialog, nothing changed, no pan (focus ${at})`)
+      if (await dialogUp(p)) await p.keyboard.press('Escape') // a failed Space leaves it up
+    }
+    // Blank: Tab once
+    if (await openFromMenu(p)) {
+      await p.keyboard.press('Tab')
+      const at = await focusName()
+      await p.keyboard.press(' ')
+      const s1 = await state(p)
+      ok(at === 'blank' && !(await dialogUp(p)) && s1.slides === 1 && s1.tokens === 0 && (await grab()) === '', `Space on Blank applies it, no pan (focus ${at}, ${s1.slides} slide, ${s1.tokens} tokens)`)
+      if (await dialogUp(p)) await p.keyboard.press('Escape') // a failed Space leaves it up
+      await p.locator('.ed-stage-scale').click({ position: { x: 4, y: 4 }, force: true })
+      await p.keyboard.press(`${MOD}+z`)
+      ok((await state(p)).json === s0.json, 'one ⌘Z brings the deck back')
+    }
+    // Keep this look: Tab round the trap back to the first choice
+    if (await openFromMenu(p)) {
+      for (let i = 0; i < 3; i++) await p.keyboard.press('Tab')
+      const at = await focusName()
+      await p.keyboard.press(' ')
+      const s1 = await state(p)
+      ok(at === 'keep' && !(await dialogUp(p)) && s1.slides === 1 && s1.tokens === s0.tokens && (await grab()) === '', `Space on Keep this look applies it, no pan (focus ${at}, ${s1.slides} slide)`)
+      if (await dialogUp(p)) await p.keyboard.press('Escape') // a failed Space leaves it up
+    }
     ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
     await ctx.close()
   }
