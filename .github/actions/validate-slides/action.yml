@@ -751,3 +751,12 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: Hover reveals the validator can see
+      # A reveal needs showOnHover, a trigger whose group matches on the same
+      # slide, and hover 'reveal'. hover-set-unreachable and hover-off name the
+      # two ways it fails; a working reveal, the resting set and the starter
+      # deck stay quiet.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-hover-reveal.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-hover-reveal.mjs"
+        node "$RUNNER_TEMP/test-slides-hover-reveal.mjs"

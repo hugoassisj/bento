@@ -270,7 +270,10 @@ unknown property names (a typo is ignored, so the styling just never applies),
 text that overflows its box (measured against the real renderer), elements off
 the canvas, entrances that can never run, `dash-march` without a dashed stroke,
 broken `link` and `asset:` references, duplicate ids and morph-key collisions,
-and chart options charts-lite does not implement.
+chart options charts-lite does not implement, and hover reveals that cannot
+fire: `hover-set-unreachable` (a `showOnHover` that no element's `group` on the
+same slide carries) and `hover-off` (elements carry `showOnHover` but the
+slide's `hover` is absent or not `{ "type": "reveal" }`, so they always show).
 
 It only reads — it never changes the document, and a finding is advice, not a
 refusal. `severity: "info"` is deliberately quiet (a photo bleeding off the

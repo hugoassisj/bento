@@ -283,6 +283,24 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       add({ code: 'broken-state-parent', severity: 'error', slide: sid, path: 'stateOf',
         message: `stateOf points at "${slide.stateOf}", which is not a slide in this deck — the state is unreachable.` })
     }
+    // hover reveal: three settings that must agree (present.ts wireHoverFocus).
+    // The show matches a showOnHover against the groups on the SAME slide, and
+    // only when the slide's hover is 'reveal'; the hover.default set shows at
+    // rest, so it needs no trigger.
+    if (slide.elements.some((e) => e.showOnHover)) {
+      if (slide.hover?.type !== 'reveal') {
+        add({ code: 'hover-off', severity: 'warning', slide: sid, path: 'hover',
+          message: slide.hover
+            ? `Elements here carry showOnHover, but this slide's hover is "${slide.hover.type}", so they always show. Set hover to { "type": "reveal" }.`
+            : `Elements here carry showOnHover, but this slide has no hover, so they always show. Set hover to { "type": "reveal" }.` })
+      }
+      const groups = new Set(slide.elements.map((e) => e.group).filter(Boolean))
+      for (const el of slide.elements) {
+        if (!el.showOnHover || groups.has(el.showOnHover) || el.showOnHover === slide.hover?.default) continue
+        add({ code: 'hover-set-unreachable', severity: 'warning', slide: sid, element: el.id, path: 'showOnHover',
+          message: `showOnHover is "${el.showOnHover}", but no element on this slide has that group, so nothing can show it. Give the trigger element "group": "${el.showOnHover}".` })
+      }
+    }
 
     for (const el of slide.elements) {
       const at = { slide: sid, element: el.id }
