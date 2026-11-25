@@ -199,7 +199,8 @@ try {
     })
   }
   console.log('\n9. Arrange ▸ in the element menu\n')
-  await run(async () => {
+  // several run() blocks, so one failure does not hide the rest
+  {
     // its own contexts, sealed: no WebSocket reaches a host and the deck stays
     // offline (a loaded deck may carry a live session), every http(s) aborted
     const sealed = async (width, height, touch = false) => {
@@ -216,9 +217,11 @@ try {
       await p.waitForTimeout(400)
       return { p, ctx, errors }
     }
-    let s = await sealed(1440, 900)
-    let q = s.p
+    let s = null
+    let q = null
     let blank = { x: 250, y: 600 } // the grey surround; the toast docks at the canvas top
+    // a desktop page, opened once and reopened if a block before lost it
+    const desk = async () => { if (!q || q.isClosed()) { s = await sealed(1440, 900); q = s.p; blank = { x: 250, y: 600 } } }
     const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
     const rect = (id, x, y, extra = {}) => ({ id, type: 'shape', shape: 'rect', x, y, w: 200, h: 120, fill: '#88aadd', ...extra })
     const load = async (elements) => {
@@ -256,8 +259,10 @@ try {
     }
     const closeAll = async () => { await q.mouse.move(5, 895); await q.keyboard.press('Escape'); await q.keyboard.press('Escape') }
 
-    // a. three rough boxes: every action, in words, with icon and keys
     const three = [rect('a', 100, 200), rect('b', 340, 210), rect('c', 610, 195)]
+    await run(async () => {
+    await desk()
+    // a. three rough boxes: every action, in words, with icon and keys
     await load(three)
     await q.keyboard.press(`${mod}+a`); await q.waitForTimeout(100)
     await menuOn('b')
@@ -319,6 +324,11 @@ try {
     ok(JSON.stringify((await els()).map((e) => [e.x, e.y])) === JSON.stringify(three.map((e) => [e.x, e.y])), 'one ⌘Z puts all three back')
     await q.keyboard.press(`${mod}+Shift+z`); await q.waitForTimeout(150)
 
+    })
+
+    await run(async () => {
+    await desk()
+    await load(three)
     // d. the toast's Use auto layout is ⇧A on the same elements
     const norm = (list) => JSON.stringify(list.map((e) => ({ ...e, id: e.layout ? 'F' : e.id, parentId: e.parentId ? 'F' : undefined })))
     await pick(['a', 'b', 'c'])
@@ -333,6 +343,10 @@ try {
     await q.keyboard.press('Shift+A'); await q.waitForTimeout(250)
     ok(norm(await els()) === norm(viaToast), 'exactly as ⇧A wraps the same selection')
 
+    })
+
+    await run(async () => {
+    await desk()
     // e. rows that cannot apply say why
     await load(three)
     await pick(['a', 'b'])
@@ -349,6 +363,10 @@ try {
     ok(mw.off && /2 or more/.test(mw.title) && !two.find((r) => r.cmd === 'align-left').off, `one selected: Same width disabled (${mw.title}), align to the slide still on`)
     await closeAll()
 
+    })
+
+    await run(async () => {
+    await desk()
     // f. a 2×3 scatter becomes a 2×3 grid, by mouse
     await load([rect('g1', 100, 100), rect('g2', 345, 112), rect('g3', 610, 95), rect('g4', 108, 285), rect('g5', 330, 300), rect('g6', 598, 290)])
     await q.keyboard.press(`${mod}+a`); await q.waitForTimeout(100)
@@ -361,6 +379,10 @@ try {
     const rowGaps = [g.g4.y - (g.g1.y + g.g1.h), g.g5.y - (g.g2.y + g.g2.h), g.g6.y - (g.g3.y + g.g3.h)]
     ok(colGaps.every((v) => Math.abs(v - colGaps[0]) <= 1) && rowGaps.every((v) => Math.abs(v - rowGaps[0]) <= 1), `equal column gaps (${colGaps.join(', ')}) and row gaps (${rowGaps.join(', ')})`)
 
+    })
+
+    await run(async () => {
+    await desk()
     // g. a frame's children are the frame's: never moved by Tidy up
     await load([
       { id: 'f', type: 'shape', shape: 'rect', x: 100, y: 150, w: 700, h: 160, fill: '#eeeeee', layout: { dir: 'row', gap: 24, pad: [16, 16, 16, 16], hug: true } },
@@ -389,12 +411,15 @@ try {
     await q.keyboard.press('Escape')
     ok(JSON.stringify((await els()).filter((e) => e.parentId)) === kids0, 'the frame’s children did not move')
 
-    ok(s.errors.length === 0, `no page errors${s.errors.length ? ': ' + s.errors.join(' | ') : ''}`)
-    await s.ctx.close()
+    })
+    await run(async () => {
+      ok(!!s && s.errors.length === 0, `no page errors${s?.errors.length ? ': ' + s.errors.join(' | ') : ''}`)
+      if (q && !q.isClosed()) await s.ctx.close()
+    })
 
     // h. a phone: no room beside the menu, so the submenu takes its place —
     // on a tap or click only, and the gesture that opened it runs nothing
-    for (const touch of [true, false]) {
+    for (const touch of [true, false]) await run(async () => {
       const how = touch ? '390px, touch' : '390px, mouse'
       s = await sealed(390, 844, touch)
       q = s.p
@@ -432,8 +457,8 @@ try {
       ok(!(await q.$('.ed-ctxmenu')) && (await els()).every((e) => e.y === 195), `${how}: a tap on a row of it runs that row (Align top: y ${(await els()).map((e) => e.y).join(', ')})`)
       ok(s.errors.length === 0, `${how}: no page errors${s.errors.length ? ': ' + s.errors.join(' | ') : ''}`)
       await s.ctx.close()
-    }
-  })
+    })
+  }
 } finally {
   await browser.close()
 }
