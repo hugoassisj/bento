@@ -427,6 +427,13 @@ jobs:
         # and the next outside edit is caught again; a disk version that gained
         # a password loads only through that password and later saves keep it.
         run: node scripts/test-slides-disk-change-browser.mjs
+      - name: The skill's browser script, run as an agent runs it
+        # references/app.md's drive.cjs, extracted verbatim: --help; a deck
+        # and a pictures folder with no document (one picture per slide, the
+        # deck untouched); a compact document from the skill's own examples
+        # with the arguments reordered (nothing dropped, no error, saved, and
+        # it reopens with the same findings). The network stays closed.
+        run: node scripts/test-skill-scripts-browser.mjs
 
   slides-editor-browser:
     # The editor revamp's browser rigs (#897), in a job of their own. They

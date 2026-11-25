@@ -61,7 +61,9 @@ import { expandDocWithStats, layoutRoles, LAYOUT_ALIASES } from '../slides/src/c
 import { parseDocInputReport } from '../slides/src/compactload.ts'
 import { derive, deriveMemory } from '../slides/src/derive.ts'
 import { TOKEN_KEYS, SLIDE_TOKEN_KEYS } from '../slides/src/untrusted.ts'
-import { TOKEN_TYPES } from '../slides/src/tokens.ts'
+import { TOKEN_TYPES, tokenValue } from '../slides/src/tokens.ts'
+import { codeFontStack } from '../slides/src/render.ts'
+import { validateDoc } from '../slides/src/validate.ts'
 import { PALETTE_SLOTS, paletteOf } from '../slides/src/palette.ts'
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { CHART_PRESETS } from '../kernel/src/charts.ts'
@@ -147,7 +149,8 @@ ok(indexed.length >= 5, `the index lists ${indexed.length} references`)
 ok(same(indexed.map((i) => i.file), Object.keys(refs)), `the index lists exactly the files in references/ (index: ${show(indexed.map((i) => i.file))}; folder: ${show(Object.keys(refs))})`)
 for (const i of indexed) ok(/\bread when\b/i.test(i.line), `references/${i.file} has a "read when" line`)
 const paths = [...body.matchAll(/`((?:references|scripts|assets)\/[^`\s]+)`/g)].map((m) => m[1])
-for (const p of new Set(paths)) ok(existsSync(join(root, DIR, p)), `SKILL.md's path ${p} resolves`)
+// scripts/bento.mjs is named only as "when this skill's folder has" it (the routing rule, checked below)
+for (const p of new Set(paths)) if (p !== 'scripts/bento.mjs') ok(existsSync(join(root, DIR, p)), `SKILL.md's path ${p} resolves`)
 const mdLinks = [...skillRaw.matchAll(/\]\(([^)]+)\)/g), ...Object.values(refs).flatMap((t) => [...t.matchAll(/\]\(([^)]+)\)/g)])].map((m) => m[1])
 ok(mdLinks.every((l) => /^https?:/.test(l) || existsSync(join(root, DIR, l))), 'every relative markdown link resolves')
 const tableRefs = [...section(body, /^## 4\. Material to feature$/m).matchAll(/`([a-z-]+\.md)`/g)].map((m) => m[1])
@@ -319,7 +322,7 @@ for (const r of ess) {
   const type = ticks(r[0])[0] as keyof typeof MODEL_KEYS.element
   const keys = MODEL_KEYS.element[type] as readonly string[]
   const shapeKinds = unionOf(/export type ShapeKind = ([^\n]+)/)
-  const named = ticks(r[1]).filter((k) => !k.includes(':') && !shapeKinds.includes(k))
+  const named = ticks(r[1]).filter((k) => !k.includes(':') && !k.startsWith('theme.') && !shapeKinds.includes(k) && !(type === 'shape' && (MODEL_KEYS.frameLayout as readonly string[]).includes(k)))
   const bad = named.filter((k) => !keys.includes(k))
   ok(!bad.length, `${type}: every key named is a ${type} key${bad.length ? ` (not: ${bad.join(', ')})` : ''}`)
   if (type === 'shape') ok(same(ticks(r[1]).filter((k) => shapeKinds.includes(k)), shapeKinds), 'shape: every shape kind is listed')
@@ -451,7 +454,10 @@ ok(!!driveJs, 'app.md carries drive.cjs')
 ok(driveJs.includes("localStorage.setItem('bento-offline', 'on')") && /addInitScript/.test(driveJs), 'drive.cjs turns the offline switch on before the page loads')
 ok(/ctx\.route\(\/\^https\?:\/, \(r\) => r\.abort\(\)\)/.test(driveJs) && /routeWebSocket/.test(driveJs), 'drive.cjs aborts every http(s) request and closes every socket')
 const used = [...driveJs.matchAll(/window\.bento\.(\w+)/g)].map((m) => m[1])
-for (const api of new Set(used)) ok(['loadDoc', 'validate', 'serialize', 'doc'].includes(api) && (api === 'doc' ? /get doc\(\)/.test(mainSrc) : mainSrc.includes(`  ${api}`)), `drive.cjs calls window.bento.${api}, which exists`)
+for (const api of new Set(used)) {
+  if (api === 'renderAll') { ok(/typeof window\.bento\.renderAll === 'function'/.test(driveJs), 'drive.cjs uses window.bento.renderAll only where the shell has it'); continue }
+  ok(['loadDoc', 'validate', 'serialize', 'doc'].includes(api) && (api === 'doc' ? /get doc\(\)/.test(mainSrc) : mainSrc.includes(`  ${api}`)), `drive.cjs calls window.bento.${api}, which exists`)
+}
 ok(/filter\(\(s\) => !s\.stateOf && !s\.hidden\)/.test(driveJs), 'drive.cjs walks the slides inLinearFlow walks (no hidden, no states)')
 ok(/className = 'ed-stage'/.test(read('slides/src/editor/canvas.ts')) && driveJs.includes("'.ed-stage'"), 'drive.cjs photographs the editor stage, .ed-stage')
 const apiRows = tableRows(section(app, /^## The page's API/m)).map((r) => /^`(\w+)\(/.exec(r[0])?.[1] ?? '')
@@ -464,7 +470,7 @@ const withFormat = parseDoc(JSON.stringify({ compact: true, format: 'bento/slide
 ok(withFormat.slides[0].elements.length === 0, 'with format, a role-placed element and a shape without fill are dropped')
 const inkText = expandDocWithStats({ compact: true, theme: { background: '#101418', color: '#C0FFEE', fontFamily: 'Georgia, serif' }, slides: [{ elements: [{ type: 'text', x: 0, y: 0, w: 99, h: 30, html: 'x' }] }] }).doc.slides[0].elements[0] as unknown as Record<string, any>
 ok(inkText.color === readableInk('#101418') && inkText.color !== '#C0FFEE' && inkText.fontFamily === FONT_STACK, `compact text with no color or fontFamily gets a readable ink (${inkText.color}) and the system stack, not the theme's`)
-ok(/text `color` that is\s+a plain readable ink for the slide background, not `theme\.color`/.test(gotchas), 'SKILL.md says so')
+ok(/text `color` that is a plain readable ink for the slide background, not `theme\.color`/.test(flat(gotchas)), 'SKILL.md says so')
 ok(/slideNumber: \(doc\.present\?\.slideNumber \?\? true\)/.test(presentSrc) && /progress: doc\.present\?\.progress \?\? true/.test(presentSrc) && /"present": \{ "slideNumber": false \}/.test(gotchas), 'the show draws its counter and progress bar unless present says otherwise, as SKILL.md says')
 const laid = expandDocWithStats({ compact: true, theme: { background: '#101418', color: '#F2F0EA', fontFamily: 'Georgia, serif' }, slides: [{ layout: 'title', elements: [{ role: 'title', md: 'Hi' }] }] }).doc
 const lt = laid.slides[0].elements.find((e) => e.role === 'title') as unknown as Record<string, any>
@@ -571,6 +577,126 @@ for (const [f, t] of sources) {
   }
 }
 ok(examples >= 6, `${examples} complete examples checked`)
+
+// ---- round-3 review findings (FU-28a) ---------------------------------------------
+console.log('\nrole placement keeps content only (finding 1)\n')
+const flatSkill = flat(body)
+const roleTheme = { background: '#14213D', color: '#F5F1E8', accent: '#E4572E', fontFamily: "'Instrument Sans', system-ui, sans-serif",
+  tokens: { set: { paper: { type: 'color', values: { default: '#F5F1E8' } }, display: { type: 'fontFamily', values: { default: "'Fraunces', Georgia, serif" } } } } }
+const loadOpen = (j: unknown) => { const p = parseDocInputReport(JSON.stringify(j), false)!; derive(p.doc, deriveMemory(p.doc)); return p }
+{
+  const styled = loadOpen({ format: 'bento/slides', compact: true, theme: roleTheme, slides: [{ id: 'a', layout: 'title-content', elements: [
+    { role: 'title', type: 'text', html: 'Bound title', color: '#F5F1E8', fontFamily: "'Fraunces', Georgia, serif", themeRefs: { color: '$paper', fontFamily: '$display' } }] }] })
+  const t = styled.doc.slides[0].elements.find((e) => e.role === 'title') as unknown as Record<string, any>
+  ok(t.html === 'Bound title' && t.color !== '#F5F1E8' && !t.themeRefs, `a role-placed element keeps its html and loses its colour and binding (colour ${t.color})`)
+  ok(/if \(copy\.type === 'text' && d\.type === 'text' && textHasContent\(d\)\) copy\.html = d\.html/.test(modelSrc) && /if \(d\.link\) copy\.link = d\.link/.test(modelSrc), 'applyLayout copies the layout element and takes html, src/fit/crop and link from the donor')
+  const ownLayout = { id: 'my-title', name: 'Title', background: '#14213D', transition: 'fade', notes: '', elements: [
+    { id: 't', type: 'text', role: 'title', placeholder: 'Title', x: 96, y: 72, w: 1088, h: 84, html: '', fontSize: 48, fontWeight: 900, align: 'left', valign: 'top', color: '#F5F1E8', themeRefs: { color: '$paper' } }] }
+  const own = loadOpen({ format: 'bento/slides', compact: true, theme: roleTheme, layouts: [ownLayout], slides: [{ id: 'a', layout: 'my-title', elements: [{ role: 'title', type: 'text', html: 'Own layout' }] }] })
+  const ot = own.doc.slides[0].elements.find((e) => e.role === 'title') as unknown as Record<string, any>
+  ok(own.report.dropped.length === 0 && ot.html === 'Own layout' && ot.color === '#F5F1E8' && ot.themeRefs?.color === '$paper', 'placing into the deck\'s own layout keeps its bound colour, nothing dropped')
+  const noTransition = loadOpen({ format: 'bento/slides', compact: true, theme: roleTheme, layouts: [{ ...ownLayout, transition: undefined }], slides: [{ id: 'a', layout: 'my-title', elements: [{ role: 'title', type: 'text', html: 'x' }] }] })
+  ok(noTransition.report.dropped.some((d) => d.path === '/slides/0/transition') && noTransition.doc.slides[0].transition === 'fade', 'an own layout without transition leaves a dropped transition note and a fade slide')
+  const placed = loadOpen({ format: 'bento/slides', compact: true, theme: roleTheme, slides: [{ id: 'a', elements: [
+    { type: 'text', x: 96, y: 72, w: 1088, h: 84, html: 'Placed', color: '#F5F1E8', fontFamily: "'Fraunces', Georgia, serif", themeRefs: { color: '$paper', fontFamily: '$display' } }] }] })
+  const pt = placed.doc.slides[0].elements[0] as unknown as Record<string, any>
+  ok(pt.color === '#F5F1E8' && pt.themeRefs?.color === '$paper' && pt.themeRefs?.fontFamily === '$display', 'an element placed by x y w h without a role keeps its bound colour and font')
+  ok(/A role-placed element keeps only its content/.test(flatSkill) && /place by role only into the deck's own `layouts` \(full slides, `transition` included\)/.test(flatSkill) && /give the element `x y w h`, no `role`, and its bound `color` and `fontFamily`/.test(flatSkill), 'SKILL.md teaches the two patterns that keep the style')
+  ok(!/on what the built-in placed/.test(flatSkill), 'SKILL.md no longer advises styling what a built-in placed')
+  ok(/Only your content goes into the slot/.test(flat(ds)) && /give it a `transition`/.test(flat(ds)), 'design-system.md says the same')
+}
+
+console.log('\na compact block in the file (finding 2)\n')
+{
+  const inblock = parseDoc(JSON.stringify({ format: 'bento/slides', compact: true, slides: [{ id: 'a', layout: 'title', elements: [
+    { role: 'title', type: 'text', html: 'Role title' }, { type: 'text', x: 96, y: 300, w: 600, html: 'Placed no h' }, { role: 'body', md: 'no type' }] }] }))!
+  const els = inblock.slides[0].elements as unknown as Array<Record<string, any>>
+  ok(els.length === 2 && els[0].html === 'Role title' && els[0].x === undefined, `with format: a role element with type and html is kept, unplaced; one without type is dropped (${els.length} kept)`)
+  ok(/with `format`, an element missing a key its type needs is dropped, and one with `type` and `html` is kept but nothing places it \(its `role` is ignored\)/.test(flat(s1)), 'SKILL.md says exactly that')
+}
+
+console.log('\ncode elements follow theme.codeFontFamily (finding 3)\n')
+{
+  const th = { theme: { fontFamily: 'Body, sans-serif', codeFontFamily: "'Code Face', monospace" } } as never
+  ok(codeFontStack(undefined, th) === "'Code Face', monospace" && codeFontStack('Own, monospace', th) === 'Own, monospace', 'render.ts: a code element without fontFamily draws in theme.codeFontFamily; its own wins')
+  const codeRow = ess.find((r) => ticks(r[0])[0] === 'code')?.[1] ?? ''
+  ok(/no `fontFamily`, so `theme\.codeFontFamily` applies/.test(codeRow) && !/`fontFamily`, `/.test(codeRow), 'SKILL.md\'s code row leaves fontFamily out, so the theme\'s code face applies')
+  const cc = expandDocWithStats({ compact: true, theme: { codeFontFamily: "'Code Face', monospace" }, slides: [{ elements: [{ type: 'code', x: 0, y: 0, w: 200, h: 100, content: 'x' }] }] }).doc.slides[0].elements[0] as unknown as Record<string, any>
+  ok(cc.fontFamily && cc.fontFamily !== "'Code Face', monospace" && /compact form fills one\s+in, the editor's monospace stack/.test(da), `compact code gets the editor's monospace stack (${String(cc.fontFamily).slice(0, 24)}…), as data.md says`)
+}
+
+console.log('\nvalidate margin units (finding 4)\n')
+{
+  const box = (id: string, x: number) => ({ id, type: 'text', x, y: 100, w: 900, h: 120, html: 'x', fontSize: 20, fontWeight: 400, color: '#000000', align: 'left', valign: 'top', lineHeight: 1.2, rotation: 0, opacity: 1 })
+  const wide = parseDoc(JSON.stringify({ format: 'bento/slides', size: { width: 1600, height: 900 }, slides: [{ id: 's', elements: [box('in', 76), { ...box('out', 70), y: 400 }] }] }))!
+  const flagged = (m?: number) => validateDoc(wide, m === undefined ? {} : { margin: m }).findings.filter((f) => f.code === 'past-margin').map((f) => f.element).join()
+  ok(flagged(64) === 'out' && flagged() === 'in,out', `on a 1600-wide deck margin 64 means 80 px (flags: ${flagged(64)}), the default 96 means 120 px (flags: ${flagged()})`)
+  ok(/`margin` is in 1280-wide units, scaled to the deck \(the default 96 is 120 px on a 1600-wide deck\): for 80 px sides there pass `window\.bento\.validate\(undefined, \{ margin: 64 \}\)`/.test(flat(s3)), 'SKILL.md states the unit and the example')
+}
+
+console.log('\ndrive.cjs arguments (finding 5)\n')
+{
+  const dir = mkdtempSync(join(tmpdir(), 'skill-drive-args-'))
+  try {
+    writeFileSync(join(dir, 'drive.cjs'), driveJs)
+    const env = { ...process.env, NODE_PATH: '' }
+    const help = spawnSync(process.execPath, [join(dir, 'drive.cjs'), '--help'], { encoding: 'utf8', env })
+    ok(help.status === 0 && /any order/.test(help.stdout), '`drive.cjs --help` prints the usage and needs no browser package')
+    const none = spawnSync(process.execPath, [join(dir, 'drive.cjs'), 'doc.json', 'shots'], { encoding: 'utf8', env })
+    ok(none.status === 2 && /no \.bento\.html/.test(none.stderr), 'without a deck it stops with exit 2 before loading a browser')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+  ok(/const deck = args\.find\(\(a\) => \/\\\.html\?\$\/i\.test\(a\)\)/.test(driveJs) && /const json = args\.find\(\(a\) => \/\\\.json\$\/i\.test\(a\)\)/.test(driveJs), 'drive.cjs takes its arguments by kind, so the document is optional')
+  ok(/the document and the folder are each optional/.test(flat(app)), 'app.md says the document and the folder are optional')
+}
+
+console.log('\nframes and font weights until the gate relaxes (finding 6)\n')
+{
+  const frameDoc = (layout: unknown, weight: unknown) => JSON.stringify({ format: 'bento/slides', fonts: [{ family: 'Fraunces', asset: 'builtin:fraunces-900', weight }], slides: [{ id: 's', elements: [
+    { id: 'f', type: 'shape', shape: 'rect', x: 96, y: 96, w: 600, h: 200, fill: '#EEEEEE', stroke: 'none', strokeWidth: 0, radius: 0, rotation: 0, opacity: 1, layout }] }] })
+  const partial = parseDocInputReport(frameDoc({ dir: 'row', gap: 8 }, 900), false)!
+  const whole = parseDocInputReport(frameDoc({ dir: 'row', gap: 8, pad: [0, 0, 0, 0] }, '900'), false)!
+  ok(!('layout' in partial.doc.slides[0].elements[0]) && partial.report.dropped.some((d) => /layout/.test(d.path)), 'a frame layout missing pad is dropped, and the report says so')
+  ok('layout' in whole.doc.slides[0].elements[0], 'with dir, gap and pad it stays a frame')
+  ok(!('weight' in (partial.doc.fonts ?? [{}])[0]) && (whole.doc.fonts ?? [{}])[0].weight === '900', 'a numeric font weight is dropped, a string is kept')
+  ok(/Write `dir`, `gap` and `pad` on every `layout`/.test(flat(ds)) && /`layout` with `dir`, `gap` and `pad` makes a rect a frame/.test(flatSkill), 'design-system.md and SKILL.md say to write dir, gap and pad')
+  ok(/`weight` is a string \(`"400 700"`\); a number is dropped/.test(flat(ds)) && /`weight` a string \(`"900"`; a number is dropped\)/.test(flatSkill), 'design-system.md and SKILL.md say weight is a string')
+}
+
+console.log('\nthe smaller corrections\n')
+{
+  ok(/font: option\?\.textStyle\?\.fontFamily \?\? 'sans-serif'/.test(chartsSrc) && /A chart draws its text in `option\.textStyle\.fontFamily`, else a plain sans-serif/.test(flat(da)), 'a chart\'s font is option.textStyle.fontFamily, else sans-serif, as data.md says')
+  ok(/photographed in the editor view/.test(flat(app)) && /out\.shots = drawn \? 'slides' : 'editor view'/.test(driveJs), 'app.md and drive.cjs say the fallback pictures are the editor view')
+  const reportText = [skillRaw, ...Object.values(refs)].join('\n').match(/dropped` lists every key/g) ?? []
+  ok(reportText.length === 1, `the load report is explained once (${reportText.length})`)
+  const dir = mkdtempSync(join(tmpdir(), 'skill-modes-'))
+  try {
+    writeFileSync(join(dir, 'inspect.mjs'), inspectJs)
+    const d: any = { format: 'bento/slides', slides: [{ id: 's', elements: [] }], theme: { background: '#FFFFFF', color: '#000000', accent: '#F7A600', fontFamily: 'x',
+      tokens: { modes: ['light', 'dark'], mode: 'dusk', set: { ink: { type: 'color', values: { zzz: '#999999', dark: '#222222', light: '#111111' } }, gap: { type: 'number', values: { zzz: 1, dark: 2 } } } } } }
+    writeFileSync(join(dir, 'deck.bento.html'), `<script type="application/bento+json" id="bento-doc">${JSON.stringify(d)}</script>`)
+    const out = JSON.parse(spawnSync(process.execPath, [join(dir, 'inspect.mjs'), join(dir, 'deck.bento.html')], { encoding: 'utf8' }).stdout || '{}')
+    const app2 = { slides: [], layouts: [], theme: d.theme } as never
+    ok(out.tokens?.mode === 'light' && JSON.stringify(out.tokens?.modes) === '["light","dark"]', `inspect.mjs reads modes in declared order and an unknown mode as the first (${out.tokens?.mode})`)
+    ok(out.tokens?.set?.ink?.[1] === tokenValue(app2, 'ink') && out.tokens?.set?.gap?.[1] === tokenValue(app2, 'gap'), `inspect.mjs gives the value the app uses (ink ${out.tokens?.set?.ink?.[1]}, gap ${out.tokens?.set?.gap?.[1]})`)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
+console.log('\nscripts: the CLI first, the inline scripts as fallback\n')
+{
+  ok(/when this skill's folder has `scripts\/bento\.mjs`, it is the default \(`node scripts\/bento\.mjs --help` lists its verbs\)\. Otherwise the fallbacks are `editing\.md`'s `inspect\.mjs` and `splice\.mjs` and, with a headless browser, `app\.md`'s `drive\.cjs`/.test(flat(s3)), 'SKILL.md routes to scripts/bento.mjs when present, the inline scripts otherwise')
+  const cli = join(root, DIR, 'scripts/bento.mjs')
+  if (existsSync(cli)) ok(spawnSync(process.execPath, [cli, '--help'], { encoding: 'utf8' }).status === 0, 'scripts/bento.mjs --help runs')
+  else ok(!!inspectJs && !!spliceJs && !!driveJs, 'no scripts/bento.mjs here: the three inline fallbacks are present')
+}
+
+console.log('\nmotion is restrained, and reduced motion is respected\n')
+{
+  ok(/let reduceMotion = readMotionPref\(\) \?\? reduceQuery\.matches/.test(presentSrc) && /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/.test(presentSrc) && /k === 'm' \|\| k === 'M'\) \{ ev\.preventDefault\(\); toggleReduceMotion\(\) \}/.test(presentSrc), 'the show follows the system reduced-motion setting, and M toggles it')
+  ok(/if \(!reduceMotion\) runEnterFx/.test(presentSrc), 'with reduced motion on, entrances do not run')
+  ok(/Motion is restrained by default/.test(flatSkill) && /every slide has to read in its final state/.test(flatSkill), 'SKILL.md sets the restrained default and the final-state rule')
+  ok(/keep motion to what explains a step/.test(flat(mo)) && /every effect is skipped and each element shows its final state/.test(flat(mo)), 'motion.md says the same')
+  ok(/restraint is a good default/.test(flat(defaults)) && !/liberally|every cover/i.test(everything), 'design-defaults.md makes restraint the default; nothing says "liberally" or "every cover"')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
