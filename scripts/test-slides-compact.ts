@@ -27,6 +27,7 @@ import { markdownToHtml } from '../slides/src/editor/markdown.ts'
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { defaultText, defaultShape, defaultTable, defaultCode, readableInk, FONT_STACK, newDoc, isLightBg, type BentoDoc, type TextElement, type ShapeElement, type TableElement } from '../slides/src/model.ts'
 import { resolveThemeRefs, shiftLightness } from '../slides/src/palette.ts'
+import { derive, deriveMemory } from '../slides/src/derive.ts'
 import { syncTokenRefs } from '../slides/src/tokens.ts'
 import { syncComponents, mainSig, components } from '../slides/src/components.ts'
 
@@ -122,7 +123,8 @@ ok(t2.color === readableInk('#101820') && t2.color === '#F5F7FA', 'text on a dar
 const c2 = el(1, 'c2')
 ok(canon(c2) === canon(defaultCode({ id: 'c2', x: 96, y: 200, w: 800, h: 300, content: 'x', color: readableInk('#101820') })), 'a code block equals defaultCode(...) with the slide\'s ink')
 const tb = el(0, 'tb') as unknown as TableElement
-ok(canon(tb.style) === canon(defaultTable({}, ex.theme).style), 'a table on a light slide carries tableStyleFor(theme)')
+// AI-08: on a theme-background slide the ink-derived keys are bound to tx1 (the rest is tableStyleFor(theme))
+ok(canon({ ...tb.style, color: 0, zebra: 0, borderColor: 0 }) === canon({ ...defaultTable({}, ex.theme).style, color: 0, zebra: 0, borderColor: 0 }) && tb.style.color === '#1E2A3A' && tb.style.zebra === 'rgba(30, 42, 58, 0.05)' && tb.style.borderColor === 'rgba(30, 42, 58, 0.14)', 'a table on a light theme-background slide carries tableStyleFor(theme), its text, zebra and rules the theme text colour at the editor\'s alphas')
 const tb2 = el(1, 'tb2') as unknown as TableElement
 ok(tb2.style.color === '#F5F7FA' && tb2.style.zebra === 'rgba(255,255,255,0.06)' && tb2.style.borderColor === 'rgba(255,255,255,0.16)', 'a table on a dark slide gets editor.newTable()\'s dark adaptation')
 ok(ex.slides[0].background === newDoc().theme.background && (ex.slides[0] as unknown as Obj & { themeRefs?: Obj }).themeRefs?.background === 'bg1' && ex.slides[0].transition === 'fade' && ex.slides[0].notes === '', 'slide background follows the theme and is bound to bg1; transition fade; notes empty')
@@ -297,6 +299,41 @@ console.log('\nround four: the deck\'s design system (AI-08)\n')
   ink.theme.background = '#101820'; ink.theme.color = '#F5F7FA'
   resolveThemeRefs(ink)
   ok(ink.slides[0].background === '#101820' && ie(0, 'h').color === '#F5F7FA' && ie(0, 'k').color === '#F5F7FA', 'switching Background and Text moves the slide and its text together (no dark-on-dark)')
+
+  // tables: transparent body cells and ink-tinted zebra and rules sit on the slide, so they bind too
+  const tbl = (more: Obj = {}) => ({ type: 'table', x: 0, y: 0, w: 400, h: 120, columns: [{ w: 1 }], rows: [{ cells: [{ html: 'a' }] }, { cells: [{ html: 'b' }] }], ...more })
+  const td = expandDoc({ compact: true, theme: { background: '#FFFFFF', color: '#1E2A3A' }, slides: [
+    { id: 'l', elements: [tbl({ id: 't' }), tbl({ id: 'mine', style: { ...defaultTable().style, color: '#550000' } })] },
+    { id: 'lit', background: '#FAFAFA', elements: [tbl({ id: 'lt' })] },
+  ] })
+  const T = (si: number, id: string) => td.slides[si].elements.find((e) => e.id === id) as unknown as R & { style: Record<string, string> }
+  ok(T(0, 't').themeRefs?.['style.color'] === 'tx1' && T(0, 't').themeRefs?.['style.zebra'] === 'tx1 /a' && T(0, 't').themeRefs?.['style.borderColor'] === 'tx1 /a' && !T(0, 't').themeRefs?.['style.headerBg'], 'a table on a bg1 slide: text bound to tx1, zebra and rules to tx1 keeping their own alpha; the header (its own background) is left alone')
+  ok(!T(0, 'mine').themeRefs && T(0, 'mine').style.color === '#550000', 'a style the author wrote stays theirs, unbound')
+  ok(!T(1, 'lt').themeRefs && T(1, 'lt').style.zebra === 'rgba(30,42,58,0.05)', 'on a literal background a table keeps the editor\'s style, unbound')
+  const ownTable = expandDoc({ compact: true, theme: { background: '#FFFFFF', color: '#1E2A3A', table: { color: '#004400' } }, slides: [{ id: 'o', elements: [tbl({ id: 'ot' })] }] }).slides[0].elements[0] as unknown as R & { style: Record<string, string> }
+  ok(ownTable.style.color === '#004400' && !ownTable.themeRefs?.['style.color'] && ownTable.themeRefs?.['style.zebra'] === 'tx1 /a', 'a table colour the deck\'s theme.table sets is the deck\'s: not rebound')
+  const dk = expandDoc({ compact: true, theme: { background: '#101820', color: '#F5F7FA' }, slides: [{ id: 'd', elements: [tbl({ id: 'dt' })] }] })
+  const dt = dk.slides[0].elements[0] as unknown as R & { style: Record<string, string> }
+  ok(dt.style.color === '#F5F7FA' && dt.style.zebra === 'rgba(245, 247, 250, 0.06)' && dt.style.borderColor === 'rgba(245, 247, 250, 0.16)', 'on a dark theme the same binding gives the editor\'s dark-slide tints (0.06 / 0.16)')
+  const mem = deriveMemory(dk)
+  derive(dk, mem)
+  ok(!derive(dk, mem) && dt.themeRefs?.['style.zebra'] === 'tx1 /a' && dt.style.zebra === 'rgba(245, 247, 250, 0.06)', 'the derive pass accepts the binding as written and reaches a fixed point')
+  dk.theme.background = '#FFFFFF'; dk.theme.color = '#1E2A3A'
+  derive(dk, mem)
+  ok(dt.style.color === '#1E2A3A' && dt.style.zebra === 'rgba(30, 42, 58, 0.06)' && dt.style.borderColor === 'rgba(30, 42, 58, 0.16)' && dk.slides[0].background === '#FFFFFF', 'switching the theme to light moves the table text, zebra and rules with the background (alphas kept)')
+  const rtt = newDoc()
+  rtt.slides = [{ id: 'b1', background: '#FFFFFF', themeRefs: { background: 'bg1' }, transition: 'fade', notes: '', elements: [
+    { ...(T(0, 't') as unknown as Obj) },
+    defaultTable({ id: 'plain', x: 0, y: 0, w: 400, h: 120 }),
+  ] } as unknown as BentoDoc['slides'][0]]
+  const rct = ((compactDoc(rtt).slides as R[])[0].elements as R[])
+  ok(!('style' in rct[0]) && !rct[0].themeRefs && 'style' in rct[1], 'compactDoc strips a bound table style only with all three refs; the editor\'s unbound style is kept')
+  ok(canon(expandDoc(compactDoc(rtt))) === canon(rtt), 'and that round-trips deep-equal')
+  const lmem = deriveMemory(td)
+  derive(td, lmem)
+  td.theme.background = '#101820'; td.theme.color = '#F5F7FA'
+  derive(td, lmem)
+  ok(T(0, 't').style.color === '#F5F7FA' && T(0, 't').style.zebra === 'rgba(245, 247, 250, 0.05)' && td.slides[0].background === '#101820', 'and from light to dark: the table text turns light with the background (review: 1.23:1 before)')
   // the bindings hold on open and follow the design system afterwards
   const live = JSON.parse(JSON.stringify(d4)) as BentoDoc
   syncTokenRefs(live, false) // what opening does: a disagreeing literal loses its binding

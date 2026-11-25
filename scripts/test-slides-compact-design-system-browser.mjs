@@ -8,7 +8,9 @@
 // `"fill": "accent2"` arrive bound. Then the real editor: editing Accent 1 and
 // the color.card token in the Tokens view (clicks and typing) re-paints the
 // bound shapes on the canvas — measured on the drawn svg, not read back from
-// the model. A `use` copy and a `like` slide survive the real loader's derive
+// the model; switching Background and Text there keeps text, code and a
+// table (header, body, zebra rows) readable on the canvas, both ways. A `use`
+// copy and a `like` slide survive the real loader's derive
 // pass; names that do not resolve come back in the load report.
 //
 // The network is closed: http(s) aborted, WebSockets answered by a closed mock.
@@ -52,6 +54,9 @@ const deck = {
       { id: 'm-t', name: 'label', type: 'text', x: 120, y: 520, w: 200, h: 40, html: 'Main', groupId: 'tile', component: { id: 'tile', key: 'label', main: true } },
       { use: 'Tile', x: 400, y: 500, over: { label: { html: 'Copy' } } },
       { type: 'shape', shape: 'rect', x: 0, y: 0, w: 10, h: 10, fill: '$color.nope' },
+      { id: 'tbl', type: 'table', x: 760, y: 380, w: 440, h: 180, columns: [{ w: 1 }, { w: 1 }],
+        rows: [{ cells: [{ html: 'Head' }, { html: 'Head' }] }, { cells: [{ html: 'Body' }, { html: '1' }] }, { cells: [{ html: 'Zebra' }, { html: '2' }] }, { cells: [{ html: 'Body' }, { html: '3' }] }] },
+      { id: 'code', type: 'code', x: 760, y: 590, w: 440, h: 60, content: 'plain words' },
     ] },
     { id: 's2', elements: [{ id: 'logo', type: 'shape', shape: 'ellipse', x: 1180, y: 30, w: 40, h: 40, fill: 'tx1' }, { type: 'text', x: 100, y: 300, w: 600, html: 'Two' }] },
     { id: 's3', like: 's2', elements: [{ type: 'text', x: 100, y: 300, w: 600, html: 'Three' }] },
@@ -116,21 +121,48 @@ try {
   console.log('\ntext and its background move together (real input)\n')
   const lum = (c) => { const m = c.match(/[\d.]+/g).map(Number); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]) }
   const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) }
+  // every sample is the drawn text colour against what is drawn under it: the
+  // slide, or a cell's own background composited over the slide
   const drawn = () => p.evaluate(() => {
     const surface = document.querySelector('.ed-stage-scale .bento-slide')
-    const host = document.querySelector('.ed-stage-scale [data-el-id="hello"]')
-    const leaf = host && [...host.querySelectorAll('*')].find((n) => n.textContent === 'Hello' && !n.children.length)
-    return { bg: surface ? getComputedStyle(surface).backgroundColor : null, ink: leaf ? getComputedStyle(leaf).color : null }
+    const bg = surface ? getComputedStyle(surface).backgroundColor : 'rgb(0, 0, 0)'
+    const nums = (c) => c.match(/[\d.]+/g).map(Number)
+    const over = (c) => { const [r, g, b, a = 1] = nums(c); const [R, G, B] = nums(bg); return `rgb(${Math.round(r * a + R * (1 - a))}, ${Math.round(g * a + G * (1 - a))}, ${Math.round(b * a + B * (1 - a))})` }
+    const leaf = (id, text) => { const h = document.querySelector(`.ed-stage-scale [data-el-id="${id}"]`); return h && [...h.querySelectorAll('*')].find((n) => n.textContent === text && !n.children.length) }
+    const rows = [...(document.querySelector('.ed-stage-scale [data-el-id="tbl"] table')?.querySelectorAll('tr') ?? [])]
+    const cell = (i) => { const c = rows[i]?.children[0]; return c ? { ink: getComputedStyle(c).color, bg: over(getComputedStyle(c).backgroundColor) } : null }
+    const text = leaf('hello', 'Hello')
+    // the highlighter splits code into token spans: the first word's own span, else the block
+    const pre = document.querySelector('.ed-stage-scale [data-el-id="code"] pre')
+    const code = pre && ([...pre.querySelectorAll('*')].find((n) => n.textContent.trim() === 'plain' && !n.children.length) ?? pre)
+    return { slide: bg, samples: {
+      text: text ? { ink: getComputedStyle(text).color, bg } : null,
+      code: code ? { ink: getComputedStyle(code).color, bg } : null,
+      'table header': cell(0), 'table body': cell(1), 'table zebra row': cell(2),
+    } }
   })
-  const before = await drawn()
-  ok(!!before.bg && !!before.ink && ratio(before.ink, before.bg) >= 4.5, `before: the text reads on its slide (${before.ink} on ${before.bg}, ${ratio(before.ink, before.bg).toFixed(2)}:1)`)
-  for (const [slot, v] of [['bg1', 'FFFFFF'], ['tx1', '1E2A3A']]) {
-    await p.locator(`.ed-token-builtin[data-slot="${slot}"] .ed-token-value`).click()
-    const f = p.locator(`.ed-token-builtin[data-slot="${slot}"] input.ed-edit-field`)
-    await f.fill(v); await f.press('Enter'); await p.waitForTimeout(400)
+  const check = async (when) => {
+    const d = await drawn()
+    const lines = Object.entries(d.samples).map(([k, v]) => [k, v, v ? ratio(v.ink, v.bg) : 0])
+    ok(lines.every(([, v, r]) => v && r >= 4.5), `${when}: text, code, table header, body and zebra rows all read on the canvas (${lines.map(([k, , r]) => `${k} ${r.toFixed(2)}:1`).join(', ')})`)
+    return d
   }
-  const after = await drawn()
-  ok(after.bg === 'rgb(255, 255, 255)' && ratio(after.ink, after.bg) >= 4.5, `after switching Background and Text to a light theme in the Tokens view, the canvas text still reads (${after.ink} on ${after.bg}, ${ratio(after.ink, after.bg).toFixed(2)}:1)`)
+  const setTheme = async (pairs) => {
+    for (const [slot, v] of pairs) {
+      await p.locator(`.ed-token-builtin[data-slot="${slot}"] .ed-token-value`).click()
+      const f = p.locator(`.ed-token-builtin[data-slot="${slot}"] input.ed-edit-field`)
+      await f.fill(v); await f.press('Enter'); await p.waitForTimeout(400)
+    }
+  }
+  await check('before (the deck\'s dark theme)')
+  await setTheme([['bg1', 'FFFFFF'], ['tx1', '1E2A3A']])
+  const light = await check('after switching Background and Text to light in the Tokens view')
+  ok(light.slide === 'rgb(255, 255, 255)', `the slide did turn light (${light.slide})`)
+  const zebra = light.samples['table zebra row']?.bg, body = light.samples['table body']?.bg
+  ok(!!zebra && zebra !== body, `the zebra stripe is still visible on the light theme (${zebra} vs ${body})`)
+  await setTheme([['bg1', '101820'], ['tx1', 'F5F7FA']])
+  const dark = await check('and back to dark')
+  ok(dark.slide === 'rgb(16, 24, 32)', `the slide did turn dark (${dark.slide})`)
 
   console.log('\nuse and like through the real loader\n')
   const s1 = await p.evaluate(() => window.bento.doc.slides[0].elements.map((e) => ({ id: e.id, html: e.html, c: e.component })))
