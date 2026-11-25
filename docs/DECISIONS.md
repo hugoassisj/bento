@@ -15417,6 +15417,11 @@ changing an existing deck; `loadDoc` stays for whole documents.
   session's diff carries only them and the derive memory survives.
 - **A bound value is never silently replaced by a literal** (`detach: true`
   says so); slot and token names write literal and binding together.
+- **The outline prints a text as the markdown `edits` takes**, and only when
+  it converts back to the stored html (else `html "…"`), so an edit built from
+  it never flattens line breaks or bold; a cut text sent back is refused.
+- **A slide and its states are one unit** (editor/slidesel.ts, #514): move
+  carries them, add lands after them, a state never moves alone.
 - The format-side modules live in `slides/src/ops.ts` and `outline.ts` for the
   Assistant (AS-01), the CLI and a tool server to import; the browser half is
   `patchstore.ts`. Rigs: `test-slides-ops.ts`, `test-slides-patch-api-browser.mjs`.

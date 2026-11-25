@@ -305,11 +305,23 @@ components and layouts, the bindings most elements carry, and a `hash`.
 Each line is one element: its address, role, words, and what an edit must
 respect — `(frame row gap 16)`, `(copy of "Button")`, `(step 2)`,
 `(→ slide-id)`, and the bindings that differ from the usual ones,
-`{color=accent1}`. Decoration (textures, plain shapes) is counted per slide,
-not listed. Long notes are cut at 72 characters and long texts at 300; the
-slide view carries them whole. Sharing keys, embedded documents and asset
-bytes never appear; in the slide view a picture's `src` reads
-`@@elided image/png 34 KB@@`, and writing that placeholder back is refused.
+`{color=accent1}`; a chart that follows a table says `(← table <id>)` (edit
+the table's cells, not the chart). Decoration (textures, plain shapes) is
+counted per slide, not listed. A table reads row by row, `r2: "Q1" | "1,204"`.
+
+**Texts are printed the way you write them back.** A text is the markdown
+`edits` takes — `**bold**`, `*italic*`, `` `code` ``, `~~strike~~`,
+`[caption](https://…)`, a line break as `\n` inside the JSON string — and
+only when that markdown converts back to exactly what is stored, so sending
+the outline's text unchanged is a no-op and changing one word keeps every
+other break and bold. A text markdown cannot say (a list, a heading) is
+printed as `html "…"`; send `{ id, html }` for it. Long texts are cut at 300
+characters and notes at 64, marked `…(+N chars)`: a cut text sent back is
+refused (it would lose the rest); read `outline({ slide: n })`, which carries
+everything whole. Sharing keys, embedded documents and asset bytes never
+appear; in the slide view a picture's `src` reads `@@elided image/png 34 KB@@`
+(writing that placeholder back is refused), and a field bound to a slot or
+token shows only its binding in `themeRefs`, not the literal it resolves to.
 
 **Addresses and numbering.** An element is `<slide>/<element id>`. The slide is
 its position in `doc.slides`, counting from 1, **interactive states and
@@ -317,7 +329,9 @@ hidden slides included** (the outline marks them), or the slide's id. "Slide
 3" in the show can be another slide; the outline's numbers are the only ones
 an address uses. Inside one patch a slide number always means the deck you
 read, however earlier ops moved things; a slide the patch adds is named by
-its id.
+its id. A slide and its interactive states are one unit: `move` carries a
+slide's states with it, `add` after a slide lands after its last state, and
+moving a state away from its parent is refused (move the parent).
 
 ```js
 const r = window.bento.patch([
@@ -334,13 +348,13 @@ const r = window.bento.patch([
 
 A patch is a list of ops run in order (later ops may name what earlier ones
 created), or one object of verb lists (`{ edits: […], notes: […] }`, which
-runs content verbs first, then `remove`, `add`, `move`). The verbs:
+runs content verbs first, then `add`, `remove`, `move`). The verbs:
 
 | verb | one op | does |
 |---|---|---|
-| `edits` | `{id, text}` | the words of a text (markdown: `**bold**`, `*italic*`, `- bullets`) or a code element |
+| `edits` | `{id, text}` or `{id, html}` | the words of a text (markdown, as the outline prints it) or a code element |
 | `notes` | `{slide, text}` | speaker notes |
-| `cells` | `{id, row, col, text}` | one table cell, from 1 |
+| `cells` | `{id, row, col, text}` or `{…, html}` | one table cell, from 1 |
 | `chart` | `{id, series: [{name, data}], categories?}` | a chart's numbers (not one linked to a table: edit the table) |
 | `style` | `{id, size?, weight?, align?}` | `bigger`/`smaller`, `bold`/`normal`, `left`/`center`/`right` |
 | `set` | `{id, …fields, detach?, at?}` | merge fields onto an element; objects merge one level, `null` deletes; `parentId` moves it into a frame, `at` reorders it there |
@@ -350,7 +364,7 @@ runs content verbs first, then `remove`, `add`, `move`). The verbs:
 | `slide` | `{slide, background?, transition?, hidden?, unnumbered?, name?, notes?, layout?}` | slide fields; `layout` re-arranges the slide onto a layout |
 | `add` | `{after, from?, layout?, id?, title?, subtitle?, body?, left?, right?, kicker?, quote?, attribution?, card1–3?, notes?, elements?}` | a new slide: a duplicate of `from` (ids kept, so it morphs with it) or a layout filled by role |
 | `remove` | `{slide}` or a number | a slide, with its states |
-| `move` | `{slide, to}` | put slide N where slide M is |
+| `move` | `{slide, to}` | put slide N, with its states, where slide M is |
 
 **Use the deck's design system.** A colour may be a palette slot (`"accent1"`,
 `"accent2 -20%"`) and any paint or type value a token (`"$color.card"`,
@@ -366,7 +380,9 @@ pasted JSON meets, before anything changes. If any op is refused, nothing is
 committed, every op still gets its reply (index-aligned, with the address it
 resolved to or the reason and what to do instead), `skipped` lists the
 refused ones by index, and `hint` says what to do. Fix and send the whole
-patch again, or pass `{ partial: true }` to apply the rest. A committed patch
+patch again, or pass `{ partial: true }` to apply the rest; a refused op
+leaves nothing behind, not even the fields it wrote before it was refused. A
+field a verb does not take is refused with the list of the ones it does. A committed patch
 is one undo step; ⌘Z restores the deck byte for byte. It is applied to the
 live deck as an edit, so the editor keeps its slide and a collaborator's
 changes to other slides survive — which is why it is the right tool even for
@@ -374,7 +390,9 @@ large changes, and `loadDoc` is not.
 
 **Options.** `base`: the hash you read; a deck that changed since is refused
 as `stale` ("read outline() again"), and the same patch retried with its base
-after it applied is answered `alreadyApplied`. `dryRun: true`: the same report,
+after it applied is answered `alreadyApplied` (the page remembers only its
+last patch, in memory). Pass the hash a report returns as the next patch's
+`base` to chain edits without reading the outline again. `dryRun: true`: the same report,
 nothing changed (no undo step). `outline: true`: the touched slides' outline
 after the change. An op that is already true replies `unchanged`; adding an
 id that exists is refused by name, so a retry never duplicates.
