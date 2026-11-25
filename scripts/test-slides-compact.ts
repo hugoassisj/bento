@@ -419,6 +419,68 @@ console.log('\nround four: the deck\'s design system (AI-08)\n')
   ok(canon(expandDoc(rc)) === canon(rt), 'expandDoc(compactDoc(d)) deep-equals d around every bound default')
 }
 
+console.log('\nbindings never ship unreadable text or overwrite the author (FU-38)\n')
+{
+  type R = Obj & { themeRefs?: Record<string, string>; style?: Record<string, string> }
+  const L = (hex: string) => { const n = parseInt(hex.replace('#', '').slice(0, 6), 16); const f = (v: number) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255) }
+  const rgbHex = (c: string) => { if (c.startsWith('#')) return c; const m = c.match(/[\d.]+/g)!.map(Number); return '#' + m.slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, '0')).join('') }
+  const over = (c: string, bg: string) => { // a tint composited over the slide
+    const m = c.match(/[\d.]+/g)!.map(Number); const a = c.startsWith('rgba') ? m[3] : 1; const b = parseInt(bg.slice(1), 16)
+    return '#' + [0, 1, 2].map((i) => Math.round(m[i] * a + ((b >> (16 - 8 * i)) & 255) * (1 - a)).toString(16).padStart(2, '0')).join('')
+  }
+  const cr = (a: string, b: string) => { const x = L(rgbHex(a)), y = L(rgbHex(b)); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) }
+  const tbl = { type: 'table', x: 0, y: 0, w: 400, h: 120, columns: [{ w: 1 }], rows: [{ cells: [{ html: 'h' }] }, { cells: [{ html: 'a' }] }, { cells: [{ html: 'b' }] }] }
+  const els = [{ type: 'text', x: 0, y: 0, w: 100, html: 'Hi' }, { type: 'code', x: 0, y: 0, w: 100, h: 50, content: 'x' }, tbl]
+  const themes: Record<string, Obj> = {
+    'background only (dark)': { background: '#0B1F33' },
+    'background only (dark) + accent': { background: '#0B1F33', accent: '#38BDF8' },
+    full: { background: '#FFFFFF', color: '#1E2A3A', accent: '#2B6CB0' },
+    dark: { background: '#101820', color: '#F5F7FA', accent: '#FF9E8A' },
+    light: { background: '#F2F0EA', color: '#0D1B2E', accent: '#FF9E8A' },
+    'mid grey': { background: '#808080' },
+    'mid grey with an unreadable text colour': { background: '#808080', color: '#1E2A3A' },
+  }
+  for (const [name, theme] of Object.entries(themes)) {
+    const d = expandDoc({ compact: true, theme, slides: [{ elements: els }] })
+    const sl = d.slides[0], [t, c, tb] = sl.elements as unknown as R[]
+    const st = tb.style!
+    const r = { text: cr(t.color as string, sl.background), code: cr(c.color as string, sl.background), 'table body': cr(st.color, sl.background), 'table zebra row': cr(st.color, over(st.zebra, sl.background)) }
+    const worst = Object.entries(r).sort((a, b) => a[1] - b[1])[0]
+    ok(worst[1] >= 4.5, `${name}: text, code and the table's body and zebra rows read at load (weakest ${worst[0]} ${worst[1].toFixed(2)}:1)`)
+  }
+  const bgOnly = expandDoc({ compact: true, theme: { background: '#0B1F33' }, slides: [] })
+  ok(bgOnly.theme.color === '#F5F7FA', `a theme with only a background gets a text colour that reads on it (${bgOnly.theme.color}, not the editor's #1E2A3A)`)
+  ok(expandDoc({ compact: true, theme: { background: '#808080' }, slides: [] }).theme.color === '#000000', 'on a mid grey neither editor ink reads, so the text colour is black (5.3:1)')
+  const badInk = expandDoc({ compact: true, theme: { background: '#808080', color: '#1E2A3A' }, slides: [{ elements: [els[0]] }] }).slides[0].elements[0] as unknown as R
+  ok(badInk.color === '#000000' && !badInk.themeRefs, 'a theme text colour that does not read on its background (4.2:1) is not followed: the readable ink stays, unbound')
+  const rtTheme = { ...newDoc(), theme: { ...newDoc().theme, background: '#0B1F33', color: '#F5F7FA' } }
+  ok(!('color' in ((compactDoc(rtTheme).theme ?? {}) as Obj)) && canon(expandDoc(compactDoc(rtTheme))) === canon(rtTheme), 'compactDoc leaves out a text colour equal to the ink expansion fills, and the round trip holds')
+  const keepDark = { ...newDoc(), theme: { ...newDoc().theme, background: '#0B1F33' } }
+  ok(((compactDoc(keepDark).theme ?? {}) as Obj).color === '#1E2A3A' && canon(expandDoc(compactDoc(keepDark))) === canon(keepDark), '…and keeps one that differs, so it round-trips too')
+
+  // the author's own nested ref is kept (review: style.color accent1 was overwritten by tx1)
+  const nr = expandDocWithStats({ compact: true, theme: { background: '#FFFFFF', color: '#1E2A3A', accent: '#C2410C', tokens: { set: { 'color.ink': { type: 'color', values: { default: '#334455' } } } } }, slides: [{ elements: [
+    { ...tbl, themeRefs: { 'style.color': 'accent1' } },
+    { ...tbl, themeRefs: { 'style.color': '$color.ink' } },
+  ] }] })
+  const [n1, n2] = nr.doc.slides[0].elements as unknown as R[]
+  ok(n1.themeRefs?.['style.color'] === 'accent1' && n1.style!.color === '#C2410C', `an author's palette ref on style.color is kept, its literal resolved (${n1.style!.color}, ${n1.themeRefs?.['style.color']})`)
+  ok(n2.themeRefs?.['style.color'] === '$color.ink' && n2.style!.color === '#334455' && !nr.stats.notes.length, 'an author\'s token ref on style.color is kept and agrees with its token (nothing to report)')
+  const live = JSON.parse(JSON.stringify(nr.doc)) as BentoDoc
+  derive(live, deriveMemory(live))
+  ok((live.slides[0].elements[0] as unknown as R).style!.color === '#C2410C' && (live.slides[0].elements[1] as unknown as R).themeRefs?.['style.color'] === '$color.ink', 'both survive the open-time derive')
+
+  // the deck's own opaque zebra: body text reads against the stripe, so it is not bound
+  const oz = expandDoc({ compact: true, theme: { background: '#FFFFFF', color: '#1E2A3A', table: { zebra: '#E8E2D0' } }, slides: [{ elements: [tbl] }] })
+  const ozt = oz.slides[0].elements[0] as unknown as R
+  ok(!ozt.themeRefs?.['style.color'] && ozt.style!.zebra === '#E8E2D0' && ozt.themeRefs?.['style.borderColor'] === 'tx1 /a', 'with the deck\'s own opaque zebra the table text is left unbound (the stripe would not follow a theme switch)')
+  oz.theme.background = '#101820'; oz.theme.color = '#F5F7FA'
+  derive(oz, deriveMemory(oz))
+  ok(cr(ozt.style!.color, ozt.style!.zebra) >= 4.5, `after a switch to dark the text still reads on that stripe (${cr(ozt.style!.color, ozt.style!.zebra).toFixed(2)}:1; 1.05:1 before)`)
+  const tz = expandDoc({ compact: true, theme: { background: '#FFFFFF', color: '#1E2A3A', table: { zebra: 'rgba(0,0,0,0.04)' } }, slides: [{ elements: [tbl] }] }).slides[0].elements[0] as unknown as R
+  ok(tz.themeRefs?.['style.color'] === 'tx1', 'a translucent theme zebra is a tint over the slide, so the text still binds')
+}
+
 console.log('\nthe numbers\n')
 // one deck, both ways: two starterDoc() calls differ in their random ids, and that noise alone moved the ratio ±0.7%
 const sd = starterDoc(), sj = JSON.stringify(sd), sc = compactJson(sd)

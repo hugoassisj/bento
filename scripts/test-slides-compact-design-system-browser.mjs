@@ -11,7 +11,9 @@
 // the model; switching Background and Text there keeps text, code and a
 // table (header, body, zebra rows) readable on the canvas, both ways. A `use`
 // copy and a `like` slide survive the real loader's derive
-// pass; names that do not resolve come back in the load report.
+// pass; names that do not resolve come back in the load report. A table
+// colour picked in the panel, and a preset, survive save and reopen with no
+// dangling or stale theme reference.
 //
 // The network is closed: http(s) aborted, WebSockets answered by a closed mock.
 //
@@ -170,6 +172,49 @@ try {
   ok(copy.length === 2 && copy.every((e) => e.c.sig && e.c.id === 'tile') && copy.find((e) => e.c.key === 'label')?.html === 'Copy' && JSON.stringify(copy.find((e) => e.c.key === 'label')?.c.over) === '["html"]', `the use is a copy of the Tile component with only its label overridden (${copy.map((e) => e.id).join(', ')})`)
   const s3 = await p.evaluate(() => { const s = window.bento.doc.slides[2]; return { ids: s.elements.map((e) => e.id), bg: s.background, ref: s.themeRefs?.background, theme: window.bento.doc.theme.background } })
   ok(s3.ids[0] === 'logo' && s3.ids.length === 2 && s3.bg.toLowerCase() === s3.theme.toLowerCase() && s3.ref === 'bg1', `the like slide carries the recurring logo and the source's bg1 background (${s3.ids.join(', ')})`)
+
+  console.log('\na table colour you pick stays picked (real input, save, reopen)\n')
+  const tdeck = { compact: true, theme: { background: '#FFFFFF', color: '#1E2A3A', accent: '#2B6CB0' }, slides: [{ id: 'T', elements: [
+    { id: 'tb', type: 'table', x: 200, y: 200, w: 600, h: 200, columns: [{ w: 1 }, { w: 1 }], rows: [{ cells: [{ html: 'Head' }, { html: 'H2' }] }, { cells: [{ html: 'Body' }, { html: 'B2' }] }, { cells: [{ html: 'Zeb' }, { html: 'Z2' }] }] },
+    { id: 'tb2', type: 'table', x: 200, y: 450, w: 600, h: 200, columns: [{ w: 1 }], rows: [{ cells: [{ html: 'A' }] }, { cells: [{ html: 'B' }] }, { cells: [{ html: 'C' }] }] }] }] }
+  const openShell = async (file) => {
+    const pg = await ctx.newPage(); pg.on('pageerror', (e) => errors.push(e.message))
+    await pg.goto('file://' + file)
+    await pg.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-topbar'), null, { timeout: 30000 })
+    await pg.waitForTimeout(500); return pg
+  }
+  const tp = await openShell(fixture)
+  await tp.evaluate((j) => window.bento.loadDoc(j), JSON.stringify(tdeck)); await tp.waitForTimeout(600)
+  const tbl = (pg, id) => pg.evaluate((id) => { const t = window.bento.doc.slides[0].elements.find((e) => e.id === id); return { style: t.style, refs: t.themeRefs ?? {} } }, id)
+  const refWarnings = (pg) => pg.evaluate(() => window.bento.validate().findings.filter((f) => /theme-ref/.test(f.code ?? '')).map((f) => `${f.code} ${f.path ?? ''}`))
+  const pick = async (id) => { const b = await tp.locator(`.ed-stage-scale [data-el-id="${id}"]`).boundingBox(); await tp.mouse.click(b.x + b.width - 4, b.y + b.height / 2); await tp.waitForTimeout(300) }
+  const rowOf = (label) => tp.locator('.ed-props .ed-row', { has: tp.locator(`span:text-is("${label}")`) }).first()
+  const setColour = async (label, hex) => {
+    await rowOf(label).locator('input[type=color]').click(); await tp.waitForTimeout(250)
+    const f = tp.locator('.ed-cpop .ed-cpop-text'); await f.fill(hex); await f.press('Enter'); await tp.waitForTimeout(400)
+    await tp.keyboard.press('Escape'); await tp.waitForTimeout(150)
+  }
+  ok((await tbl(tp, 'tb')).refs['style.color'] === 'tx1', 'the compact table arrives with its text bound to the theme')
+  await pick('tb')
+  await setColour('Text', '#CC0000')
+  await pick('tb')
+  await setColour('Grid lines', '#00AA00')
+  const edited = await tbl(tp, 'tb')
+  ok(edited.style.color.toLowerCase() === '#cc0000' && !edited.refs['style.color'] && !edited.refs['style.borderColor'], `a colour picked in the panel drops that key's theme binding (refs left: ${Object.keys(edited.refs).join(', ') || 'none'})`)
+  await pick('tb2')
+  await rowOf('Preset').locator('select').selectOption('Lined'); await tp.waitForTimeout(400)
+  await rowOf('Preset').locator('select').selectOption('Minimal'); await tp.waitForTimeout(400)
+  const preset = await tbl(tp, 'tb2')
+  ok(!preset.refs['style.zebra'] && !preset.refs['style.headerBg'], 'a preset that removes the zebra removes its binding too')
+  const warn1 = await refWarnings(tp)
+  ok(warn1.length === 0, `no dangling or stale theme references after the edits and presets (${warn1.join(', ') || 'none'})`)
+  const saved = join(scratch, 'saved.bento.html')
+  writeFileSync(saved, await tp.evaluate(() => window.bento.serialize()))
+  const rp = await openShell(saved)
+  const back = await tbl(rp, 'tb')
+  ok(back.style.color.toLowerCase() === '#cc0000' && /0, 170, 0|#00aa00/i.test(back.style.borderColor), `after save and reopen the picked colours are still there (text ${back.style.color}, grid ${back.style.borderColor}; reverted to #1E2A3A before)`)
+  const warn2 = await refWarnings(rp)
+  ok(warn2.length === 0, `and the reopened deck reports no theme-reference problems (${warn2.join(', ') || 'none'})`)
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

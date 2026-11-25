@@ -7,6 +7,17 @@ import { row, toggle, section, labeledSelect, mini, number } from './fields'
 import { t } from '../../i18n'
 import { colorAlpha } from './color'
 
+/** A colour set here is the author's own, so the theme binding on that key
+ *  (`themeRefs['style.<key>']`) goes with it: left in place, the next palette
+ *  pass (every open runs one) would put the bound colour back, and a key the
+ *  preset removed would leave a ref pointing at nothing. */
+function unbind(tb: TableElement, ...keys: string[]) {
+  const refs = tb.themeRefs
+  if (!refs) return
+  for (const k of keys) delete refs[`style.${k}`]
+  if (!Object.keys(refs).length) delete tb.themeRefs
+}
+
 export function buildTableProps(p: PropsPanel, el: TableElement) {
   // a count is a number field like any other: typed, stepped with ↑↓, or
   // worked out (+2); one undo step however far it moves
@@ -42,24 +53,27 @@ export function buildTableProps(p: PropsPanel, el: TableElement) {
   section(p, t('Style'))
   row(p, 'Preset', labeledSelect([['Lined', t('Lined')], ['Zebra', t('Striped')], ['Boxed', t('Boxed')], ['Minimal', t('Minimal')]], preset, (v) =>
     p.mutate(el.id, (e) => {
-      const s = (e as TableElement).style
+      const tb = e as TableElement
+      const s = tb.style
       s.borderWidth = v === 'Lined' || v === 'Boxed' ? Math.max(themed.borderWidth, 1) : 0
       s.zebra = v === 'Zebra' || v === 'Boxed' ? themed.zebra ?? 'rgba(30,42,58,0.05)' : undefined
-      if (v === 'Minimal') { s.headerBg = 'transparent'; s.headerColor = s.color }
+      unbind(tb, 'zebra')
+      if (v === 'Minimal') { s.headerBg = 'transparent'; s.headerColor = s.color; unbind(tb, 'headerBg', 'headerColor') }
       else if (s.headerBg === 'transparent') {
         s.headerBg = themed.headerBg
         s.headerColor = themed.headerColor
+        unbind(tb, 'headerBg', 'headerColor')
       }
     }, true)))
 
   row(p, 'Header fill', colorAlpha(p, st.headerBg, (v, fin) =>
-    p.mutate(el.id, (e) => { (e as TableElement).style.headerBg = v }, fin)))
+    p.mutate(el.id, (e) => { (e as TableElement).style.headerBg = v; unbind(e as TableElement, 'headerBg') }, fin)))
   row(p, 'Header text', colorAlpha(p, st.headerColor, (v, fin) =>
-    p.mutate(el.id, (e) => { (e as TableElement).style.headerColor = v }, fin)))
+    p.mutate(el.id, (e) => { (e as TableElement).style.headerColor = v; unbind(e as TableElement, 'headerColor') }, fin)))
   row(p, 'Text', colorAlpha(p, st.color, (v, fin) =>
-    p.mutate(el.id, (e) => { (e as TableElement).style.color = v }, fin)))
+    p.mutate(el.id, (e) => { (e as TableElement).style.color = v; unbind(e as TableElement, 'color') }, fin)))
   row(p, 'Grid lines', colorAlpha(p, st.borderColor, (v, fin) =>
-    p.mutate(el.id, (e) => { (e as TableElement).style.borderColor = v }, fin)))
+    p.mutate(el.id, (e) => { (e as TableElement).style.borderColor = v; unbind(e as TableElement, 'borderColor') }, fin)))
 
   const grid = document.createElement('div')
   grid.className = 'ed-grid2'

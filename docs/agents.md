@@ -482,12 +482,15 @@ saved full). In it, reuse what the deck defines instead of copying values:
 - leave a text's `fontFamily` out and none is written, so it renders in
   `theme.fontFamily` (it used to be filled with the editor's system font
   stack); leave its `color` out on a theme-background slide and it is the
-  theme's text colour, bound to `tx1`, and a table's omitted `style` binds
-  its text, zebra and rules the same way; leave a shape's `fill` out and it
+  theme's text colour, bound to `tx1` (only where it reads at 4.5:1 on the
+  slide; a theme with no `color` gets one that reads on its background), and
+  a table's omitted `style` binds its text, zebra and rules the same way; leave a shape's `fill` out and it
   is the deck's accent (bound to `accent1`);
-- text on a card is bound for the slide background, not the card: on a card
-  whose fill does not follow the theme, colour the text yourself with the
-  card's paired token or slot.
+- an omitted text colour is chosen for the slide background, never for a
+  shape under the text: text on any filled shape (a card, a frame, a shape
+  on its default accent fill) needs a colour chosen for that fill — its
+  paired slot or token (`"color": "tx2"` on a `bg2` card), else a literal
+  that reads on it.
 
 A name that does not resolve is listed in the load report's `dropped`, with the
 names that exist. The repository's `AGENTS.md` has the full compact reference.

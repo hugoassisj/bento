@@ -6,8 +6,7 @@
  * this follows).
  *
  * A full bento/slides element carries a dozen fields no author chose:
- * rotation 0, opacity 1, the font stack, weight 400, centre/middle, line
- * height 1.25 … An agent writing a hundred-element deck spends most of its
+ * rotation 0, opacity 1, weight 400, centre/middle, line height 1.25 … An agent writing a hundred-element deck spends most of its
  * output on that boilerplate. The compact form is the same document with
  * every field that equals what the editor would have inserted LEFT OUT, and
  * three conveniences on top:
@@ -15,8 +14,8 @@
  *   - `"compact": true` at the top level says "expand me". Without it a
  *     document is taken as full, exactly as today — so a full file that
  *     happens to lack an optional field keeps its meaning (a text box with
- *     no `fontFamily` renders in the THEME font; the expanded default is the
- *     editor's font stack, and those are not the same thing).
+ *     no `fontFamily` renders in the THEME font — and so does a compact one,
+ *     which expansion leaves without a font of its own).
  *   - `elements` may nest arrays: `[title, [cardBg, cardTitle, cardBody]]`.
  *     A factory helper that returns a group is the natural way to write a
  *     card, and flattening it here means the helper needs no spread at the
@@ -84,7 +83,10 @@
  *     omitted `fill` is bound to `accent1`, a slide's omitted background is
  *     bound to `bg1`, and on a slide bound to bg1 (bg2) an omitted text or
  *     code colour is bound to tx1 (tx2), and so are an omitted table style's
- *     text colour, zebra and rules (as tints), so they move together. compactDoc strips such a pair only when both halves
+ *     text colour, zebra and rules (as tints), so they move together — but
+ *     only where tx1 reads on the slide (4.5:1), never over a ref the author
+ *     wrote, and never under the deck's own opaque zebra. A theme that leaves
+ *     out `color` gets the ink that reads on its background (inkOn). compactDoc strips such a pair only when both halves
  *     match, so the round-trip still holds.
  *   - A `$token` binding written beside a literal that disagrees with the
  *     token is reported: the open-time rule (tokens.ts syncTokenRefs) drops it.
@@ -104,7 +106,7 @@
 
 import { markdownToHtml } from './editor/markdown.ts'
 import {
-  FORMAT, FORMAT_VERSION, FONT_STACK,
+  FORMAT, FORMAT_VERSION,
   defaultText, defaultShape, defaultImage, defaultChart, defaultCode, defaultTable, defaultMedia,
   readableInk, isLightBg, newDoc, builtinLayouts, applyLayout,
   type BentoDoc, type Slide, type SlideElement, type ShapeKind,
@@ -153,7 +155,7 @@ function elementDefaults(el: Obj, slide: Obj, doc: Obj): Obj | null {
 function editorDefaults(el: Obj, slide: Obj, doc: Obj): Obj | null {
   const theme = (doc.theme ?? {}) as BentoDoc['theme']
   const bg = typeof slide.background === 'string' ? slide.background : (theme?.background ?? '#FFFFFF')
-  const ink = readableInk(bg)
+  const ink = inkOn(bg)
   switch (el.type) {
     case 'text': {
       // no fontFamily: absent follows the theme font, as in a full document
@@ -197,6 +199,38 @@ function slideDefaults(): Obj {
 }
 
 type Bound = Record<string, [unknown, string]>
+
+/** WCAG relative luminance of the first #rgb / #rrggbb in a colour string, or null. */
+function lum(c: unknown): number | null {
+  const m = typeof c === 'string' ? /#([0-9a-f]{6}|[0-9a-f]{3})(?![0-9a-f])/i.exec(c) : null
+  if (!m) return null
+  const h = m[1].length === 3 ? [...m[1]].map((x) => x + x).join('') : m[1]
+  const f = (i: number) => { const v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+  return 0.2126 * f(0) + 0.7152 * f(2) + 0.0722 * f(4)
+}
+/** The contrast of two colours; null when either is not a colour we can read (a gradient without a hex, a name). */
+function contrast(a: unknown, b: unknown): number | null {
+  const x = lum(a), y = lum(b)
+  return x === null || y === null ? null : (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+}
+const READABLE = 4.5
+/** A text colour that reads (4.5:1) on `bg`: the editor's readable ink where it
+ *  does, else the editor's other ink, else black or white, whichever reads
+ *  better (a mid grey defeats both editor inks). */
+export function inkOn(bg: string): string {
+  const first = readableInk(bg)
+  const other = first === '#1E2A3A' ? '#F5F7FA' : '#1E2A3A'
+  for (const c of [first, other]) if ((contrast(c, bg) ?? READABLE) >= READABLE) return c
+  return (contrast('#000000', bg) ?? 0) >= (contrast('#FFFFFF', bg) ?? 0) ? '#000000' : '#FFFFFF'
+}
+/** Opaque enough to be the cell's background rather than a tint over the slide. */
+const opaque = (c: unknown): boolean => {
+  if (typeof c !== 'string' || /^\s*transparent\s*$/i.test(c)) return false
+  const hex = /^\s*#(?:[0-9a-f]{6}([0-9a-f]{2})|[0-9a-f]{3}([0-9a-f]))\s*$/i.exec(c)
+  if (hex) return parseInt(hex[1] ?? hex[2] + hex[2], 16) / 255 >= 0.5
+  const a = /^\s*(?:rgb|hsl)a?\(([^)]*)\)\s*$/i.exec(c)?.[1].split(/[\s,/]+/).filter(Boolean)[3]
+  return a === undefined || (a.endsWith('%') ? parseFloat(a) / 100 : parseFloat(a)) >= 0.5
+}
 const themeOf = (doc: Obj) => (isObj(doc.theme) ? doc.theme : {}) as { background?: string; accent?: string }
 
 /** Defaults that are a BINDING: the literal and the palette ref expansion
@@ -210,19 +244,25 @@ function elementBound(el: Obj, slide: Obj, doc: Obj): Bound {
   const tx = bg === 'bg1' ? 'tx1' : bg === 'bg2' ? 'tx2' : null
   if (!tx || !isObj(doc.theme)) return {}
   const ink = paletteOf(doc as unknown as BentoDoc)[tx]
+  // a theme whose text colour does not read on its own background (a hand-set
+  // palette) is not followed: the readable ink stays, unbound
+  if ((contrast(ink, slide.background) ?? READABLE) < READABLE) return {}
   if (el.type === 'text' || el.type === 'code') return { color: [ink, tx] }
   if (el.type !== 'table' || !/^#[0-9a-f]{6}$/i.test(ink)) return {}
   // A table's body cells are transparent and its zebra and rules are tints of
   // the ink, so all three are the text slot: the body text plainly, the zebra
   // and rules at the editor's own alphas (` /a`, palette.ts: the field keeps
   // its opacity). The header paints its own background and stays as it is,
-  // and so does any key the deck's theme.table sets.
+  // and so does any key the deck's theme.table sets. Body text over the
+  // deck's own OPAQUE zebra reads against that stripe, not the slide, so it
+  // is not bound either.
   const light = isLightBg(typeof slide.background === 'string' ? slide.background : '#FFFFFF')
   const tint = (a: number) => keepAlpha(`rgba(0,0,0,${a})`, ink)
   const own = (doc.theme as { table?: Record<string, unknown> }).table ?? {}
   const out: Bound = {}
   const want: Bound = { 'style.color': [ink, tx], 'style.zebra': [tint(light ? 0.05 : 0.06), `${tx} /a`], 'style.borderColor': [tint(light ? 0.14 : 0.16), `${tx} /a`] }
   for (const [k, pair] of Object.entries(want)) if (!(k.slice(6) in own)) out[k] = pair
+  if (opaque(own.zebra)) delete out['style.color']
   return out
 }
 const slideBound = (doc: Obj): Bound => ({ background: [themeOf(doc).background ?? '#FFFFFF', 'bg1'] })
@@ -275,7 +315,10 @@ export function compactDoc(full: BentoDoc): Obj {
   if (isObj(doc.theme)) {
     const base = dd.theme as Obj
     const th: Obj = {}
-    for (const [k, v] of Object.entries(doc.theme)) if (!(k in base && deepEqual(v, base[k]))) th[k] = v
+    // an omitted text colour expands to the ink that reads on the background
+    const bg = (doc.theme as Obj).background
+    const want = (k: string) => (k === 'color' && typeof bg === 'string' ? inkOn(bg) : base[k])
+    for (const [k, v] of Object.entries(doc.theme)) if (!(k in base && deepEqual(v, want(k)))) th[k] = v
     if (Object.keys(th).length) out.theme = th; else delete out.theme
   }
   out.slides = ((doc.slides ?? []) as Obj[]).map((slide) => {
@@ -500,8 +543,19 @@ function bindNames(given: Obj, out: Obj, plain: Obj, bound: Bound, doc: BentoDoc
     delete refs[k]
     if (k in plain) out[k] = plain[k]
   }
+  // the author's own ref on a nested key of a parent they left out (a table's
+  // style.color) is theirs: its literal is resolved now, and no default binds over it
+  for (const [k, r] of Object.entries(refs)) {
+    const [top, sub] = k.split('.')
+    if (!sub || top in given || !isObj(out[top]) || typeof r !== 'string') continue
+    const name = tokenName(r)
+    if (name) { if (tokenValue(doc, name) !== undefined) bindToken(doc, out as never, k, name); continue }
+    const lit = resolveRef(r, paletteOf(doc))
+    if (lit !== null && k.split('.').length === 2) out[top] = { ...out[top], [sub]: keepAlpha((out[top] as Obj)[sub], lit) }
+  }
   for (const [k, [v, ref]] of Object.entries(bound)) {
     const [top, sub] = k.split('.')
+    if (refs[k] !== undefined) continue
     if (sub) {
       // a nested default binds only when the author left its parent out
       if (top in given || !isObj(out[top])) continue
@@ -610,6 +664,9 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
   }
   doc.theme = { ...(dd.theme as Obj), ...(isObj(src.theme) ? src.theme : {}) }
   for (const k of Object.keys(dd.theme as Obj)) if (typeof (doc.theme as Obj)[k] !== 'string') { (doc.theme as Obj)[k] = (dd.theme as Obj)[k]; stats.expanded++ }
+  // a theme that gives only a background gets a text colour that reads on it,
+  // not the editor's dark ink (which a dark background would swallow)
+  if (!(isObj(src.theme) && typeof src.theme.color === 'string')) (doc.theme as Obj).color = inkOn((doc.theme as Obj).background as string)
   const slidesIn = Array.isArray(src.slides) ? (src.slides as unknown[]) : []
   const built: Obj[] = [] // slides expanded so far: what `like` may name
   const uses: Array<{ marker: Obj; raw: Obj; slide: Obj; si: number; i: number }> = []
@@ -710,10 +767,6 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
   }
   return { doc: doc as unknown as BentoDoc, stats }
 }
-
-/** The font stack expansion assumes for text — exported so the rig can state
- *  why a full document without `fontFamily` is NOT auto-expanded. */
-export const EXPANDED_TEXT_FONT = FONT_STACK
 
 /** The compact JSON of a document, for "Copy compact JSON" and window.bento.compact(). */
 export const compactJson = (doc: BentoDoc): string => JSON.stringify(compactDoc(doc))

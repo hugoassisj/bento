@@ -140,8 +140,9 @@ looked at is not finished.
   "<slide id>"` starts a slide from an earlier one. In compact input only,
   leave out a text's `fontFamily` and `color`, a table's `style` and a
   shape's `fill`, and they follow the theme (the full JSON still needs every
-  field, as above). Text on a card whose fill does not follow the theme
-  needs its own colour. Details in AGENTS.md / agents.md, "compact form".
+  field, as above). An omitted text colour is chosen for the slide, so
+  text on any filled shape (a card, a frame, the default accent fill) needs a
+  colour chosen for that fill. Details in AGENTS.md / agents.md, "compact form".
 - **Never regenerate `docId`** when editing an existing deck; it is the
   document's identity. (Fresh decks omit it — the app mints one.)
 - `template:true` → every open mints a fresh deck; `readonly:true` → the

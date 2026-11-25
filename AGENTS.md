@@ -171,13 +171,21 @@ out follows them:
   `color` is the theme's text colour, bound to `tx1`, and a table with no
   `style` has its text, zebra and rules bound to `tx1` too (zebra and rules
   keep their tint), so a later theme change keeps them readable together (on a
-  `bg2` slide, `tx2`). Keys the deck's `theme.table` sets stay the deck's.
-- Text you put on a card is bound to `tx1`, which is drawn for the slide
-  background, not for the card. If the card's fill does not follow the theme
-  (a fixed literal or a token without modes), give the text its own colour —
-  the token or slot paired with that card if the deck has one (`"color":
-  "$color.on-card"`, `"color": "tx2"` on a `bg2` card) — or a theme change
-  can leave it unreadable on the card.
+  `bg2` slide, `tx2`). Keys the deck's `theme.table` sets stay the deck's, a
+  table text over the deck's own opaque zebra is not bound, and a ref you write
+  yourself (`"themeRefs": { "style.color": "accent1" }`) is kept.
+- A `theme` with no `color` gets a text colour that reads on its
+  `background` (a theme that gives only a dark background gets light text).
+  Whatever the theme says, an omitted text colour is bound to it only where it
+  reads at 4.5:1 or better on the slide; elsewhere the readable ink is
+  written, unbound.
+- A text colour you leave out is chosen for the SLIDE background, never for
+  a shape under the text. Text on any filled shape — a card, a frame, a shape
+  left on its default accent fill — needs a colour chosen for that fill: the
+  slot or token paired with it if the deck has one (`"color": "tx2"` on a
+  `bg2` card, `"color": "$color.on-card"`), else a literal that reads on it.
+  Left out, it can read at under 3:1 on the card from the start (dark ink on
+  the default accent is 2.7:1), and a theme change can make it worse.
 - Name a slot or a token as the value: `"fill": "accent2"`,
   `"color": "tx1 -20%"`, `"background": "bg2"` (slots: `bg1 tx1 bg2 tx2
   accent1`…`accent6 hlink folHlink`, with an optional lightness shift), or

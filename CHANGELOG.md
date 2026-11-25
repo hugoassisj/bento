@@ -27,6 +27,12 @@ pre-1.0.
   theme. `use` places a copy of one of your components, and `like` starts a
   slide from an earlier one. A name that does not exist is listed in the load
   report with the ones that do. Saved files are unchanged.
+- **Table colours you pick stay picked.** Recolouring a table's text, grid or
+  header in the panel, or choosing one of its looks, keeps your colour after
+  the deck is saved and reopened; it used to snap back to the theme's colour,
+  the starter deck's tables included. A deck an assistant loads with only a
+  background colour, or with a text colour that does not read on its
+  background, now gets text, code and tables that read from the first view.
 
 ## [1.3.0] — 2026-11-22
 
