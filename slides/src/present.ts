@@ -637,7 +637,7 @@ export function startPresentation(
     if (on) buildLaser()
     laserEnabled = on
     overlay.classList.toggle('laser-enabled', on)
-    if (!on) resetLaserPointer()
+    if (!on) { resetLaserPointer(); endSpeakerLaser() }
     if (feedback) flashPresentMsg(on ? t('Laser pointer: on') : t('Laser pointer: off'))
     updateSpeakerControls()
   }
@@ -892,15 +892,65 @@ export function startPresentation(
   }
 
   // A brief centred pill so a keypress (M) gives visible confirmation — the
-  // audience overlay otherwise changes silently.
-  let toastTimer = 0
-  const flashPresentMsg = (text: string) => {
-    let el = overlay.querySelector<HTMLElement>('.bento-present-toast')
-    if (!el) { el = document.createElement('div'); el.className = 'bento-present-toast'; overlay.appendChild(el) }
-    el.textContent = text
-    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show') // restart the fade
-    clearTimeout(toastTimer)
-    toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
+  // audience overlay otherwise changes silently. `root` is the speaker view's
+  // body for a message only the presenter should see; each pill keeps its own
+  // timer so one never strands the other on screen.
+  const toastTimers = new WeakMap<HTMLElement, number>()
+  const flashPresentMsg = (text: string, root: HTMLElement = overlay) => {
+    let el = root.querySelector<HTMLElement>('.bento-present-toast')
+    if (!el) { el = root.ownerDocument.createElement('div'); el.className = 'bento-present-toast'; root.appendChild(el) }
+    const toast = el
+    toast.textContent = text
+    toast.classList.remove('show'); void toast.offsetWidth; toast.classList.add('show') // restart the fade
+    clearTimeout(toastTimers.get(toast))
+    toastTimers.set(toast, window.setTimeout(() => toast.classList.remove('show'), 1400))
+  }
+
+  // ——— laser from the speaker view ———
+  // A presenter working from the speaker view points on its current-slide
+  // preview. The audience window paints the same slide fractions with the
+  // remote painter (setRemoteLaser: dot, trail, fade, black screen and reduced
+  // motion are all handled there), and live copies get the frames a local
+  // stroke sends. The popup's DOM was imported by this window, so these
+  // listeners run here, but their coordinates are the popup's: measure the
+  // preview on every event (the speaker layout is resizable), never cache it.
+  let svLaserDot: HTMLElement | null = null
+  let svLaserDrawing = false
+  let svLaserSent = false
+  const endSpeakerLaser = () => {
+    if (!svLaserDrawing) return
+    svLaserDrawing = false
+    svLaserDot?.classList.remove('visible')
+    if (svLaserSent) sendLaserPoint(null)
+    svLaserSent = false
+    setRemoteLaser(null)
+  }
+  const pointSpeakerLaser = (ev: PointerEvent, box: HTMLElement) => {
+    const rect = box.querySelector<HTMLElement>('.bento-slide')?.getBoundingClientRect()
+    if (!laserEnabled || blacked || !rect?.width || !rect.height) { endSpeakerLaser(); return }
+    const fx = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
+    const fy = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height))
+    const p = `${fx.toFixed(4)},${fy.toFixed(4)}`
+    setRemoteLaser(p)
+    if (svLaserDot) {
+      svLaserDot.style.left = `${rect.left + fx * rect.width}px`
+      svLaserDot.style.top = `${rect.top + fy * rect.height}px`
+      svLaserDot.classList.add('visible')
+    }
+    // the same ~30fps wire gate as a local stroke (sendLaserPoint caps it again)
+    const now = performance.now()
+    if (!svLaserSent || now - lastLaserSend >= 33) {
+      sendLaserPoint(p)
+      lastLaserSend = now
+      svLaserSent = true
+    }
+  }
+  // The speaker view's toggle confirms in the speaker view: the audience
+  // has no use for a "Laser pointer: on" pill over the slide.
+  const toggleLaserFromSpeaker = () => {
+    const on = !laserEnabled
+    setLaserEnabled(on, false)
+    if (speaker && !speaker.closed) flashPresentMsg(on ? t('Laser pointer: on') : t('Laser pointer: off'), speaker.document.body)
   }
 
   const stopShow = async () => {
@@ -1135,7 +1185,7 @@ export function startPresentation(
       else if (k === 'next') goNext()
       else if (k === 'last') goLast()
       else if (k === 'black') toggleBlack()
-      else if (k === 'laser') toggleLaser()
+      else if (k === 'laser') toggleLaserFromSpeaker()
       else if (k === 'grid') toggleGrid()
       else if (k === 'reduce') toggleReduceMotion()
       else if (k === 'live') void toggleShow()
@@ -1160,10 +1210,32 @@ export function startPresentation(
       else if (k === 'End') { ev.preventDefault(); goLast() }
       else if (k === 'b' || k === 'B') { ev.preventDefault(); toggleBlack() }
       else if (k === 'g' || k === 'G') { ev.preventDefault(); toggleGrid() }
-      else if (k === 'l' || k === 'L') { ev.preventDefault(); if (!ev.repeat) toggleLaser() }
+      else if (k === 'l' || k === 'L') { ev.preventDefault(); if (!ev.repeat) toggleLaserFromSpeaker() }
       else if (k === 'm' || k === 'M') { ev.preventDefault(); toggleReduceMotion() }
       else if (k === 'Escape' && !grid.hasAttribute('hidden')) { ev.preventDefault(); toggleGrid(false) }
     })
+
+    // point the laser from the current-slide preview. The box survives
+    // updateSpeaker (only its contents are re-filled); the feedback dot lives
+    // in the body, positioned in the popup's viewport like the pointer.
+    const curBox = d.querySelector<HTMLElement>('.sv-current')!
+    endSpeakerLaser() // a stroke from a previous body never outlives it
+    svLaserDot = d.createElement('div')
+    svLaserDot.className = 'bento-laser-dot sv-laser-dot'
+    d.body.appendChild(svLaserDot)
+    curBox.addEventListener('pointerdown', (ev: PointerEvent) => {
+      if (!laserEnabled || blacked || !deckReady || ev.pointerType === 'touch' || !ev.isPrimary || ev.button !== 0) return
+      const rect = curBox.querySelector<HTMLElement>('.bento-slide')?.getBoundingClientRect()
+      if (!rect || ev.clientX < rect.left || ev.clientX > rect.right || ev.clientY < rect.top || ev.clientY > rect.bottom) return
+      ev.preventDefault() // no picture drag or selection to fight the stroke
+      svLaserDrawing = true
+      svLaserSent = false
+      pointSpeakerLaser(ev, curBox)
+    })
+    curBox.addEventListener('pointermove', (ev: PointerEvent) => {
+      if (svLaserDrawing && ev.isPrimary) pointSpeakerLaser(ev, curBox)
+    })
+    for (const type of ['pointerup', 'pointerleave', 'pointercancel']) curBox.addEventListener(type, endSpeakerLaser)
 
     updateSpeaker()
     if (!speakerAdopted && wasFullscreen) {
