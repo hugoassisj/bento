@@ -15429,3 +15429,31 @@ Amends one line of 2026-11-19 ("the overlay stand-in keeps the `?` help").
   row, steps, state skipping and MP-07's wake-first under black included.
 - `scripts/test-slides-show-keys-browser.mjs` guards all of it with real keys
   (17 of 43 checks pass on the parent).
+
+## 2026-11-25 — The show has its own slide grid; O opens it, not Reveal's overview
+
+Amends one line of 2026-11-24 ("O keeps Reveal's overview … until the show has
+a slide grid of its own").
+
+- **G and O open one grid in the audience window**, the speaker view's grid
+  through the same builder (`slides/src/showgrid.ts`: `slideThumb`,
+  `slideGrid`, `walkGrid`): the linear-flow slides as numbered buttons, a
+  dialog named "All slides", arrows walk a focus ring, Enter/Space or a click
+  jumps, Esc or G closes it and the show goes on. Reveal's overview is
+  `overview: false`: it laid out real sections, showed state slides and could
+  not show slide numbers. Reveal's jump-to-slide box stays unreachable (it
+  counts Reveal's raw indices, state slides included).
+- **A typed number + Enter goes to the slide that carries that number** — the
+  counter's and the thumbnails' (`paginates`), in the linear flow; a hidden
+  slide numbered by `numberHidden` is not a destination. A "Go to 12" chip
+  shows the digits; Backspace edits, Esc or 1.5 s idle clears, out of range
+  shakes it and goes nowhere. A leading 0 starts nothing.
+- **Black screen**: the grid sits under the blackout, so G wakes the screen
+  first, and so does a jump (a deliberate, visible destination — unlike the
+  clicker press MP-07 made wake-only).
+- **Local chrome, like the ? sheet**: never streamed (only the resulting nav
+  is). An audience copy may use both while it can browse; the presenter's
+  lock closes them and keeps them shut (`follow.locked`).
+- `scripts/test-slides-show-jump-browser.mjs` guards it, the audience part
+  with a fake relay answered inside the browser (13 of 47 checks pass on the
+  parent).

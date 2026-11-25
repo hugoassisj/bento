@@ -146,7 +146,10 @@ anim, charts, i18n, sync), shared by every app.
   (click → slide id) and `group`; slides can set `hover:'focus-group'` (dim other
   groups). Present arrows are handled capture-phase (focus-proof). Reveal's own
   keyboard is OFF: every key of the show is a row of `SHOW_KEYS`, which also
-  builds the show's ? sheet — add a key there, never to Reveal. Editing UI for
+  builds the show's ? sheet — add a key there, never to Reveal. G/O open the
+  show's own slide grid and a typed number + Enter jumps (Reveal's overview is
+  `overview: false`); the grid is `src/showgrid.ts`, the SAME builder the
+  speaker window's rail and grid use. Editing UI for
   fx/link lives in the panel's "Presenting" section.
   **Reduced motion (v1.0.8)**: a VIEWER/PRESENTER preference (localStorage
   `bento-reduce-motion` 'on'/'off', default = OS `prefers-reduced-motion`),

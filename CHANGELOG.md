@@ -11,6 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Jump straight to any slide while presenting.** Press G during the
+  slideshow for a grid of every slide, numbered as the counter numbers them;
+  click one, or move with the arrow keys and press Enter, and the show goes
+  there. Esc closes the grid and keeps the show running. Or type the slide's
+  number and press Enter: a small "Go to 12" label shows what you typed,
+  Backspace corrects it, and a number past the end of the deck goes nowhere.
+  This works with no speaker view open, on one screen, and the speaker view's
+  own grid works as before. O, which opened a bare strip of slides, now opens
+  the same grid. The grid and the number are yours alone: a live audience
+  only sees the slide you land on, and an audience copy can use them only
+  while the presenter has not locked it to their slide.
 - **Press ? while presenting to see the show's keys.** A sheet lists every
   key the slideshow answers to, in your language: next and previous, first and
   last slide, speaker view, fullscreen, black screen, laser pointer, reduced
@@ -20,7 +31,7 @@ pre-1.0.
   anything: / . and V used to dim the slide, and ? opened an English list of
   keys that mostly did not apply. N and P used to skip reveal steps and land
   on hidden state slides; they now move exactly like → and ←, and Home and End
-  stay on the slides of the show. O still opens the slide overview.
+  stay on the slides of the show.
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the
