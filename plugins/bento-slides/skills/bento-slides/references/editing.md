@@ -1,20 +1,7 @@
 # Editing a deck on disk
 
-Read this when you read or write a `.bento.html` file directly, or need the
-empty app. `SKILL.md` section 1 is the rule; these scripts follow it.
-
-## Getting the empty app
-
-When the user has no deck and agrees to a download, the published app is the
-file to write into (this is the only step that needs the network):
-
-```bash
-curl -fsSL https://bento.page/releases/slides/Bento_Slides.bento.html -o "Q4_Review.bento.html"
-```
-
-(Windows: `iwr <same URL> -OutFile Q4_Review.bento.html`.) Name it after the
-deck's topic. Its block is empty (a browser shows a starter deck in its
-place), so write a whole new document into it.
+Read this when you read or write a `.bento.html` file directly. `SKILL.md`
+section 1 is the rule; these scripts follow it.
 
 ## Reading the block: `inspect.mjs`
 

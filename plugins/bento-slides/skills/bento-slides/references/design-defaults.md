@@ -18,8 +18,9 @@ something, do that.
   right on a 1280-wide canvas (content between x 96 and x 1184) is a good
   default, because it is what the built-in layouts scale to and what
   `validate()`'s `past-margin` check assumes. If the deck's content sits
-  elsewhere, measure its margin from its slides and pass it to
-  `validate(undefined, { margin: … })`.
+  elsewhere, measure its margin in px from its slides and pass it in
+  1280-wide units, `margin = px × 1280 / size.width` (80 px on a 1600-wide
+  deck is `{ margin: 64 }`).
 - **Columns.** If you are placing columns by hand inside 96 px margins on
   1280×720, these splits already end flush at x 1184, so no arithmetic is
   needed:

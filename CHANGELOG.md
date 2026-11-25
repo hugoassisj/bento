@@ -37,7 +37,7 @@ pre-1.0.
   looking at every slide, and says so when it could not. The skill is now a
   short main file plus references on design systems, defaults, motion, data,
   editing a file safely and driving the app (one script loads, checks,
-  photographs and saves a deck); installed as a plugin it carries all of them.
+  photographs and saves a deck, with all its slides on one contact sheet); installed as a plugin it carries all of them.
   Its motion advice is restrained (builds and morphs that explain a step, and
   every slide readable with motion turned off), and it shows agents how to
   keep your theme's colours and fonts on slides placed by layout, on code and

@@ -55,15 +55,14 @@ These rules protect the user's file. They are absolute.
 - **Never regenerate `docId`**: it is the document's identity for recovery and
   sync. A new deck omits both `docId` and `collab`; the app mints them on first
   open.
-- `template: true` makes every open mint a fresh deck; `readonly: true` opens
-  straight into the show with no editor. Leave both as you found them.
-- **Keep what you do not recognise.** A deck written by a newer shell may carry
-  keys this skill does not describe; they are the user's data.
+- Leave `template` and `readonly` as you found them, and keep keys you do not
+  recognise (a newer shell's): they are the user's data.
 
 **Getting a file to write into.** Work in the user's `.bento.html`. With none,
 ask for one, or, with network access and the user's agreement, download the
-empty app (`references/editing.md`). That is the only step that touches
-the network.
+empty app (its block is empty; write a whole document into it). That is the
+only step that touches the network:
+`curl -fsSL https://bento.page/releases/slides/Bento_Slides.bento.html -o Topic.bento.html`.
 
 **In a chat, with no file access**, the user moves the JSON by hand: the File
 menu (the bento/slides wordmark, top left) has *Copy document JSON*, *Copy
@@ -84,15 +83,9 @@ Whose choice counts, in this order:
 4. this skill's defaults (`references/design-defaults.md`).
 
 Look for the deck's system in this order before you write anything:
-
-1. `theme`: `background`, `color`, `accent`, `fontFamily`, and the optional
-   `palette` (`bg2`, `tx2`, `accent2` to `accent6`, `hlink`, `folHlink`),
-   `chartPalette`, `table` and `codePalette`;
-2. `theme.tokens`: its `set` of named values and its `modes`;
-3. how much of the deck is bound: `themeRefs` on elements and slides;
-4. components: elements carrying `component` (a `main` and its copies);
-5. `layouts`: the deck's own slide templates;
-6. `fonts`: the faces the deck carries.
+`theme` (colours, `fontFamily`, `palette`, `chartPalette`, `table`,
+`codePalette`); `theme.tokens` (`set`, `modes`); how much is bound
+(`themeRefs`); components (elements with `component`); `layouts`; `fonts`.
 
 **A system exists if `theme.palette`, `theme.tokens`, any `themeRefs`, any
 `component`, `layouts` or `fonts` is non-empty.** Even without one, the
@@ -114,16 +107,14 @@ When a system exists:
 - Do not "fix" contrast, density or type sizes inside the user's system.
   Report what you noticed and let the user decide.
 
-`references/design-system.md` has the mechanics: token types and modes,
-palette refs and shifts, components, frames and fonts.
-
 ## 3. Workflow
 
 **Inspect → plan → author → check → look → apply.** Tools: when this skill's
-folder has `scripts/bento.mjs`, it is the default (`node scripts/bento.mjs
---help` lists its verbs). Otherwise the fallbacks are `editing.md`'s
-`inspect.mjs` and `splice.mjs` and, with a headless browser, `app.md`'s
-`drive.cjs`, which loads, checks, photographs and saves in one call.
+folder has `scripts/bento.mjs` (a path inside that folder), it is the default
+(`node scripts/bento.mjs --help` lists its verbs). Otherwise the fallbacks
+are `editing.md`'s `inspect.mjs` and `splice.mjs` and, with a headless
+browser, `app.md`'s `drive.cjs`, which loads, checks, photographs and saves
+in one call.
 
 1. **Inspect.** Find the block, check `format`, list `collab` field names, set
    `assets` aside, and record `size`, the system (section 2), the slide ids and
@@ -148,13 +139,14 @@ folder has `scripts/bento.mjs`, it is the default (`node scripts/bento.mjs
    unknown keys). Fix and load again until nothing you caused remains.
    `past-margin`'s `margin` is in 1280-wide units, scaled to the deck (the
    default 96 is 120 px on a 1600-wide deck): for 80 px sides there pass
-   `window.bento.validate(undefined, { margin: 64 })`, or `0` to turn it off. Before a browser you drive opens a deck that
-   carries `collab` keys, set `localStorage['bento-offline'] = 'on'` (before
-   the page loads), or it can join the deck's live room and your edits reach
-   everyone in it.
+   `window.bento.validate(undefined, { margin: 64 })`, or `0` to turn it off.
+   Before a browser you drive opens a deck that carries `collab` keys, set
+   `localStorage['bento-offline'] = 'on'` (before the page loads), or it can
+   join the deck's live room and your edits reach everyone in it.
 5. **Look** at every slide: overflow, crowding, a heading wrapped to three
    lines and a chart that ignored a key are invisible in the JSON. `drive.cjs`
-   writes one picture per slide; by hand, the arrow keys walk the slides in the
+   writes one picture per slide and `sheet.png` with all of them (view that
+   one); by hand, the arrow keys walk the slides in the
    editor (nothing selected), and the File menu's *Export slides as images…*
    writes one picture per slide in the show, leaving out hidden and state
    slides.
@@ -178,15 +170,15 @@ classify the material and pick the feature built for it.
 | a comparison, spec, pricing or feature grid | a `table` element | `data.md` |
 | the same thing changing across slides | morph: shared ids and `"transition": "morph"` on the later slide | `motion.md` |
 | points revealed one at a time | a click build: `fx.step` on the elements | `motion.md` |
-| a detail to drill into | a state slide (`stateOf`) reached by an element `link` | `motion.md` |
-| a full-slide photograph | full-bleed image, scrim, text, a ken-burns drift | `motion.md` |
-| a sequence, flow or timeline | a line or path with a `dash-march` loop, or a highlight morphed through the steps | `motion.md` |
+| a detail to drill into | a state slide (`stateOf`) reached by an element `link` | `interaction.md` |
+| a full-slide photograph | full-bleed image, scrim, text (a ken-burns drift is optional) | `interaction.md` |
+| a sequence, flow or timeline | a highlight morphed through the steps, or a click build (a `dash-march` loop is optional) | `motion.md` |
 | a headline number | large text with `fx.countUp` | `motion.md` |
 | repeated chrome or a logo | the same element `id` on every slide, so it stays put across morphs | `motion.md` |
 | code that changes between slides | a `code` element, morphed token by token | `data.md` |
 | a formula | `$…$` (inline) or `$$…$$` (display) in text | `data.md` |
 | a clip, recording or soundbite | a `media` element | `data.md` |
-| cards, rows of stats, a grid of logos | an auto-layout frame, or a component the deck already has | `design-system.md` |
+| cards, rows of stats, a grid of logos | an auto-layout frame, or a component the deck already has | `frames.md` |
 
 Motion is restrained by default: a build or a morph that explains a step,
 rarely an ambient loop. A viewer who asks for reduced motion (their system
@@ -236,8 +228,10 @@ And a few more that cost a guess each time:
 - **An omitted field means different things in the two forms.** In the full
   form a text box without `fontFamily` renders in `theme.fontFamily`. In the
   compact form an omitted field is the editor's default: the system font
-  stack, and a text `color` that is a plain readable ink for the slide
-  background, not `theme.color`. Write both on compact text, bound.
+  stack, a plain readable ink (not `theme.color`), `align: "center"`,
+  `valign: "middle"`, `fontSize` 32, `lineHeight` 1.25. Write `color`,
+  `fontFamily` and `align` on compact text, bound. A compact document's own
+  `layouts` are not expanded: write them in full, text with `html: ""`.
 - **Unknown keys are ignored.** A typo (`fontSze`) simply does not apply; the
   load report's `dropped` and validate's `unknown-key` name it.
 - **The show draws its own page counter and progress bar.** If the slides
@@ -259,7 +253,7 @@ each type's own content and styling keys:
 | `type` | Keys you write |
 |---|---|
 | `text` | `html`, `fontSize`, `fontWeight`, `color`, `align`, `valign`, `lineHeight`; optional `fontFamily`, `letterSpacing`, `role` |
-| `shape` | `shape` (`rect`, `ellipse`, `triangle`, `arrow`, `line`, `path`), `fill`, `stroke`, `strokeWidth`, `radius`; `d` and `pathBox` for a path; `layout` with `dir`, `gap` and `pad` makes a rect a frame |
+| `shape` | `shape` (`rect`, `ellipse`, `triangle`, `arrow`, `line`, `path`), `fill`, `stroke`, `strokeWidth`, `radius`; `d` and `pathBox` for a path; `layout` with `dir`, `gap` and `pad` makes a rect a frame; a `line` draws in its `fill` at `strokeWidth` across the middle of its box (no `stroke`; give it an `h`) |
 | `image` | `src` (`asset:<key>` or a data URI), `fit`, `radius` |
 | `chart` | `preset`, `option` |
 | `table` | `columns`, `rows`, `header`, `style` |
@@ -280,17 +274,18 @@ Read a reference when its trigger applies; each stands alone. They sit in the
 own lacks them, and sections 1 to 6 still hold without them.
 
 - `references/design-system.md`: read when the deck has tokens, palette slots,
-  `themeRefs`, components, its own layouts or fonts, or when you build a row,
-  grid or card with a frame.
+  `themeRefs`, components, its own layouts or fonts, or you place by `role`.
+- `references/frames.md`: read when you build a row, column, grid or cards.
 - `references/design-defaults.md`: read when you are creating a deck from
   nothing, or the deck leaves a choice (margins, type scale, colour, motion)
   undecided.
-- `references/motion.md`: read when the material changes across slides, is
-  revealed step by step, drills into detail, or needs an entrance, a loop or
-  hover behaviour.
+- `references/motion.md`: read when the material changes across slides or is
+  revealed step by step (morph, builds, entrances).
+- `references/interaction.md`: read only when the brief asks for a loop, a
+  state slide, a link, a backup slide or a hover reveal.
 - `references/data.md`: read when the material has numbers, a grid of values,
   code, a formula or a clip.
 - `references/editing.md`: read when you read or write the file on disk
-  (`inspect.mjs`, `splice.mjs`, ids) or need the empty app.
+  (`inspect.mjs`, `splice.mjs`, ids).
 - `references/app.md`: read when you can run a headless browser
   (`drive.cjs`: load, check, photograph and save in one call).

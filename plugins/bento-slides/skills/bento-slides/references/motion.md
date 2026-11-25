@@ -1,12 +1,13 @@
-# Motion: morph, builds, entrances, loops, states, hover
+# Motion: morph, builds, entrances
 
-Read this when the material changes across slides, is revealed step by step,
-drills into detail, or needs an entrance, a loop or hover behaviour. All of it
+Read this when the material changes across slides or is revealed step by
+step. All of it
 runs while presenting; the editor and print show the slide at rest. If the
 deck already has a motion style (its transitions, its entrance kinds and
 timing), match it; otherwise keep motion to what explains a step. With reduced
-motion asked for (the viewer's system setting, or M in the show) every effect
-is skipped and each element shows its final state.
+motion asked for (the viewer's system setting, or M in the show) morphs,
+entrances, count-ups and loops are skipped and each element shows its final
+state; a click build still waits for its clicks, each step appearing at once.
 
 ## Transitions and morph
 
@@ -66,45 +67,3 @@ element without one is new to the slide, so both run, and without an
 `fx.countUp: true` counts the numbers in a text box up from zero when it
 appears. `fx.typeWriter: true` types a `code` element in a character at a time;
 `present.typeWriterSeconds` sets the pace.
-
-## Ambient motion and loops
-
-- **Ken-burns** on a photograph:
-  `"fx": { "ambient": "kenburns", "ken": { "dir": "drift", "scale": 1.08, "duration": 20 } }`.
-  `drift` loops; `out` and `in` play once when the slide appears. For a
-  full-bleed photo: the image at the full canvas, a translucent scrim rect
-  over it, then the text.
-- **`dash-march`**: `"fx": { "loop": { "type": "dash-march", "distance": 18, "duration": 1.4 } }`
-  marches a stroke's dashes along a line or path. It needs a visible stroke
-  and `strokeStyle: "dashed"` or `"dotted"`; on a solid stroke there is
-  nothing to see, and `validate()` reports `dash-march-no-dash`.
-- **`motion-path`**: `"fx": { "loop": { "type": "motion-path", "path": "M0,0 C60,-40 140,40 200,0", "duration": 6 } }`
-  drifts the element along a path relative to where it rests; `delay`,
-  `ease` and `speeds` (one multiplier per on-curve point) are optional. An
-  entrance on the same element fights the loop over its transform, so give it
-  one or the other (`validate()` reports `entrance-on-motion-path`).
-
-## States, hidden slides and links
-
-- An element's `link` is a slide id (jump there when clicked while
-  presenting) or an `http(s)` URL (opens in a new tab).
-- A slide with `"stateOf": "<parent id>"` is a variant of that slide: the
-  arrow keys skip it, a `link` reaches it, ← returns to the parent, and it
-  morphs with the parent when ids are shared. Use it for "click to see
-  detail".
-- `"hidden": true` keeps a slide in the deck and out of the show (skipped by
-  the arrow keys, left out of PDF export), still reachable by a `link`. Use it
-  for backup material. `validate()` reports a hidden slide nothing links to.
-- A padded transparent rect makes a better click target than the text itself.
-
-## Hover
-
-A slide's `hover` reacts to the pointer while presenting:
-
-- `{ "type": "focus-group", "dim": 0.13 }` dims every element outside the
-  hovered element's `group` (elements carry `"group": "<name>"`).
-- `{ "type": "reveal", "default": "<group>" }` shows only the elements whose
-  `showOnHover` names the hovered element's `group`; `default` is the set shown
-  when nothing is hovered.
-
-Click is for state slides; hover is for in-slide detail.
