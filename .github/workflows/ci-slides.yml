@@ -736,4 +736,14 @@ jobs:
         # past state slides; Home/End stay in the linear flow; O and Esc keep
         # the overview; the first show says "Press ? …" once.
         run: node scripts/test-slides-show-keys-browser.mjs
+      - name: Jump to a slide from the show in Chromium
+        if: ${{ !cancelled() }}
+        # G or O opens a grid of the linear-flow slides inside the show (a
+        # dialog of numbered buttons, arrows move a focus ring, Enter or a
+        # click jumps, Esc closes it and a second Esc ends the show); a typed
+        # number shows "Go to 12" and Enter lands on visible slide 12 past the
+        # state slides, out of range does not move; nothing leaks to the
+        # editor; the ? sheet lists both; the speaker grid still works; an
+        # audience copy (fake relay, in-browser) has neither while locked.
+        run: node scripts/test-slides-show-jump-browser.mjs
 
