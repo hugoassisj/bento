@@ -8,8 +8,9 @@
 // extracts that script verbatim and runs it against the built shell:
 //
 //   - `--help` prints the usage;
-//   - deck + pictures, no document (arguments go by kind, so none is empty):
-//     one picture per slide in the show, the deck left byte for byte;
+//   - deck + pictures, no document (arguments go by kind, so none is empty),
+//     the deck in a folder whose name has a `#`: one picture per slide in the
+//     show plus one contact sheet, the deck left byte for byte;
 //   - a compact document built from the skill's own examples, the arguments
 //     in another order: nothing dropped, no error finding, the deck saved,
 //     and the saved deck reopens with the same findings.
@@ -18,7 +19,7 @@
 // the app's offline switch on; the rig adds no network of its own.
 //
 // Run: (cd slides && npm run build:single) && node scripts/test-skill-scripts-browser.mjs
-import { mkdtempSync, readFileSync, writeFileSync, copyFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -47,15 +48,19 @@ try {
   writeFileSync(join(dir, 'drive.cjs'), drive)
   const help = run('--help')
   ok(help.status === 0 && /drive\.cjs deck\.bento\.html \[doc\.json\] \[shots-dir\]/.test(help.stdout), '--help prints the usage')
+  ok(run('-h').status === 0, '-h prints it too')
 
   console.log('\na deck and a pictures folder, no document\n')
-  const deck = join(dir, 'deck.bento.html')
+  mkdirSync(join(dir, 'q#4'))
+  const deck = join(dir, 'q#4', 'deck.bento.html')
   copyFileSync(shell, deck)
   const look = run(deck, 'shots')
   const r1 = report(look)
   ok(look.status === 0 && !!r1, `runs with no document argument${look.stderr ? ` (${look.stderr.trim().slice(0, 200)})` : ''}`)
-  const pngs = (d) => { try { return readdirSync(join(dir, d)).filter((f) => f.endsWith('.png')) } catch { return [] } }
+  const pngs = (d) => { try { return readdirSync(join(dir, d)).filter((f) => /^slide-\d+\.png$/.test(f)) } catch { return [] } }
   ok(pngs('shots').length >= 10, `one picture per slide in the show (${pngs('shots').length}, ${r1?.shots})`)
+  const sheet = r1?.sheet ? readFileSync(join(dir, r1.sheet)) : Buffer.alloc(0)
+  ok(r1?.sheet === join('shots', 'sheet.png') && sheet.subarray(1, 4).toString() === 'PNG' && sheet.readUInt32BE(16) > 1200, `one contact sheet, its path in the report (${r1?.sheet}, ${sheet.length ? sheet.readUInt32BE(16) + '×' + sheet.readUInt32BE(20) : 'none'})`)
   ok(r1 && (r1.shots === 'editor view' || r1.shots === 'slides'), 'the report says which kind of picture it wrote')
   ok(readFileSync(deck).equals(readFileSync(shell)), 'without a document the deck is left byte for byte')
   ok(r1 && !('load' in r1) && typeof r1.counts?.error === 'number', 'the report has findings and no load section')

@@ -31,6 +31,7 @@ on:
       - 'scripts/test-*-browser.mjs'
       - 'scripts/test-gate1-oracle.mjs'
       - 'scripts/test-sealed-boot.mjs'
+      - 'plugins/bento-slides/skills/**'
   push:
     branches: [main]
 
