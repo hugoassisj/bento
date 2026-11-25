@@ -4,8 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
-  "This slide’s hover dims other groups: this always shows, and pointing at {name} dims everything outside its group.": "此投影片的懸停設為讓其他組變暗：它永遠顯示，指向{name}時，其所在組以外的內容都會變暗。",
-  "{name} is hidden or shows only on hover, so the pointer can never reach it.": "{name}已隱藏或只在懸停時顯示，所以指標永遠無法指向它。",
+  "This slide’s hover dims other groups: this always shows, and pointing at {name} dims the other hover groups.": "此投影片的懸停設為讓其他組變暗：它永遠顯示，指向{name}時，其他懸停組會變暗。",
+  "{name} is hidden or in a hover set itself, so it can never reveal this.": "{name}已隱藏或本身就在某個懸停集中，所以它永遠無法顯示此元素。",
+  "{name} (main component)": "{name}（主元件）",
+  "{name} (component copy)": "{name}（元件副本）",
   "Always visible": "永遠顯示",
   "This slide’s hover is off, so this always shows.": "此投影片的懸停已關閉，所以它永遠顯示。",
   "Turn on": "開啟",

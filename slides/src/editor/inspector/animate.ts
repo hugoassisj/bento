@@ -604,14 +604,14 @@ function buildHoverReveal(p: PropsPanel, el: SlideElement) {
     const reveal = () => p.store.commit(() => useReveal(slide))
     if (issue === 'off') line('off', t('This slide’s hover is off, so this always shows.'), fix(t('Turn on'), reveal))
     // On a dimming slide the trigger's group already counts: pointing at it
-    // dims everything outside it. Said rather than deferred — holding the
+    // dims the other hover groups (present.ts wireHoverFocus). Said rather than deferred — holding the
     // group back until the switch would leave the pick nowhere to live (the
     // format has no place for "the trigger chosen, not yet written").
     else if (issue === 'dim') line('dim', triggers.length
-      ? t('This slide’s hover dims other groups: this always shows, and pointing at {name} dims everything outside its group.', { name: names })
+      ? t('This slide’s hover dims other groups: this always shows, and pointing at {name} dims the other hover groups.', { name: names })
       : t('This slide’s hover dims other groups, so this always shows.'), fix(t('Switch to Switch content'), reveal))
     if (!triggers.length && set !== slide.hover?.default && blocked.length) {
-      line('hidden', t('{name} is hidden or shows only on hover, so the pointer can never reach it.', { name: blockedNames }), fix(t('Pick the trigger'), () => openHoverPicker(p, el, pick)))
+      line('hidden', t('{name} is hidden or in a hover set itself, so it can never reveal this.', { name: blockedNames }), fix(t('Pick the trigger'), () => openHoverPicker(p, el, pick)))
     } else if (!triggers.length && set !== slide.hover?.default) {
       line('orphan', t('Nothing on this slide is in the group “{group}”.', { group: set }), fix(t('Pick the trigger'), () => openHoverPicker(p, el, pick)))
     } else if (!issue) {
@@ -705,7 +705,9 @@ function openHoverPicker(p: PropsPanel, el: SlideElement, anchor: HTMLElement) {
   if (el.showOnHover) list.append(option(t('Always visible'), null))
   // only what the pointer can be on in the show: not hidden, drawn at rest
   const others = slide.elements.filter((e) => e.id !== el.id && reachable(slide, e))
-  for (const e of others) list.append(option(labelIn(slide, e, t), e.id, e, !!el.showOnHover && e.group === el.showOnHover))
+  // a component's main and its copy can share a Layers name: say which is which
+  const nameOf = (e: SlideElement) => { const n = labelIn(slide, e, t); return e.component ? t(e.component.main ? '{name} (main component)' : '{name} (component copy)', { name: n }) : n }
+  for (const e of others) list.append(option(nameOf(e), e.id, e, !!el.showOnHover && e.group === el.showOnHover))
   if (!others.length) { const n = document.createElement('div'); n.className = 'ed-hint'; n.textContent = t('Nothing else on this slide to point at.'); list.append(n) }
 
   const options = () => [...list.querySelectorAll<HTMLElement>('[role=option]')].filter((o) => !o.hidden)

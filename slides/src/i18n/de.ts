@@ -4,8 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
-  "This slide’s hover dims other groups: this always shows, and pointing at {name} dims everything outside its group.": "Hover blendet auf dieser Folie andere Gruppen ab: Dies ist immer sichtbar, und der Zeiger auf {name} blendet alles außerhalb seiner Gruppe ab.",
-  "{name} is hidden or shows only on hover, so the pointer can never reach it.": "{name} ist ausgeblendet oder erscheint nur bei Hover, daher kann der Zeiger es nie erreichen.",
+  "This slide’s hover dims other groups: this always shows, and pointing at {name} dims the other hover groups.": "Hover blendet auf dieser Folie andere Gruppen ab: Dies ist immer sichtbar, und der Zeiger auf {name} blendet die anderen Hover-Gruppen ab.",
+  "{name} is hidden or in a hover set itself, so it can never reveal this.": "{name} ist ausgeblendet oder selbst in einem Hover-Set, daher kann es dies nie einblenden.",
+  "{name} (main component)": "{name} (Hauptkomponente)",
+  "{name} (component copy)": "{name} (Komponentenkopie)",
   "Always visible": "Immer sichtbar",
   "This slide’s hover is off, so this always shows.": "Hover ist auf dieser Folie aus, daher ist dies immer sichtbar.",
   "Turn on": "Einschalten",

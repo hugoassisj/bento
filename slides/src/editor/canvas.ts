@@ -1495,7 +1495,7 @@ export class SlideCanvas {
         chip.classList.add('ed-setchip-warn', 'ed-setchip-orphan')
         const blocked = unreachableTriggersOf(slide, set).map((e) => labelIn(slide, e, t)).join(', ')
         chip.title = blocked
-          ? t('{name} is hidden or shows only on hover, so the pointer can never reach it.', { name: blocked })
+          ? t('{name} is hidden or in a hover set itself, so it can never reveal this.', { name: blocked })
           : t('Nothing on this slide is in the group “{group}”.', { group: set })
         bar.appendChild(this.setBarFix(t('Pick the trigger'), chip.title, () => {
           const member = slide.elements.find((e) => e.showOnHover === set)
