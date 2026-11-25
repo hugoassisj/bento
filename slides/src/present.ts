@@ -680,6 +680,7 @@ export function startPresentation(
   const setBlack = (on: boolean) => {
     blacked = on
     if (on) {
+      endSpeakerLaser()
       resetLaserPointer()
       sendLaserPoint(null)
       setRemoteLaser(null)
@@ -917,17 +918,29 @@ export function startPresentation(
   let svLaserDot: HTMLElement | null = null
   let svLaserDrawing = false
   let svLaserSent = false
-  const endSpeakerLaser = () => {
-    if (!svLaserDrawing) return
-    svLaserDrawing = false
+  // pen up on the audience window and on live copies; the trail fades
+  const liftSpeakerLaser = () => {
     svLaserDot?.classList.remove('visible')
     if (svLaserSent) sendLaserPoint(null)
     svLaserSent = false
     setRemoteLaser(null)
   }
+  // Ends the stroke: release, leaving the preview, the laser switched off, a
+  // black screen, and the popup closing (it never sends pointerup then).
+  const endSpeakerLaser = () => {
+    if (!svLaserDrawing) return
+    svLaserDrawing = false
+    liftSpeakerLaser()
+  }
   const pointSpeakerLaser = (ev: PointerEvent, box: HTMLElement) => {
     const rect = box.querySelector<HTMLElement>('.bento-slide')?.getBoundingClientRect()
     if (!laserEnabled || blacked || !rect?.width || !rect.height) { endSpeakerLaser(); return }
+    if (ev.clientX < rect.left || ev.clientX > rect.right || ev.clientY < rect.top || ev.clientY > rect.bottom) {
+      // off the slide (the preview's empty margin): hide, as the audience-side
+      // laser does, and pick up again when the pointer comes back
+      if (svLaserDot?.classList.contains('visible')) liftSpeakerLaser()
+      return
+    }
     const fx = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
     const fy = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height))
     const p = `${fx.toFixed(4)},${fy.toFixed(4)}`
@@ -937,7 +950,7 @@ export function startPresentation(
       svLaserDot.style.top = `${rect.top + fy * rect.height}px`
       svLaserDot.classList.add('visible')
     }
-    // the same ~30fps wire gate as a local stroke (sendLaserPoint caps it again)
+    // the local stroke's 33 ms gate; sendLaserPoint caps the wire at ≤ 20/s
     const now = performance.now()
     if (!svLaserSent || now - lastLaserSend >= 33) {
       sendLaserPoint(p)
@@ -1138,7 +1151,7 @@ export function startPresentation(
     d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })
     clearInterval(speakerTimer)
     speakerTimer = window.setInterval(() => {
-      if (!speaker || speaker.closed) { clearInterval(speakerTimer); return }
+      if (!speaker || speaker.closed) { endSpeakerLaser(); clearInterval(speakerTimer); return }
       const el = speaker.document.querySelector('.sv-timer')
       if (el) {
         const s = Math.floor((performance.now() - speakerStart) / 1000)
@@ -1236,6 +1249,9 @@ export function startPresentation(
       if (svLaserDrawing && ev.isPrimary) pointSpeakerLaser(ev, curBox)
     })
     for (const type of ['pointerup', 'pointerleave', 'pointercancel']) curBox.addEventListener(type, endSpeakerLaser)
+    // closing the popup mid-stroke must not leave the dot on the audience
+    // screen (the 1 s timer above is the fallback if pagehide never comes)
+    speaker.addEventListener('pagehide', endSpeakerLaser)
 
     updateSpeaker()
     if (!speakerAdopted && wasFullscreen) {
@@ -1330,6 +1346,7 @@ export function startPresentation(
     reduceQuery.removeEventListener?.('change', onMotionQuery)
     clearInterval(speakerTimer)
     cleanupSpeakerLayout?.()
+    speaker?.removeEventListener('pagehide', endSpeakerLaser)
     if (speaker && !speaker.closed) {
       if (speakerAdopted) {
         // editor-owned window — leave it open, reset to the idle placeholder so

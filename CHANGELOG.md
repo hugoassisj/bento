@@ -17,11 +17,13 @@ pre-1.0.
   slide in front of you has notes. Once you open or fold them, the editor
   remembers your choice.
 - **Point with the laser from the speaker view.** With the laser on, press
-  and drag over the current slide in the speaker view and the red dot and its
-  trail appear on the audience screen at the same spot, so you can present
-  from your laptop without reaching for the projector's screen. Letting go
-  fades the trail, nothing shows while the screen is black, and live audience
-  copies follow as they do when you point on the slides. Switching the laser
+  and drag over the current slide in the speaker view, with a mouse, a
+  trackpad or a pen, and the red dot and its trail appear on the audience
+  screen at the same spot, so you can present from your laptop without
+  reaching for the projector's screen. Letting go, moving off the slide or
+  closing the speaker view lifts the dot, nothing shows while the screen is
+  black, and live audience copies follow as they do when you point on the
+  slides. Switching the laser
   on or off from the speaker view now confirms it there, instead of with a
   message over the audience's slide.
 
