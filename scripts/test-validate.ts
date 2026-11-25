@@ -342,8 +342,22 @@ ok(refCodes(refDoc({ fill: 'accent1' }, '#123456')).has('theme-ref-stale'),
   ok(found(slideDoc([main, copy('#00ff00', { sig: 'reset' })]), 'component-copy-unsynced').length === 0, 'a copy with sig "reset" is silent — it follows its main')
   ok(found(slideDoc([main, copy('#ff0000')]), 'component-copy-unsynced').length === 0, 'a copy with no sig that equals its main is silent — nothing becomes an override')
 
-  const starterNew = starter.findings.filter((f) => ['token-stale', 'component-copy-unsynced'].includes(f.code))
-  ok(starterNew.length === 0, `the starter deck produces neither token-stale nor component-copy-unsynced (${starterNew.map((f) => f.code).join(', ') || 'none'})`)
+  // a parentId naming nothing, a non-frame or itself: `dangling-parent`, the
+  // code and the conditions F-08 gives the same check. Exactly ONE finding per
+  // element: should both implementations ever be merged, this fails until one goes.
+  const frame = rect({ id: 'f', x: 96, y: 300, w: 600, h: 200, layout: { dir: 'row', gap: 10, pad: [10, 10, 10, 10] } })
+  const parents = found(slideDoc([frame, rect({ id: 'a', parentId: 'nope' }), rect({ id: 'b', parentId: 'c' }), rect({ id: 'c', x: 600 }), rect({ id: 'd', parentId: 'f' }), rect({ id: 'e', parentId: 'e' }), rect({ id: 'g', parentId: '' })]), 'dangling-parent')
+  ok(parents.length === 3 && parents.every((f) => f.severity === 'warning' && f.path === 'parentId') && parents.map((f) => f.element).join() === 'a,b,e',
+    `a parentId naming nothing, a non-frame or itself is dangling-parent, once per element; one naming a frame, or "", is silent (${parents.map((f) => f.element).join()})`)
+
+  // every message ends in one instruction that names what to write
+  const last = (t: string) => t.split(/(?<=\.) (?=[A-Z])/).pop() ?? ''
+  const msgs = [stale[0], unsynced[0], parents[0], found(tokDoc({ themeRefs: { stroke: '$color.card' } }), 'token-stale')[0]].map((f) => f?.message ?? '')
+  ok(msgs.every((m) => /^(Write|Set|Name)\b/.test(last(m)) && /"[^"]+"/.test(last(m)) && m.endsWith('.')),
+    `each message's last sentence is one instruction naming what to write (${msgs.map(last).join(' | ')})`)
+
+  const starterNew = starter.findings.filter((f) => ['token-stale', 'component-copy-unsynced', 'dangling-parent'].includes(f.code))
+  ok(starterNew.length === 0, `the starter deck produces none of token-stale, component-copy-unsynced, dangling-parent (${starterNew.map((f) => f.code).join(', ') || 'none'})`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

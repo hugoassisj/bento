@@ -158,7 +158,7 @@ console.log('\nwhat the derive pass changes is reported\n')
     const r = load(full([rect({ id: 'card', fill: '#123456', themeRefs: { fill: '$color.card' } })]))
     const d = entry(r, '/slides/0/elements/0/themeRefs/fill')
     ok(!els(r)[0].themeRefs?.fill, 'a literal that differs from its token still loses the binding (behaviour unchanged)')
-    ok(!!d && /^binding dropped/.test(d.reason) && d.reason.includes('"#123456"') && d.reason.includes('"color.card"') && d.reason.includes('"#F2F0EA"') && /write the token's value/i.test(d.reason),
+    ok(!!d && /^binding dropped/.test(d.reason) && d.reason.includes('"#123456"') && d.reason.includes('"color.card"') && d.reason.includes('Write "#F2F0EA" at "fill"'),
       `the dropped binding is reported with both values and the fix (${show(r)})`)
     const agree = load(full([rect({ id: 'card', fill: '#f2f0ea', themeRefs: { fill: '$color.card' } })]))
     ok(els(agree)[0].themeRefs?.fill === '$color.card' && agree.report.dropped.length === 0, `a literal that agrees (any case) keeps its binding and reports nothing (${show(agree)})`)
@@ -193,7 +193,7 @@ console.log('\nwhat the derive pass changes is reported\n')
     const xs = els(r).slice(1).map((e) => `${e.id}:${e.x}`).join(' ')
     const d = entry(r, '/slides/0/elements/0')
     ok(xs === 'A:230 B:120 C:10', `children written at x 900, 500, 0 still lay out C, B, A (behaviour unchanged: ${xs})`)
-    ok(!!d && /^children reordered/.test(d.reason) && d.reason.includes('C, B, A') && /same x/.test(d.reason),
+    ok(!!d && /^children reordered/.test(d.reason) && d.reason.includes('C, B, A') && d.reason.includes('"x": 0 on every child'),
       `the reorder is reported on the frame, with the order and the fix (${show(r)})`)
     const tie = load(full([frame, rect({ id: 'A', parentId: 'f' }), rect({ id: 'B', parentId: 'f' }), rect({ id: 'C', parentId: 'f' })]))
     ok(els(tie).slice(1).map((e) => e.id + ':' + e.x).join(' ') === 'A:10 B:120 C:230' && tie.report.dropped.length === 0,
@@ -238,19 +238,81 @@ console.log('\nwhat the derive pass changes is reported\n')
   // out that a default filled has its own reason
   {
     const reason = (r: ReturnType<typeof load>) => r.report.dropped.find((d) => /^binding dropped/.test(d.reason))?.reason ?? ''
-    const omitOk = load(full([rect({ id: 'card', stroke: '#123456', themeRefs: { stroke: '$color.card' } })]))
-    ok(/leave the literal out/.test(reason(omitOk)), `full, a key that may be left out: the fix offers leaving the literal out (${reason(omitOk)})`)
+    // the advice to leave a literal out names it: `leave "fill" out`
+    const LEAVE = /leave "([^"]+)" out/
+    const advised = (r: ReturnType<typeof load>) => r.report.dropped.filter((d) => LEAVE.test(d.reason))
+    const writes = (r: ReturnType<typeof load>, v: string) => new RegExp(`Write "?${v.replace(/[#.]/g, '\\$&')}"? at "`).test(reason(r))
+    // following the advice that IS given keeps the binding and loses nothing:
+    // the input with each advised literal removed loads with every element,
+    // the binding held at the token's value, and no entry left at that path
+    const followAdvice = (name: string, input: any, r: ReturnType<typeof load>) => {
+      const given = advised(r)
+      if (!given.length) return
+      const next = structuredClone(input)
+      for (const d of given) {
+        const key = LEAVE.exec(d.reason)![1]
+        const segs = d.path.split('/').slice(1, -2) // …/themeRefs/<key>
+        let h: any = next
+        for (const sg of segs) h = h[Array.isArray(h) ? Number(sg) : sg]
+        delete h[key]
+      }
+      const again = load(JSON.stringify(next))
+      const count = (x: ReturnType<typeof load>) => x.doc.slides.map((sl) => sl.elements.length).join() + '|' + (x.doc.layouts ?? []).map((sl) => sl.elements.length).join()
+      const left = again.report.dropped.filter((d) => given.some((g) => g.path === d.path))
+      const held = given.every((d) => {
+        const key = LEAVE.exec(d.reason)![1]
+        const id = /element "([^"]+)"/.exec(d.reason)?.[1]
+        const el: any = again.doc.slides.flatMap((sl) => sl.elements).find((e) => e.id === id)
+        return !!el && typeof el.themeRefs?.[key] === 'string'
+      })
+      ok(count(again) === count(r) && !left.length && held,
+        `${name}: following the advice (${given.map((d) => d.path).join(', ')}) keeps every element and the binding (${count(r)} → ${count(again)}, left ${JSON.stringify(left)})`)
+    }
+    const compactDeck = (elements: unknown[], extra: Record<string, unknown> = {}) => ({ compact: true, theme, ...extra, slides: [{ id: 's1', elements }] })
+    const shape = (o: Record<string, unknown>) => ({ type: 'shape', shape: 'rect', x: 0, y: 0, w: 10, h: 10, ...o })
+
+    const optional = load(full([rect({ id: 'card', stroke: '#123456', themeRefs: { stroke: '$color.card' } })]))
+    ok(!advised(optional).length && writes(optional, '#F2F0EA'), `full input: the fix is to write the token's value, never to leave it out (${reason(optional)})`)
     const required = load(full([rect({ id: 'card', fill: '#123456', themeRefs: { fill: '$color.card' } })]))
-    ok(!/leave the literal out/.test(reason(required)) && /write the token's value/i.test(reason(required)), `full, a required key (fill): the fix is only to write the token's value (${reason(required)})`)
-    const compactR = load(JSON.stringify({ compact: true, theme, slides: [{ id: 's1', elements: [{ type: 'shape', shape: 'rect', id: 'card', x: 0, y: 0, w: 10, h: 10, fill: '#123456', themeRefs: { fill: '$color.card' } }] }] }))
-    ok(/leave the literal out/.test(reason(compactR)), `compact: the fix offers leaving the literal out (${reason(compactR)})`)
+    ok(!advised(required).length && writes(required, '#F2F0EA'), `full, a required key (fill): the fix is only to write the token's value (${reason(required)})`)
+    const cIn = compactDeck([shape({ id: 'card', fill: '#123456', themeRefs: { fill: '$color.card' } })])
+    const compactR = load(JSON.stringify(cIn))
+    ok(advised(compactR).length === 1 && LEAVE.exec(reason(compactR))![1] === 'fill' && writes(compactR, '#F2F0EA'), `compact slide element: the fix offers writing the value or leaving "fill" out (${reason(compactR)})`)
+    followAdvice('compact slide element', cIn, compactR)
+    // a compact deck's own layouts are not expanded: leaving a required literal out deletes the element
+    const lIn = { ...compactDeck([shape({ id: 'x' })]), layouts: [{ id: 'L1', name: 'L', background: '#fff', transition: 'none', notes: '', elements: [rect({ id: 'lx', fill: '#123456', themeRefs: { fill: '$color.card' } })] }] }
+    const layR = load(JSON.stringify(lIn))
+    ok(/^binding dropped/.test(reason(layR)) && !advised(layR).length && writes(layR, '#F2F0EA'), `compact deck, an element of its own layout: no advice to leave it out (${reason(layR)})`)
+    // an auto-height text's h is measured on load: leaving it out never keeps a binding
+    const hIn = compactDeck([{ type: 'text', id: 't', html: 'x', x: 0, y: 0, w: 300, h: 50, themeRefs: { h: '$hh' } }], { theme: { ...theme, tokens: { set: { ...theme.tokens.set, hh: { type: 'number', values: { default: 80 } } } } } })
+    const hR = load(JSON.stringify(hIn))
+    ok(/^binding dropped/.test(reason(hR)) && !advised(hR).length && writes(hR, '80'), `compact text h (auto height when left out): no advice to leave it out (${reason(hR)})`)
+    // a holder the input cannot resolve (an id written twice): no advice, and the path is said to be the loaded one
+    const dIn = compactDeck([shape({ id: 'dup' }), shape({ id: 'dup', x: 50, fill: '#123456', themeRefs: { fill: '$color.card' } })])
+    const dR = load(JSON.stringify(dIn))
+    ok(/^binding dropped/.test(reason(dR)) && !advised(dR).length && /loaded document/.test(reason(dR)), `an element the input cannot resolve: no advice, loaded-document path said (${show(dR)})`)
+    followAdvice('compact nested arrays', JSON.parse(JSON.stringify({ compact: true, theme, slides: [{ id: 's1', elements: [[shape({ id: 'n1' }), shape({ y: 20, fill: '#123456', themeRefs: { fill: '$color.card' } })]] }] })),
+      load(JSON.stringify({ compact: true, theme, slides: [{ id: 's1', elements: [[shape({ id: 'n1' }), shape({ y: 20, fill: '#123456', themeRefs: { fill: '$color.card' } })]] }] })))
+
     const bg = JSON.parse(full([]))
     bg.slides[0] = { id: 's1', transition: 'none', notes: '', elements: [], themeRefs: { background: '$color.card' } }
     const bgR = load(JSON.stringify(bg))
-    ok(/no value/.test(reason(bgR)) && !/leave the literal out/.test(reason(bgR)) && /write the token's value/i.test(reason(bgR)),
-      `full, an omitted slide background the loader filled: its own reason, and no "leave the literal out" (${reason(bgR)})`)
+    ok(/no value/.test(reason(bgR)) && !advised(bgR).length && writes(bgR, '#F2F0EA'),
+      `full, an omitted slide background the loader filled: its own reason, and no advice to leave it out (${reason(bgR)})`)
     const gapR = load(full([rect({ id: 'f', w: 600, layout: { dir: 'row', pad: [0, 0, 0, 0] }, themeRefs: { 'layout.gap': '$g' } })]).replace('"tokens":{"set":{', '"tokens":{"set":{"g":{"type":"number","values":{"default":16}},'))
-    ok(/no value/.test(reason(gapR)) && !/leave the literal out/.test(reason(gapR)), `full, an omitted layout.gap: its own reason, and no "leave the literal out" (${reason(gapR)})`)
+    ok(/no value/.test(reason(gapR)) && !advised(gapR).length && writes(gapR, '16'), `full, an omitted layout.gap: its own reason, and no advice to leave it out (${reason(gapR)})`)
+  }
+  // every reason ends in one sentence that says what to write, and where
+  {
+    const all = [
+      load(full([rect({ id: 'card', fill: '#123456', themeRefs: { fill: '$color.card' } })])),
+      load(full([rect({ id: 'm1', fill: '#ff0000', groupId: 'gm', component: { id: 'c1', key: 'k0', main: true } }), rect({ id: 'c1a', x: 500, fill: '#00ff00', groupId: 'gc', component: { id: 'c1', key: 'k0' } })])),
+      load(full([rect({ id: 'f', w: 1200, layout: { dir: 'row', gap: 10, pad: [10, 10, 10, 10] } }), rect({ id: 'A', parentId: 'f', x: 900 }), rect({ id: 'B', parentId: 'f', x: 0 })])),
+      load(full([rect({ id: 'x', parentId: 'nope' })])),
+    ].flatMap((r) => r.report.dropped)
+    const last = (t: string) => t.split(/(?<=\.) (?=[A-Z])/).pop() ?? ''
+    ok(all.length === 4 && all.every((d) => /^(Write|Name|Remove|Give|Set)\b/.test(last(d.reason)) && /"[^"]+"/.test(last(d.reason)) && d.reason.endsWith('.')),
+      `each reason's last sentence is one instruction naming what to write (${all.map((d) => last(d.reason)).join(' | ')})`)
   }
   // parent removed: a cycle and a layout are worded as such; an empty parentId is no link at all
   {
