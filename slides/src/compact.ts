@@ -83,7 +83,8 @@
  *     ABSENT (it renders in the theme font, as in a full document), a shape's
  *     omitted `fill` is bound to `accent1`, a slide's omitted background is
  *     bound to `bg1`, and on a slide bound to bg1 (bg2) an omitted text or
- *     code colour is bound to tx1 (tx2), so the two move together. compactDoc strips such a pair only when both halves
+ *     code colour is bound to tx1 (tx2), and so are an omitted table style's
+ *     text colour, zebra and rules (as tints), so they move together. compactDoc strips such a pair only when both halves
  *     match, so the round-trip still holds.
  *   - A `$token` binding written beside a literal that disagrees with the
  *     token is reported: the open-time rule (tokens.ts syncTokenRefs) drops it.
@@ -137,8 +138,15 @@ const deepEqual = (a: unknown, b: unknown): boolean => {
  */
 function elementDefaults(el: Obj, slide: Obj, doc: Obj): Obj | null {
   const d = editorDefaults(el, slide, doc)
-  // a key filled as a binding is never also a plain default
-  if (d) for (const k of Object.keys(elementBound(el, slide, doc))) delete d[k]
+  if (!d) return d
+  // a key filled as a binding is never also a plain default; a nested one
+  // (a table's style.color) carries the bound literal in its parent, so the
+  // parent compares whole in compactDoc and stripBound checks the refs
+  for (const [k, [v]] of Object.entries(elementBound(el, slide, doc))) {
+    const [top, sub] = k.split('.')
+    if (!sub) delete d[top]
+    else if (isObj(d[top])) d[top] = { ...d[top], [sub]: v }
+  }
   return d
 }
 
@@ -199,24 +207,50 @@ const themeOf = (doc: Obj) => (isObj(doc.theme) ? doc.theme : {}) as { backgroun
  *  put while a theme change turned the background under it. */
 function elementBound(el: Obj, slide: Obj, doc: Obj): Bound {
   if (el.type === 'shape') return { fill: [themeOf(doc).accent ?? '#F7A600', 'accent1'] }
-  if (el.type !== 'text' && el.type !== 'code') return {}
   const bg = isObj(slide.themeRefs) ? slide.themeRefs.background : undefined
   const tx = bg === 'bg1' ? 'tx1' : bg === 'bg2' ? 'tx2' : null
-  return tx && isObj(doc.theme) ? { color: [paletteOf(doc as unknown as BentoDoc)[tx], tx] } : {}
+  if (!tx || !isObj(doc.theme)) return {}
+  const ink = paletteOf(doc as unknown as BentoDoc)[tx]
+  if (el.type === 'text' || el.type === 'code') return { color: [ink, tx] }
+  if (el.type !== 'table' || !/^#[0-9a-f]{6}$/i.test(ink)) return {}
+  // A table's body cells are transparent and its zebra and rules are tints of
+  // the ink, so all three are the text slot: the body text plainly, the zebra
+  // and rules at the editor's own alphas (` /a`, palette.ts: the field keeps
+  // its opacity). The header paints its own background and stays as it is,
+  // and so does any key the deck's theme.table sets.
+  const light = isLightBg(typeof slide.background === 'string' ? slide.background : '#FFFFFF')
+  const tint = (a: number) => keepAlpha(`rgba(0,0,0,${a})`, ink)
+  const own = (doc.theme as { table?: Record<string, unknown> }).table ?? {}
+  const out: Bound = {}
+  const want: Bound = { 'style.color': [ink, tx], 'style.zebra': [tint(light ? 0.05 : 0.06), `${tx} /a`], 'style.borderColor': [tint(light ? 0.14 : 0.16), `${tx} /a`] }
+  for (const [k, pair] of Object.entries(want)) if (!(k.slice(6) in own)) out[k] = pair
+  return out
 }
 const slideBound = (doc: Obj): Bound => ({ background: [themeOf(doc).background ?? '#FFFFFF', 'bg1'] })
 
 /** compactDoc's half: drop a bound pair only when the literal AND the ref
  *  match, so expansion puts back exactly what was there. */
 function stripBound(src: Obj, out: Obj, bound: Bound): void {
+  const refs = isObj(src.themeRefs) ? src.themeRefs : {}
+  const drop = new Set<string>()
   for (const [k, [v, ref]] of Object.entries(bound)) {
-    const refs = isObj(src.themeRefs) ? src.themeRefs : {}
-    if (!deepEqual(src[k], v) || refs[k] !== ref) continue
+    if (k.includes('.') || !deepEqual(src[k], v) || refs[k] !== ref) continue
     delete out[k]
-    const rest = { ...refs }
-    delete rest[k]
-    if (Object.keys(rest).length) out.themeRefs = rest; else delete out.themeRefs
+    drop.add(k)
   }
+  // nested pairs, per parent: the generic pass dropped the parent only if it
+  // equals the defaults, which hold the bound literals; it stays dropped only
+  // if every bound ref under it is there as well, else it is written back
+  for (const top of new Set(Object.keys(bound).filter((k) => k.includes('.')).map((k) => k.split('.')[0]))) {
+    if (top in out || !(top in src)) continue
+    const ks = Object.keys(bound).filter((k) => k.startsWith(`${top}.`))
+    if (ks.every((k) => refs[k] === bound[k][1])) ks.forEach((k) => drop.add(k))
+    else out[top] = src[top]
+  }
+  if (!drop.size) return
+  const rest = { ...refs }
+  for (const k of drop) delete rest[k]
+  if (Object.keys(rest).length) out.themeRefs = rest; else delete out.themeRefs
 }
 
 function docDefaults(): Obj {
@@ -517,8 +551,13 @@ function bindNames(given: Obj, out: Obj, plain: Obj, bound: Bound, doc: BentoDoc
     if (k in plain) out[k] = plain[k]
   }
   for (const [k, [v, ref]] of Object.entries(bound)) {
-    if (k in out) continue
-    out[k] = v
+    const [top, sub] = k.split('.')
+    if (sub) {
+      // a nested default binds only when the author left its parent out
+      if (top in given || !isObj(out[top])) continue
+      out[top] = { ...out[top], [sub]: v }
+    } else if (k in out) continue
+    else out[k] = v
     refs[k] = ref
     stats.expanded++
   }

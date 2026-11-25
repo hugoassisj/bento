@@ -174,11 +174,22 @@ writes) may be named the same way.
 deck's palette slots, tokens and components are the user's, and what you leave
 out follows them:
 
-- A text element with no `fontFamily` renders in the theme font (none is
-  written). A shape with no `fill` is the deck's accent, bound to `accent1`. A
-  slide with no `background` is the theme's, bound to `bg1`, and text or code
-  with no `color` on it is the theme's text colour, bound to `tx1` (on a `bg2`
-  slide, `tx2`), so a later theme change keeps the two readable together.
+- A compact text element with no `fontFamily` is written WITHOUT one, and so
+  renders in `theme.fontFamily`, exactly as a full document's text box without
+  one does. (Earlier versions filled it with the editor's system font stack;
+  they no longer do. A code block still gets the editor's monospace stack.) A
+  shape with no `fill` is the deck's accent, bound to `accent1`. A slide with
+  no `background` is the theme's, bound to `bg1`; on it, text or code with no
+  `color` is the theme's text colour, bound to `tx1`, and a table with no
+  `style` has its text, zebra and rules bound to `tx1` too (zebra and rules
+  keep their tint), so a later theme change keeps them readable together (on a
+  `bg2` slide, `tx2`). Keys the deck's `theme.table` sets stay the deck's.
+- Text you put on a card is bound to `tx1`, which is drawn for the slide
+  background, not for the card. If the card's fill does not follow the theme
+  (a fixed literal or a token without modes), give the text its own colour —
+  the token or slot paired with that card if the deck has one (`"color":
+  "$color.on-card"`, `"color": "tx2"` on a `bg2` card) — or a theme change
+  can leave it unreadable on the card.
 - Name a slot or a token as the value: `"fill": "accent2"`,
   `"color": "tx1 -20%"`, `"background": "bg2"` (slots: `bg1 tx1 bg2 tx2
   accent1`…`accent6 hlink folHlink`, with an optional lightness shift), or
