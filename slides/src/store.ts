@@ -23,6 +23,8 @@ export type ViewSnapshot = {
 type HistoryEntry = {
   doc: string
   view: ViewSnapshot
+  /** the editor's side state at that point (sideState), when one is set */
+  side?: unknown
 }
 
 const MAX_UNDO = 100
@@ -49,6 +51,12 @@ export class Store {
    *  apply via the session's direct state.apply + emit, NOT commit — still
    *  flow, so a live viewer sees updates but can never author them. */
   readOnly = false
+
+  /** Editor-only state that undoes WITH the document: captured at every
+   *  checkpoint, swapped back on undo and redo, never saved or synced. The
+   *  canvas keeps here how its text boxes size themselves, so a resize and
+   *  the sizing change it made are one undo step (canvas.ts `hugs`). */
+  sideState: { capture(): unknown; restore(state: unknown): void } | null = null
 
   constructor(doc: BentoDoc) {
     this.doc = doc
@@ -104,7 +112,7 @@ export class Store {
 
   /** Snapshot current doc state onto the undo stack. Call BEFORE a mutation. */
   checkpoint() {
-    this.undoStack.push({ doc: JSON.stringify(this.doc), view: this.captureView() })
+    this.undoStack.push({ doc: JSON.stringify(this.doc), view: this.captureView(), side: this.sideState?.capture() })
     if (this.undoStack.length > MAX_UNDO) this.undoStack.shift()
     this.redoStack.length = 0
   }
@@ -179,7 +187,7 @@ export class Store {
     const entry = from.pop()
     if (!entry) return
     const before = this.captureView()
-    to.push({ doc: JSON.stringify(this.doc), view: before })
+    to.push({ doc: JSON.stringify(this.doc), view: before, side: this.sideState?.capture() })
     const live = this.doc // identity/capability is the open file's, not undoable
     this.doc = JSON.parse(entry.doc)
     // Undo/redo move CONTENT, never identity: keep the live docId, collab and
@@ -191,6 +199,7 @@ export class Store {
       if (v !== undefined) (this.doc as unknown as Record<string, unknown>)[k] = v
       else delete (this.doc as unknown as Record<string, unknown>)[k]
     }
+    if (this.sideState && entry.side !== undefined) this.sideState.restore(entry.side)
     this.reconcileView(before, entry.view)
     this.setDirty(true)
     this.emit('doc')
