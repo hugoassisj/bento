@@ -45,6 +45,7 @@ import { gateShell } from './shell-gate.mjs'
 import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
 import { homeWebOptions, homeWebKey, prepareHomeWebOut, publishedHistories, homeWebBuildArgs, servedListCheck, servedListArgs } from './home-web-release.mjs'
 import { releasePublicKey } from './sign-payload.mjs'
+import { SKILL_DIR, REFERENCES_SITE_DIR, buildSkillZip, publishReferences } from './skill-package.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const args = process.argv.slice(2)
@@ -454,14 +455,28 @@ if (app.ownsSiteContent) {
   cpSync(join(site, `${app.dir}/agents.md`), join(site, 'agents.md'))
   // The harness skill (canonical home: the Claude Code plugin at
   // plugins/bento-slides). Published three ways: the raw SKILL.md (curl
-  // one-liner), a claude.ai-uploadable zip (must contain bento-slides/SKILL.md,
-  // folder-inside-zip), and a compat copy at the old bento-deck URL.
-  const skillSrc = join(root, 'plugins/bento-slides/skills/bento-slides/SKILL.md')
+  // one-liner), a claude.ai-uploadable zip, and a compat copy at the old
+  // bento-deck URL. The zip carries the WHOLE skill folder inside
+  // bento-slides/ (folder-inside-zip), minus evals/, with the shell this
+  // release signs and the schema bundled into assets/, so an uploaded skill
+  // has its references, scripts and an app to work offline with
+  // (scripts/skill-package.mjs, rig: scripts/test-slides-skill-zip.ts).
+  const skillDir = join(root, SKILL_DIR)
+  const skillSrc = join(skillDir, 'SKILL.md')
   mkdirSync(join(site, 'skills/bento-slides'), { recursive: true })
   cpSync(skillSrc, join(site, 'skills/bento-slides/SKILL.md'))
   mkdirSync(join(site, 'skills/bento-deck'), { recursive: true })
   cpSync(skillSrc, join(site, 'skills/bento-deck/SKILL.md'))
-  execFileSync('zip', ['-q', '-X', '-o', 'bento-slides.zip', 'bento-slides/SKILL.md'], { cwd: join(site, 'skills') })
+  const skillEntries = buildSkillZip({
+    skillDir,
+    shell: stagedShell,
+    schema: join(root, 'schema/slides.json'),
+    zipPath: join(site, 'skills/bento-slides.zip'),
+  })
+  console.log(`skill zip: skills/bento-slides.zip, ${skillEntries.length} file(s)`)
+  // The skill's references, beside the agent guide: /slides/agents/<topic>.md.
+  const refs = publishReferences({ skillDir, outDir: join(site, REFERENCES_SITE_DIR) })
+  if (refs.length) console.log(`skill references: ${refs.length} published at /${REFERENCES_SITE_DIR}/`)
 
   // MIT license — travels to the public site repo so the published tree carries it.
   cpSync(join(root, 'LICENSE'), join(site, 'LICENSE'))

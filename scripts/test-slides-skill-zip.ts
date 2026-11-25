@@ -40,7 +40,9 @@ function ok(cond: unknown, msg: string) {
 }
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex')
 const listing = (zip: string) => execFileSync('unzip', ['-Z1', zip], { encoding: 'utf8' }).trim().split('\n').filter(Boolean)
-const member = (zip: string, entry: string) => execFileSync('unzip', ['-p', zip, entry], { maxBuffer: 64 << 20 })
+const member = (zip: string, entry: string) => {
+  try { return execFileSync('unzip', ['-p', zip, entry], { maxBuffer: 64 << 20, stdio: ['ignore', 'pipe', 'ignore'] }) } catch { return Buffer.alloc(0) }
+}
 const put = (dir: string, rel: string, body: string) => { mkdirSync(dirname(join(dir, rel)), { recursive: true }); writeFileSync(join(dir, rel), body) }
 
 const work = mkdtempSync(join(tmpdir(), 'bento-skill-zip-rig-'))
@@ -145,6 +147,10 @@ console.log('published references')
   const site2 = join(work, 'site2')
   ok(publishReferences({ skillDir: bare, outDir: join(site2, REFERENCES_SITE_DIR) }).length === 0 && !existsSync(join(site2, REFERENCES_SITE_DIR)),
     'a skill without references publishes nothing and creates no folder (the site is unchanged)')
+  const txtOnly = join(work, 'txt-skill'); put(txtOnly, 'SKILL.md', '# txt\n'); put(txtOnly, 'references/notes.txt', 'x\n')
+  const site4 = join(work, 'site4')
+  ok(publishReferences({ skillDir: txtOnly, outDir: join(site4, REFERENCES_SITE_DIR) }).length === 0 && !existsSync(join(site4, REFERENCES_SITE_DIR)),
+    'a references/ folder with no .md publishes nothing and creates no folder')
   const realNames = publishReferences({ skillDir: realDir, outDir: join(work, 'site3', REFERENCES_SITE_DIR) })
   const realRefs = tracked.filter((f) => /^references\/[^/]+\.md$/.test(f)).map((f) => f.slice('references/'.length)).sort()
   ok(JSON.stringify(realNames) === JSON.stringify(realRefs), `the real folder publishes every tracked references/*.md (${realNames.length})`)
