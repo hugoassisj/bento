@@ -17,6 +17,10 @@
 //   3. The status line tells the truth: working, slide hover off, nothing in
 //      the group. The canvas "Hover set:" bar flags a set nothing can reveal,
 //      and its Pick the trigger opens the picker.
+//   3b. A trigger the pointer can never be on — the element itself, a hidden
+//      one — is flagged, not counted, and the picker leaves hidden ones out.
+//      A component main picked as the trigger keeps its group to itself: the
+//      copy on another slide records the key as overridden (one undo step).
 //   4. validate() reports hover-set-unreachable and hover-off on those slides
 //      and nothing on a working one.
 //   5. A deck with hand-typed groups opens and behaves as before, and the
@@ -43,6 +47,10 @@ const SLIDES = [
   slide('s3', [rect('s3-r', { group: 'italy', name: 'Italy' }), text('s3-t', 'Rome', { showOnHover: 'italy' })], { hover: { type: 'reveal' } }), // hand-typed, working
   slide('s4', [rect('s4-r'), text('s4-t', 'Typed a layer name', { showOnHover: 'Rectangle' })], { hover: { type: 'reveal' } }), // unmatched set
   slide('s5', [rect('s5-r', { group: 'g' }), text('s5-t', 'Hover off', { showOnHover: 'g' })]), // slide hover off
+  slide('s6', [rect('s6-r'), text('s6-t', 'Own trigger', { showOnHover: 'x', group: 'x', name: 'Self' })], { hover: { type: 'reveal' } }), // its own trigger
+  slide('s7', [rect('s7-h', { group: 'h', hidden: true, name: 'Hidden box' }), rect('s7-v', { x: 450, name: 'Visible box' }), text('s7-t', 'Behind a hidden box', { showOnHover: 'h' })], { hover: { type: 'reveal' } }),
+  slide('s8', [rect('s8-m', { name: 'Button', groupId: 'gcmp', component: { id: 'cmp', key: 'k', main: true } }), text('s8-t', 'Main card')]),
+  slide('s9', [rect('s8-m', { name: 'Button', groupId: 'gcmp2', component: { id: 'cmp', key: 'k' } }), text('s9-t', 'Elsewhere')], { hover: { type: 'focus-group' } }),
 ]
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
@@ -145,7 +153,7 @@ try {
     ok(s2.hover?.type === 'focus-group' && !!s2.elements[1].showOnHover && s2.elements[0].group === s2.elements[1].showOnHover,
       `on a Dim other groups slide the pick sets trigger and target, and leaves the slide's hover alone (${JSON.stringify(s2.hover)})`)
     const st = await status()
-    ok(st.some((x) => x.startsWith('dim:')), `the status line says the slide dims other groups (${JSON.stringify(st)})`)
+    ok(st.some((x) => x.startsWith('dim:') && x.includes('pointing at Rectangle dims everything outside its group')), `the status line says the slide dims other groups, and that pointing at the trigger now dims the rest (${JSON.stringify(st)})`)
     const fix = p.locator('.ed-props .ed-hover-status[data-state="dim"] .ed-hover-fix')
     ok((await fix.innerText().catch(() => '')).trim() === 'Switch to Switch content', 'and offers Switch to Switch content')
     if (await fix.count()) { await fix.click(); await p.waitForTimeout(300) }
@@ -182,10 +190,46 @@ try {
     await p.keyboard.press('Escape'); await p.waitForTimeout(150)
   }
 
+  // ---- 3b. triggers the pointer can never be on -----------------------------------
+  await goSlide(5)
+  ok(await p.locator('.ed-setchip-warn').count() === 1 && await p.locator('.ed-setbar-fix', { hasText: 'Pick the trigger' }).count() === 1,
+    'an element carrying its own set\'s group: the Hover set bar flags the set (it cannot be its own trigger)')
+  await selectEl('s6-t')
+  await interact()
+  {
+    const st = await status()
+    ok(st.length === 1 && st[0].startsWith('hidden:') && st[0].includes('Self'), `…and the status line says the pointer can never reach it (${JSON.stringify(st)})`)
+  }
+  await goSlide(6)
+  await selectEl('s7-t')
+  await interact()
+  {
+    const st = await status()
+    ok(st.length === 1 && st[0].startsWith('hidden:') && st[0].includes('Hidden box'), `a hidden trigger: the status line names it and says why (${JSON.stringify(st)})`)
+    await openPicker()
+    const opts = (await p.locator('.ed-hover-pick [role=option]').allInnerTexts()).map((x) => x.trim())
+    ok(opts.includes('Visible box') && !opts.includes('Hidden box'), `the picker leaves hidden elements out (${JSON.stringify(opts)})`)
+    await p.keyboard.press('Escape'); await p.waitForTimeout(150)
+  }
+  await goSlide(7)
+  await selectEl('s8-t')
+  await interact()
+  if (await pickBtn.count()) {
+    await openPicker(); await pickOption('Button')
+    await p.waitForTimeout(400) // components re-derive copies on the doc event
+    const all = await doc()
+    const main = all[7].elements[0], copy = all[8].elements[0]
+    ok(!!main.group && all[7].elements[1].showOnHover === main.group, `a component main picked as the trigger takes the group ("${main.group}")`)
+    ok(!copy.group && (copy.component?.over ?? []).includes('group'), `…and its copy on another slide does not join it (copy group ${JSON.stringify(copy.group)}, over ${JSON.stringify(copy.component?.over)})`)
+    await p.keyboard.press('Control+z'); await p.waitForTimeout(400)
+    const back = await doc()
+    ok(!back[7].elements[0].group && !back[8].elements[0].component?.over && !back[7].elements[1].showOnHover && !back[7].hover, 'one ⌘Z takes back the group, the copy\'s override, the set and the slide\'s hover')
+  }
+
   // ---- 4. the validator ----------------------------------------------------------
   {
     const f = await p.evaluate(() => window.bento.validate().findings.filter((x) => x.code.startsWith('hover-')).map((x) => `${x.code}@${x.element ?? x.slide}`).sort())
-    ok(JSON.stringify(f) === JSON.stringify(['hover-off@s5', 'hover-set-unreachable@s4-t']),
+    ok(JSON.stringify(f) === JSON.stringify(['hover-off@s5', 'hover-set-unreachable@s4-t', 'hover-set-unreachable@s6-t', 'hover-set-unreachable@s7-t']),
       `validate() reports hover-off on the slide with hover off, hover-set-unreachable on the typed layer name, nothing on the working slides (${JSON.stringify(f)})`)
   }
 

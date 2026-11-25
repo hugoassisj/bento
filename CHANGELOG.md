@@ -15,8 +15,10 @@ pre-1.0.
   used to need three settings in two places, two of them names you had to type
   the same way twice. Now, on the Interact tab, Show on hover of lists the
   slide's other elements by their layer names: pick one and the reveal works in
-  the show, set up in one step that one undo takes back. A slide set to dim
-  other groups is only switched when you say so. A line under the picker says
+  the show, set up in one step that one undo takes back. It offers only what
+  the pointer can be on: hidden elements are left out, and a component's
+  other copies stay out of the trigger's group. A slide set to dim other groups
+  is only switched when you say so. A line under the picker says
   what the show will do, or what is missing, with a button that fixes it; the
   canvas's Hover set bar flags a set nothing can reveal. Hover group stays under
   Advanced, for one group shared by several triggers. `validate()` reports
