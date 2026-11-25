@@ -3848,9 +3848,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-morph-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ed-morph-use, .ed-morph-play { height: 26px; padding: 0 10px; }
 .ed-morph-play { margin-top: 6px; }
-.ed-morph-pick-btn { box-sizing: border-box; width: 100%; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; justify-content: space-between; background: var(--field); border: 1px solid var(--field-line); border-radius: 6px; }
+.ed-morph-pick-btn, .ed-hover-pick-btn { box-sizing: border-box; width: 100%; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; justify-content: space-between; background: var(--field); border: 1px solid var(--field-line); border-radius: 6px; }
 .ed-morph-pick-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: start; }
-.ed-morph-pick-btn svg { flex: none; width: 12px; height: 12px; stroke-width: 2.25; transform: rotate(90deg); color: var(--muted); }
+.ed-morph-pick-btn svg, .ed-hover-pick-btn svg { flex: none; width: 12px; height: 12px; stroke-width: 2.25; transform: rotate(90deg); color: var(--muted); }
 .ed-morph-pick {
   position: fixed; z-index: 60; box-sizing: border-box; width: 260px; max-height: min(420px, calc(100vh - 16px));
   display: flex; flex-direction: column; gap: 6px; padding: 8px; overflow: hidden;

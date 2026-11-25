@@ -11,6 +11,18 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A hover reveal is one pick.** "Show this while the pointer is on that"
+  used to need three settings in two places, two of them names you had to type
+  the same way twice. Now, on the Interact tab, Show on hover of lists the
+  slide's other elements by their layer names: pick one and the reveal works in
+  the show, set up in one step that one undo takes back. A slide set to dim
+  other groups is only switched when you say so. A line under the picker says
+  what the show will do, or what is missing, with a button that fixes it; the
+  canvas's Hover set bar flags a set nothing can reveal. Hover group stays under
+  Advanced, for one group shared by several triggers. `validate()` reports
+  `hover-set-unreachable` and `hover-off` for the same mistakes in a deck
+  written by hand or by an agent. Decks with hand-typed groups behave as before.
+
 - **Speaker notes start folded, and fold out of the way.** A new editor
   opens with the whole canvas; folded, the notes take no room at all. A notes
   button beside Slideshow shows and hides them, and carries a dot when the

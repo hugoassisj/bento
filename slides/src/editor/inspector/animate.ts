@@ -567,7 +567,7 @@ function buildHoverReveal(p: PropsPanel, el: SlideElement) {
 
   const pick = document.createElement('button')
   pick.type = 'button'
-  pick.className = 'ed-btn ed-morph-pick-btn ed-hover-pick-btn'
+  pick.className = 'ed-btn ed-hover-pick-btn' // the morph picker's look (styles.css), not its class
   pick.setAttribute('aria-haspopup', 'listbox')
   const chosen = document.createElement('span')
   chosen.className = 'ed-morph-pick-txt'
