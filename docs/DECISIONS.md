@@ -15396,3 +15396,35 @@ replaced before this shipped.
   1440×900 and 390×844, and the row's fit at 320px. Mutants that open by
   default, never tighten the row, widen the tap area onto the Slideshow pill,
   or never draw the dot each turn rows red.
+
+## 2026-11-25 — The skill zip carries the whole skill folder; references are published
+
+Owner-authorised exception to the release-file rule (`docs/PARALLEL-WORK.md`
+§3), given on 2026-11-25 for this change only: `scripts/release.mjs` changes
+how it packages the agent skill and nothing else. No version is bumped, no
+signing or key file is touched, `plugin.json` is unchanged.
+
+- **The zip is the folder.** `bento.page/skills/bento-slides.zip` holds
+  `plugins/bento-slides/skills/bento-slides/` inside `bento-slides/`, minus
+  any `evals/` folder (graders and cases are for developing the skill) and
+  dot-files, plus two files bundled at release time:
+  `assets/Bento_Slides.bento.html` (the staged shell, the bytes this release
+  signs) and `assets/slides.json` (`schema/slides.json`). These are the paths
+  the agent CLI looks in first (AI-04, `scripts/bento.mjs`). The packaging
+  lives in `scripts/skill-package.mjs`; `scripts/test-slides-skill-zip.ts`
+  builds the zip offline and asserts its listing.
+- **References are published at `/slides/agents/<topic>.md`**, beside
+  `/slides/agents.md` (FU-28 spec D8). A folder of only `.md` files costs one
+  `_headers` rule however many topics it holds (`scripts/site-routing.mjs`).
+  Not yet listed in `site-src/llms.txt`.
+- **The raw `SKILL.md` stays a single file** at `/skills/bento-slides/SKILL.md`
+  and `/skills/bento-deck/SKILL.md`; the curl one-liner still installs only
+  that file. Shipping the folder that way is a separate change.
+- A full rehearsal release (throwaway key, offline, `--out` a temp dir)
+  writes the same 70 files before and after; the files that differ are the
+  ones that differ between two runs of the same code (signatures and
+  timestamps) and the zip, whose contents are the change.
+
+This marks done the AI-01 follow-up "`scripts/release.mjs` still publishes
+`SKILL.md` alone" (the 2026-11-24 skill-package entry, AI-01's branch). Its
+other follow-up, the `plugin.json` bump, stays open for the maintainer.
