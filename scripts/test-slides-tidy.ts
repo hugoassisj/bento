@@ -18,7 +18,11 @@
 // centres spread. Nothing is pushed off the slide: a row too long for it
 // tightens its gap, then wraps (one to a line turns it into a column), a grid
 // too big tightens and is laid out again, and an arrangement past an edge is
-// shifted back. A seeded property check runs thousands of random selections.
+// shifted back. Lines keep their own widths, so a title over its cards is two
+// lines; when no arrangement fits the slide, nothing moves and fits is false.
+// Seeded property checks run thousands of random selections, ordinary slides
+// (titles and cards, big photos, title-wide strips) among them, at 1280×720
+// and 1920×1080.
 
 import { detect, medianGap, tidy, type Box } from '../slides/src/editor/tidy.ts'
 
@@ -220,6 +224,81 @@ console.log('\n11. seeded property check: random rows, columns, grids and scatte
   ok(moved === 0, `${N} random selections: a second run moves nothing (${moved} moved)`)
   ok(offSlide === 0, `…none that started on the slide leaves it (${offSlide} off)`)
   ok(resized === 0, `…and no size changes (${resized})${example ? ' — first: ' + example : ''}`)
+}
+
+console.log('\n12. ordinary slides: a title over its cards, big photos\n')
+{
+  // a title over three cards is two lines, each its own widths, and stays put
+  const titled = [b(80, 40, 1120, 90), b(80, 180, 340, 440), b(470, 180, 340, 440), b(860, 180, 340, 440)]
+  const t1 = tidy(titled, SLIDE)
+  ok(t1.fits && t1.kind === 'lines' && JSON.stringify(t1.boxes) === JSON.stringify(titled), `a title over three even cards is already tidy: nothing moves (${t1.kind})`)
+  const messy = [b(90, 50, 1100, 90), b(80, 175, 340, 440), b(465, 190, 340, 440), b(870, 182, 340, 440)]
+  const m1 = tidy(messy, SLIDE)
+  const cards = m1.boxes.slice(1)
+  ok(m1.fits && cards.every((x) => x.y === cards[0].y) && m1.boxes[0].y + 90 < cards[0].y && m1.boxes.every((x) => x.x + x.w <= SLIDE.w && x.y + x.h <= SLIDE.h),
+    `a rough title and cards become two lines on the slide (title ${m1.boxes[0].x},${m1.boxes[0].y}; cards x ${cards.map((x) => x.x).join(', ')})`)
+  ok(JSON.stringify(tidy(m1.boxes, SLIDE).boxes) === JSON.stringify(m1.boxes), '…and a second run moves nothing')
+  const page = [b(80, 40, 1120, 100), b(80, 170, 560, 450), b(680, 170, 520, 450), b(80, 650, 400, 30), b(1150, 650, 50, 30)]
+  const p1 = tidy(page, SLIDE)
+  ok(p1.fits && p1.boxes.every((x) => x.x >= 0 && x.y >= 0 && x.x + x.w <= SLIDE.w && x.y + x.h <= SLIDE.h) && JSON.stringify(tidy(p1.boxes, SLIDE).boxes) === JSON.stringify(p1.boxes),
+    'title, body, image, footer and page number: on the slide, and settled')
+  // two 800×600 photos fit a 1280×720 slide no way at all: nothing moves, and it says so
+  const two = [b(100, 50, 800, 600), b(380, 80, 800, 600)]
+  const p2 = tidy(two, SLIDE)
+  ok(!p2.fits && p2.kind === 'none' && JSON.stringify(p2.boxes) === JSON.stringify(two), 'two 800×600 photos: nothing fits, so nothing moves (fits: false)')
+  ok(JSON.stringify(tidy(p2.boxes, SLIDE)) === JSON.stringify(p2), '…the same the second time')
+}
+
+console.log('\n13. seeded property check: titled slides, wide elements and big photos, at 1280×720 and 1920×1080\n')
+for (const room of [{ w: 1280, h: 720 }, { w: 1920, h: 1080 }]) {
+  const k = room.w / 1280
+  let seed = 99
+  const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648 }
+  const R = (lo: number, hi: number) => Math.round((lo + rnd() * (hi - lo)) * k)
+  const off = (bs: Box[]) => bs.some((x) => x.x < 0 || x.y < 0 || x.x + x.w > room.w || x.y + x.h > room.h)
+  // a shelf packing (tallest first, 8px apart): when it fits, Tidy up must
+  const shelf = (bs: Box[]) => {
+    const o = bs.map((_, i) => i).sort((m, n) => bs[n].h - bs[m].h)
+    let x = 0, y = 0, rh = 0
+    for (const i of o) { if (bs[i].w > room.w) return false; if (x > 0 && x + bs[i].w > room.w) { y += rh + 8; x = 0; rh = 0 } x += bs[i].w + 8; rh = Math.max(rh, bs[i].h) }
+    return y + rh <= room.h
+  }
+  const gen = (kind: number): Box[] => {
+    if (kind === 0) { // a slide's title and its cards, maybe a footer: select all
+      const n = Math.max(1, Math.round(1 + rnd() * 4))
+      const out = [b(R(40, 100), R(20, 60), R(900, 1180), R(60, 120))]
+      const top = out[0].y + out[0].h + R(10, 40), cw = Math.floor((room.w - R(60, 120)) / n) - R(10, 30)
+      for (let i = 0; i < n; i++) out.push(b(R(40, 80) + i * (cw + R(15, 30)), top + R(-10, 10), cw, Math.min(room.h - top - R(10, 40), R(150, 500))))
+      if (rnd() < 0.5) out.push(b(R(40, 100), room.h - R(40, 50), R(200, 400), R(24, 32)))
+      return out
+    }
+    if (kind === 1) { // two to four big photos, overlapping
+      const n = 2 + Math.floor(rnd() * 3)
+      return Array.from({ length: n }, () => { const w = R(400, 900), h = R(300, 650); return b(Math.floor(rnd() * (room.w - w)), Math.floor(rnd() * (room.h - h)), w, h) })
+    }
+    // title-width strips among small boxes
+    const n = Math.round(2 + rnd() * 6)
+    return Array.from({ length: n }, (_, i) => { const w = i % 3 === 0 ? R(700, 1200) : R(60, 300), h = R(30, 160); return b(Math.floor(rnd() * (room.w - w)), Math.floor(rnd() * (room.h - h)), w, h) })
+  }
+  const N = 3000
+  let started = 0, moved = 0, offSlide = 0, resized = 0, missed = 0, wrongNone = 0, example = ''
+  for (let i = 0; i < N; i++) {
+    const bs = gen(i % 3)
+    if (off(bs)) continue
+    started++
+    const r1 = tidy(bs, room), r2 = tidy(r1.boxes, room)
+    const fail = (what: string) => { if (!example) example = `${what}: ${JSON.stringify(bs.map((x) => [x.x, x.y, x.w, x.h]))}` }
+    if (JSON.stringify(r1.boxes) !== JSON.stringify(r2.boxes)) { moved++; fail('moved') }
+    if (off(r1.boxes)) { offSlide++; fail('off') }
+    if (r1.boxes.some((x, j) => x.w !== bs[j].w || x.h !== bs[j].h)) { resized++; fail('resized') }
+    if (!r1.fits && shelf(bs)) { missed++; fail('a shelf fits, Tidy up gave up') }
+    if (!r1.fits && JSON.stringify(r1.boxes) !== JSON.stringify(bs)) { wrongNone++; fail('gave up but moved') }
+  }
+  const tag = `${room.w}×${room.h}`
+  ok(started > N * 0.9 && moved === 0, `${tag}, ${started} selections: a second run moves nothing (${moved} moved)`)
+  ok(offSlide === 0, `${tag}: nothing leaves the slide (${offSlide})`)
+  ok(missed === 0, `${tag}: whenever a shelf packing fits, Tidy up fits too (${missed} gave up)`)
+  ok(wrongNone === 0 && resized === 0, `${tag}: giving up moves nothing, and no size changes (${wrongNone}, ${resized})${example ? ' — first: ' + example : ''}`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
