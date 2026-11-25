@@ -23,6 +23,13 @@
 //   7. Reduced motion: nothing travels, the steps still come one by one.
 //   8. Dark and light chrome, the fitted zoom and zoomed in past 100%: the
 //      overlay covers exactly the canvas slide.
+//   9. Mid-fade the stage is opaque: a step not yet revealed, drawn in blue on
+//      the live canvas underneath, does not show through (pixels sampled from
+//      a real screenshot). Step badges and comment pins step aside and take
+//      no clicks while it plays.
+//   5 also types: Enter and Space stop it without starting it again or an
+//      edit; any other key stops it BEFORE the editor sees the key; focus
+//      comes back to ▶ when a play ends by itself.
 import { readFileSync, writeFileSync, mkdtempSync, realpathSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -52,6 +59,9 @@ const DOC = {
       rect('s2', 300, 420, 120, 120, { fill: '#06b', fx: { step: 2, enter: 'slide-up' } }),
       rect('loop', 500, 100, 40, 40, { fill: '#222', fx: { loop: { type: 'motion-path', path: 'M0 0 C 120 0 120 120 240 120', duration: 2 } } }),
       rect('ken', 900, 60, 200, 120, { fill: '#e8c', fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.4, duration: 3 } } }),
+    ], comments: [{ id: 'cm1', x: 1150, y: 600, author: 'Rig', text: 'a pin', at: '2026-11-25T00:00:00Z' }] },
+    { id: 'sc', background: '#ffffff', transition: 'fade', notes: '', elements: [
+      rect('s3', 500, 250, 280, 220, { fill: '#0000ff', fx: { step: 1 } }),
     ] },
   ],
 }
@@ -170,6 +180,7 @@ await section('1-4', async () => {
   const s1Ys = rows.filter((r) => s1 !== null && r.t >= s1 && r.t < s1 + 0.8).map((r) => r.s1.y)
   ok(s1Ys.length > 2 && s1Ys[0] - s1Ys[s1Ys.length - 1] > 20, `a step's entrance travels (${(s1Ys[0] - s1Ys[s1Ys.length - 1]).toFixed(0)}px up)`)
   ok(rows.length > 1 && end < 12 && await p.locator('.ed-play-overlay').count() === 0, `the play ends by itself after ${end.toFixed(2)}s of engine time`)
+  ok(await p.evaluate(() => document.activeElement?.classList.contains('ed-play-slide')), 'focus is back on ▶ Play slide')
   const after = await state(p)
   ok(after.block === before.block, 'the saved document block is byte-identical')
   ok(after.model === before.model, 'the model is unchanged')
@@ -211,6 +222,39 @@ await section('5', async () => {
     ok(now.sel === before.sel, `${how}: the selection survives (${now.sel})`)
     ok(now.canvas === before.canvas && now.model === before.model, `${how}: the canvas and the model are untouched`)
   }
+  // keys: Enter and Space are spent stopping it (no restart from the focused
+  // button, no text edit); any other key stops it before the editor sees it
+  await p.evaluate(() => {
+    window.__seen = []
+    document.addEventListener('keydown', (e) => window.__seen.push([e.key, !!document.querySelector('.ed-play-overlay')]))
+  })
+  const tb = await p.locator('.ed-stage-scale > .bento-slide [data-el-id="e"]').boundingBox()
+  await p.mouse.click(tb.x + 20, tb.y + 20)
+  await p.waitForTimeout(250)
+  const textBefore = await state(p)
+  for (const key of ['Enter', 'Space']) {
+    await pressPlay(p)
+    await tick(p, 0.6)
+    ok(await p.evaluate(() => document.activeElement?.classList.contains('ed-play-slide')) === false, `${key}: focus left ▶ while it plays`)
+    await p.keyboard.press(key)
+    await p.waitForTimeout(150)
+    await tick(p, 0.2)
+    ok(await p.locator('.ed-play-overlay').count() === 0, `${key} stops it and does not start it again`)
+    ok(await p.locator('.bento-editing').count() === 0 && (await state(p)).model === textBefore.model && (await state(p)).sel === textBefore.sel, `${key}: no edit started, the selection kept`)
+  }
+  await pressPlay(p)
+  await tick(p, 0.6)
+  await p.evaluate(() => { window.__seen = [] })
+  await p.keyboard.type('XYZ')
+  await p.waitForTimeout(150)
+  const seen = await p.evaluate(() => window.__seen)
+  ok(await p.locator('.ed-play-overlay').count() === 0 && seen.length > 0 && seen.every(([, playing]) => !playing), `typing stops it before the editor sees a key (${JSON.stringify(seen)})`)
+  await p.keyboard.press('Escape')
+  await p.waitForTimeout(150)
+  await p.keyboard.press('Escape')
+  await p.waitForTimeout(150)
+  await p.mouse.click(bx.x + bx.width / 2, bx.y + bx.height / 2)
+  await p.waitForTimeout(250)
   // an edit mid-play (here: a nudge) stops it before it lands
   await pressPlay(p)
   await tick(p, 0.5)
@@ -267,6 +311,60 @@ await section('7', async () => {
 })
 
 // --- 8: chrome themes and zoom --------------------------------------------------
+await section('9', async () => {
+  console.log('\n9. the stage is opaque, and the editing chrome steps aside\n')
+  const { ctx, p, errs } = await open()
+  // mean colour of a small square of the page, from a real screenshot decoded in the page
+  const pixel = async (x, y) => {
+    const png = (await p.screenshot({ clip: { x: x - 4, y: y - 4, width: 8, height: 8 } })).toString('base64')
+    return p.evaluate(async (src) => {
+      const img = new Image(); img.src = 'data:image/png;base64,' + src; await img.decode()
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0)
+      const d = g.getImageData(0, 0, c.width, c.height).data
+      const m = [0, 0, 0]; for (let i = 0; i < d.length; i += 4) { m[0] += d[i]; m[1] += d[i + 1]; m[2] += d[i + 2] }
+      return m.map((v) => Math.round(v / (d.length / 4)))
+    }, png)
+  }
+  const blue = ([r, g, bl]) => bl > 150 && r < 90 && g < 90
+  await goSlide(p, 2)
+  await p.keyboard.press('Escape')
+  const s3 = await p.locator('.ed-stage-scale > .bento-slide [data-el-id="s3"]').boundingBox()
+  const cx = s3.x + s3.width / 2, cy = s3.y + s3.height / 2
+  const live = await pixel(cx, cy)
+  ok(blue(live), `CONTROL: the sampler sees the live step-1 element in blue (${live})`)
+  await p.evaluate(() => window.bento.anim.setManual(true))
+  await pressPlay(p)
+  for (const t of [0.5, 0.8, 1.0]) {
+    await tick(p, t === 0.5 ? 0.5 : t === 0.8 ? 0.3 : 0.2)
+    const px = await pixel(cx, cy)
+    ok(await p.locator('.ed-play-overlay').count() === 1 && !blue(px), `mid-fade (${t}s) the hidden step does not show through (${px})`)
+  }
+  await tick(p, 10)
+  await goSlide(p, 1)
+  await p.keyboard.press('Escape')
+  const vis = () => p.evaluate(() => {
+    const v = (sel) => [...document.querySelectorAll(sel)].filter((n) => n.checkVisibility({ visibilityProperty: true })).length
+    return { badges: v('.ed-step-badge'), pins: v('.ed-comment-marker') }
+  })
+  const v0 = await vis()
+  ok(v0.badges === 2 && v0.pins === 1, `CONTROL: two step badges and a comment pin are on the canvas (${JSON.stringify(v0)})`)
+  const badge = await p.locator('.ed-step-badge').first().boundingBox()
+  const before = await state(p)
+  await pressPlay(p)
+  await tick(p, 0.6)
+  const v1 = await vis()
+  ok(v1.badges === 0 && v1.pins === 0, `while it plays they are hidden (${JSON.stringify(v1)})`)
+  const hit = await p.evaluate(([x, y]) => { const n = document.elementFromPoint(x, y); return n?.closest('.ed-play-overlay') ? 'overlay' : n?.className }, [badge.x + badge.width / 2, badge.y + badge.height / 2])
+  ok(hit === 'overlay', `a press where a badge was lands on the play (${hit})`)
+  await p.mouse.click(badge.x + badge.width / 2, badge.y + badge.height / 2)
+  ok(await p.locator('.ed-play-overlay').count() === 0 && (await state(p)).model === before.model, 'and stops it without changing a step')
+  const v2 = await vis()
+  ok(v2.badges === 2 && v2.pins === 1, `afterwards they are back (${JSON.stringify(v2)})`)
+  ok(!errs.length, `no page error ${errs.join(' | ')}`)
+  await ctx.close()
+})
+
 for (const theme of ['dark', 'light']) await section(`8 (${theme})`, async () => {
   console.log(`\n8. ${theme} chrome, fitted and zoomed in\n`)
   const { ctx, p, errs } = await open({ theme })
