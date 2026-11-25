@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Reviewing…": "Controllo in corso…",
   "Paste the JSON a chatbot or tool gave back. A code fence or text around it is fine; nothing changes until you have reviewed the changes and applied them.": "Incolla il JSON restituito da un chatbot o da uno strumento. Un blocco di codice o del testo intorno vanno bene; non cambia nulla finché non hai controllato le modifiche e non le hai applicate.",
   "Copy report": "Copia rapporto",
   "Review changes": "Controlla le modifiche",

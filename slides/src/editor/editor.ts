@@ -58,7 +58,8 @@ import { readerCopy, inviteCopy } from '../share'
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripCollabSecrets } from '../envelope'
 import { compactJson } from '../compact'
-import { parseDocInputReport } from '../compactload'
+import { parseDocInputReport, type LoadReport } from '../compactload'
+import { keepLiveIdentity } from '../../../kernel/src/docfields.ts'
 import { cleanPastedJson, docRejection, summarizeReplace } from './pastejson'
 import { gateRestored, guardOpenedDoc } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
@@ -1495,30 +1496,56 @@ export class Editor {
     const cancelB = btn(t('Cancel'))
     const applyB = btn(t('Review changes'), 'ed-btn ed-btn-primary')
     let reviewed: string | null = null // the textarea text the summary on show describes
-    let json = ''
+    let result: { doc: import('../model').BentoDoc; report: LoadReport } | null = null // …and what it describes
     let report: string[] = []
     let timer = 0
-    // when the summary on show armed Apply; a click from before that moment
-    // (or within a beat of it) was aimed at "Review changes", not at it
+    let gen = 0 // bumped when the text changes: a review deferred for older text is dropped
+    // when the summary on show armed Apply; a press begun before that moment
+    // (or within half a second of it) was aimed at "Review changes", not at it
     let armedAt = Infinity
-    // when the press on Apply began (mousedown / keydown): a click's own time
-    // is its release, which can be delivered long after a press made early
+    let readyTimer = 0
+    // when the press on Apply began (pointerdown, or a first Enter/Space
+    // keydown): a click's own time is its release, which can be delivered
+    // long after a press made early. A held key's repeats are never a decision.
     let pressedAt = 0
+    let repeatPress = false
     const stale = () => {
+      gen++
       reviewed = null
+      result = null
       armedAt = Infinity
       pressedAt = 0
+      repeatPress = false
+      clearTimeout(readyTimer)
+      applyB.removeAttribute('aria-disabled')
       applyB.textContent = t('Review changes')
       applyB.disabled = false
     }
-    const review = () => {
+    const review = (then?: () => void) => {
       clearTimeout(timer)
       stale()
+      const mine = gen
       report = []
-      status.replaceChildren()
       list.replaceChildren()
       confirmRow.hidden = true
       tick.checked = false
+      // say so before the parse holds the page: a multi-MB reply takes seconds
+      const busy = div('')
+      busy.textContent = t('Reviewing…')
+      status.replaceChildren(busy)
+      status.setAttribute('aria-busy', 'true')
+      let started = false
+      const go = () => {
+        if (started) return
+        started = true
+        if (mine === gen) { run(); then?.() }
+      }
+      requestAnimationFrame(() => setTimeout(go, 0)) // after a frame has painted it
+      setTimeout(go, 50) // a hidden tab paints no frames
+    }
+    const run = () => {
+      status.replaceChildren()
+      status.removeAttribute('aria-busy')
       // `ids`: slide ids, set apart so a right-to-left line cannot reorder them
       const say = (text: string, err = false, ids?: string) => {
         const d = div(err ? 'ed-replace-err' : '')
@@ -1542,7 +1569,7 @@ export class Editor {
           : r === 'prose' ? t('Repaired: ignored the text around the JSON')
             : t('Repaired: trailing commas removed ({n})', { n: String(c.commas) }))
       }
-      // the gate (and the live identity) exactly as at apply time, below
+      // the gate, with the live identity (taken again at apply time, below)
       const parsed = c.error ? null : parseDocInputReport(c.json, { live: this.store.doc })
       if (!parsed) {
         const e = c.error ?? docRejection(c.json)
@@ -1573,9 +1600,12 @@ export class Editor {
         confirmRow.hidden = false
       }
       reviewed = ta.value
-      json = c.json
+      result = parsed
       applyB.textContent = t('Apply changes')
       armedAt = performance.now()
+      // shown as not ready while the summary is fresh; a press now does nothing
+      applyB.setAttribute('aria-disabled', 'true')
+      readyTimer = window.setTimeout(() => applyB.removeAttribute('aria-disabled'), 500)
       if (sum.removed.length) {
         // a disabled button drops keyboard focus on the page behind the scrim
         if (document.activeElement === applyB) tick.focus()
@@ -1591,20 +1621,30 @@ export class Editor {
       // a paste is reviewed by itself (typing waits for the press); a very
       // large one waits for the press too, so the page never stalls unasked
       const kind = (ev as InputEvent).inputType ?? ''
-      if ((kind === 'insertFromPaste' || kind === 'insertFromDrop') && ta.value.length <= 2_000_000) timer = window.setTimeout(review, 100)
+      if ((kind === 'insertFromPaste' || kind === 'insertFromDrop') && ta.value.length <= 2_000_000) timer = window.setTimeout(() => review(), 100)
     })
     tick.addEventListener('change', () => { applyB.disabled = !tick.checked })
-    for (const k of ['mousedown', 'keydown']) applyB.addEventListener(k, (ev) => { pressedAt = ev.timeStamp })
+    applyB.addEventListener('pointerdown', (ev) => { pressedAt = ev.timeStamp; repeatPress = false })
+    applyB.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return
+      if (ev.repeat) repeatPress = true
+      else { pressedAt = ev.timeStamp; repeatPress = false }
+    })
     copyB.addEventListener('click', () => {
-      if (reviewed !== ta.value) review()
-      navigator.clipboard.writeText(report.join('\n')).then(
-        () => { copyB.textContent = t('Report copied') },
-        () => { copyB.textContent = t('Couldn’t access the clipboard') })
-      setTimeout(() => { copyB.textContent = t('Copy report') }, 1800)
+      const copy = () => {
+        navigator.clipboard.writeText(report.join('\n')).then(
+          () => { copyB.textContent = t('Report copied') },
+          () => { copyB.textContent = t('Couldn’t access the clipboard') })
+        setTimeout(() => { copyB.textContent = t('Copy report') }, 1800)
+      }
+      if (reviewed !== ta.value) review(copy)
+      else copy()
     })
     applyB.addEventListener('click', (ev) => {
+      // a held Enter or Space clicks again and again: no repeat is a decision
+      if (repeatPress) { repeatPress = false; return }
       // nothing is applied that the summary on show does not describe
-      if (reviewed !== ta.value) { review(); return }
+      if (reviewed !== ta.value || !result) { review(); return }
       // …nor by a press begun before that summary was on screen: one queued
       // while a review ran, or landing as the label changed under it
       const at = pressedAt && pressedAt <= ev.timeStamp ? pressedAt : ev.timeStamp
@@ -1619,7 +1659,11 @@ export class Editor {
       // and its file mode. Decided BEFORE the swap: replaceDoc's events reach
       // the sync session synchronously and it re-attaches to whatever
       // `collab` the new document holds. Content is imported; identity is not.
-      const parsed = parseDocInputReport(json, { live: this.store.doc })
+      // The review already ran the gate with `live`; the document it made is
+      // applied as reviewed, its identity taken again from the deck as it is
+      // now (FROM_LIVE: docId, collab, readonly, template).
+      const parsed = result
+      if (parsed) keepLiveIdentity(parsed.doc as unknown as Record<string, unknown>, this.store.doc as unknown as Record<string, unknown>)
       if (parsed) {
         this.store.replaceDoc(parsed.doc)
         // the load report, summarised; the whole thing goes to the console

@@ -27,6 +27,12 @@
 //   8. Keyboard only: when the review disables the focused button (a reply
 //      that removes slides), focus moves to the tick and stays in the dialog;
 //      opened from ⌘K, Escape puts focus on the File button, not the page.
+//   9. Enter or Space HELD for 2 s across the review applies nothing and
+//      never reaches the File menu behind the dialog; a click made with the
+//      summary on screen still applies.
+// Also: a fresh summary shows Apply as not ready (aria-disabled) for half a
+// second; "Reviewing…" is on show for a painted frame before a slow parse;
+// applying uses the reviewed document instead of parsing the reply again.
 // Every press waits for a known state first: the dialog reviews a paste by
 // itself, so a press racing that review would test the timing, not the dialog.
 // No network: http(s) aborted, WebSockets closed, offline mode on.
@@ -82,7 +88,10 @@ try {
     const ta = document.querySelector('[role=dialog] textarea')
     ta.focus(); ta.value = v; ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: k }))
   }, [text, inputType])
-  const reviewedState = () => p.waitForFunction(() => document.querySelector('[role=dialog] [role=status]')?.textContent !== '', null, { timeout: 15000 })
+  const reviewedState = () => p.waitForFunction(() => {
+    const st = document.querySelector('[role=dialog] [role=status]')
+    return st && st.textContent !== '' && st.getAttribute('aria-busy') !== 'true'
+  }, null, { timeout: 15000 })
   // a paste, then its automatic review on show
   const paste = async (text) => { await input(text, 'insertFromPaste'); await reviewedState() }
   // typed text, then a press of "Review changes"
@@ -93,8 +102,8 @@ try {
   }
   // the second press, once the summary has been on screen for a moment
   const apply = async () => {
-    await p.waitForFunction(() => document.querySelector('[role=dialog] .ed-btn-primary')?.textContent === 'Apply changes', null, { timeout: 15000 })
-    await p.waitForTimeout(700)
+    await p.waitForFunction(() => { const b = document.querySelector('[role=dialog] .ed-btn-primary'); return b?.textContent === 'Apply changes' && !b.hasAttribute('aria-disabled') }, null, { timeout: 15000 })
+    await p.waitForTimeout(150)
     await p.click(primary); await p.waitForTimeout(150)
   }
   const state = () => p.evaluate(() => {
@@ -170,9 +179,28 @@ try {
     await typeAndReview('```json\n' + full + '\n```')
     s = await state()
     ok(await docJson() === original && /No changes to the slides/.test(s.status), 'text edited after a review: the press reviews again instead of applying')
-    await paste('```json\n' + JSON.stringify(edited) + '\n```')
+    // the moment the summary arms the button, click it (in the page, so the
+    // click lands inside the half second whatever the rig's own latency)
+    const seen = p.evaluate(() => new Promise((done) => {
+      const b = document.querySelector('[role=dialog] .ed-btn-primary')
+      const mo = new MutationObserver(() => {
+        if (b.textContent !== 'Apply changes') return
+        mo.disconnect()
+        const notReady = b.getAttribute('aria-disabled') === 'true'
+        b.click()
+        done(notReady)
+      })
+      mo.observe(b, { childList: true, characterData: true, subtree: true })
+    }))
+    await input('```json\n' + JSON.stringify(edited) + '\n```', 'insertFromPaste')
+    const notReady = await seen
+    await reviewedState(); await p.waitForTimeout(100)
     s = await state()
     ok(s.button === 'Apply changes' && /Slides changed \(1\)/.test(s.status), 'a paste is reviewed by itself')
+    ok(notReady, 'a fresh summary shows Apply changes as not ready (aria-disabled)')
+    ok(await docJson() === original && await dialogOpen(), 'a click while it is not ready applies nothing')
+    await p.waitForTimeout(600)
+    ok(await p.$eval(primary, (b) => !b.hasAttribute('aria-disabled')), 'half a second on, it is ready')
     await apply()
     const now = await p.evaluate(() => window.bento.doc)
     ok(!(await dialogOpen()) && now.slides[1].elements.find((e) => e.id === target.id)?.html === 'Tidied by a chatbot', 'the second press applies and closes')
@@ -244,13 +272,23 @@ try {
     await paste(mk('Version A'))
     await p.waitForTimeout(400)
     const box = await p.locator(primary).boundingBox()
-    await p.evaluate(() => {
+    const inner = mk('Version B').slice(8, -4) // the JSON inside the fence
+    await p.evaluate((inner) => {
       // hold the next review on the main thread for 1.5 s, once
       const parse = JSON.parse
       window.__slow = true
+      window.__parsesOfReply = 0
+      window.__frames = 0
+      const tickFrames = () => { window.__frames++; requestAnimationFrame(tickFrames) }
+      requestAnimationFrame(tickFrames)
+      new MutationObserver(() => {
+        if (window.__busyFrame == null && document.querySelector('[role=dialog] [role=status]')?.textContent === 'Reviewing…') window.__busyFrame = window.__frames
+      }).observe(document.body, { subtree: true, childList: true, characterData: true })
       JSON.parse = function (...a) {
+        if (a[0] === inner) window.__parsesOfReply++
         if (window.__slow) {
           window.__slow = false
+          window.__parseFrame = window.__frames
           console.log('bento-rig: review held') // reaches the rig while the page is busy
           const t0 = performance.now(); while (performance.now() - t0 < 1500) { /* a big deck */ }
         }
@@ -262,7 +300,7 @@ try {
         const b = e.target.closest?.('.ed-btn-primary')
         if (b) window.__clicks.push(b.textContent)
       }, true)
-    })
+    }, inner)
     const held = p.waitForEvent('console', { predicate: (m) => m.text() === 'bento-rig: review held', timeout: 15000 })
     await input(mk('Version B'), 'insertFromPaste') // reviewed by itself 100 ms on, for 1.5 s
     await held
@@ -273,7 +311,11 @@ try {
     const r = await p.evaluate(() => ({ clicks: window.__clicks, open: !!document.querySelector('[role=dialog] textarea'), b: window.bento.doc.slides[1].elements.some((e) => e.html === 'Version B'), label: document.querySelector('[role=dialog] .ed-btn-primary')?.textContent }))
     ok(r.clicks[0] === 'Apply changes', `the race is staged: the click reached the button after it read "Apply changes" (${JSON.stringify(r.clicks)})`)
     ok(!r.b && r.open && await docJson() === original, 'that click applied nothing; the dialog stays open on the summary')
+    const fr = await p.evaluate(() => ({ busy: window.__busyFrame, parse: window.__parseFrame, n: window.__parsesOfReply }))
+    ok(fr.busy != null && fr.parse > fr.busy, `"Reviewing…" was on show for a painted frame before the slow parse began (frame ${fr.busy} → ${fr.parse})`)
     await apply()
+    const n2 = await p.evaluate(() => window.__parsesOfReply)
+    ok(n2 === fr.n, `applying uses the reviewed document: the reply is not parsed again (${fr.n} → ${n2})`)
     ok(await p.evaluate(() => window.bento.doc.slides[1].elements.some((e) => e.html === 'Version B')), 'a click made with the summary on screen applies it')
     await p.keyboard.press(UNDO); await p.waitForTimeout(150)
     ok(await docJson() === original, 'one undo step restores it')
@@ -304,6 +346,38 @@ try {
     await p.keyboard.press('Escape'); await p.waitForTimeout(100)
     const back = await p.evaluate(() => document.activeElement?.className ?? '')
     ok(/ed-logo/.test(back), `opened from ⌘K, Escape puts focus on the File button (${back || 'body'})`)
+  })
+
+  console.log('\n9. A held key is not a decision\n')
+  await run(async () => {
+    const d = JSON.parse(full); d.slides[1].elements.find((e) => e.type === 'text').html = 'Held key'
+    const applied = () => p.evaluate(() => window.bento.doc.slides[1].elements.some((e) => e.html === 'Held key'))
+    const hold = async (key) => {
+      await p.keyboard.down(key)
+      for (let i = 0; i < 60; i++) { await p.waitForTimeout(33); await p.keyboard.down(key) } // repeat: true
+      await p.keyboard.up(key)
+      await p.waitForTimeout(150)
+    }
+    const after = () => p.evaluate(() => ({ open: !!document.querySelector('[role=dialog] textarea'), menu: !!document.querySelector('.ed-file.open'), inDialog: !!document.activeElement?.closest('[role=dialog]'), label: document.querySelector('[role=dialog] .ed-btn-primary')?.textContent }))
+    await openDialog()
+    await p.evaluate(() => { window.__repeats = { Enter: 0, ' ': 0 }; document.addEventListener('keydown', (e) => { if (e.repeat && e.key in window.__repeats) window.__repeats[e.key]++ }, true) })
+    await input('```json\n' + JSON.stringify(d) + '\n```', 'insertText') // typed: reviewed by the press
+    await p.focus(primary)
+    await hold('Enter')
+    let a = await after()
+    ok(await p.evaluate(() => window.__repeats.Enter) >= 50, `the held key auto-repeats (${await p.evaluate(() => window.__repeats.Enter)} repeat keydowns)`)
+    ok(!(await applied()) && a.open && a.label === 'Apply changes', `Enter held 2 s: the first press reviewed, its repeats applied nothing (${JSON.stringify(a)})`)
+    ok(!a.menu && a.inDialog, 'and nothing reached the File menu behind the dialog')
+    await p.focus(primary)
+    await hold('Space')
+    a = await after()
+    ok(await p.evaluate(() => window.__repeats[' ']) >= 50, `Space auto-repeats too (${await p.evaluate(() => window.__repeats[' '])})`)
+    ok(!(await applied()) && a.open && !a.menu && a.inDialog, `Space held 2 s with the summary on screen: released, it applies nothing (${JSON.stringify(a)})`)
+    await p.waitForTimeout(600)
+    await p.click(primary); await p.waitForTimeout(150)
+    ok(await applied() && !(await dialogOpen()), 'a click with the summary on screen applies it')
+    await p.keyboard.press(UNDO); await p.waitForTimeout(150)
+    ok(await docJson() === original, 'one undo step restores it')
   })
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)

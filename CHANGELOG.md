@@ -22,10 +22,12 @@ pre-1.0.
   loads, and the dialog says what it cleaned up; it only ever removes those
   characters, never adds any. A reply that was cut off is refused with that
   reason instead of being guessed at, and a syntax error names its line and
-  column. Pressing Review changes lists the slides added, removed and changed,
-  the fields that were dropped and any warnings, with Copy report to paste
-  back to the chatbot; nothing changes until you press Apply changes, and a
-  reply that would remove slides says how many and asks you to confirm. ⌘Z
+  column. Pasting a reply (up to 2,000,000 characters; a longer one on Review
+  changes) lists the slides added, removed and changed, the fields that were
+  dropped and any warnings, with Copy report to paste back to the chatbot;
+  nothing changes until you press Apply changes with that summary in front of
+  you, and a reply that would remove slides says how many and asks you to
+  confirm. ⌘Z
   still undoes the whole replacement in one step, and the deck keeps its own
   identity and live session.
 

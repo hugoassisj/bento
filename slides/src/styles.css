@@ -1092,7 +1092,8 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
 .ed-replace-status { margin-top: 8px; font-size: 12.5px; line-height: 1.5; }
 .ed-replace-err { color: var(--danger); }
 .ed-replace textarea[aria-invalid='true'] { border-color: var(--danger); }
-.bkd-card:has(.ed-replace) .ed-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.bkd-card:has(.ed-replace) .ed-btn:disabled,
+.bkd-card:has(.ed-replace) .ed-btn[aria-disabled='true'] { opacity: 0.45; cursor: not-allowed; }
 .ed-replace-report { max-height: 140px; overflow: auto; margin: 6px 0 0; padding-inline-start: 18px; font: 11px/1.45 ui-monospace, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
 .ed-replace-report:empty { display: none; }
 .ed-replace-confirm { display: flex; gap: 6px; align-items: center; margin-top: 8px; font-size: 12.5px; color: var(--danger); }

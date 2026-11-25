@@ -7,6 +7,7 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Reviewing…": "Revisando…",
   "Paste the JSON a chatbot or tool gave back. A code fence or text around it is fine; nothing changes until you have reviewed the changes and applied them.": "Cole o JSON que um chatbot ou ferramenta devolveu. Um bloco de código ou texto em volta não tem problema; nada muda até você revisar as alterações e aplicá-las.",
   "Copy report": "Copiar relatório",
   "Review changes": "Revisar alterações",
