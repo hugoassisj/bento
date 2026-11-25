@@ -224,7 +224,7 @@ function nudge(p: PropsPanel, id: string, dir: 1 | -1) {
 type Drop = { group: HTMLElement; index: number; step: number; where: 'before' | 'after' | 'into' }
 
 /** The drag in progress, kept off the rows: a rebuild replaces every row. */
-let drag: { id: string; x: number; y: number; on: boolean } | null = null
+let drag: { id: string; x: number; y: number; on: boolean; left: boolean } | null = null
 
 /** How long a finger rests on a row before it picks the row up. Until then a
  *  touch is the panel's: a swipe scrolls it (rows are touch-action: pan-y). */
@@ -235,15 +235,18 @@ const HOLD_MS = 350
  * first (HOLD_MS, moving less than 8px); moving sooner is a scroll, and the
  * drag stands down. Escape ends a drag without dropping, and so does a move
  * that arrives with no button held (the button came up outside the window).
+ * Only a release after the pointer has left the row it picked up can drop:
+ * a long press let go in place, or a wobble inside the row, changes nothing.
  */
 function startDrag(p: PropsPanel, id: string, ev: PointerEvent) {
   const touch = ev.pointerType === 'touch'
-  drag = { id, x: ev.clientX, y: ev.clientY, on: false }
+  const pid = ev.pointerId
+  drag = { id, x: ev.clientX, y: ev.clientY, on: false, left: false }
   const lift = () => {
     if (!drag) return
     drag.on = true
     endPreview()
-    p.host.querySelector(`.ed-build-row[data-id="${CSS.escape(id)}"]`)?.classList.add('dragging')
+    mark(p, dropAt(p, drag.y, drag.x)) // the row shows it is picked up; still over itself, no target yet
   }
   const hold = touch ? setTimeout(lift, HOLD_MS) : 0
   const done = () => {
@@ -254,13 +257,13 @@ function startDrag(p: PropsPanel, id: string, ev: PointerEvent) {
     window.removeEventListener('keydown', key, true)
     window.removeEventListener('touchmove', still)
     window.removeEventListener('contextmenu', still, true)
-    mark(p, null)
     const d = drag
     drag = null
+    mark(p, null) // with no drag, this only clears
     return d
   }
   const move = (e: PointerEvent) => {
-    if (!drag) return
+    if (!drag || e.pointerId !== pid) return
     if (!touch && e.buttons === 0) { done(); return } // released outside the window: no drop
     if (!drag.on) {
       const far = Math.hypot(e.clientX - drag.x, e.clientY - drag.y)
@@ -269,16 +272,21 @@ function startDrag(p: PropsPanel, id: string, ev: PointerEvent) {
       lift()
     }
     e.preventDefault()
+    if (!drag.left) {
+      const r = p.host.querySelector(`.ed-build-row[data-id="${CSS.escape(id)}"]`)?.getBoundingClientRect()
+      drag.left = !r || e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom
+    }
     mark(p, dropAt(p, e.clientY, e.clientX))
   }
   const up = (e: PointerEvent) => {
+    if (e.pointerId !== pid) return
     const target = dropAt(p, e.clientY, e.clientX)
     const d = done()
     if (!d) return
     if (!d.on) { p.store.select([id]); return } // a click or a tap: select the element
-    if (target) applySteps(p, dropPatches(p.store.slide.elements, id, target))
+    if (target && d.left) applySteps(p, dropPatches(p.store.slide.elements, id, target))
   }
-  const cancel = () => { done() }
+  const cancel = (e: PointerEvent) => { if (e.pointerId === pid) done() }
   const key = (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return
     e.preventDefault(); e.stopPropagation()
@@ -316,20 +324,31 @@ function dropAt(p: PropsPanel, y: number, x: number): Drop | null {
   return null
 }
 
+/** Show the drag: the row picked up, and a target only where a release would
+ *  change something (never while the pointer is still over its own row). */
 function mark(p: PropsPanel, d: Drop | null) {
   for (const n of p.host.querySelectorAll('.ed-build .drop-before, .ed-build .drop-after, .ed-build .drop-into, .ed-build .dragging')) n.classList.remove('drop-before', 'drop-after', 'drop-into', 'dragging')
-  if (!d || !drag) return
-  d.group.classList.add(`drop-${d.where}`)
+  if (!drag?.on) return
   p.host.querySelector(`.ed-build-row[data-id="${CSS.escape(drag.id)}"]`)?.classList.add('dragging')
+  if (d && drag.left && dropPatches(p.store.slide.elements, drag.id, d).length) d.group.classList.add(`drop-${d.where}`)
 }
 
 /** A drop as reveal.ts verbs: onto a group joins its step; before or after
- *  it is a step of its own there, counted among the groups the row leaves. */
+ *  it is a step of its own there, counted among the groups the row leaves.
+ *  A drop that leaves the groups as they were writes nothing — not even the
+ *  renumbering of a slide whose steps skip (2, 5, 9), which nobody asked for. */
 function dropPatches(els: SlideElement[], id: string, d: Drop): StepPatch[] {
-  if (d.where === 'into') return joinStep(els, id, d.step)
-  const others = stepGroups(els)[d.index]?.filter((x) => x !== id) ?? []
-  if (!others.length) return [] // its own group, alone: it is already there
-  const remaining = stepGroups(els).map((g) => g.filter((x) => x !== id)).filter((g) => g.length)
-  const at = remaining.findIndex((g) => g[0] === others[0])
-  return moveStep(els, id, d.where === 'before' ? at : at + 1)
+  let patches: StepPatch[]
+  if (d.where === 'into') patches = joinStep(els, id, d.step)
+  else {
+    const others = stepGroups(els)[d.index]?.filter((x) => x !== id) ?? []
+    if (!others.length) return [] // its own group, alone: it is already there
+    const remaining = stepGroups(els).map((g) => g.filter((x) => x !== id)).filter((g) => g.length)
+    const at = remaining.findIndex((g) => g[0] === others[0])
+    patches = moveStep(els, id, d.where === 'before' ? at : at + 1)
+  }
+  const step = new Map(patches.map((q) => [q.id, q.step]))
+  const after = els.map((e) => (step.has(e.id) ? { id: e.id, fx: { step: step.get(e.id) } } : e))
+  const same = (g: string[][]) => g.map((ids) => ids.join('+')).join('|')
+  return same(stepGroups(after)) === same(stepGroups(els)) ? [] : patches
 }

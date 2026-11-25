@@ -25,7 +25,11 @@
 //   9. Escape mid-drag cancels the drop (the release after it does nothing),
 //      and so does a move that arrives with no button held; on touch a swipe
 //      that starts on a row scrolls the inspector and leaves the document
-//      byte-identical, while a long press picks the row up and a tap selects.
+//      byte-identical, while a long press picks the row up and a tap selects;
+//      a long press let go in place writes nothing (no renumbering of a
+//      2, 5, 9 slide, no split of a shared step);
+//  10. at the narrowest panel (190px in en and de, 213px in ja) every row
+//      keeps its name, its picker and its remove button inside the panel.
 // No network: every http(s) request is aborted, WebSockets are closed, and
 // the deck is told it is offline before it loads.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -133,9 +137,10 @@ try {
   await p.waitForTimeout(150)
   ok(await docNow() === unchanged, `and the release after it drops nothing: the drag was cancelled, not just hidden (${await steps()})`)
   ok(await p.evaluate(() => window.bento.selection.length) === 0, '…nor does it count as a click')
+  await p.evaluate(() => window.addEventListener('pointerdown', (e) => { window.__pid = e.pointerId }, { capture: true, once: true }))
   await armAt('c', { x: ge.x + 60, y: ge.y + 3 })
-  // the button comes up outside the window: no pointerup, the next move has no button held
-  await p.evaluate(({ x, y }) => window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, buttons: 0, pointerType: 'mouse', bubbles: true })), { x: ge.x + 60, y: ge.y + 3 })
+  // the button comes up outside the window: no pointerup, the next move (same pointer) has no button held
+  await p.evaluate(({ x, y }) => window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, buttons: 0, pointerId: window.__pid, pointerType: 'mouse', bubbles: true })), { x: ge.x + 60, y: ge.y + 3 })
   ok(await p.locator('.ed-props .ed-build .drop-before, .ed-props .ed-build .dragging').count() === 0, 'a move with no button held ends the drag')
   await p.mouse.up()
   await p.waitForTimeout(150)
@@ -149,6 +154,16 @@ try {
   ok(await listed() === 'Click 1=a+c | Click 2=b', `one group holds both (${await listed()})`)
   ok(agree(snap2), 'the badges agree')
   ok(await p.locator('.ed-props .ed-build-group').first().locator('.ed-num').count() === 2, 'a group of two offers Stagger on each row')
+  const inRow = await row('c').boundingBox()
+  const pair1 = await p.evaluate(() => JSON.stringify(window.bento.doc))
+  await p.mouse.move(inRow.x + 50, inRow.y + inRow.height / 2)
+  await p.mouse.down()
+  await p.mouse.move(inRow.x + 58, inRow.y + inRow.height - 2, { steps: 4 })
+  ok(await p.locator('.ed-props .ed-build .drop-before, .ed-props .ed-build .drop-after, .ed-props .ed-build .drop-into').count() === 0, 'a drag still over its own row shows no target')
+  await p.mouse.up()
+  await p.waitForTimeout(150)
+  ok(await p.evaluate(() => JSON.stringify(window.bento.doc)) === pair1, `and released there writes nothing — the shared step is not split by its own row's edge (${await steps()})`)
+  await load([1, 2, 1]); await p.waitForTimeout(300) // whatever that did, section 3 goes on from a+c on 1, b on 2
   ok((await p.locator('.ed-props .ed-build-group').first().locator('.ed-build-beat-cap').allTextContents()).join() === 'Stagger', 'its column has a visible caption, "Stagger"')
   const pickerX = await p.$$eval('.ed-props .ed-build-row select', (ss) => ss.map((x) => Math.round(x.getBoundingClientRect().left)))
   const removeX = await p.$$eval('.ed-props .ed-build-row .ed-build-remove', (ss) => ss.map((x) => Math.round(x.getBoundingClientRect().right)))
@@ -314,8 +329,72 @@ try {
   await tp.waitForTimeout(200)
   ok(await tp.evaluate(() => window.bento.selection.join()) === 'e1', 'a tap on a row selects its element')
   ok(await tdoc() === before0, 'and changes nothing')
+  // A long press let go where it started writes nothing: no renumbering of a
+  // slide whose steps skip, no split of a shared step from a row's bottom
+  // edge. The whole document is compared, its `modified` stamp included, so
+  // an edit (and the undo step every edit records) cannot slip through.
+  const whole = () => tp.evaluate(() => JSON.stringify(window.bento.doc))
+  const loadT = (steps) => tp.evaluate((steps) => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    d.slides = [{ id: 's1', background: '#ffffff', notes: '', transition: 'fade', elements: steps.map((st, i) => ({ id: 'e' + i, type: 'text', x: 100, y: 40 + i * 80, w: 400, h: 50, rotation: 0, opacity: 1, html: 'Item ' + i, fontSize: 24, color: '#222222', fx: { step: st } })) }]
+    window.bento.loadDoc(JSON.stringify(d))
+  }, steps)
+  await loadT([2, 5, 9]); await tp.waitForTimeout(400)
+  await tp.evaluate(() => { document.querySelector('.ed-build').scrollIntoView({ block: 'start' }) }); await tp.waitForTimeout(150)
+  const skip0 = await whole()
+  const pb = await tp.locator('.ed-build-row[data-id="e1"]').boundingBox()
+  await touch([{ x: pb.x + 40, y: pb.y + pb.height / 2 }], 600)
+  ok(await whole() === skip0, `a long press on a row of a 2, 5, 9 slide, let go in place, writes nothing (${await tsteps()})`)
+  ok(await tp.evaluate(() => window.bento.selection.length) === 0, '…and selects nothing')
+  await loadT([1, 1, 2]); await tp.waitForTimeout(400)
+  await tp.evaluate(() => { document.querySelector('.ed-build').scrollIntoView({ block: 'start' }) }); await tp.waitForTimeout(150)
+  const pair0 = await whole()
+  const pe = await tp.locator('.ed-build-row[data-id="e1"]').boundingBox()
+  await touch([{ x: pe.x + 40, y: pe.y + pe.height - 3 }], 600)
+  ok(await whole() === pair0, `a long press on the bottom edge of a shared step's last row, let go in place, does not split it (${await tsteps()})`)
+  await touch([{ x: pe.x + 40, y: pe.y + pe.height - 3 }, { x: pe.x + 44, y: pe.y + pe.height - 2 }, { x: pe.x + 40, y: pe.y + pe.height - 1 }], 600)
+  ok(await whole() === pair0, `nor does a finger that wobbles inside the row after the hold (${await tsteps()})`)
   ok(!errors.length, `no page errors on touch${errors.length ? ': ' + errors.join(' | ') : ''}`)
   await tctx.close()
+
+  console.log('\n10. the narrowest panel\n')
+  for (const [lang, w] of [['en', 190], ['de', 190], ['ja', 213]]) {
+    const nctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    await nctx.route(/^https?:/, (r) => r.abort())
+    if (nctx.routeWebSocket) await nctx.routeWebSocket(/.*/, (ws) => ws.close())
+    await nctx.addInitScript(([lang, w]) => {
+      localStorage.setItem('bento-offline', 'on')
+      localStorage.setItem('bento-panel-tab', '"animate"')
+      localStorage.setItem('bento-lang', lang)
+      localStorage.setItem('bento-ed-panels', JSON.stringify({ left: 200, right: w }))
+    }, [lang, w])
+    const np = await nctx.newPage()
+    np.on('pageerror', (e) => errors.push(e.message))
+    await np.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+    await np.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale [data-el-id]'))
+    await np.evaluate((els) => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      d.slides = [{ id: 's1', background: '#ffffff', notes: '', transition: 'fade', elements: els }]
+      window.bento.loadDoc(JSON.stringify(d))
+    }, [text('t', 40, 0, 'Why Bento'), text('a', 150, 1, 'Works offline'), text('b', 250, 2, 'Nothing to install'), text('c', 350, 1, 'Yours forever')])
+    await np.waitForTimeout(500)
+    const m = await np.evaluate(() => {
+      const panel = document.querySelector('.ed-props').getBoundingClientRect()
+      return {
+        panel: Math.round(panel.width),
+        names: [...document.querySelectorAll('.ed-build-row .ed-layer-label')].map((n) => Math.round(n.getBoundingClientRect().width)),
+        removeIn: [...document.querySelectorAll('.ed-build-row .ed-build-remove')].every((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.left >= panel.left && r.right <= panel.right }),
+        pickers: [...document.querySelectorAll('.ed-build-row select')].map((s) => Math.round(s.getBoundingClientRect().width)),
+        heads: [...document.querySelectorAll('.ed-build-head > span')].map((h) => Math.round(h.getBoundingClientRect().height)),
+      }
+    })
+    ok(m.panel <= w && m.names.length === 3 && m.names.every((x) => x >= 30), `${lang} at ${m.panel}px: every row keeps its name visible (${m.names} px)`)
+    ok(m.removeIn, `${lang}: every remove button is wholly inside the panel`)
+    ok(m.pickers.every((x) => x >= 48), `${lang}: the entrance pickers keep a readable width (${m.pickers} px)`)
+    ok(m.heads.every((h) => h <= 16), `${lang}: "Click n" and the Stagger caption stay on one line (${m.heads} px tall)`)
+    await nctx.close()
+  }
+  ok(!errors.length, `no page errors at the narrowest panel${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()
 }
