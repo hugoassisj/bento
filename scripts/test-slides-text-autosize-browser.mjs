@@ -23,8 +23,10 @@
 //      the floor, one undo step) and the badge goes; Fit height to text does
 //      the same by growing the box.
 //   6. Resizing a hugging box by a side handle stops the width hugging; an
-//      undo or redo does not (the next edit hugs the text again, never a
-//      stale width), and a document loaded over the deck starts fixed.
+//      undo or redo of an edit does not (the next edit hugs the text again,
+//      never a stale width); undoing a hand resize (panel W, a corner drag)
+//      undoes its sizing change with it, redo redoes both; and a document
+//      loaded over the deck starts fixed.
 //   7. A text box put down inside an auto-layout frame is placed exactly as
 //      before (centred defaults, the frame's room), and is not given a badge.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -347,6 +349,69 @@ try {
     e = await edit(e.id, 'Q')
     tr = await textRect(e.id)
     ok(e.w < wide && Math.abs(e.w - tr.width) <= 4, `an edit after redo hugs again, narrower (${wide} → ${e.w}, text ${tr.width.toFixed(1)})`)
+
+    // A hand resize and the sizing change it makes are ONE undo step: undo
+    // gives back the old size and the hugging, redo the new size and the
+    // fixed width. The mode is editor state, not the model's, so it is read
+    // the way a person sees it — the next edit — with rendered rects.
+    const frame = (id) => p.evaluate((id) => {
+      const n = document.querySelector(`.ed-stage-scale [data-el-id="${CSS.escape(id)}"]`)
+      const st = document.querySelector('.ed-stage-scale').getBoundingClientRect()
+      const s = st.width / window.bento.doc.size.width
+      const r = n.getBoundingClientRect()
+      return { w: Math.round(r.width / s), h: Math.round(r.height / s) }
+    }, id)
+    const LONG = 'Quarterly revenue grew twelve percent'
+    const hugsText = async (id, label) => {
+      const b = await frame(id), tr = await textRect(id), m = await measure(id)
+      ok(m.lines === 1 && Math.abs(b.w - tr.width) <= 4 && Math.abs(b.h - m.height) <= 2,
+        `${label}: the box hugs the new text again — width mode (${b.w}×${b.h}, text ${tr.width.toFixed(1)}, ${m.lines} line)`)
+    }
+    const typedW = async (id, w) => {
+      await select(id)
+      const f = p.locator('.ed-props .ed-mini input[aria-label="W"]').first()
+      await f.fill(String(w)); await f.press('Enter'); await p.waitForTimeout(250)
+    }
+    const cornerDrag = async (id, dx, dy) => {
+      await select(id)
+      const h = await p.evaluate(() => {
+        const c = [...document.querySelectorAll('.moveable-control-box .moveable-control.moveable-direction[data-direction="se"]')]
+          .find((x) => getComputedStyle(x).display !== 'none' && x.getBoundingClientRect().width > 0)
+        if (!c) return null
+        const r = c.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+      })
+      if (!h) { ok(false, 'the corner handle is there'); return }
+      const st = await stage()
+      await p.mouse.move(h.x, h.y); await p.mouse.down()
+      await p.mouse.move(h.x + dx * st.s / 2, h.y + dy * st.s / 2, { steps: 4 })
+      await p.mouse.move(h.x + dx * st.s, h.y + dy * st.s, { steps: 4 }); await p.mouse.up()
+      await p.waitForTimeout(300)
+    }
+    for (const [how, resize] of [['panel W', (id) => typedW(id, 500)], ['corner drag', (id) => cornerDrag(id, 300, 60)]]) {
+      await load([])
+      e = await placeText(200, 200, 'Ok')
+      const hugged = await frame(e.id)
+      await resize(e.id)
+      const sized = await frame(e.id)
+      ok(sized.w > hugged.w + 200, `${how}: resized by hand (${hugged.w}×${hugged.h} → ${sized.w}×${sized.h})`)
+      await deselect(); await undoRedo(`${MOD}+z`)
+      const back = await frame(e.id)
+      ok(back.w === hugged.w && back.h === hugged.h, `${how}: ⌘Z gives the old size back (${back.w}×${back.h})`)
+      await edit(e.id, LONG)
+      await hugsText(e.id, `${how}, ⌘Z, then typing`)
+
+      await load([])
+      e = await placeText(200, 200, 'Ok')
+      await resize(e.id)
+      const want = await frame(e.id)
+      await deselect(); await undoRedo(`${MOD}+z`); await undoRedo(`${MOD}+Shift+z`)
+      const again = await frame(e.id)
+      ok(again.w === want.w && again.h === want.h, `${how}: ⌘⇧Z brings the hand size back (${again.w}×${again.h})`)
+      await edit(e.id, 'Hi')
+      const after = await frame(e.id), m = await measure(e.id)
+      if (how === 'panel W') ok(after.w === want.w && Math.abs(after.h - m.height) <= 2, `${how}, redo, then typing: the width stays the hand's, the height follows — height mode (${after.w}×${after.h})`)
+      else ok(after.w === want.w && after.h === want.h, `${how}, redo, then typing: the box stays the size the hand gave it — fixed (${after.w}×${after.h})`)
+    }
 
     // a document loaded over the deck carries no hugging: its boxes are fixed
     await load([])

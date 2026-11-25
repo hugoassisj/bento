@@ -15417,7 +15417,10 @@ document is unchanged and rendering never depends on measurement (the
   a redo or a collaborator moves the frame without changing the mode, and the
   next commit measures the text afresh. (Reading any frame change as a hand
   resize made an undo followed by an edit wrap the text into the old, narrow
-  width — one letter per line.) A document loaded over the deck clears it.
+  width — one letter per line.) The mode rides the undo history
+  (`store.sideState`, editor-only, never saved): undoing a hand resize gives
+  back the old size and the hugging together, redo the new size and the
+  fixed width. A document loaded over the deck clears it.
 - **Frame children are untouched.** A box put down inside an auto-layout
   frame is placed as before and never hugs: the frame sizes it.
 - **The overflow badge uses the validator's tests** (`text-overflow` past

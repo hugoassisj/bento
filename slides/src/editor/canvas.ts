@@ -100,10 +100,12 @@ export class SlideCanvas {
    *  'height': drawn by a drag — the width is the author's, the height follows.
    *  Only a hand resize changes that (handSized: a resize handle or the
    *  panel's W/H): a new width turns 'width' into 'height', a new height ends
-   *  both. Anything else that moves the frame — undo, redo, a collaborator —
-   *  leaves the mode alone, and the next commit measures the text afresh, so
-   *  a box never shrinks to a width it no longer has. Session-only, never in
-   *  the document, cleared when another document takes this one's place: a
+   *  both. The map rides the undo history (store.sideState), so undoing that
+   *  resize gives the box back its old size AND its old mode, and redo both
+   *  again. Anything else that moves the frame — a collaborator — leaves the
+   *  mode alone, and the next commit measures the text afresh, so a box never
+   *  shrinks to a width it no longer has. Session-only, never in the
+   *  document, cleared when another document takes this one's place: a
    *  reloaded box is a fixed box. */
   private hugs = new Map<string, 'width' | 'height'>()
   /** the inline frame a hugging box had before editing let it grow */
@@ -540,6 +542,10 @@ export class SlideCanvas {
     store.on('current', () => this.render())
     store.on('doc', () => this.render())
     store.on('replace', () => this.hugs.clear())
+    store.sideState = {
+      capture: () => new Map(this.hugs),
+      restore: (state) => { this.hugs = new Map(state as Map<string, 'width' | 'height'>) },
+    }
     store.on('selection', () => { this.trackEnteredGroup(); this.trackEnteredFrame(); this.syncTargets() })
 
     this.render()
