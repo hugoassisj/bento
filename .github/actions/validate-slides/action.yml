@@ -751,3 +751,12 @@ runs:
       # and every intake from file open to live sync. Four mutants turn it red.
       shell: bento-step {0}
       run: node scripts/test-slides-alpha-refs.ts
+    - name: The skill zip carries the whole skill folder
+      # A slides release zipped bento-slides/SKILL.md alone, so a skill
+      # uploaded to claude.ai had no references, scripts or app. The zip now
+      # carries the folder minus evals/, plus the signed shell and the schema
+      # in assets/; references/*.md are published at /slides/agents/. Rows: a
+      # fixture zips to the exact listing, the refusals, the real folder, the
+      # published references, and release.mjs wired to the module.
+      shell: bento-step {0}
+      run: node scripts/test-slides-skill-zip.ts
